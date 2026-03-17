@@ -6,110 +6,79 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-02-16 ~ 2026-03-17
-- 运行时间：2026-03-17 09:33:43 UTC
+- 最新运行日期：2026-03-17
+- 运行时间：2026-03-17 19:39:22 UTC
 - 运行状态：成功
-- 本次总论文数：29
-- 精读区：0
-- 速读区：29
+- 本次总论文数：19
+- 精读区：9
+- 速读区：10
 
 ### 今日简报（AI）
-今日速览 29 篇前沿论文，聚焦机器人全身协同操控与复杂地形下的动态运动突破。
-重点关注人形机器人跑酷技能链化及四足机器人挑战 U 型楼梯的强化学习新方案。
-建议深入探索在线状态估计与动作匹配技术，这是提升机器人环境适应力的关键。
-- 详情：[/20260216-20260317/README](/20260216-20260317/README)
+今日聚焦19篇机器人顶尖成果，深度拆解类人机器人平衡恢复与四足机器人地形感知技术。
+核心突破在于将经典控制原理植入强化学习，并实现仅靠本体感知即可在复杂地形安全穿梭。
+推荐关注多足机器人如何利用触觉天线与物理交互感知环境，这是提升野外作业能力的必读方向。
+- 详情：[/202603/17/README](/202603/17/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Embedding Classical Balance Control Principles in Reinforcement Learning for Humanoid Recovery](/202603/17/2603.08619v1-embedding-classical-balance-control-principles-in-reinforcement-learning-for-humanoid-recovery)  
+   标签：评分：10.0/10、query:robot
+   evidence：利用经典平衡指标进行人形机器人恢复的强化学习策略
+2. [Towards Terrain-Aware Safe Locomotion for Quadrupedal Robots Using Proprioceptive Sensing](/202603/17/2603.09585v1-towards-terrain-aware-safe-locomotion-for-quadrupedal-robots-using-proprioceptive-sensing)  
+   标签：评分：10.0/10、query:robot
+   evidence：四足机器人的地形感知状态估计与控制
+3. [Data-Driven Physics Embedded Dynamics with Predictive Control and Reinforcement Learning for Quadrupeds](/202603/17/2603.14333v1-data-driven-physics-embedded-dynamics-with-predictive-control-and-reinforcement-learning-for-quadrupeds)  
+   标签：评分：10.0/10、query:robot
+   evidence：四足机器人运动的预测控制与强化学习
+4. [VIP-Loco: A Visually Guided Infinite Horizon Planning Framework for Legged Locomotion](/202603/17/2603.14345v1-vip-loco-a-visually-guided-infinite-horizon-planning-framework-for-legged-locomotion)  
+   标签：评分：10.0/10、query:robot
+   evidence：足式机器人运动的视觉引导无限时界规划
+5. [CyboRacket: A Perception-to-Action Framework for Humanoid Racket Sports](/202603/17/2603.14605v1-cyboracket-a-perception-to-action-framework-for-humanoid-racket-sports)  
+   标签：评分：10.0/10、query:robot
+   evidence：人形机器人全身控制的感知到动作框架
+6. [Dual-Horizon Hybrid Internal Model for Low-Gravity Quadrupedal Jumping with Hardware-in-the-Loop Validation](/202603/17/2603.07999v1-dual-horizon-hybrid-internal-model-for-low-gravity-quadrupedal-jumping-with-hardware-in-the-loop-validation)  
+   标签：评分：9.0/10、query:robot
+   evidence：低重力环境下利用本体感受感知的四足跳跃
+7. [Proprioceptive Safe Active Navigation and Exploration for Planetary Environments](/202603/17/2603.08905v1-proprioceptive-safe-active-navigation-and-exploration-for-planetary-environments)  
+   标签：评分：9.0/10、query:robot
+   evidence：足式机器人感知地形属性用于导航规划
+8. [Energy Prediction on Sloping Ground for Quadruped Robots](/202603/17/2603.11963v1-energy-prediction-on-sloping-ground-for-quadruped-robots)  
+   标签：评分：9.0/10、query:robot
+   evidence：使用车载传感器的四足机器人运动能量模型
+9. [KiRAS: Keyframe Guided Self-Imitation for Robust and Adaptive Skill Learning in Quadruped Robots](/202603/17/2603.15179v1-kiras-keyframe-guided-self-imitation-for-robust-and-adaptive-skill-learning-in-quadruped-robots)  
+   标签：评分：9.0/10、query:robot
+   evidence：复杂地形下四足机器人技能学习的强化学习
 
 ### 速读区论文标签
-1. [AdaptManip: Learning Adaptive Whole-Body Object Lifting and Delivery with Online Recurrent State Estimation](/20260216-20260317/2602.14363v1-adaptmanip-learning-adaptive-whole-body-object-lifting-and-delivery-with-online-recurrent-state-estimation)  
-   标签：评分：10.0/10、query:robot
-   evidence：结合强化学习与状态估计的人形机器人全身运动操作
-2. [Learning Transferability: A Two-Stage Reinforcement Learning Approach for Enhancing Quadruped Robots' Performance in U-Shaped Stair Climbing](/20260216-20260317/2602.14473v1-learning-transferability-a-two-stage-reinforcement-learning-approach-for-enhancing-quadruped-robots-performance-in-u-shaped-stair-climbing)  
-   标签：评分：10.0/10、query:robot
-   evidence：深度强化学习用于四足机器人爬楼梯
-3. [Perceptive Humanoid Parkour: Chaining Dynamic Human Skills via Motion Matching](/20260216-20260317/2602.15827v1-perceptive-humanoid-parkour-chaining-dynamic-human-skills-via-motion-matching)  
-   标签：评分：10.0/10、query:robot
-   evidence：人形机器人的视觉跑酷与运动匹配技术
-4. [Dynamic Modeling and MPC for Locomotion of Tendon-Driven Soft Quadruped](/20260216-20260317/2602.16371v1-dynamic-modeling-and-mpc-for-locomotion-of-tendon-driven-soft-quadruped)  
-   标签：评分：10.0/10、query:robot
-   evidence：软体四足机器人运动的MPC控制
-5. [VIGOR: Visual Goal-In-Context Inference for Unified Humanoid Fall Safety](/20260216-20260317/2602.16511v1-vigor-visual-goal-in-context-inference-for-unified-humanoid-fall-safety)  
-   标签：评分：10.0/10、query:robot
-   evidence：人形机器人在复杂环境下的跌倒安全与恢复视觉推理
-6. [GrandTour: A Legged Robotics Dataset in the Wild for Multi-Modal Perception and State Estimation](/20260216-20260317/2602.18164v1-grandtour-a-legged-robotics-dataset-in-the-wild-for-multi-modal-perception-and-state-estimation)  
-   标签：评分：10.0/10、query:robot
-   evidence：复杂环境下足式机器人多模态感知与状态估计数据集
-7. [CMoE: Contrastive Mixture of Experts for Motion Control and Terrain Adaptation of Humanoid Robots](/20260216-20260317/2603.03067v1-cmoe-contrastive-mixture-of-experts-for-motion-control-and-terrain-adaptation-of-humanoid-robots)  
-   标签：评分：10.0/10、query:robot
-   evidence：使用强化学习的人形机器人运动控制和地形自适应
-8. [X-Loco: Towards Generalist Humanoid Locomotion Control via Synergetic Policy Distillation](/20260216-20260317/2603.03733v1-x-loco-towards-generalist-humanoid-locomotion-control-via-synergetic-policy-distillation)  
-   标签：评分：10.0/10、query:robot
-   evidence：基于视觉的通用类人机器人运动策略
-9. [Efficient Autonomous Navigation of a Quadruped Robot in Underground Mines on Edge Hardware](/20260216-20260317/2603.04470v1-efficient-autonomous-navigation-of-a-quadruped-robot-in-underground-mines-on-edge-hardware)  
-   标签：评分：10.0/10、query:robot
-   evidence：复杂地下环境下四足机器人的感知、状态估计与导航
-10. [Perceptive Variable-Timing Footstep Planning for Humanoid Locomotion on Disconnected Footholds](/20260216-20260317/2603.07400v1-perceptive-variable-timing-footstep-planning-for-humanoid-locomotion-on-disconnected-footholds)  
-   标签：评分：10.0/10、query:robot
-   evidence：类人机器人在不连续落脚点上的感知足迹规划
-11. [Omnidirectional Humanoid Locomotion on Stairs via Unsafe Stepping Penalty and Sparse LiDAR Elevation Mapping](/20260216-20260317/2603.07928v1-omnidirectional-humanoid-locomotion-on-stairs-via-unsafe-stepping-penalty-and-sparse-lidar-elevation-mapping)  
-   标签：评分：10.0/10、query:robot
-   evidence：基于LiDAR高程地图的类人机器人楼梯运动规划
-12. [SEA-Nav: Efficient Policy Learning for Safe and Agile Quadruped Navigation in Cluttered Environments](/20260216-20260317/2603.09460v1-sea-nav-efficient-policy-learning-for-safe-and-agile-quadruped-navigation-in-cluttered-environments)  
-   标签：评分：10.0/10、query:robot
-   evidence：复杂环境下的安全敏捷四足机器人导航
-13. [SCDP: Learning Humanoid Locomotion from Partial Observations via Mixed-Observation Distillation](/20260216-20260317/2603.09574v1-scdp-learning-humanoid-locomotion-from-partial-observations-via-mixed-observation-distillation)  
-   标签：评分：10.0/10、query:robot
-   evidence：通过扩散策略从部分观测中学习人形机器人运动
-14. [Panoramic Multimodal Semantic Occupancy Prediction for Quadruped Robots](/20260216-20260317/2603.13108v1-panoramic-multimodal-semantic-occupancy-prediction-for-quadruped-robots)  
-   标签：评分：10.0/10、query:robot
-   evidence：四足机器人的全景多模态占据感知
-15. [MeshMimic: Geometry-Aware Humanoid Motion Learning through 3D Scene Reconstruction](/20260216-20260317/2602.15733v1-meshmimic-geometry-aware-humanoid-motion-learning-through-3d-scene-reconstruction)  
-   标签：评分：9.0/10、query:robot
-   evidence：用于3D场景下人形机器人运动控制的深度强化学习
-16. [Learning Humanoid End-Effector Control for Open-Vocabulary Visual Loco-Manipulation](/20260216-20260317/2602.16705v2-learning-humanoid-end-effector-control-for-open-vocabulary-visual-loco-manipulation)  
-   标签：评分：9.0/10、query:robot
-   evidence：类人机器人的视觉运动与操作控制
-17. [Contact-Anchored Proprioceptive Odometry for Quadruped Robots](/20260216-20260317/2602.17393v1-contact-anchored-proprioceptive-odometry-for-quadruped-robots)  
-   标签：评分：9.0/10、query:robot
-   evidence：四足机器人的本体感受状态估计和里程计
-18. [Contact-Anchored Proprioceptive Odometry for Quadruped Robots](/20260216-20260317/2602.17393v2-contact-anchored-proprioceptive-odometry-for-quadruped-robots)  
-   标签：评分：9.0/10、query:robot
-   evidence：四足机器人的本体感受状态估计和里程计
-19. [Role-Adaptive Collaborative Formation Planning for Team of Quadruped Robots in Cluttered Environments](/20260216-20260317/2602.18260v1-role-adaptive-collaborative-formation-planning-for-team-of-quadruped-robots-in-cluttered-environments)  
-   标签：评分：9.0/10、query:robot
-   evidence：四足机器人团队的协作编队规划
-20. [Soft Surfaced Vision-Based Tactile Sensing for Bipedal Robot Applications](/20260216-20260317/2602.18638v2-soft-surfaced-vision-based-tactile-sensing-for-bipedal-robot-applications)  
-   标签：评分：9.0/10、query:robot
-   evidence：基于视觉的触觉传感用于双足机器人地形感知
-21. [Jumping Control for a Quadrupedal Wheeled-Legged Robot via NMPC and DE Optimization](/20260216-20260317/2602.21612v1-jumping-control-for-a-quadrupedal-wheeled-legged-robot-via-nmpc-and-de-optimization)  
-   标签：评分：9.0/10、query:robot
-   evidence：用于四足机器人跳跃控制的轨迹优化与非线性模型预测控制
-22. [Learning Thermal-Aware Locomotion Policies for an Electrically-Actuated Quadruped Robot](/20260216-20260317/2603.01631v1-learning-thermal-aware-locomotion-policies-for-an-electrically-actuated-quadruped-robot)  
-   标签：评分：9.0/10、query:robot
-   evidence：四足机器人的热感知运动策略
-23. [Safe Whole-Body Loco-Manipulation via Combined Model and Learning-based Control](/20260216-20260317/2603.02443v1-safe-whole-body-loco-manipulation-via-combined-model-and-learning-based-control)  
-   标签：评分：9.0/10、query:robot
-   evidence：结合全身控制的足式机器人强化学习运动策略
-24. [Omni-Manip: Beyond-FOV Large-Workspace Humanoid Manipulation with Omnidirectional 3D Perception](/20260216-20260317/2603.05355v1-omni-manip-beyond-fov-large-workspace-humanoid-manipulation-with-omnidirectional-3d-perception)  
-   标签：评分：9.0/10、query:robot
-   evidence：用于操作的人形机器人全向3D感知
-25. [ACLM: ADMM-Based Distributed Model Predictive Control for Collaborative Loco-Manipulation](/20260216-20260317/2603.07095v1-aclm-admm-based-distributed-model-predictive-control-for-collaborative-loco-manipulation)  
-   标签：评分：9.0/10、query:robot
-   evidence：四足机器人的分布式模型预测控制与轨迹优化
-26. [Cybo-Waiter: A Physical Agentic Framework for Humanoid Whole-Body Locomotion-Manipulation](/20260216-20260317/2603.10675v1-cybo-waiter-a-physical-agentic-framework-for-humanoid-whole-body-locomotion-manipulation)  
-   标签：评分：9.0/10、query:robot
-   evidence：类人机器人全身运动控制与3D几何监督感知
-27. [RL-Augmented MPC for Non-Gaited Legged and Hybrid Locomotion](/20260216-20260317/2603.10878v1-rl-augmented-mpc-for-non-gaited-legged-and-hybrid-locomotion)  
-   标签：评分：9.0/10、query:robot
-   evidence：用于足式机器人运动和步态自适应的强化学习增强型MPC
-28. [Biomechanical Comparisons Reveal Divergence of Human and Humanoid Gaits](/20260216-20260317/2602.21666v1-biomechanical-comparisons-reveal-divergence-of-human-and-humanoid-gaits)  
+1. [A Robust Antenna Provides Tactile Feedback in a Multi-legged Robot](/202603/17/2603.07795v1-a-robust-antenna-provides-tactile-feedback-in-a-multi-legged-robot)  
    标签：评分：8.0/10、query:robot
-   evidence：类人机器人步态与人类运动的生物力学评估
-29. [cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots](/20260216-20260317/2603.05493v1-curobov2-dynamics-aware-motion-generation-with-depth-fused-distance-fields-for-high-dof-robots)  
+   evidence：多足机器人在受限空间内的触觉反馈感知
+2. [Inverse Resistive Force Theory (I-RFT): Learning granular properties through robot-terrain physical interactions](/202603/17/2603.07796v1-inverse-resistive-force-theory-i-rft-learning-granular-properties-through-robot-terrain-physical-interactions)  
    标签：评分：8.0/10、query:robot
-   evidence：B样条轨迹优化与深度融合距离场感知
+   evidence：通过机器人与地形的物理交互感知地形属性
+3. [Walking on Rough Terrain with Any Number of Legs](/202603/17/2603.09147v1-walking-on-rough-terrain-with-any-number-of-legs)  
+   标签：评分：8.0/10、query:robot
+   evidence：用于粗糙地形的多足机器人控制架构
+4. [STRIDE: Structured Lagrangian and Stochastic Residual Dynamics via Flow Matching](/202603/17/2603.08478v1-stride-structured-lagrangian-and-stochastic-residual-dynamics-via-flow-matching)  
+   标签：评分：7.0/10、query:robot
+   evidence：非结构化环境下用于规划和控制的动力学学习
+5. [STRIDE: Structured Lagrangian and Stochastic Residual Dynamics via Flow Matching](/202603/17/2603.08478v2-stride-structured-lagrangian-and-stochastic-residual-dynamics-via-flow-matching)  
+   标签：评分：7.0/10、query:robot
+   evidence：非结构化环境下用于规划的动力学学习
+6. [Perceptive Hierarchical-Task MPC for Sequential Mobile Manipulation in Unstructured Semi-Static Environments](/202603/17/2603.10227v1-perceptive-hierarchical-task-mpc-for-sequential-mobile-manipulation-in-unstructured-semi-static-environments)  
+   标签：评分：7.0/10、query:robot
+   evidence：半静态环境下的移动操作感知运动规划
+7. [OA-NBV: Occlusion-Aware Next-Best-View Planning for Human-Centered Active Perception on Mobile Robots](/202603/17/2603.11072v1-oa-nbv-occlusion-aware-next-best-view-planning-for-human-centered-active-perception-on-mobile-robots)  
+   标签：评分：7.0/10、query:robot
+   evidence：移动机器人的主动感知与视角规划
+8. [Perception-Aware Communication-Free Multi-UAV Coordination in the Wild](/202603/17/2603.08379v1-perception-aware-communication-free-multi-uav-coordination-in-the-wild)  
+   标签：评分：6.0/10、query:robot
+   evidence：复杂环境下的感知感知导航与SLAM
+9. [Provably Safe Trajectory Generation for Manipulators Under Motion and Environmental Uncertainties](/202603/17/2603.09083v1-provably-safe-trajectory-generation-for-manipulators-under-motion-and-environmental-uncertainties)  
+   标签：评分：6.0/10、query:robot
+   evidence：运动和环境不确定性下的安全轨迹生成
+10. [Decentralized Cooperative Localization for Multi-Robot Systems with Asynchronous Sensor Fusion](/202603/17/2603.12075v1-decentralized-cooperative-localization-for-multi-robot-systems-with-asynchronous-sensor-fusion)  
+   标签：评分：6.0/10、query:robot
+   evidence：分布式协作定位与状态估计
 
 
 <div class="dpr-home-promo-card">

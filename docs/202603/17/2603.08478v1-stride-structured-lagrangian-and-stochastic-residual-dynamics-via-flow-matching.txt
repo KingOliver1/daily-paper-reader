@@ -1,0 +1,291 @@
+Title: STRIDE: Structured Lagrangian and Stochastic Residual Dynamics via Flow Matching
+
+URL Source: https://arxiv.org/pdf/2603.08478v1
+
+Published Time: Tue, 10 Mar 2026 02:39:45 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# STRIDE: Structured Lagrangian and Stochastic Residual Dynamics via Flow Matching 
+
+Prakrut Kotecha 1, Ganga Nair B 1, Shishir Kolathaya 2
+
+Abstract — Robotic systems operating in unstructured envi-ronments must operate under significant uncertainty arising from intermittent contacts, frictional variability, and unmod-eled compliance. While recent model-free approaches have demonstrated impressive performance, many deployment set-tings still require predictive models that support planning, constraint handling, and online adaptation. Analytical rigid-body models provide strong physical structure but often fail to capture complex interaction effects, whereas purely data-driven models may violate physical consistency, exhibit data bias, and accumulate long-horizon drift. In this work, we pro-pose STRIDE, a dynamics learning framework that explicitly separates conservative rigid-body mechanics from uncertain, effectively stochastic non-conservative interaction effects. The structured component is modeled using a Lagrangian Neural Network (LNN) to preserve energy-consistent inertial dynamics, while residual interaction forces are represented using Condi-tional Flow Matching (CFM) to capture multi-modal interaction phenomena. The two components are trained jointly end-to-end, enabling the model to retain physical structure while representing complex stochastic behavior. We evaluate STRIDE on systems of increasing complexity, including a pendulum, the Unitree Go1 quadruped, and the Unitree G1 humanoid. Results show 20% reduction in long-horizon prediction error and 30% reduction in contact force prediction error compared to deterministic residual baselines, supporting more reliable model-based control in uncertain robotic environments. 
+
+I. I NTRODUCTION 
+
+Robotic systems are increasingly expected to operate out-side controlled laboratory settings and within unstructured, dynamic environments. In such conditions, robots must con-tend with significant uncertainty arising from intermittent contacts, frictional variability, unmodeled compliance, and actuator nonlinearities [1]. These effects are particularly pronounced in legged and humanoid systems, where small disturbances during contact can lead to large deviations in system behavior. Recent advances in deep reinforcement learning have demonstrated that model-free policies can achieve highly agile behaviors directly from observation, especially when combined with large-scale training and domain random-ization [2], [3]. However, purely reactive policies provide limited scope for reasoning about future state evolution, enforcing hard safety constraints, or adapting behavior online when encountering previously unseen conditions. Many real-world deployment scenarios therefore continue to benefit         
+
+> 1G. Nair, P. Kotecha, are with the Robert Bosch Center for Cyber-Physical Systems, Indian Institute of Science, Bengaluru.
+> 2S. Kolathaya is with the Robert Bosch Center for Cyber-Physical Systems and the Department of Computer Science & Automation, Indian Institute of Science, Bengaluru. Email: stochlab@iisc.ac.in, Website: link
+> Fig. 1. Conceptual overview of STRIDE. The proposed framework combines a structured Lagrangian prior with a stochastic residual to capture interaction uncertainty while preserving physical consistency.
+
+from predictive models that enable planning, constraint han-dling, and closed-loop adaptation [4], [5]. Model-based control frameworks offer these capabilities by explicitly leveraging system dynamics. When a suffi-ciently accurate model is available, control methods such as Model Predictive Control (MPC) and trajectory optimization can incorporate task objectives at runtime, enforce state and input constraints, and locally replan under distribution shift. In practice, however, obtaining dynamics models that are both physically consistent and expressive enough to capture real-world interaction uncertainty remains a central challenge. This requirement becomes particularly critical in high-dimensional robotic platforms such as quadrupeds and hu-manoids, where planning and control operate under tight stability margins and frequent contact events [6]–[8]. In these regimes, small modeling errors can compound rapidly, degrading planning performance or even leading to unstable motion [9], [10]. Analytical rigid-body models provide strong physical structure grounded in first-principles and remain central to many control and planning pipelines [11]–[13]. When accurate parameters are available, such models preserve important properties including inertia coupling and momen-tum consistency. However, deriving high-fidelity analytical models for complex robotic systems is often difficult and computationally expensive, and their accuracy deteriorates in the presence of frictional changes, impacts, and unmodeled compliance. Purely data-driven approaches have emerged as an alter-
+
+> arXiv:2603.08478v1 [cs.RO] 9 Mar 2026
+
+native by learning system dynamics directly from trajectory data [14], [15]. While expressive, such models typically lack physical inductive bias, require large datasets for general-ization, and may violate fundamental physical constraints, leading to energy inconsistency and compounding long-horizon prediction errors [16]. To bridge analytical and learning-based paradigms, physics-informed neural architectures embed structural priors directly into learned models. In particular, Lagrangian Neural Networks (LNNs) parameterize system dynamics through learned kinetic and potential energy functions, enforcing the Euler-Lagrange equations by construction [17], [18]. Related formulations, including Hamiltonian Neural Networks and Neural ODE models, similarly incorporate physics-inspired inductive biases [19], [20]. These approaches improve physi-cal consistency and sample efficiency but typically represent non-conservative effects such as friction and contact impulses using deterministic residual terms [9], [21], [22]. However, due to unresolved degrees of freedom and partial observabil-ity, a purely deterministic representation of non-conservative forces fails to capture the underlying stochasticity inherent in such complex interactions. Recent efforts to capture this stochasticity have explored fully generative transition models, including diffusion and score-based approaches [23]–[25]. While expressive, these models often lack the structural decompositions required for linearization-based planning, and embedding iterative generation within real-time control loops introduces pro-hibitive computational overhead. To retain expressive power while supporting predictable inference, Conditional Flow Matching (CFM) offers an attractive alternative: by learning continuous transport maps, CFM enables direct, efficient sampling from complex conditional distributions without the multi-step denoising required by diffusion models [26]. Motivated by these observations, we propose STRIDE ,a dynamics learning framework that separates conservative rigid-body mechanics from stochastic non-conservative ef-fects (Fig. 1). The structured component is modeled using an LNN to preserve the inductive biases of analytical me-chanics, while residual interaction forces are modeled using CFM to capture multi-modal variability efficiently. By doing so, STRIDE preserves physical consistency while reducing the modeling burden on the generative component. We evaluate STRIDE on the Unitree Go1 quadruped and the Unitree G1 humanoid. Empirically, the proposed approach improves long-horizon prediction error and more faithfully captures contact transitions compared to determin-istic residual baselines. We further demonstrate the effec-tiveness of STRIDE within model-based control pipelines through both simulation studies on Unitree Go1 and G1 and real-world experiments on the Unitree Go1, highlighting its practical deployability. We also perform an additional experiment on pendulum to show its ability to preserve topology of dynamics of the system. II. P ROBLEM FORMULATION 
+
+A. Mechanical System Model 
+
+We consider a robotic system defined by generalized coordinates q ∈ Rn and generalized velocities ˙q ∈ Rn. In an ideal, undisturbed environment, the system is to evolve according to classical Lagrangian mechanics. The scalar Lagrangian (L) is defined as: 
+
+L(q, ˙q) = T (q, ˙q) − V (q), (1) where T and V denote the kinetic and potential energy, respectively. The evolution of the system follows the Euler-Lagrange equations: 
+
+ddt 
+
+ ∂L
+
+∂ ˙q
+
+
+
+− ∂L
+
+∂q = τ + Fext , (2) where τ ∈ Rn represents the known control inputs and 
+
+Fext represents the sum of all external, non-conservative, and unmodeled forces. By expanding (2), we can arrive at the standard rigid-body dynamics form: 
+
+M(q)¨ q + C(q, ˙q) ˙ q + g(q) = τ + Fext , (3) where M(q) is the positive-definite mass matrix, C(q, ˙q)
+
+captures Coriolis and centrifugal effects, and g(q) represents gravitational forces. 
+
+B. Structured vs. Residual Dynamics 
+
+Equation (3) motivates a useful modeling decomposi-tion of robot dynamics. The rigid-body terms capture the dominant, geometry-dependent mechanics arising from the robot’s morphology (e.g., mass distribution and inertial cou-pling), while the external force term Fext aggregates non-conservative and environment-dependent effects. In practice, while the rigid-body component is smooth and amenable to physics-informed parameterization, Fext acts as an aggregation of non-conservative, state-dependent effects (e.g., friction and impacts) that often exhibit multi-modal behavior near contact transitions. Motivated by this observation, STRIDE models dynamics as: the dominant rigid-body dynamics using a structured Lagrangian prior, while the remaining interaction effects are represented using a stochastic residual model. This decom-position is not enforced strictly but serves as a practical inductive bias that improves learning efficiency and long-horizon predictive stability in complex robotic settings. 
+
+C. Learning Objective 
+
+Our goal is to learn a predictive model ¨q = fθ (q, ˙q, τ )
+
+that does not sacrifice physical consistency for expressive power. We propose a structural decomposition of the pre-dicted acceleration: 
+
+¨qpred = fLNN (q, ˙q, τ ) + M−1(q)ϵCFM (q, ˙q, τ ), (4) where: 1) fLNN is a deterministic LNN that learns the conserva-tive prior by parameterizing M(q) and V(q).2) ϵCFM is a CFM residual that treats the unstructured dynamics as a stochastic generative process. Rather than learning the conservative and residual com-ponents independently, we train the full model jointly in an end-to-end manner under a unified objective. III. M ETHODOLOGY 
+
+A. Structured Dynamics Decomposition 
+
+The core of STRIDE is the observation that a robot’s motion can be naturally decomposed into structured rigid-body dynamics and residual interaction effects. Starting from the manipulator equation, we express the system acceleration 
+
+¨q as 
+
+¨q = M−1(q) [ τ − C(q, ˙q) ˙ q − g(q)] 
+
+| {z }
+
+> fstruct
+
++ M−1(q)Fext 
+
+| {z }
+
+> funstruct
+
+. (5) Rather than approximating the entire right-hand side with a single black-box model, STRIDE explicitly adopts a dual-stream architecture: 
+
+¨qpred = fLNN (q, ˙q, τ ; θ) + M−1(q)ϵCFM (q, ˙q, τ , z; ϕ), (6) where, 
+
+fLNN = M−1(q) [ τ − C(q, ˙q) ˙ q − g(q)] ,
+
+and ϵCFM represents a stochastic residual ( Fext ) sampled from a generative model with latent noise z ∼ N (0, I). ϕ
+
+and θ are learnable parameters. 
+
+B. The Lagrangian Prior 
+
+To preserve physical structure, STRIDE parameterizes 
+
+fLNN using a LNN. Specifically, we learn a network to predict the Cholesky factor Lθ (q) and a scalar-valued network to predict the potential energy Vθ (q).
+
+Positive-Definiteness of the Mass Matrix. To ensure physical consistency, STRIDE constructs the mass matrix via a Cholesky factorization 
+
+Mθ (q) = Lθ (q)Lθ (q)⊤,
+
+where Lθ is lower triangular and its diagonal entries are enforced to be positive using a softplus activation. This guarantees that Mθ (q) remains symmetric positive-definite during both training and deployment. The kinetic energy is then computed as 
+
+T (q, ˙q) = ˙ q⊤Mθ (q) ˙ q.
+
+Together with (1) and (2), this formulation encourages fLNN 
+
+to capture the conservative mechanics of the system, reduc-ing the risk of energy drift commonly observed in purely data-driven models. 
+
+Algorithm 1: Joint Training of STRIDE Dynamics 
+
+Input: Dataset D, learning rate η
+
+Output: Parameters θ, ϕ 
+
+Initialize θ, ϕ ;
+
+while not converged do 
+
+Sample batch (c, ¨q) ∼ D ;Compute fLNN (c; θ);Sample z0 ∼ N (0, I);Integrate CFM to obtain ϵCFM ;Form ˆ¨q and compute loss L;Update θ, ϕ ;
+
+C. Generative Residuals via Flow Matching 
+
+The unstructured component Fext includes friction, im-pacts, and other non-conservative interaction effects. Instead of modeling this term deterministically, STRIDE represents it as a conditional stochastic process that captures the distri-bution of residual forces given the system state. We employ CFM to learn a continuous transport map from a simple base distribution to the target residual force distribu-tion. Specifically, we sample latent noise z0 ∼ N (0, I) and learn a context-conditioned vector field vϕ(z, t | c), where the context is c = ( q, ˙q, τ ). The residual force sample is obtained by integrating the learned flow: 
+
+ϵCFM = z0 +
+
+Z 10
+
+vϕ(zt, t | c) dt. (7) Compared to iterative diffusion sampling, this continuous-time formulation enables efficient generation of physically plausible residual forces (see Sec. IV-E), making STRIDE compatible with high-frequency control loops. 
+
+D. Joint Optimization 
+
+A key feature of STRIDE is that the LNN and CFM components are trained jointly under a single supervised objective on observed accelerations. Given a dataset D =
+
+{(c, ¨q)}, we minimize 
+
+J (θ, ϕ ) = E(c,¨q)∼D ,z∼N 
+
+h
+
+¨q −
+
+
+
+fLNN (c; θ)+ M−1 
+
+> θ
+
+(q)ϵCFM (c, z; ϕ)
+
+ 2i
+
+. (8) Optimizing both components jointly encourages an im-plicit division of labor: the LNN captures the low-variance structured dynamics, while the CFM residual models stochastic variability. The overall STRIDE training procedure is summarized in Algorithm 1. 
+
+E. Structural Motivation: Avoiding Averaging Bias 
+
+While the LNN component guarantees the preservation of conservative rigid-body mechanics, representing the un-structured residual Fext deterministically introduces a critical failure mode in contact-rich environments as mentioned before. We rely on a well-known property of regression to motivate our generative approach. Let p∗(Fext | c) denote the true conditional distribution of non-conservative interaction forces given the context c =(q, ˙q, τ ). In many robotic interaction scenarios involving intermittent contact or frictional regime changes, this dis-tribution can become inherently multi-modal, with support concentrated on a set of physically realizable modes M.A common modeling strategy is to approximate the resid-ual forces using a deterministic regressor trained with a mean-squared error objective. Under the standard L2 risk, 
+
+min  
+
+> f
+
+E
+
+h
+
+∥Fext − f (c)∥2i
+
+, (9) the optimal predictor is the conditional mean 
+
+f ∗(c) = Ep∗ [Fext | c]. (10) When the true conditional distribution is multi-modal, this mean may lie between physically distinct modes. In robotic systems, such averaging can smooth over discontinuous interaction phenomena, for example, when a foot either slips or establishes stiction depending on subtle state variations. As a result, deterministic residual models may produce force predictions that do not correspond to any physically realizable interaction outcome. To address this limitation, we model the residual forces us-ing a conditional generative formulation. Specifically, CFM learns a transport vector field that maps simple noise to samples from the conditional distribution, 
+
+Fext ∼ pϕ(Fext | c, z), (11) enabling the model to represent multi-modal interaction behavior. 
+
+Practical implication. The generative residual formula-tion is particularly beneficial in regimes where interaction dynamics exhibit branching behavior, such as near contact transitions or frictional regime changes. In these settings, sampling-based prediction with CFM provides a more faith-ful representation of the underlying uncertainty while re-maining compatible with model-based control. 
+
+F. Discussion on Residual Allocation 
+
+A potential concern is whether the residual component may absorb dynamics that should be captured by the struc-tured model. In STRIDE, the LNN is constrained by the Euler–Lagrange formulation and a positive-definite mass ma-trix, which biases it toward modeling conservative dynamics. Empirically, in a validated bouncing pendulum experiment comparing analytical priors with non-parametric residuals, we observe a clear separation of responsibilities: during smooth rigid-body motion (e.g., flight or free swing), the generative residual contributes only 6.5% of the predicted acceleration magnitude. In contrast, during contact transi-tions and boundary impacts—where structured Lagrangian assumptions degrade—the residual dynamically scales to 78.8%, absorbing high-frequency discontinuities without cor-rupting the global mass matrix. IV. E XPERIMENTS AND RESULTS 
+
+We evaluate whether the proposed STRIDE formulation delivers measurable gains in prediction accuracy, control performance, and hardware deployment. Specifically, we assess: (1) long-horizon predictive accuracy and stability under compounding rollout errors, (2) accuracy in modeling non-conservative effects, including contact impulses and impact-induced discontinuities, and (3) real-time deployabil-ity within existing control pipelines on hardware. Across both the Unitree Go1 quadruped and the Unitree G1 humanoid, we demonstrate consistent improvements in long-horizon rollout stability and contact-force prediction, validating the effectiveness of the proposed model. We further examine the broader implications of this mod-eling approach by analyzing its behavior in systems where sensitivity to bias, such as systems with unstable equilibria, can help evaluate model bias. 
+
+A. Baselines 
+
+We compare STRIDE against deterministic and generative baselines trained under controlled and identical settings, including same network size and training iterations. All models are evaluated using identical rollouts to ensure a fair comparison.  
+
+> •
+
+ONN Dynamics (Black-Box MLP): A fully data-driven baseline that directly predicts the next envi-ronment observation. Input: Current observation ot.
+
+Output: Predicted next observation ˆot+1 . Loss: RMSE between predicted and ground-truth next observations. 
+
+Role: Serves as an unstructured regression baseline without explicit physical inductive bias.  
+
+> •
+
+DeLaN: A physics-informed baseline based on Deep Lagrangian Networks that parameterizes kinetic and po-tential energy to enforce Euler Lagrange structure [17]. 
+
+Input: (q, ˙q, τ ). Output: Predicted joint acceleration ˆ¨q.
+
+Loss: RMSE on predicted accelerations. Role: Tests the benefit of structured dynamics without stochastic residual modeling.  
+
+> •
+
+Pure Diffusion Dynamics: A fully generative baseline that models the conditional distribution of the next observation using a diffusion model. Input: Current observation ot and diffusion timestep. Output: Sam-pled next observation ˆot+1 . Loss: Standard diffusion denoising objective with RMSE evaluation in observa-tion space. Role: Evaluates fully generative modeling without explicit physical structure.  
+
+> •
+
+LNN + Diffusion: A baseline in which an LNN models nominal rigid-body dynamics and a diffusion model predicts a residual acceleration. Input: (q, ˙q, τ ) and diffusion noise. Output: Predicted acceleration 
+
+ˆ¨q = fLNN + M−1(q) ϵdiff .
+
+Loss: RMSE on total predicted acceleration with dif-fusion denoising objective for the residual. Role: Tests whether flow-based residuals in STRIDE provide advan-tages over diffusion within the same structured setting. • STRIDE (Ours): STRIDE combines a Lagrangian Neural Network prior with a CFM residual. The model is trained end-to-end using the joint objective described in Sec. III-D. Input: (q, ˙q, τ ) and latent noise z. Output: 
+
+Predicted joint acceleration. Loss: Joint RMSE-based objective on accelerations with flow-matching training for the residual. Role: Evaluates the proposed struc-tured–stochastic decomposition. 
+
+B. MPC Integration and Deployment 
+
+To evaluate the practical utility of the learned dynam-ics model, we embed STRIDE within a sampling-based MPC framework, specifically Model Predictive Path Integral (MPPI) control. MPPI is well suited to this setting because it performs optimization via sampling and naturally ac-commodates stochastic dynamics without requiring analytic gradients or local linearization [27]. We integrate STRIDE into the Dreamer–MPC control architecture of [27], where reinforcement learning is used to learn a warm-start policy along with dynamics, reward, and value models, while MPPI performs online trajectory optimization at deployment. This setup provides a stringent evaluation: the receding-horizon MPC loop repeatedly ex-poses long-horizon prediction errors, the modular design enables controlled swapping of dynamics models for fair comparison, and the contact-rich nature of legged locomotion stresses modeling assumptions. To further evaluate adaptability, we extend the study to a variable gait optimization framework for quadrupeds based on the same Dreamer–MPC backbone [9]. In this formulation, MPPI jointly optimizes actions and continuous gait parameters online, enabling seamless transitions between locomotion modes without explicitly training each transition in reinforcement learning. This provides a stronger test of predictive quality, as the planner explores previously unseen gait configurations and relies heavily on accurate short-horizon rollouts. We apply this formulation to the quadruped platform in both simulation and hardware experiments. 
+
+C. Long-Horizon Prediction and Stability 
+
+Long-horizon stability is a primary motivation for incorpo-rating a structured Lagrangian prior, as physically consistent inductive bias can mitigate the exponential error growth typically observed in unstructured regressors. We evaluate long-horizon predictive accuracy via multi-step rollouts for both Unitree Go1 and Unitree G1 robots in simulation and report the cumulative root-mean-square error (RMSE) over a horizon of H = 30 (Fig. 2). As expected, ONN exhibits a rapid (effectively exponential) increase in error even within 30 time steps. The DeLaN baseline substantially improves stability, showing a slower, approximately linear growth in error consistent with the benefits of enforcing structure in the conservative dynam-ics. Augmenting the LNN with generative residuals further reduces drift and improves long-horizon prediction on both Unitree Go1 and Unitree G1.  
+
+> Fig. 2. Long-horizon rollout error on complex legged systems (Unitree Go1 and Unitree G1). The ONN baseline exhibits rapid, near-exponential error growth, while the DeLaN reduces error growth to approximately linear. STRIDE further reduces long-horizon drift by capturing stochastic, contact-induced variability.
+
+Table I reports the cumulative normalized RMSE over the 30-step horizon. STRIDE reduces rollout error by 83% rel-ative to the ONN baseline on Unitree Go1 (53% on Unitree G1), and achieves a further 19% (Unitree Go1) and 21% (Unitree G1) reduction compared to the strongest structured generative baseline (LNN + Diffusion), representing a sub-stantial improvement over models that already incorporate physical priors. Interestingly, the Pure Diffusion baseline performs slightly better on the Unitree G1 humanoid, likely because direct observation-space modeling can more readily absorb high-dimensional sensing noise, whereas structure-constrained models prioritize physically consistent accelera-tion prediction. 
+
+D. Contact and Force Prediction 
+
+We next evaluate contact modeling accuracy by comparing predicted ground reaction forces against ground-truth mea-surements, as shown in Fig. 3 and Fig. 4. State RMSE in Table I corresponds to multi-step open-loop prediction error in observation space evaluated over a 30-step horizon. Since the plotted contact forces correspond to the non-conservative term Fext , they are directly available only for LNN-based models; therefore, force-level comparisons are limited to structured baselines. Beyond reducing aggregate RMSE, STRIDE captures the Fig. 3. Contact force prediction on the Unitree G1 humanoid during walking. Predicted vertical ground reaction forces are compared against ground truth for left and right legs. STRIDE closely tracks the timing and magnitude of stance–swing transitions, preserving sharp impact disconti-nuities and reducing force smoothing observed in deterministic baselines (DeLaN and LNN+Diff).  
+
+> Fig. 4. Contact force prediction on the Unitree Go1 quadruped across multiple gaits (trot, pronk, bound, and pace). Vertical ground reaction forces are shown for all four legs (FL, FR, RL, RR).
+
+sharp discontinuities at impact and during swing–stance transitions, preserving both the timing and magnitude of impulsive contact forces, as illustrated in Fig. 4. The achieved force prediction error corresponds to approximately 13% of the nominal contact force magnitude on Unitree Go1 and 8% on Unitree G1, indicating accurate modeling relative to the physical scale of interaction forces. Improvements are consistent across individual legs and across the four evaluated gaits on the quadruped, suggesting that the model generalizes across contact configurations rather than overfit-ting to a specific locomotion mode. Overall, the proposed model achieves substantially lower force prediction error than all structured baselines, as sum-                           
+
+> TABLE I PERFORMANCE COMPARISON . (E VALUATED AT HORIZON = 30)
+> Robot Model State RMSE ↓Force Error (N) ↓
+> Go1 Plain MLP 5.489 NA Pure Diffusion 3.521 NA DeLaN 1.326 9.4 LNN + Diffusion 1.154 8.8
+> STRIDE (Ours) 0.932 6.7
+> G1 Plain MLP 1.204 NA Pure Diffusion 0.314 NA DeLaN 1.023 17.1 LNN + Diffusion 0.918 15.4
+> STRIDE (Ours) 0.289 12.1
+
+marized in Table I. STRIDE reduces contact force predic-tion error by approximately 30% relative to the DeLaN baseline on both quadruped and humanoid experiments. This reduction contributes to more reliable contact-aware planning and improved closed-loop stability during hardware deployment. The consistent error reduction observed on the higher-dimensional humanoid system further indicates that STRIDE generalizes and scales robustly to more complex platforms.  
+
+> Fig. 5. Inference-time comparison between diffusion sampling and CFM. Dotted curves show rollout error versus NFEs, and solid curves show inference frequency. CFM attains DeLaN-level rollout error with fewer evaluations while sustaining higher sampling frequency, highlighting its suitability for real-time deployment.
+
+E. Inference and Accuracy Comparison 
+
+Figure 5 compares STRIDE’s CFM-based residual genera-tion with the diffusion residual used in the LNN + Diffusion baseline, evaluating both computational cost and rollout accuracy. As shown in Fig. 5, CFM achieves substantially higher inference frequency across all evaluated numbers of function evaluations (NFEs). The advantage is particularly pronounced at low NFE budgets, highlighting the efficiency of continuous-time flow transport relative to iterative denois-ing procedures. The figure further shows that the flow-based model reaches the rollout error level of the DeLaN baseline with signifi-cantly fewer NFEs, whereas diffusion requires more evalu-ations to attain comparable accuracy. Overall, STRIDE ex-Fig. 6. Hardware deployment of STRIDE within the Dreamer–MPPI multi-gait framework on the Unitree Go1. STRIDE maintains consistently low tracking error under sensing noise and hardware uncertainties while enabling smooth gait transitions across varying speeds and elevations. The controller demonstrates zero-shot adaptation to unseen terrains, including friction changes, 20° slopes, muddy, and grassy surfaces.  
+
+> Fig. 7. Phase portrait on the 1-DoF pendulum near the unstable upright equilibrium. STRIDE preserves physically consistent trajectories and captures multi-modal next-state evolution, while deterministic baselines (e.g., DeLaN) show averaging bias and drift in sensitive regions.
+
+hibits a favorable accuracy–efficiency trade-off. These results justify the choice of CFM within STRIDE for real-time model-based control, where both predictive accuracy and sampling speed are essential. 
+
+F. Hardware Implementation and Real-Time Performance 
+
+To thoroughly test the dynamics model beyond simulation, we implement the Dreamer–MPC multi-gait controller on hardware using the Unitree Go1. Real-world deployment provides a more stringent evaluation due to unmodeled com-pliance, actuator dynamics, sensing noise, terrain variation, slipping, and other uncertainties. We evaluated STRIDE-embedded control pipeline under varying commanded speeds and terrain elevations, where the system demonstrates smooth and continuous gait adapta-tion for stable locomotion. The improved dynamics model enables accurate long-horizon rollouts, allowing MPPI to effectively optimize over gait parameters and control actions in real time. As the hardware platform does not provide direct measurements of contact forces, we instead evaluate performance through rollout error comparisons. As shown in Fig. 6, STRIDE maintains the lowest prediction error in the presence of sensing noise and hardware uncertainties. We further evaluate zero-shot adaptation across four previ-ously unseen terrains, including transitions from high-friction to low-friction surfaces, 20° slopes, as well as muddy and grassy terrain. The controller successfully adapts gaits and joint positions under these conditions, maintaining stable locomotion without additional training or parameter tuning. The model captures shifts in residual non-conservative forces (Fext ), enabling the MPPI optimizer to adjust gait and refine actions online in response to changing contact dynamics. STRIDE runs in 3 ms within the MPPI loop, maintaining an on-board control frequency of 50 Hz, thereby demonstrating real-time feasibility alongside improved robustness. In summary, our experiments successfully demonstrate:  
+
+> •
+
+Velocity tracking from 0 to 2 m/s, including sudden velocity change.  
+
+> •
+
+Adaptation to changing elevation up to 20°.  
+
+> •
+
+Single-shot adaptation to 4 previously unseen terrains: 
+
+– Muddy: increased compliance of ground 
+
+– Grassy: increased roughness and disturbances 
+
+– Terrain with high and low friction surface 
+
+– Grassy and flat terrain with increasing slope • Enables smooth and continuous gait adaptation, includ-ing various gaits like trotting, pronking and pacing. 
+
+G. Behavior in Sensitive Dynamical Regimes 
+
+While the primary evaluation focuses on contact-rich legged systems, we further analyze the behavior of the proposed model in a controlled low-dimensional setting to better understand its qualitative properties. Specifically, we study a 1-DoF simple pendulum system to examine the consistency of phase portraits in sensitive dynamical regions. Despite its simplicity, the pendulum exhibits a stable configuration and an unstable equilibrium at the upright configuration. Trajectories near this equilibrium are highly sensitive to modeling errors and stochastic perturbations, making it an informative regime for evaluating bias and un-certainty representation. We therefore analyze the predicted phase portrait near the unstable equilibrium (Fig. 7). In this sensitive region, deterministic predictors such as the ONN and DeLaN exhibit clear distortions in the learned vector field. The ONN produces irregular and noisy flows, while the DeLaN, although structurally smoother, shows no-ticeable deviations near the unstable equilibrium. In contrast, STRIDE produces a coherent phase portrait that closely aligns with the ground-truth flow. The elliptical orbits around the stable equilibrium are preserved, and the saddle-like structure near the unstable upright configuration remains well defined. These observations indicate that explicitly modeling stochastic residual dynamics mitigates data-induced averag-ing effects while preserving the qualitative topology of the underlying system. V. C ONCLUSION 
+
+We presented STRIDE, a dynamics modeling framework that decomposes robot dynamics into conservative rigid-body mechanics and stochastic non-conservative interaction effects. The conservative component is modeled using a La-grangian Neural Network to preserve energy-consistent struc-ture and positive-definite inertial properties, while residual forces are represented via Conditional Flow Matching (CFM) to capture multi-modal contact variability with efficient sam-pling. Across complex systems, including the Unitree Go1 quadruped and Unitree G1 humanoid, STRIDE achieves at least a 20% improvement in long-horizon prediction accuracy and contact-force modeling compared to deterministic and diffusion-based baselines, with these gains translating to stable hardware behavior. The flow-based residual offers a favorable accuracy–efficiency trade-off, requiring fewer function evaluations than diffusion-based alternatives. Pendu-lum experiments further demonstrate improved preservation of phase-space structure near unstable equilibria, mitigating averaging effects observed in deterministic predictors. Future work will explore tighter integration with uncertainty-aware and risk-sensitive planning and improved robustness under distribution shift. Another promising di-rection is to extend the flow-matching residual to incorpo-rate visual observations, enabling perception-driven residual modeling that can capture environment-dependent interaction effects within the same physics-informed framework. REFERENCES [1] Y. Hu, J. Liu, A. Spielberg, J. B. Tenenbaum, W. T. Freeman, J. Wu, D. Rus, and W. Matusik, “Chainqueen: A real-time differentiable physical simulator for soft robotics,” in 2019 International conference on robotics and automation (ICRA) , pp. 6265–6271, IEEE, 2019. [2] J. Tan, T. Zhang, E. Coumans, A. Iscen, Y. Bai, D. Hafner, S. Bo-hez, and V. Vanhoucke, “Sim-to-real: Learning agile locomotion for quadruped robots,” Robotics: Science and Systems XIV , 2018. [3] Y. Yang, G. Shi, C. Lin, X. Meng, R. Scalise, M. G. Castro, W. Yu, T. Zhang, D. Zhao, J. Tan, and B. Boots, “Agile continuous jumping in discontinuous terrains,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) , pp. 10245–10252, 2025. [4] A. Nagabandi, G. Kahn, R. S. Fearing, and S. Levine, “Neural network dynamics for model-based deep reinforcement learning with model-free fine-tuning,” in 2018 IEEE international conference on robotics and automation (ICRA) , pp. 7559–7566, IEEE, 2018. [5] K. Chua, R. Calandra, R. McAllister, and S. Levine, “Deep rein-forcement learning in a handful of trials using probabilistic dynamics models,” Advances in neural information processing systems , vol. 31, 2018. [6] M. H. Raibert, Legged Robots That Balance . MIT Press, 1986. [7] A. Herzog et al. , “Momentum control with hierarchical inverse dynam-ics on a torque-controlled humanoid,” Autonomous Robots , vol. 40, no. 3, pp. 473–491, 2016. [8] K. Werling, D. Omens, J. Lee, I. Exarchos, and K. Liu, “Fast and feature-complete differentiable physics engine for articulated rigid bodies with contact constraints,” Robotics: Science and Systems XVII ,2021. [9] P. Kotecha, A. Shirwatkar, and S. Kolathaya, “Investigating lagrangian neural networks for infinite horizon planning in quadrupedal locomo-tion,” arXiv preprint arXiv:2506.16079 , 2025. [10] L. Schulze, J. D. Negri, V. Barasuol, V. S. Medeiros, M. Becker, J. Peters, and O. Arenz, “Floating-base deep lagrangian networks,” 
+
+arXiv preprint arXiv:2510.17270 , 2025. [11] B. Siciliano, L. Sciavicco, L. Villani, and G. Oriolo, Robotics: Mod-elling, Planning and Control . Springer, 2010. [12] R. Featherstone, “Rigid body dynamics algorithms,” Springer , 2014. [13] E. Todorov, T. Erez, and Y. Tassa, “Mujoco: A physics engine for model-based control,” IROS , 2012. [14] M. P. Deisenroth and C. E. Rasmussen, “Pilco: A model-based and data-efficient approach to policy search,” ICML , 2011. [15] G. Williams, A. Aldrich, and E. A. Theodorou, “Information-theoretic model predictive control: Theory and applications to autonomous driving,” IEEE Transactions on Robotics , vol. 34, no. 6, pp. 1603– 1622, 2017. [16] N. Gruver, M. A. Finzi, S. D. Stanton, and A. G. Wilson, “De-constructing the inductive biases of hamiltonian neural networks,” in 
+
+International Conference on Learning Representations , 2022. [17] M. Lutter, C. Ritter, and J. Peters, “Deep lagrangian networks: Using physics as an inductive bias for deep learning,” in International Conference on Learning Representations (ICLR) , 2019. [18] M. Cranmer, S. Greydanus, S. Hoyer, P. Battaglia, D. Spergel, and S. Ho, “Lagrangian neural networks,” in ICLR 2020 Workshop on Integration of Deep Neural Models and Differential Equations , 2020. [19] S. Greydanus, M. Dzamba, and J. Yosinski, “Hamiltonian neural networks,” in Advances in Neural Information Processing Systems (NeurIPS) , 2019. [20] R. T. Q. Chen, Y. Rubanova, J. Bettencourt, and D. K. Duvenaud, “Neural ordinary differential equations,” in Advances in Neural Infor-mation Processing Systems (NeurIPS) , 2018. [21] Y. D. Zhong, B. Dey, and A. Chakraborty, “Extending lagrangian and hamiltonian neural networks with differentiable contact models,” Ad-vances in Neural Information Processing Systems , vol. 34, pp. 21910– 21922, 2021. [22] L. Schulze, J. Peters, and O. Arenz, “Context-aware deep lagrangian networks for model predictive control,” in 2025 IEEE/RSJ Interna-tional Conference on Intelligent Robots and Systems (IROS) , pp. 6939– 6946, IEEE, 2025. [23] C. Pan, Z. Yi, G. Shi, and G. Qu, “Model-based diffusion for trajectory optimization,” Advances in Neural Information Processing Systems ,vol. 37, pp. 57914–57943, 2024. [24] J. Ho, A. Jain, and P. Abbeel, “Denoising diffusion probabilistic models,” in Advances in Neural Information Processing Systems (NeurIPS) , vol. 33, pp. 6840–6851, 2020. [25] X. Xu, H. Ha, and S. Song, “Dynamics-guided diffusion model for sensor-less robot manipulator design,” in Conference on Robot Learning , pp. 4446–4462, PMLR, 2025. [26] Y. Lipman, R. T. Chen, H. Ben-Hamu, M. Nickel, and M. Le, “Flow matching for generative modeling,” in The Eleventh International Conference on Learning Representations , 2023. [27] A. Shirwatkar, N. Saxena, K. Chandra, and S. Kolathaya, “Pip-loco: A proprioceptive infinite horizon planning framework for quadrupedal robot locomotion,” in 2025 IEEE International Confer-ence on Robotics and Automation (ICRA) , pp. 11198–11204, IEEE, 2025.

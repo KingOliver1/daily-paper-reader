@@ -1,0 +1,428 @@
+Title: VIP-Loco: A Visually Guided Infinite Horizon Planning Framework for Legged Locomotion
+
+URL Source: https://arxiv.org/pdf/2603.14345v1
+
+Published Time: Tue, 17 Mar 2026 04:42:00 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# VIP-Loco: A Visually Guided Infinite Horizon Planning Framework for Legged Locomotion 
+
+Aditya Shirwatkar 1, Satyam Gupta 1, Shishir Kolathaya 2
+
+Abstract — Perceptive locomotion for legged robots requires anticipating and adapting to complex, dynamic environments. Model Predictive Control (MPC) serves as a strong base-line, providing interpretable motion planning with constraint enforcement, but struggles with high-dimensional perceptual inputs and rapidly changing terrain. In contrast, model-free Reinforcement Learning (RL) adapts well across visually challenging scenarios but lacks planning. To bridge this gap, we propose VIP-Loco, a framework that integrates vision-based scene understanding with RL and planning. During training, an internal model maps proprioceptive states and depth images into compact kinodynamic features used by the RL policy. At deployment, the learned models are used within an infinite-horizon MPC formulation, combining adapt-ability with structured planning. We validate VIP-Loco in simulation on challenging locomotion tasks, including slopes, stairs, crawling, tilting, gap jumping, and climbing, across three robot morphologies: a quadruped (Unitree Go1), a biped (Cassie), and a wheeled-biped (TronA1-W). Through ablations and comparisons with state-of-the-art methods, we show that VIP-Loco unifies planning and perception, enabling robust, interpretable locomotion in diverse environments. 
+
+Keywords: Legged Robots, Reinforcement Learning, Planning 
+
+I. I NTRODUCTION 
+
+Model Predictive Control (MPC) [1], [2] and Reinforce-ment Learning (RL) [3], [4], [5] have driven major progress in legged locomotion, enabling robust performance across diverse terrains. MPC offers interpretable control by opti-mizing actions over a horizon under constraints, while RL achieves adaptability and generalization through policy opti-mization. Despite these strengths, a majority of the methods in both paradigms exhibit reactive behavior when relying on proprioceptive observations, which limits their performance in scenarios requiring foresight, such as gap crossing, con-fined navigation, or high-penalty obstacle traversal. Legged robots operating in real-world environments must anticipate upcoming terrain variations and plan motion tra-jectories that satisfy stability and kinodynamic constraints. Purely reactive controllers often fail in such settings because they lack predictive reasoning. This gap has motivated re-search into integrating perception and planning for locomo-tion. Recent works have begun incorporating exteroceptive sensing to extend beyond purely reactive control [6], [7], [8],   
+
+> This work is funded by Kotak IISc AI-ML Centre (KIAC) - Google Grant
+> 1A. Shirwatkar, and S. Gupta are with the Robert Bosch Center for Cyber-Physical Systems, Indian Institute of Science, Bengaluru.
+> 2S. Kolathaya is with the Robert Bosch Center for Cyber-Physical Systems and the Department of Computer Science & Automation, Indian Institute of Science, Bengaluru. Project Website: stochlab.com/VIP-Loco/, Email: stochlab@iisc.ac.in
+> Fig. 1: Conceptual outline of VIP-Loco – The framework learns a compact internal model from vision and proprioception during training, which is then utilized by an infinite-horizon MPC planner at deployment to enable anticipatory, constraint-aware locomotion.
+
+[5], [9], [10], [11], [12], [13]. We discuss these lines of work in detail in Section II, yet a unified framework combining visual foresight with planning has remained elusive. Thus, a key challenge lies in unifying perception, long-horizon predictive control, and real-time deployment. An ideal framework must leverage rich visual context for terrain understanding, maintain interpretability through structured planning, and remain computationally feasible for onboard control. To bridge these gaps, we introduce VIP-Loco, a Visually Guided Infinite-Horizon Planning framework for Legged Locomotion (see Fig. 1 for a conceptual overview). Our approach integrates vision-based scene understanding with an internal model-driven predictive control, enabling robots to anticipate terrain variations and reason over ex-tended horizons while maintaining real-time feasibility. We show that this achieves robust, adaptive locomotion across challenging environments that require proactive decision-making. In summary, our contributions are:  
+
+> •
+
+Visually-Guided Infinite-Horizon Planning: We use a visually guided internal model-driven predictive control for legged locomotion, where infinite-horizon return is approximated via value function bootstrapping at the terminal planning state.  
+
+> •
+
+Interpretable Internal Model with Kinodynamic Predictions: Our internal model predicts kinodynamic states in compact representations for imagination aug-mentation, bridging the gap between perception-driven reinforcement learning and structured planning.               
+
+> arXiv:2603.14345v1 [cs.RO] 15 Mar 2026 Fig. 2: Overview of VIP-Loco Framework – The proposed framework consists of two major components: (1) Learning Stage (left) – The internal model includes a GRU cell gφ(operating at 10 Hz, updating recurrent memory hat each step) coupled with a CNN-MLP encoder for depth processing, an encoder/dynamics pair for latent state estimation, and reward/value heads. The Expert Actor (50 Hz) receives the imagined rollout Xand hidden state
+> hvia stop-gradient. (2) Deployment Stage (right) – a data-driven MPC that uses the learned internal model to iteratively sample and refine trajectories, leveraging vision-based scene understanding to select actions that maximize long-term reward while satisfying kinodynamic constraints.
+> •
+
+Extensive Multi-Morphology Evaluation: We demon-strate our approach across three distinct morphologies: a quadruped (Unitree Go1), a biped (Cassie), and a wheeled-biped (TronA1-W), and validate it on chal-lenging terrains such as stairs, gaps, crawling, narrow passages, and climbing. II. R ELATED WORK 
+
+Proprioceptive Locomotion with RL. Reinforcement learning has enabled robust locomotion across diverse ter-rains using proprioceptive inputs alone [4], [5]. Teacher-student distillation [3], [14] can transfer privileged-information policies to deployable ones, achieving surpris-ingly capable blind locomotion. However, these methods fundamentally lack visual foresight, limiting performance in scenarios requiring anticipation, such as gap crossing or confined navigation. 
+
+Perceptive Locomotion with RL. Incorporating depth, LiDAR, or RGB inputs has enabled more agile, terrain-aware behaviors [12], [10], [11], [6], [13], [15]. ANYmal Parkour [10] and Robot Parkour Learning [11] demonstrate that perception-conditioned RL policies can learn highly dynamic maneuvers. WMP [7] introduces a world model to learn recurrent visual representations for locomotion, achieving strong generalization. However, these methods do not employ explicit planning at deployment, relying only on the learned policy to implicitly encode foresight. 
+
+MPC and Hybrid Frameworks. Classical MPC [1], [16] provides interpretable, constraint-satisfying control but struggles with high-dimensional visual inputs and gener-alization. Infinite-horizon MPC variants [17], [18], [19], [20], [21], [22], [23] combine learned dynamics and value models with trajectory optimization, but typically rely on off-policy training pipelines ill-suited to massively parallel simulation. PIP-Loco [8] bridges on-policy RL training with MPC deployment for proprioceptive locomotion. For VIP-Loco, we aim to extend these paradigms of perception-based locomotion (WMP [7]) and MPC (PIP-Loco [8]) to enable anticipatory planning in visually com-plex environments, while maintaining on-policy training effi-ciency and addressing environments not addressed by either predecessor alone. III. METHODOLOGY 
+
+This section will describe our proposed method, starting with some preliminary concepts. 
+
+A. Setup 
+
+We formulate legged locomotion as a Partially Observable Markov Decision Process (POMDP), represented by the tuple 
+
+M = ( S, A, O, r, P, γ, F). The system state space is de-noted as S ⊂ Rn, while the agent receives observations from an observation space O ⊂ Rp (p << n ). The control inputs belong to an action space A ⊂ Rm. Additionally, we define an observation history OM ⊂ Rp×M , which aggregates sensory information over the past M steps. Observations are obtained via the mapping F : S 7 → O . The dynamics of the environment are governed by a transition function P : S × A 7 → Pr( S), where Pr represents a probability distribution over future states. The agent’s objective is to maximize the cumulative discounted reward, where the reward function is given by r : S × A → R, and future rewards are discounted by a factor γ ∈ (0 , 1) .In this work, to effectively solve this POMDP, we employ an Asymmetric Actor-Critic [24] architecture. While the expert actor and privileged critic are trained via the Proximal Policy Optimization (PPO) [25], the internal model is trained via supervised learning (see Fig. 2). The exact details of this will be discussed in the later subsections. 
+
+1) Observation Space: At each time step t, the observa-tion ot comprises a 5-step history of the robot’s joint angles relative to their nominal values, joint velocities, projected gravity, target velocity commands for the robot’s base, and the previous action. We collectively refer to these as proprio-ceptive observations. To incorporate vision, we introduce ad-ditional inputs of 2D depth images in ot. Finally, we denote the set of privileged observations opriv  
+
+> t
+
+, which consists of proprioceptive terms and some extra terms like scan dots that provide height field information around the robot, base linear velocities, reaction forces, mass, and friction parameters. 
+
+2) Action Space: In the case of quadruped and biped, the policy outputs joint-angle perturbations relative to the nominal joint angles for all 12 degrees of freedom (DoF). For the wheeled-biped, the action also includes joint-velocity commands for the wheel DoF. The resulting joint command is given to a PD controller, which computes the correspond-ing torques to achieve the desired motion. 
+
+3) Reward Function: The reward function is designed to guide the agent toward desired locomotion behaviors, including tracking commanded linear and angular velocities, maintaining body height, and preserving orientation. Table I summarizes the reward terms and their scales across different robots. The rewards are grouped into two categories: Core Locomotion Rewards encourage stable and efficient motion, 
+
+Environment-Constraint Rewards penalize collisions, stum-bles, edge steps, and immobility. Unlike prior works that manually select waypoints along a preset trajectory to compute tracking rewards, we adopt a simpler formulation from [7]: 
+
+rlin tracking = exp 
+
+
+
+−   min( vxy , v cmd  
+
+> xy
+
++ 0 .1) − vcmd 
+
+> xy
+
+2/σ 
+
+
+
+, (1) 
+
+where vxy is the current planar speed of the robot, vcmd  
+
+> xy
+
+is the commanded speed, and σ is a scaling factor. This for-mulation allows the agent to naturally accelerate, decelerate, or turn as required by the terrain (e.g., when jumping over gaps), reducing human effort in waypoint selection.                                           
+
+> TABLE I: Reward scales used for training, grouped into core locomotion and environment-constraint rewards.
+> Go1 (Quadruped) Cassie (Biped) TronA1-W (Wheeled Biped)
+> Core Locomotion Rewards
+> Linear Velocity Tracking 1.52.55.0
+> Angular Velocity Tracking 0.50.52.5
+> Torques Penalty 1e−71e−71e−7
+> DoF Acceleration Penalty 2.5e−72.5e−72.5e−7
+> Action Rate −0.03 −0.03 −0.03
+> DoF Error −0.04 −0.04 −0.04
+> Z-Linear Velocity Penalty −1.0−1.0−1.0
+> Feet Air Time 0.50.50.5
+> Wheel Penalty −− −− −0.01
+> Environment-Constraint Rewards
+> Collision −1.0−1.0−1.0
+> Feet Stumble −0.1−0.1−0.1
+> Feet Edge −1.0−1.00.0
+> Cheat −1.0−1.0−0.7
+> Stuck −1.0−1.0−1.0
+
+B. Model Architecture 
+
+Our training framework consists of an Internal Model combined with an Asymmetric Actor-Critic setup (Fig. 2). The Internal Model learns a predictive representation, en-abling the policy to reason in a compact state space that is robust to sensor noise and domain shifts. 
+
+1) Internal Model: It serves two purposes simultaneously. During training , it provides the expert actor with imagined kinodynamic rollouts that encode future terrain geometry, en-abling anticipatory behavior without privileged access to the simulator. 1 During deployment , it acts as the dynamics and return oracle for the MPC planner (Algorithm 2), enabling trajectory optimization in a compact learned state space. This dual role motivates the specific architecture choices below: a gated recurrent unit (GRU) for temporal memory, a stochastic latent state for uncertainty representation, and an explicit kinodynamic CoM state x for interpretable constraint enforcement. The model state is defined as y = [x, h, z ]⊤, with h
+
+representing the recurrent hidden state and z the stochastic latent state, both following the formulation in [27]. x is the kinodynamic CoM state from [28] (which includes body pose, twist, and joint states). Explicitly incorporating x en-sures interpretability and facilitates easier constraint handling during planning. The Internal Model operates at 10 Hz rather than the actor’s 50 Hz due to the computational cost of depth-image encoding and latent-state estimation; the recurrent hidden state h is thus held fixed between GRU updates and reused by the actor at the higher control frequency. 
+
+Algorithm 1 Imagination Augmentation                                                           
+
+> Require: y0= [ x0, h 0, z 0]; observation embedding e; horizon H
+> 1: X ← ∅
+> 2: for k= 0 to H−1do
+> 3: ak∼πφ(· | yk)// Internal Policy
+> 4: hk+1 =gφ(yk, a k)// GRU update
+> 5: if k= 0 then
+> 6: zk+1 ∼pzφ(· | e, h k+1 )// Encoder (posterior)
+> 7: xk+1 =pxφ(e, h k+1 )// Estimation
+> 8: else
+> 9: zk+1 ∼dzφ(· | hk+1 )// Latent Dynamics (prior)
+> 10: xk+1 =dxφ(hk+1 )// Rigid Body Dynamics
+> 11: end if
+> 12: X ← X ∪ { xk+1 }
+> 13: end for
+> 14: return X, y 1= [ x1, h 1, z 1]
+
+The whole model consists of the following components:  
+
+> •
+
+Internal Policy πφ: Outputs the action distribution con-ditioned on the model state y. 
+
+> •
+
+GRU Cell gφ: Updates the recurrent memory h for the current model state and action input.  
+
+> •
+
+Encoder (pzφ, p xφ): Consists of two components to es-timate the future state variables (z, x ) conditioned on the observation embedding e and the recurrent state h.Here e is obtained by passing o through a preprocessing module (see Fig. 2).  
+
+> •
+
+Dynamics (dzφ, d xφ): Predicts future states (z, x ) from the recurrent state h. It also consists of two components,       
+
+> 1We adopt the RSSM architecture from Dreamer [26] as the internal model backbone; we refer to its policy as the Internal Policy πφto distinguish it from the Expert Actor πθ.
+
+an MLP dzφ to model the dynamics probability distri-bution for the latent state z. And dxφ for the rigid body dynamics equations from [28] to update x. This makes the overall dynamics more interpretable and useful for adding constraints during deployment.  
+
+> •
+
+Decoder qφ: Reconstructs the full proprioceptive obser-vations and the depth image given the model state.  
+
+> •
+
+Reward and Value Models (rφ, V φ): Estimate task re-ward and value for a given model state. Starting from the previous model state y0 and current observation embedding e, Algorithm 1 predicts a horizon 
+
+H sequence of kinodynamic states entirely in model state. The first step ( k = 0 ) uses the encoder for a posterior update; subsequent steps use the dynamics prior. Actions are sampled from the Internal Policy at every step. 
+
+2) Asymmetric Actor-Critic: The Expert Actor πθ is an MLP that interacts with the environment during training, taking input as o, and sg (h, X ). Here sg (·) denotes stop-gradient, preventing Actor-Critic updates from altering the Internal Model. The Privileged Critic Vθ is trained with access to privileged information opriv and also sg (h, X ).
+
+C. Training 
+
+This section describes the procedure for jointly optimizing the Internal Model, Expert Actor, and Privileged Critic, following the architecture in Section III-B.1. 
+
+1) Supervised Learning of the Internal Model: We train it using targets from simulation interaction. For each timestep t in the replay buffer, we construct: 
+
+(ot, a expert  
+
+> t
+
+, r sim  
+
+> t
+
+, V target  
+
+> t
+
+, x sim  
+
+> t
+
+, x sim 
+
+> t+1
+
+) where aexpert  
+
+> t
+
+is the action from the Expert Actor, rsim  
+
+> t
+
+is the ground-truth reward, 
+
+V target  
+
+> t
+
+is the value target, and (xsim  
+
+> t
+
+, x sim 
+
+> t+1
+
+) are ground-truth kinodynamic CoM states. Recall that the model state is yt = [ xt, h t, z t]⊤, and the model includes a preprocessing module for obtaining et from observations, a GRU core for memory updates, an encoder for posterior estimation, and a dynamics model for prior prediction. The decoder, reward, Internal Policy, and Internal Critic networks are modeled as distributions. Thus the combined model loss is defined as:                                                 
+
+> LIM =
+> LX
+> t=0
+> Epφ
+> "
+> −ln rφ(rsim
+> t|yt, a expert
+> t)
+> |{z }
+> Reward NLL
+> −ln Vφ(Vtarget
+> t|yt)
+> |{z }
+> Value NLL
+> +βKL
+> 
+> pzφ(zt|et, h t)∥dzφ(zt|ht)
+> |{z }
+> Latent KL
+> −ln πφ(aexpert
+> t|yt)
+> |{z }
+> Action Cloning
+> +xsim
+> t−pxφ(et, h t)22+xsim
+> t+1 −dxφ(ht)22
+> |{z }
+> Kinodynamic CoM Loss
+> −ln qφ(ot|yt)
+> |{z }
+> Reconstruction
+> #
+> (2)
+
+Here, the KL term aligns the encoder posterior and dynamics prior for consistent imagination; the CoM loss enforces accurate physical state predictions; reward and value terms use negative log-likelihood (NLL) for likelihood max-imization under predicted distributions; the behavior cloning term trains the Internal Policy to match expert actions; and the reconstruction term ensures the latent state retains observation information. This supervised approach enables sample-efficient training without propagating gradients into the imagined rollouts from on-policy updates. We adopt a variational objective for our internal model rather than a consistency-based one (as in TD-MPC [22], [23]) for a specific reason: the privileged critic’s scan dot inputs provide sufficient height information for open terrains but cannot capture lateral geometry constraints such as wall clearances that define tasks like crawl and tilt. A consistency loss trained against this privileged representation inherits its blind spots. The variational objective instead avoids dependence on the quality of the privileged scan data and produces representations better suited to tasks such as crawl and tilt, as confirmed by the ablation in Section IV-A. 
+
+2) Policy Learning via PPO: The Expert Actor πθ and Privileged Critic Vθ are trained using PPO on trajectories col-lected in simulation. As mentioned earlier, the actor receives 
+
+(ot, h t, Xt), where Xt is the imagined kinodynamic rollout from Algorithm 1. The critic additionally uses privileged simulator information. The PPO objective in our approach is defined as:                             
+
+> LPPO =E
+> "
+> min
+> 
+> ρt(θ) ˆAt,clip  ρt(θ),1−ϵ, 1 + ϵˆAt
+> |{z }
+> Clipped Policy Loss
+> +βent H
+> 
+> πθ(· | ot,sg (ht,Xt))
+> |{z }
+> Entropy Bonus
+> −Vθ(opriv
+> t,sg (ht,Xt)) −ˆRt
+> 22
+> |{z }
+> Value Loss
+> #
+> (3)
+
+Here, ρt(θ) is the probability ratio between new and old policies, ˆAt is the GAE advantage estimate, and ˆRt is the return target. 
+
+D. Deployment: Infinite-Horizon Planning 
+
+Safe and optimal locomotion requires online filtering of actions generated by the learned policy (in our case πθ ). While RL policies provide generalization, they may produce unsafe or suboptimal actions under distribution shifts or unseen situations. An online planner is therefore essential to ensure stability, safety, and constraint satisfaction during deployment. Furthermore, incorporating model-based plan-ning improves interpretability by explicitly reasoning over predicted kinodynamic states. To this end, we adopt a planning approach using the learned models from Section III-B.1. The planner optimizes a receding-horizon trajectory with value estimates for boot-strapping to approximate infinite-horizon return. At each control step starting from y0, the objective is to compute an optimal action sequence a∗ 
+
+> 0: H−1
+
+as formulated below, 
+
+max 
+
+> a0: H−1
+
+E
+
+" H−1X
+
+> k=0
+
+γk rk + γH VH
+
+#
+
+s.t. yk+1 ∼ fφ( · | yk , a k ) ∀k = 0 , . . . , H − 1,rk ∼ rφ( · | yk , a k ) ∀k = 0 , . . . , H − 1,VH ∼ Vφ( · | yH ),cj (yk , a k ) ≤ 0 ∀j ∈ C , ak ∈ A .
+
+(4) 
+
+Here, fφ(·) denotes the composition of (dzφ, d xφ) and gφ
+
+for readability. The constraint set C enforces kinodynamic feasibility and safety, including: (i) joint position and velocity limits, (ii) base twist bounds on linear and angular velocity. And A represents an admissible set for actions. Since Equa-tion (4) is a nonlinear stochastic program, exact solutions are intractable for real-time execution. We adopt a constrained version of the Model Predictive Path Integral (MPPI) [29] method (see Algorithm 2), which updates a Gaussian dis-tribution over action sequences using elite sampling. Here, 
+
+μ and σ denote the mean and covariance of this Gaussian policy with RL policy providing a warm-start to accelerate convergence. The infinite-horizon objective in Equation (4) uses value function bootstrapping at the terminal state to account for rewards beyond the planning horizon. This improves long-term planning capabilities compared to classical fixed-horizon MPC formulations [1], [2]. Furthermore, although we adopted the MPPI formulation for computational effi-ciency, our framework is general enough to employ other gradient or Hessian based optimization solvers. 
+
+Algorithm 2 Data-Driven ∞ Horizon MPC (Deployment)                                                                                                   
+
+> Require: (μprev , σ prev ): Previous Gaussian policy; yprev : Previous model state; e: Observation embedding; H: Horizon; N: # of MPPI updates;
+> M: # of MPPI samples; Mπ: # of RL policy samples; Melite : Elite set size; α: Temporal momentum; β: Iteration momentum. 1: Get y0and a Gaussian policy (μRL , σ RL )using expert actor πθstarting from (e, y prev )up to horizon H.// Uses Algorithm 1
+> 2: (μ0, σ 0)←α(μprev , σ prev ) + (1 −α)( μRL , σ RL )
+> 3: for i= 1 to Ndo
+> 4: A← ∅ ,R← ∅
+> 5: // Sample action trajectories
+> a(j)0: H−1∼ N (μi−1, σ i−1),∀j∈[1 , M ]
+> a(j)0: H−1∼ N (μRL , σ RL ),j∈[M+ 1 , M +Mπ]
+> 6: // Evaluate expected return of trajectories 2
+> ¯R(j)=E
+> "H−1X
+> k=0
+> γkr(j)
+> k+γHV(j)
+> H
+> #
+> 7: R←R∪ { ¯R(j)}
+> 8: Sort Aaccording to returns R
+> 9: AE←select top-Melite trajectories from Asatisfying C
+> 10: (μelite , σ elite )←fit Nto the elite set AE// MPPI Update
+> 11: (μi, σ i)←β(μelite , σ elite ) + (1 −β)( μi−1, σ i−1)
+> 12: end for
+> 13: return First action a0∼ N (μN, σ N)
+
+IV. R ESULTS 
+
+We evaluate VIP-Loco through extensive simulation ex-periments, complemented by ablation studies to analyze the contribution of each framework component. Training was performed in an open-source environment built on NVIDIA’s Isaac Gym [30], [31], with all neural networks implemented in PyTorch [32]. Robots were trained to navigate diverse terrains, including rough slopes, staircases, gaps requiring jumps, obstacles for climbing, narrow passages for tilting,                     
+
+> 2The expectation is taken over trajectories induced by y(j)
+> k+1 ∼fφ(· |
+> y(j)
+> k, a (j)
+> k), r (j)
+> k∼rφ(· | y(j)
+> k, a (j)
+> k)and V(j)
+> H∼Vφ(· | y(j)
+> H).
+
+and low-clearance slabs for crawling. To enhance robust-ness, we employed domain randomization and a curriculum learning strategy that gradually increased terrain difficulty. Each morphology is trained with an independent model using robot-specific reward scales (Table I) and terrain curricula. We demonstrate that the VIP-Loco framework architecture is sufficiently general to be instantiated across fundamentally different morphologies without requiring structural changes to the method.       
+
+> Fig. 3: Training comparison for Go1 (quadruped) over 5seeds – Top: episodic return progression over training iterations. Bottom: average terrain level successfully mastered. VIP-Loco (Variational) achieves the highest and most stable returns, steadily mastering harder terrains (levels ≥6). WMP performs competitively but asymptotically regresses to easier terrains. VIP-Loco (Consistency) converges earlier and stagnates at lower levels.
+
+We train using PPO [25] with a clipping range of 0.2, a GAE factor of 0.95, and a discount factor of 0.99. All networks are optimized using Adam with a learning rate of 0.001. Training was executed on a desktop equipped with an Intel Xeon Gold 5318Y (48) @ 3.40 GHz and two NVIDIA RTX A6000 GPUs. Our implementation also uses the NVIDIA WARP library to maintain VRAM usage below 25 GB while supporting 4096 parallel environments and rendering depth images within milliseconds. For deployment, we run the planner (Algorithm 2) using JAX [33], achieving inference rates of 40–50 Hz. An approximate per-component breakdown at deployment is as follows: depth image encod-ing ( ∼2–3 ms), GRU state update ( <1 ms), imagination rollout over horizon H (∼3–5 ms), MPPI sampling and return evaluation over M trajectories ( ∼10–15 ms), and elite selection and distribution update ( <1 ms), yielding a total planner latency of approximately 20–25 ms per control step on a desktop GPU. 
+
+1) Ablation Methods: To evaluate VIP-Loco systemati-cally, we compare it against the following methods, which together isolate the contributions of proprioception, vision, and planning:  
+
+> •
+
+HIM-Loco [5]: A proprioception-only baseline using internal model latent representations, without vision or planning.  
+
+> •
+
+PIP-Loco [8]: Extends HIM-Loco with a hierarchical internal model and infinite-horizon MPC at deployment, but uses only proprioceptive inputs. Isolates the effect Fig. 4: Comparison of locomotion performance for Go1 (quadruped) across terrains of increasing difficulty and 5 seeds – The plots show the success rate (top row) and average return (bottom row) for five locomotion methods: HIM-Loco, PIP-Loco, WMP, VIP-Loco (with Consistency Loss), and VIP-Loco (with Variational Loss). Each column corresponds to a different terrain type and the x-axis indicates terrain difficulty level (0 = easiest, 8 = hardest). TABLE II: Average episodic return comparison across six terrains and three robots after 5k iterations (averaged over 5 seeds).                                                                                                                    
+
+> Robot Method Slopes Stairs Climb Gaps Crawl Tilt
+> Go1 (Quadruped) VIP-Loco w/o Planning 28 .37 ±2.59 26 .66 ±2.54 22 .80 ±3.29 24 .80 ±3.29 20 .80 ±2.82 16 .18 ±2.54
+> VIP-Loco 27 .22 ±1.34 27 .85 ±3.28 23 .26 ±2.45 26 .33 ±2.38 22 .63 ±3.74 18 .78 ±2.13
+> Cassie (Biped) VIP-Loco w/o Planning 22 .54 ±1.83 23 .66 ±3.79 21 .46 ±2.46 21 .34 ±2.91 18 .52 ±1.91 12 .33 ±1.98
+> VIP-Loco 23 .19 ±2.94 23 .85 ±1.64 27 .42 ±2.72 20 .50 ±3.06 17 .69 ±2.22 14 .40 ±3.21
+> TronA1-W (Wheeled Biped) VIP-Loco w/o Planning 33 .47 ±1.38 31 .32 ±1.22 29 .39 ±3.92 31 .19 ±2.26 27 .55 ±2.73 21 .82 ±2.01
+> VIP-Loco 38 .29 ±2.39 34 .05 ±2.31 32 .87 ±1.50 30 .22 ±2.99 29 .27 ±3.09 24 .03 ±1.17
+
+of planning without vision.  
+
+> •
+
+WMP [7]: A visually-guided locomotion method using a world model with depth inputs and RL, but without 
+
+explicit MPC-based planning at deployment. Isolates the effect of vision without planning.  
+
+> •
+
+VIP-Loco (Consistency) : A variant of our method that replaces the variational latent loss with the latent consistency loss from [22], [23]. Isolates the effect of the representation learning objective.  
+
+> •
+
+VIP-Loco (Variational) : Our proposed method, trained with the variational loss in Eq. (2), and infinite-horizon MPC at deployment. Together, HIM-Loco and PIP-Loco represent the [RL + MPC] family (no vision); WMP represents [RL + Vision] (no planning); and VIP-Loco represents [RL + Vision + MPC], enabling analysis of each component’s contribution. 
+
+A. Training Comparison 
+
+Figure 3 shows the training performance of WMP, VIP-Loco (Consistency), and VIP-Loco (Variational) over 6000 
+
+iterations, tracking average episodic return (top) and mas-tered terrain level (bottom). All methods adapt quickly, show-ing rapid early gains in both return and terrain level. How-ever, their asymptotic behavior diverges: VIP-Loco (Varia-tional) achieves the highest and most stable returns while steadily mastering harder terrains, sustaining levels above 6. WMP performs competitively and it reaches similar terrain levels, but it asymptotically regresses to easier terrains to maintain higher reward. In contrast, VIP-Loco (Consistency) plateaus at a lower level, struggling on terrains like crawl and tilt. Overall, while all methods show fast initial adaptation, only VIP-Loco (Variational) and, to some extent, WMP maintain strong returns and terrain generalization throughout training. We hypothesize that the failure of the consistency-based variant on crawl and tilt stems from an information asymmetry: the privileged critic’s scan dot inputs provide sufficient height information for open terrains but cannot cap-ture the lateral geometry constraints (e.g., wall clearances) that define these tasks, causing the consistency loss to learn representations poorly suited to visually demanding loco-motion. The variational objective, by directly reconstructing the depth image, learns more effective representations when sparse scan data provides an insufficient description of the terrain. 
+
+B. Deployment Performance Comparison 
+
+Figure 4 compares success rate and episodic return across five of the six terrain types. On stairs, VIP-Loco variants maintain > 90% success at maximum difficulty while PIP-Loco and HIM-Loco degrade sharply. On visually demanding tasks (climb, gaps), proprioceptive-only methods fail beyond level 4, while vision-based methods remain robust. On crawl and tilt, only WMP and VIP-Loco (Variational) sustain 
+
+> 60% success, with the consistency variant degrading at higher levels. This again highlights that the variational for-mulation exhibits the highest robustness and generalization when no information can be extracted from the scan-dot inputs fed to the privileged critic. We note that VIP-Loco (Variational) and WMP exhibit similar success rates across several terrains (Fig. 4). The primary advantage of VIP-Loco over WMP lies not in raw success rate but in interpretability (a) Go1 (quadruped) performing Climb and Crawl . The left plots show predicted vs. actual CoM height, while the right frames show execution snapshots demonstrating coordinated four-leg motion across terrains. 
+
+> (b) Cassie (biped) executing the same tasks. The model accurately forecasts sharp height variations during climbing and low crouched profiles during crawling, with snapshots showing balanced bipedal motion.
+> (c) TronA1-W (wheeled biped) combining leg and wheel motions. Predicted and actual profiles align well, and snapshots illustrate seamless hybrid transitions for climbing and crawling.
+
+Fig. 5: Qualitative evaluation for VIP-Loco with planning across three robot morphologies: (a) Go1 (quadruped), (b) Cassie (biped), and (c) TronA1-W (wheeled biped). Each subfigure includes (left) predicted vs. actual CoM height trajectories for Climb and Crawl tasks, and (right) corresponding execution frames. The MPC predictions and actual measurements demonstrate interpretable dynamics modeling, while the snapshots show task-specific stable behaviors across diverse morphologies. 
+
+and constraint satisfaction enabled by explicit MPC planning, as evidenced by the following section. 
+
+C. Why Combine MPC and RL? 
+
+Table II compares VIP-Loco with and without planning across three robots, evaluated over 5000 iterations on six terrain types and averaged across five seeds. While loco-motion behaviors appear visually similar, planning achieves higher average returns across robots, with gains concentrated on anticipatory terrains, though marginal regressions appear on some easier terrain types where the no-planning policy already saturates. The performance gains are particularly evident on terrains where stability and precise foothold selection are critical for tasks that benefit from planning’s ability to anticipate future states. Among the robots, TronA1-W (wheeled-biped) shows the most significant improvement, likely because its hybrid wheeled-biped morphology intro-duces additional non-holonomic constraints, making trajec-tory planning in model state y more advantageous. To make the role of each component explicit: PIP-Loco, which represents [RL + MPC] without vision, succeeds on proprioceptive terrains (slopes, stairs) but degrades sharply on visually demanding tasks (gaps, crawl, tilt) beyond dif-ficulty level 4 (Fig. 4). WMP represents [RL + Vision] without planning; it captures terrain geometry effectively but lacks the corrective horizon that filters unsafe or suboptimal actions at deployment. VIP-Loco combines both: Table II shows that the planning stage contributes a return gain over the no-planning variant for the quadruped, biped, and wheeled-biped, with the largest gains on terrains where antic-ipatory foothold selection is critical (gaps, crawl, climb). This confirms that neither vision nor planning alone is sufficient; their combination is what enables robust performance at the highest difficulty levels. 
+
+1) Qualitative Rollouts and Model Accuracy: Figure 5 shows Climb and Crawl rollouts for all robots, comparing MPC-predicted CoM height (red) with actual tracked profiles (black). Predictions align with execution, confirming that VIP-Loco’s learned dynamics model provides insight into the receding-horizon planning. Snapshots illustrate morphology-specific behaviors: quadrupeds coordinate legs for climb-ing/crawling, bipeds adapt step height and posture, and the wheeled biped blends wheel-leg transitions. V. C ONCLUSION 
+
+We introduced VIP-Loco, a perceptive planning frame-work for legged locomotion that bridges vision-based RL and infinite-horizon MPC. Our internal model provides compact kinodynamic features enabling imagination augmentation during training and constraint-aware planning at deployment. Experiments across three morphologies demonstrate consis-tent benefits: VIP-Loco yields higher average returns across robots, with the most consistent gains on tasks requiring anticipatory foothold selection, particularly climbing and tilt. Marginal regressions on some terrains (e.g., gaps and crawl for Cassie) indicate that planning benefits are morphology and terrain-dependent. While results are simulation-based, the framework incorporates domain randomization and de-ploys at 40–50 Hz, compatible with onboard control loops. PIP-Loco [8], the closest predecessor of this work, has been validated on physical hardware, providing evidence that the on-policy training plus MPC deployment paradigm transfers to the real world. Extending VIP-Loco to hardware, including depth sensor noise and onboard compute constraints, is the primary direction for future work. REFERENCES [1] J. Di Carlo, P. M. Wensing, B. Katz, G. Bledt, and S. Kim, “Dynamic locomotion in the mit cheetah 3 through convex model-predictive control,” in 2018 IEEE/RSJ international conference on intelligent robots and systems (IROS) , pp. 1–9, IEEE, 2018. [2] H. Li, T. Zhang, W. Yu, and P. M. Wensing, “Versatile real-time motion synthesis via kino-dynamic mpc with hybrid-systems ddp,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) ,pp. 9988–9994, IEEE, 2023. [3] A. Kumar, Z. Fu, D. Pathak, and J. Malik, “Rma: Rapid motor adaptation for legged robots,” Robotics: Science and Systems XVII ,2021. [4] I. M. A. Nahrendra, B. Yu, and H. Myung, “Dreamwaq: Learning robust quadrupedal locomotion with implicit terrain imagination via deep reinforcement learning,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) , pp. 5078–5084, IEEE, 2023. [5] J. Long, Z. Wang, Q. Li, L. Cao, J. Gao, and J. Pang, “Hybrid internal model: Learning agile legged locomotion with simulated robot response,” in The Twelfth International Conference on Learning Representations , 2024. [6] S. Luo, S. Li, R. Yu, Z. Wang, J. Wu, and Q. Zhu, “Pie: Parkour with implicit-explicit learning framework for legged robots,” 2024. [7] H. Lai, J. Cao, J. Xu, H. Wu, Y. Lin, T. Kong, Y. Yu, and W. Zhang, “World model-based perception for visual legged locomotion,” arXiv preprint arXiv:2409.16784 , 2024. [8] A. Shirwatkar, N. Saxena, K. Chandra, and S. Kolathaya, “Pip-loco: A proprioceptive infinite horizon planning framework for quadrupedal robot locomotion,” in 2025 IEEE International Confer-ence on Robotics and Automation (ICRA) , pp. 11198–11204, 2025. [9] X. Cheng, K. Shi, A. Agarwal, and D. Pathak, “Extreme parkour with legged robots,” arXiv preprint arXiv:2309.14341 , 2023. [10] D. Hoeller, N. Rudin, D. Sako, and M. Hutter, “Anymal parkour: Learning agile navigation for quadrupedal robots,” Science Robotics ,vol. 9, no. 88, p. eadi7566, 2024. [11] Z. Zhuang, Z. Fu, J. Wang, C. Atkeson, S. Schwertfeger, C. Finn, and H. Zhao, “Robot parkour learning,” in Conference on Robot Learning (CoRL) , 2023. [12] A. Agarwal, A. Kumar, J. Malik, and D. Pathak, “Legged locomotion in challenging terrains using egocentric vision,” in Conference on robot learning , pp. 403–415, PMLR, 2023. [13] H. Liu, Y. Cheng, R. Li, X. Hu, L. Ye, and H. Liu, “Mbc: Multi-brain collaborative control for quadruped robots,” 2024. [14] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning quadrupedal locomotion over challenging terrain,” Science Robotics , vol. 5, no. 47, p. eabc5986, 2020. [15] I. Nahrendra, B. Yu, M. Oh, D. Lee, S. Lee, H. Lee, H. Lim, and H. Myung, “Obstacle-aware quadrupedal locomotion with resilient multi-modal reinforcement learning,” arXiv preprint arXiv:2409.19709 , 2024. [16] Y. Ding, A. Pandala, and H.-W. Park, “Real-time model predictive control for versatile dynamic motions in quadrupedal robots,” in 
+
+2019 International Conference on Robotics and Automation (ICRA) ,pp. 8484–8490, 2019. [17] H. Sikchi, W. Zhou, and D. Held, “Learning off-policy with online planning,” in Conference on Robot Learning , pp. 1622–1633, PMLR, 2022. [18] A. S. Morgan, D. Nandha, G. Chalvatzaki, C. D’Eramo, A. M. Dollar, and J. Peters, “Model predictive actor-critic: Accelerating robot skill acquisition with deep reinforcement learning,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) ,pp. 6672–6678, IEEE, 2021. [19] U. A. Mishra, S. R. Samineni, P. Goel, C. Kunjeti, H. Lodha, A. Singh, A. Sagi, S. Bhatnagar, and S. Kolathaya, “Dynamic mirror descent based model predictive control for accelerating robot learning,” in 
+
+2022 International Conference on Robotics and Automation (ICRA) ,pp. 1631–1637, IEEE, 2022. [20] J. Zhu, Y. Wang, L. Wu, T. Qin, W. gang Zhou, T.-Y. Liu, and H. Li, “Making better decision by directly planning in continuous control,” in International Conference on Learning Representations , 2023. [21] T. Zong, L. Sun, and Y. Liu, “Reinforced ilqr: A sample-efficient robot locomotion learning,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) , pp. 5906–5913, 2021. [22] N. Hansen, X. Wang, and H. Su, “Temporal difference learning for model predictive control,” arXiv preprint arXiv:2203.04955 , 2022. [23] N. Hansen, H. Su, and X. Wang, “Td-mpc2: Scalable, robust world models for continuous control,” arXiv preprint arXiv:2310.16828 ,2023. [24] L. Pinto, M. Andrychowicz, P. Welinder, W. Zaremba, and P. Abbeel, “Asymmetric actor critic for image-based robot learning,” arXiv preprint arXiv:1710.06542 , 2017. [25] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 , 2017. [26] D. Hafner, T. Lillicrap, J. Ba, and M. Norouzi, “Dream to control: Learning behaviors by latent imagination,” 2020. [27] D. Hafner, J. Pasukonis, J. Ba, and T. Lillicrap, “Mastering diverse domains through world models,” arXiv preprint arXiv:2301.04104 ,2023. [28] R. Grandia, F. Farshidian, R. Ranftl, and M. Hutter, “Feedback mpc for torque-controlled legged robots,” in 2019 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 4730–4737, 2019. [29] G. Williams, A. Aldrich, and E. Theodorou, “Model predictive path integral control using covariance variable importance sampling,” 2015. [30] V. Makoviychuk, L. Wawrzyniak, Y. Guo, M. Lu, K. Storey, M. Mack-lin, D. Hoeller, N. Rudin, A. Allshire, A. Handa, and G. State, “Isaac gym: High performance gpu-based physics simulation for robot learning,” 2021. [31] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk in minutes using massively parallel deep reinforcement learning,” in 
+
+Conference on Robot Learning , pp. 91–100, PMLR, 2022. [32] A. Paszke, S. Gross, S. Chintala, G. Chanan, E. Yang, Z. DeVito, Z. Lin, A. Desmaison, L. Antiga, and A. Lerer, “Automatic differen-tiation in pytorch,” 2017. [33] J. Bradbury, R. Frostig, P. Hawkins, M. J. Johnson, C. Leary, D. Maclaurin, G. Necula, A. Paszke, J. VanderPlas, S. Wanderman-Milne, and Q. Zhang, “JAX: composable transformations of Python+NumPy programs,” 2018.

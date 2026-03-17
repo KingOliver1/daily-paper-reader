@@ -1,0 +1,395 @@
+Title: Embedding Classical Balance Control Principles in Reinforcement Learning for Humanoid Recovery
+
+URL Source: https://arxiv.org/pdf/2603.08619v1
+
+Published Time: Tue, 10 Mar 2026 02:36:35 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Embedding Classical Balance Control Principles in Reinforcement Learning for Humanoid Recovery 
+
+Nehar Poddar 1,2, Stephen McCrory 1,2, Luigi Penco 1, Geoffrey Clark 1,2, Hakki Erhan Sevil 2, Robert Griffin 1,2
+
+Abstract — Humanoid robots remain vulnerable to falls and unrecoverable failure states, limiting their practical utility in unstructured environments. While reinforcement learning has demonstrated stand-up behaviors, existing approaches treat recovery as a pure task-reward problem without an explicit representation of the balance state. We present a unified RL policy that addresses this limitation by embedding classical bal-ance metrics: capture point, center-of-mass state, and centroidal momentum, as privileged critic inputs and shaping rewards directly around these quantities during training, while the actor relies solely on proprioception for zero-shot hardware transfer. Without reference trajectories or scripted contacts, a single policy spans the full recovery spectrum: ankle and hip strategies for small disturbances, corrective stepping under large pushes, and compliant falling with multi-contact stand-up using the hands, elbows, and knees. Trained on the Unitree H1-2 in Isaac Lab, the policy achieves a 93 .4% recovery rate across randomized initial poses and unscripted fall configurations. An ablation study shows that removing the balance-informed structure causes stand-up learning to fail entirely, confirming that these metrics provide a meaningful learning signal rather than incidental structure. Sim-to-sim transfer to MuJoCo and preliminary hardware experiments further demonstrate cross-environment generalization. These results show that embedding interpretable balance structure into the learning framework substantially reduces time spent in failure states and broadens the envelope of autonomous recovery. 
+
+I. I NTRODUCTION 
+
+Humanoid robots have demonstrated increasingly capable locomotion and manipulation in controlled environments [1– 3]. However, reliable recovery from falls and large distur-bances remains an open challenge. Falls interrupt operation, risk hardware damage, and often require manual interven-tion, limiting deployment beyond laboratory settings. For humanoid platforms to operate autonomously in unstructured environments, fall recovery must be treated as a core capa-bility rather than an exceptional case. Fall recovery is contact-rich, non-periodic, and highly state-dependent. Depending on the disturbance, a robot must decide in real time whether to resist using ankle or hip strategies, take a stabilizing step, initiate a controlled descent, or execute a multi-contact stand-up using the hands, elbows, and knees yet no existing approach addresses all of these behaviors within a single policy. Prior works tackle isolated subproblems, including predefined stand-up sequences [4, 5],     
+
+> 1Florida Institute for Human and Machine Cognition, Pensacola, FL, USA.
+> 2University of West Florida, Pensacola, FL, USA. Email: npoddar@ihmc.org
+> Fig. 1. Stand-up sequence on the Unitree H1-2 hardware. Frames 1–8 show recovery from a fallen configuration (1) to upright stance (8).
+
+scripted contact schedules [6], and reference motion track-ing [7]. Although effective within their respective design envelopes, these approaches require significant engineering effort and generalize poorly to unplanned contact configura-tions or disturbances of unexpected magnitude. Reinforcement learning offers a path toward more general recovery [8–10], and recent work has produced increasingly capable whole-body controllers across a range of disturbance conditions. However, most RL-based recovery formulations treat stability as an implicit consequence of the task reward, leaving the policy without an explicit representation of how close the robot is to an unrecoverable state. Without balance-aware signals, the critic must infer recoverability from reward history alone, a representation that may suffice under narrow task conditions but leaves open the question of generalization across a broader disturbance spectrum. Classical humanoid balance analysis already provides this information in compact, interpretable form. Capture point [11, 12], center of mass (CoM) state, and centroidal mo-mentum together characterize whether a given configuration is recoverable under feasible contact changes and are well-established tools in model-based control [13]. These quanti-ties are readily available in simulation and can be estimated on hardware, yet they are rarely used to directly structure learned recovery policies. We argue that this represents an underexplored opportunity: embedding balance-aware struc-ture may improve both the efficiency and generality of RL based recovery without sacrificing the adaptability of learned controllers. We address this by incorporating classical balance metrics: 
+
+> arXiv:2603.08619v1 [cs.RO] 9 Mar 2026
+
+capture point, CoM state, and centroidal momentum, directly into both the reward structure and an asymmetric critic [14]. The critic receives these quantities as privileged inputs during training [15], while the actor relies solely on proprioception for zero-shot hardware transfer. Without reference trajecto-ries or scripted contacts, a single policy trained in Isaac Lab [16] on the Unitree H1-2 learns ankle and hip stabilization, stepping recovery, compliant falling, and multi-contact stand-up from arbitrary initial configurations. The main contributions of this work are:  
+
+> •
+
+A balance-informed RL formulation embedding capture point, CoM state, and centroidal momentum as privi-leged critic inputs and reward terms, providing explicit recoverability structure without reference trajectories or scripted contacts.  
+
+> •
+
+A single unified policy on the Unitree H1-2 spanning the full recovery spectrum: ankle and hip strategies, stepping recovery, compliant falling, and multi-contact stand-up through hands, elbows, and knees [6, 17], trained via a curriculum that explicitly cycles fall-induction and stand-up to cover the complete recovery sequence.  
+
+> •
+
+An ablation study indicating that, within this formula-tion, balance-informed structure is critical for stand-up discovery: removing privileged critic inputs and capture-point rewards results in failure to leave the ground, with stuck-low termination rate rising from 0.067 to 1.0.  
+
+> •
+
+Zero-shot hardware deployment on the Unitree H1-2 across 10 trials from diverse configurations, and sim-to-sim transfer to MuJoCo, validating cross-environment generalization without policy modification. II. R ELATED WORK 
+
+A) Classical Stability and Reduced-Order Models 
+
+Early humanoid balance research established analytical criteria linking centroidal motion to contact feasibility. The Zero Moment Point (ZMP) framework provided a practical trajectory feasibility condition under fixed-foot contacts [18], later extended to multi-contact settings through wrench-based support region analysis [19]. The capture point and divergent component of motion (DCM) relate CoM position and velocity to stepping requirements, unifying ankle, hip, and stepping strategies within a common framework [11, 12, 17, 20]. Reaction-mass and flywheel models extend these ideas to centroidal angular momentum, capturing upper-body effects [21, 22]. Centroidal dynamics formulations then bridge reduced-order reasoning and full multi-contact whole-body behavior [23, 24]. While these methods yield inter-pretable stability criteria effective for structured locomotion, they rely on simplifying assumptions that become strained in the non-periodic, contact-rich scenarios characterizing post-disturbance recovery. Our work draws on these classical metrics not as controllers, but as structured signals to guide learned value estimation.                                                  
+
+> TABLE I COMPARISON OF REPRESENTATIVE RL-BASED HUMANOID RECOVERY APPROACHES .
+> Method HoF Fall MP MT Ref EB AC
+> FRASA [8] ✗✓✗✗✗✗✗
+> HumanUP [7] ✓✗✓✓✓✗✓
+> HoST [5] ✓✗✓✓✗✗✗
+> HiFAR [10] ✓✓✓✓✗✗✗
+> Ours ✓✓✓✓✗✓✓
+> HoF : high-DOF humanoid; Fall : fall recovery; MP : multi-pose initialization; MT : multi-terrain; Ref : uses motion reference; EB : explicit balance metrics; AC : asymmetric critic.
+
+B) Optimization and Multi-Contact Planning 
+
+Optimization-based approaches formulate balance and recovery as constrained trajectory optimization problems over contact forces, centroidal dynamics, and joint motion. Whole-body trajectory optimization enables dynamically consistent multi-contact behavior [23], while direct-contact formulations such as DirCon compute contact-consistent tra-jectories through hybrid dynamics optimization [25].Contact-explicit optimal control frameworks such as Crocoddyl achieve real-time feasible motion plans through efficient differential dynamic programming [26]. Model predictive control extends these ideas to online adaptation, with contact-implicit variants discovering contact transitions via comple-mentarity constraints [27], and reduced-order MPC schemes leveraging simplified models for push recovery and bracing [28–30]. Contact-Invariant Optimization treats contact activa-tion as a decision variable to discover feasible contact phases [31], while learning-based feasibility predictors estimate whether candidate configurations are dynamically realizable [32]. Despite their expressiveness and physical grounding, these methods remain computationally demanding and chal-lenging to apply in real time to the non-periodic, unplanned scenarios characterizing fall and recovery. 
+
+C) Reinforcement Learning for Humanoid Recovery 
+
+Reinforcement learning has been applied to fall detec-tion, recovery control, and end-to-end stand-up using pose-tracking or task-based rewards [8, 9]. Curriculum-based frameworks address high-dynamics recovery through staged training [10], and reward-shaping strategies have been ex-plored to improve recovery from fallen states [33]. Several getting-up methods rely on motion references, keyframes, or canonical poses [7, 34], while others train reference-free, posture-spanning policies in which multi-contact strategies emerge implicitly [5]. Beyond dedicated recovery controllers, recent RL methods have produced versatile humanoid be-haviors including agile locomotion, running, and parkour [3, 35, 36], with whole-body controllers leveraging refer-ence motions, symmetry priors, or shared architectures to generalize across behaviors [37, 33, 38, 39]. In most of these formulations, balance behavior arises as a consequence of task or survival objectives rather than from explicitly structured stability criteria, as summarized in Table I. Our work is reference-free and does not rely on motion clips, keyframes, or canonical poses; instead, it incor-porates CoM state, capture point, and centroidal momentum directly into the reward structure and an asymmetric critic, connecting classical stability analysis with learned recovery without predefined contact schedules. III. M ETHODOLOGY 
+
+A) Problem Formulation 
+
+We formulate humanoid fall recovery as a continuous-state, continuous-action Markov Decision Process (MDP) defined by (S , A , P, R). A stochastic policy πθ (at | ot ),parameterized by learnable weights θ , maps proprioceptive observations ot to joint-level actions at , with the objective of maximizing the expected discounted return: 
+
+J(θ ) = Eπθ
+
+" T
+
+# ∑
+
+> t=0
+
+γt rt
+
+#
+
+,
+
+where rt = R(st , at ) is the per-step reward, γ ∈ (0, 1) is the discount factor, and T is the episode horizon. The full system state st is available during training, while the deployed policy receives only partial observations ot corresponding to onboard proprioceptive sensing. Actions are continuous joint-level position commands. 
+
+B) Learning Architecture 
+
+We employ an on-policy actor–critic framework based on Proximal Policy Optimization (PPO) [40]. The actor outputs relative joint position targets for all actuated degrees of freedom of the Unitree H1-2, tracked by low-level PD controllers. The critic estimates the state-value function using privileged information available only during training, following the asymmetric actor–critic design of [14]. Both actor and critic are multilayer perceptrons with hidden dimensions [512 , 256 , 128 ] and ELU activations. The policy is initialized with action noise σ = 1.0. Training runs for 50,000 iterations with 24 rollout steps per environment per update. PPO hyperparameters are summarized in Table II. Training is conducted in Isaac Lab [37], modeling full-body dynamics, contact, joint limits, and friction.               
+
+> TABLE II PPO TRAINING HYPERPARAMETERS .
+> Hyperparameter Value
+> Iterations 50,000 PPO clip ε0.2 Discount γ0.99 GAE λ0.95 Learning rate 1×10 −3
+> Target KL 0.01 Entropy coeff. 0.005
+
+C) Observation Design 
+
+To support sim-to-real transfer, we decompose the full state st into policy observations ot and privileged variables available only to the critic during training. 
+
+1) Policy Observations 
+
+The actor receives only quantities measurable on hard-ware:  
+
+> •
+
+Base angular velocity and projected gravity,  
+
+> •
+
+Relative joint positions and joint velocities,  
+
+> •
+
+Previous action at−1.Additive uniform noise is applied to ot during training to model sensor uncertainty and improve robustness to real-world measurement error. 
+
+2) Privileged Critic Observations 
+
+The critic receives the full actor observation ot augmented with simulator-derived quantities spriv  
+
+> t
+
+, forming the input 
+
+(ot , spriv  
+
+> t
+
+), where spriv  
+
+> t
+
+⊂ st contains quantities unavailable on hardware:  
+
+> •
+
+Center-of-mass (CoM) position, velocity, and accelera-tion,  
+
+> •
+
+Whole-body linear and angular momentum,  
+
+> •
+
+Capture point location. These quantities characterize the instantaneous balance state of the robot, enabling more accurate value estimation and more stable policy updates during training. While CoM state can in principle be estimated via IMU integration or whole-body state estimators, reliable estimation during contact-rich fall recovery is particularly challenging: drift accumulates rapidly during dynamic motion, and multi-contact estimation requires knowing which contacts to trust during uncontrolled falling. 
+
+D) Action Space 
+
+The action space comprises relative joint position com-mands for all actuated joints of the H1-2. At each control step, the policy outputs actions at , scaled by 0.3 and executed via low-level PD controllers. To model realistic actuator and communication latencies, a randomized per-episode delay of 10–40 ms is applied to joint commands and held constant within each episode, supporting consistent sim-to-real trans-fer. 
+
+E) Physics-Guided Reward Design 
+
+We decompose the total reward into three physically motivated groups: 
+
+R(st ) = RI(st ) + RII (st ) + RIII (st ) (1) where RI enforces vertical recovery, RII enforces balance and capturability, and RIII provides regularization and motion priors. This grouping mirrors the physical recovery sequence: vertical elevation → dynamic balance → motion refinement. Table III summarizes all symbols and Table IV provides a full decomposition. 
+
+1) Group I: Vertical Recovery 
+
+Group I rewards drive vertical recovery toward a target CoM height h∗:
+
+RI(st ) = wh rheight + wr rrise + w f rfall + ws rstab (2) Fig. 2. End-to-end pipeline for the Unitree H1-2 stand-up controller: diverse initial pose distribution with upright target (left); Isaac Lab training with PPO, asymmetric critic, and push curriculum; MuJoCo sim-to-sim validation; SCS2 integration with balance visualization; and zero-shot hardware deployment using proprioception only (right). TABLE III SUMMARY OF SYMBOLS USED IN THE REWARD FORMULATION .
+
+Category Symbol Description 
+
+State st Robot state at discrete time t
+
+∆t Control/simulation time step CoM 
+
+pc ∈ R3 3-D CoM position 
+
+pc,xy ∈ R2 Horizontal CoM projection 
+
+hc Vertical CoM height ( pc,z)
+
+h∗ Target upright CoM height ˙hc Vertical CoM velocity 
+
+eh Height error (hc − h∗)
+
+Balance 
+
+ξ Capture point (LIP model) 
+
+g Gravitational acceleration 
+
+I[·] Indicator function Support 
+
+C Convex hull of active contacts 
+
+Cfeet Convex hull of foot contacts 
+
+dCoM Signed distance: CoM projection to C
+
+dCP Signed distance: CP to Cfeet 
+
+Momentum 
+
+pℓ Whole-body linear momentum 
+
+L Whole-body angular momentum 
+
+Fnet Net centroidal force ( ˙ pℓ/∆t)
+
+τnet Net centroidal torque ( ˙ L/∆t)Parameters 
+
+w• Group weighting coefficients 
+
+α• Shaping coefficients 
+
+σ• Gaussian bandwidth parameters 
+
+δh Height deadband threshold 
+
+a) Height tracking. 
+
+A dense Gaussian reward centered at h∗ provides a smooth gradient throughout the elevation range: 
+
+rheight = exp 
+
+
+
+− (hc − h∗)2
+
+σ 2
+
+> h
+
+
+
+(3) where σh controls the reward bandwidth. 
+
+b) Vertical momentum shaping. 
+
+rrise rewards upward CoM velocity when the robot is below target height; rfall quadratically penalizes downward velocity to discourage collapse: 
+
+rrise = αr max (˙hc, 0) I[hc < h∗] (4) 
+
+rfall = −α f max (−˙hc, 0)2 (5) This asymmetric structure rewards rising proportionally to upward velocity while penalizing downward motion quadrat-ically. Neither term activates near h∗, avoiding conflicting incentives during final convergence. 
+
+c) Stationary stability near target. 
+
+Once the robot approaches h∗, rstab provides a proximity bonus within tolerance δh while penalizing residual vertical velocity to suppress overshoot: 
+
+rstab = αs I[|hc − h∗| < δh] − αv |˙hc| (6) The Gaussian in (3) provides a nonzero gradient at all heights below h∗, and rrise encourages upward momentum throughout, giving the policy a continuous learning signal across the full range of initial CoM heights rather than only at discrete canonical poses. 
+
+2) Group II: Balance and Capturability 
+
+Group II rewards enforce static and dynamic stability by embedding capture-point theory directly into the reward structure: 
+
+RII (st ) = wc rCoM + wξ rCP + wm rmom (7) Capture Point: Balance is assessed using the capture point ξ , derived from the Linear Inverted Pendulum (LIP) model [11], which indicates the location where the robot must step to arrest a fall: 
+
+ξ = pc,xy + ˙pc,xy 
+
+pg/hc
+
+(8) The signed distances dCoM and dCP measure how far the CoM projection and capture point lie from the boundaries of 
+
+C and Cfeet respectively (negative inside, positive outside). a) Static Stability 
+
+rCoM rewards configurations in which the CoM projection lies within the support hull C :
+
+rCoM = exp 
+
+
+
+− d2CoM 
+
+σ 2
+
+> c
+
+
+
+(9) The smooth Gaussian decay encourages stable base mainte-nance without hard threshold switching. 
+
+b) Dynamic Capturability 
+
+rCP penalizes configurations in which the capture point falls outside the foot support hull Cfeet , indicating that balance cannot be maintained under the LIP model without a contact change [12]: 
+
+rCP = exp − d2CP 
+
+σ 2
+
+> ξ
+
+!
+
+(10) Together, rCoM and rCP couple static and dynamic stability: the former penalizes instantaneous support violations while the latter penalizes momentum states that may lead to future balance loss even when the CoM projection currently lies within the support hull. 
+
+c) Momentum Regularization 
+
+rmom penalizes large net centroidal forces and moments to suppress impulsive whole-body reactions: 
+
+rmom = −αℓ ∥Fnet ∥22 − αL ∥τnet ∥22 (11) Quadratic penalization disproportionately discourages large impulsive reactions relative to small smooth corrections. 
+
+3) Group III: Regularization and Motion Shaping 
+
+Group III introduces hardware safety constraints and phys-ically consistent motion priors: 
+
+RIII (st ) = rtorque + rorient + rcontact + ralive (12) Safety terms penalize torque and joint limit violations and rapid action changes, protecting hardware during high-force recovery transitions. The posture term penalizes torso misalignment with gravity, encouraging upright orienta-tion throughout recovery. The contact shaping term applies height-gated rewards for hand and elbow support, promoting appropriate multi-contact transitions during stand-up. The survival term combines an alive bonus with an early ter-mination penalty, encouraging task completion rather than episode length maximization. Taken together, Group III terms encourage the detailed recovery sequence: including multi-contact transitions and compliant falling, to emerge from the physics-based objec-tives in RI and RII , without scripted contact schedules or reference trajectories. 
+
+F) Curriculum and Training Strategy 
+
+Training follows a three-stage progressive curriculum de-signed to encourage broad exploration of recovery strate-gies, introduce physical realism, and constrain behavior to hardware-safe operating ranges. 1) Exploration phase. Joint torque limits are initially set to 10 × hardware specifications, providing sufficient                           
+
+> TABLE IV PHYSICS -GUIDED REWARD DECOMPOSITION .
+> Group Component Symbol Objective
+> RI
+> Height tracking rheight Reach h∗
+> Rise shaping rrise Encourage upward motion Fall penalty rfall Suppress downward velocity Stability band rstab Prevent oscillation
+> RII
+> CoM support rCoM Static stability Capture point rCP Dynamic capturability Momentum reg. rmom Smooth centroidal dynamics
+> RIII
+> Safety rtorque Hardware protection Posture rorient Upright torso alignment Contact shaping rcontact Multi-contact transitions Survival ralive Task completion
+
+actuation authority for the policy to discover diverse recovery strategies, including multi-contact behaviors such as hand-assisted push-ups from the ground. 2) Difficulty expansion. External disturbances, random-ized initial configurations (standing, squatting, kneel-ing, sitting, and supine), and domain randomization over physical parameters (mass distribution, friction, inertia, and joint armature) are progressively intro-duced. Once the robot reaches upright stance, large destabilizing impulses are applied to induce a fall and trigger a full fall-and-recovery cycle, ensuring the policy trains on the complete recovery sequence. 3) Hardware constraint annealing. Joint torque and position limits are gradually reduced toward hardware-safe values (1 × torque, 0 .9× position limit factor), transitioning the policy from exploratory to deployable behavior. Episodes were terminated upon timeout or when unsafe torso–ground contact occurred under high contact force conditions, encouraging recovery while discouraging catas-trophic collapse. 
+
+G) Domain Randomization and Noise Injection 
+
+To improve sim-to-real robustness, domain randomization is applied across dynamics, contacts, initialization, observa-tions, and disturbances:  
+
+> •
+
+Actuation and joint dynamics: Stiffness and damping gains scaled by [0.75 , 1.25 ]; joint friction sampled from 
+
+[0.5, 4.0]; armature scaled by [0.5, 1.6]. 
+
+> •
+
+Contact properties: Static friction μs ∼ [0.3, 1.6], dy-namic friction μd ∼ [0.3, 1.2], restitution e ∼ [0, 0.2]. 
+
+> •
+
+Initialization noise: Base pose perturbations ∆p ∈
+
+[−0.05 , 0.05 ] m, ∆r ∈ [−0.2, 0.2] rad; joint offsets ∆q ∈
+
+[−0.1, 0.1] rad.  
+
+> •
+
+Observation noise: Additive uniform noise on policy inputs: base angular velocity ωb ± 0.5 rad/s, projected gravity ±0.15, joint positions q±0.1 rad, joint velocities ˙q ± 0.5 rad/s.  
+
+> •
+
+External disturbances: Random torso impulses of 50– 300 N over 0.1–0.2 s for push recovery training. Once upright stance is reached, large destabilizing impulses Fig. 3. Capture-point evolution during push recovery. The blue marker denotes ξ and polygons represent active foot support regions. The policy progressively drives ξ back inside the support hull through ankle, hip, and stepping responses. 
+
+are applied to induce a fall and trigger a full fall-and-recovery cycle. Rigid-body inertias are randomized without recomputing a dynamically consistent model, requiring the policy to infer balance-relevant structure directly from observed state tra-jectories rather than relying on accurate internal dynamics. IV. E XPERIMENTS AND RESULTS 
+
+A) Simulation 
+
+All policies were trained and evaluated in Isaac Lab using the Unitree H1-2 model, with additional validation in MuJoCo to assess cross-simulator generalization. Under nominal conditions, the policy maintained stable standing for the full episode horizon in both environments. 
+
+1) Recovery from Diverse Configurations 
+
+The policy successfully recovered to upright stance from a variety of initial poses, including squatting, kneeling, sitting, and supine, without relying on predefined trajectories. Across 10,000 trials, it achieved a 93.4% recovery success rate with a mean recovery time of 5 s. Failures primarily occurred when the robot became trapped in local contact configurations from which upright recovery could not be completed within the episode horizon. 
+
+2) Disturbance Rejection 
+
+External perturbations of increasing magnitude were ap-plied during standing. Small pushes (50–100 N) were ab-sorbed through ankle strategies; moderate pushes (100– 200 N) induced hip-based adjustments; and larger pushes (200–300 N) triggered stepping responses. This graduated hierarchy is consistent with the balance structure embedded in the reward and with classical push-recovery analysis [17]. For disturbances ≥300 N, the robot transitioned to multi-contact recovery, bracing with the hands before returning to upright stance. Fig. 3 shows the capture point evolution during a representative push recovery trial. The policy drives 
+
+ξ back inside the foot support hull through the ankle, hip, and stepping sequence, consistent with the capturability reward structure in Eqs. (9)–(10). 
+
+3) Sim-to-Sim Validation 
+
+To assess cross-simulator generalization, we evaluated the policy in MuJoCo across five initial configurations (standing, squatting, kneeling, supine, and sitting) under applied forces from 0–500 N in four lateral directions. MuJoCo’s more con-servative contact model, with stricter friction and damping defaults than Isaac Lab, we observe, more closely approxi-mates physical hardware dynamics, providing a stronger test of transferability than in-distribution Isaac Lab evaluation alone. A trial is counted as successful only if the CoM exceeds 0.85 m and remains there for at least 1 s with vertical velocity below 0.1 m/s and torso tilt within 72 ◦ of vertical, ruling out momentary bounces or transient uprighting. Without perturbation, the policy achieves 100% recovery from all poses. Under perturbation, robustness degrades gracefully: standing and squatting maintain recovery rates above 50% at 200 N, while supine and sitting drop below 25% beyond 100 N, consistent with the greater centroidal momentum that must be regulated from near-floor orientations. Recovery time increases with force magnitude, reaching up to 9 s for supine trials at high forces. Push application height has a consistent effect: low pushes (−0.2 m) yield the highest recovery rates while high pushes (0.6 m) yield the lowest. A force applied above the CoM in-duces larger whole-body angular momentum, driving greater displacement of ξ outside the support polygon, the precise failure mode penalised by Eq. (10). Results are summarized in Fig. 4. 
+
+B) Ablation Study 
+
+To evaluate the contribution of our key design choices, we trained a reduced policy without privileged critic in-puts (CoM dynamics, capture point, centroidal momentum), capture-point reward terms, or progressive curriculum, with all other hyperparameters and reward terms held identical. Results are shown in Table V. The reduced policy failed to learn stand-up behavior: episodes terminated exclusively via the stuck-low condition (triggered when CoM height shows no increase for 2 consecutive seconds) at a rate of 1.0, compared to 0.067 in the full policy, indicating the robot never left the ground. Mean reward fell from +379.2 to −115.3 and all recovery metrics collapsed. These results suggest that, within this training setup, balance-informed structure is necessary for the policy to discover multi-contact stand-up behavior. We note that this is a single combined ablation; disentangling the individual contributions of privi-leged critic inputs, capture-point rewards, and curriculum is left for future work. 
+
+C) Hardware Deployment 
+
+Policies trained in simulation were exported as ONNX networks and deployed on the physical Unitree H1-2 using our software stack, integrated via the OpenCV DNN Java Fig. 4. MuJoCo sim-to-sim recovery analysis across five initial poses and forces 0–500 N. Success requires the CoM to exceed 0.85 m and remain stable for ≥1 s. (A) Baseline recovery without push. (B–C) Recovery rate degrades gracefully with force; standing and squatting are most robust. (D) Recovery time increases with perturbation magnitude. (E–F) Directional and height sensitivity show consistent trends across poses. TABLE V ABLATION AT CONVERGENCE : FULL POLICY VS . REDUCED VARIANT (NO PRIVILEGED CRITIC , NO CAPTURE -POINT REWARDS , NO CURRICULUM ).                   
+
+> Metric Full Reduced Performance
+> Mean reward +379 .2−115 .3Episode length (steps) 975 219
+> Recovery
+> CoM height maintenance 13 .23 0.17 Progressive recovery 3.78 0.41 Hand-support recovery 1.80 0.11 Feet under CoM 1.58 0.00
+> Termination
+> Timeout 0.934 0.000 Stuck low 0.067 1.000
+
+API at 50 Hz. The joint-level control law was 
+
+τ = kp (qref − q) − kd ˙q,
+
+where qref is the policy output and q, ˙ q are measured joint position and velocity. No modifications were made to the policy or control structure at deployment. Across 10 trials initialized from supine, seated, kneeling, and crouched configurations, the robot successfully achieved upright recovery in all 10 attempts with no parameter tuning between simulation and hardware. In 3 trials, transient high-frequency joint oscillations were observed following recov-ery, prompting conservative safety intervention. We attribute this behavior to residual sim-to-real mismatch in damping characteristics and are addressing it through improved action-smoothing during training. During disturbance trials, the robot successfully rejected manual pushes and recovered balance. Observable increases in ankle and hip motor torques following perturbations were consistent with the ankle and hip stabilization strategies learned in simulation, providing qualitative evidence that the balance hierarchy transfers to hardware. V. C ONCLUSION AND FUTURE WORK 
+
+We presented a balance-informed reinforcement learning framework for humanoid fall recovery that incorporates clas-sical stability metrics: capture point, CoM state, and whole-body momentum, as privileged critic inputs and reward terms. Rather than enforcing predefined contact sequences, this structure gives the critic an explicit representation of recoverability, enabling the actor to decide when to resist a disturbance, when to step, and when to engage multi-contact support. Simulation results demonstrate a 93 .4% recovery rate across diverse initial configurations, while an ablation with-out balance-informed structure fails entirely to learn stand-up behavior. These results suggest that the embedded metrics provide a meaningful learning signal rather than an incidental cue. A single policy spans the full recovery spectrum: ankle and hip strategies, stepping recovery, compliant falling, and hand-assisted stand-up, all achieved without reference trajectories or scripted contact schedules. Zero-shot hardware deployment on the Unitree H1-2 successfully recovers from diverse configurations across 10 trials, providing initial val-idation that the learned balance structure transfers to real hardware. These findings highlight a broader insight: classical bal-ance metrics offer a compact, transferable representation for contact-rich humanoid control that complements purely task-driven reward design. Whether this structure generalizes beyond fall recovery: to manipulation under external loads or locomotion over complex terrain, remains an open question. In particular, maintaining capturability and regulating mo-mentum may serve as prerequisites for robust manipulation, allowing a robot to respond to externally applied loads without explicit payload estimation, potentially simplifying downstream control. Future work will explore perception-driven contact se-lection in cluttered environments, multi-surface recovery, integration with long-horizon locomotion and manipulation tasks, and tighter coupling between balance-aware control and task-level planning. Extending to non-planar surfaces is a natural next step; however, the convex hull support polygon metric assumes coplanar contacts, and replacing it with a more general criterion, such as wrench-space feasibility over non-coplanar contact sets, would be necessary. By using a planar segmentation representation of the environment, the policy could infer contact normals and select contacts within a continuous action space. REFERENCES [1] I. Radosavovic, et al. , “Real-world humanoid locomotion with rein-forcement learning,” Science Robotics , vol. 9, 2024. [2] T. Haarnoja, et al. , “Learning agile soccer skills for a bipedal robot with deep reinforcement learning,” Science Robotics , vol. 9, no. 89, 2024. [3] Z. Li, et al. , “Reinforcement learning for versatile, dynamic, and robust bipedal locomotion control,” International Journal of Robotics Research , vol. 44, 2025. [4] J. Stückler, J. Schwenk, and S. Behnke, “Getting back on two feet: Reliable standing-up routines for a humanoid robot,” in International Conference on Intelligent Autonomous Systems , 2006. [5] T. Huang, et al. , “Learning humanoid standing-up control across diverse postures,” in Robotics: Science and Systems (RSS) , 2025. [6] C. Zhang, et al. , “WoCoCo: Learning whole-body humanoid control with sequential contacts,” in Conference on Robot Learning (CoRL) ,2024. [7] X. He, et al. , “Learning getting-up policies for real-world humanoid robots,” in Robotics: Science and Systems (RSS) , 2025. [8] C. Gaspard, et al. , “Frasa: An end-to-end reinforcement learning agent for fall recovery and stand up of humanoid robots,” in IEEE International Conference on Robotics and Automation (ICRA) , 2025. [9] C. Yang, et al. , “Learning complex motor skills for legged robot fall recovery,” IEEE Robotics and Automation Letters , vol. 8, no. 7, 2023. [10] P. Chen, et al. , “Hifar: Multi-stage curriculum learning for high-dynamics humanoid fall recovery,” in IEEE/RSJ International Con-ference on Intelligent Robots and Systems (IROS) , 2025. [11] J. Pratt, et al. , “Capture point: A step toward humanoid push recovery,” in IEEE-RAS International Conference on Humanoid Robots , 2006. [12] T. Koolen, et al. , “Capturability-based analysis and control of legged locomotion, part 1: Theory and application to three simple gait models,” International Journal of Robotics Research , vol. 31, no. 9, 2012. [13] J. Pratt, et al. , “Capturability-based analysis and control of legged locomotion, part 2: Application to m2v2, a lower-body humanoid,” 
+
+International Journal of Robotics Research , vol. 31, no. 10, 2012. [14] L. Pinto, et al. , “Asymmetric actor critic for image-based robot learning,” in Robotics: Science and Systems (RSS) , 2018. [15] A. Kumar, et al. , “RMA: Rapid motor adaptation for legged robots,” in Robotics: Science and Systems (RSS) , 2021. [16] M. Mittal, et al. , “Isaac lab: A gpu-accelerated simulation framework for multi-modal robot learning,” arXiv preprint arXiv:2511.04831 ,2025. [17] A. Herzog, et al. , “Momentum control with hierarchical inverse dy-namics on a torque-controlled humanoid,” in IEEE-RAS International Conference on Humanoid Robots , 2016. [18] M. Vukobratovic and B. Stepanenko, “Contribution to the synthesis of biped gait,” RAIRO Automatique , 1972. [19] T. Bretl and S. Lall, “Testing static equilibrium for legged robots,” 
+
+IEEE Transactions on Robotics , 2008. [20] A. L. Hof, “Condition for dynamic stability,” Journal of Biomechanics ,vol. 38, no. 1, 2005. [21] S.-H. Lee and A. Goswami, “A momentum-based balance controller for humanoid robots on non-level and non-stationary ground,” Au-tonomous Robots , vol. 33, no. 4, 2012. [22] Y. Gong and J. Grizzle, “Angular momentum about the contact point for control of bipedal locomotion: Validation in a lip-based controller,” 
+
+arXiv preprint arXiv:2008.10763 , 2020. [23] H. Dai, A. Valenzuela, and R. Tedrake, “Whole-body motion planning with centroidal dynamics and full kinematics,” in IEEE-RAS Interna-tional Conference on Humanoid Robots , 2014. [24] L. Sentis, J. Park, and O. Khatib, “Compliant control of multicontact and center-of-mass behaviors in humanoid robots,” IEEE Transactions on Robotics , vol. 26, no. 3, 2010. [25] M. Posa, M. Tobenkin, and R. Tedrake, “Optimization and stabilization of trajectories for constrained dynamical systems,” in IEEE Interna-tional Conference on Robotics and Automation (ICRA) , 2016. [26] C. Mastalli, et al. , “Crocoddyl: An efficient and versatile framework for multi-contact optimal control,” in IEEE International Conference on Robotics and Automation (ICRA) , 2020. [27] S. Le Cleac’h et al. , “Fast contact-implicit model-predictive control,” in IEEE Robotics and Automation Letters , 2020. [28] L. Yang, et al. , “Bracing for impact: Robust humanoid push recovery with reduced order models,” IEEE Transactions on Robotics , 2020. [29] M.-J. Kim, et al. , “A model predictive capture point control framework for robust humanoid balancing via ankle, hip, and stepping strategies,” 
+
+IEEE Transactions on Robotics , 2025. [30] W. Zuo, et al. , “Whole-body dynamics for humanoid robot fall pro-tection trajectory generation with wall support,” Biomimetics , vol. 9, no. 4, 2024. [31] I. Mordatch, E. Todorov, and Z. Popovic, “Discovery of complex behaviors through contact-invariant optimization,” ACM Transactions on Graphics , vol. 31, no. 4, 2012. [32] J. Carpentier, R. Budhiraja, and N. Mansard, “Learning feasibility constraints for multicontact locomotion of legged robots,” in Robotics: Science and Systems (RSS) , 2017. [33] B. Deng, et al. , “Learning to recover: Dynamic reward shap-ing with wheel-leg coordination for fallen robots,” arXiv preprint arXiv:2506.05516 , 2025. [34] Z. Xu, et al. , “Unified humanoid fall-safety policy from a few demonstrations,” arXiv preprint arXiv:2511.07407 , 2025. [35] B. van Marum, et al. , “Revisiting reward design and evaluation for robust humanoid standing and walking,” in IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2024. [36] Z. Zhuang, S. Yao, and H. Zhao, “Humanoid parkour learning,” 2024. [37] M. Mittal, et al. , “Orbit: A unified simulation framework for interactive robot learning environments,” IEEE Robotics and Automation Letters ,vol. 8, no. 6, 2023. [38] T. He, et al. , “Hover: Versatile neural whole-body controller for humanoid robots,” in IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025. [39] M. Mittal, et al. , “Symmetry considerations for learning task symmet-ric robot policies,” in IEEE International Conference on Robotics and Automation (ICRA) , 2024. [40] J. Schulman, et al. , “Proximal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 , 2017.

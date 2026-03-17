@@ -1,0 +1,258 @@
+Title: Decentralized Cooperative Localization for Multi-Robot Systems with Asynchronous Sensor Fusion
+
+URL Source: https://arxiv.org/pdf/2603.12075v1
+
+Published Time: Fri, 13 Mar 2026 01:06:53 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+Proceedings of the 13th RSI International Conference on Robotics and Mechatronics (ICRoM 2025), Dec. 16-18, 2025, Tehran, Iran 
+
+# Decentralized Cooperative Localization for Multi-Robot Systems with Asynchronous Sensor Fusion 
+
+Nivand Khosravi ∗, Niusha Khosravi ∗, Mohammad Bozorg †, Masoud S. Bahraini ‡∗Department of Electrical and Computer Engineering , Instituto Superior T´ ecnico , Lisbon, Portugal 
+
+†Department of Mechanical Engineering , Yazd University , Yazd, Iran 
+
+‡Department of Mechanical Engineering , University of Birmingham , Birmingham, United Kingdom nivand.khosravi@tecnico.ulisboa.pt, niusha.khosravi@tecnico.ulisboa.pt, mohammad.bozorg@yazd.ac.ir, m.bahraini@bham.ac.uk 
+
+Abstract —This paper presents a decentralized cooperative localization (DCL) framework for nonholonomic mobile robots navigating GPS-denied environments with limited communica-tion infrastructure. Each robot performs cooperative localization locally using an Extended Kalman Filter, sharing measurement information during update stages only when communication links are available and LiDAR successfully detects companion robots. The framework maintains cross-correlation consistency between robot state estimates while accommodating asynchronous sensor data from heterogeneous sampling rates and robot accelerations during dynamic maneuvers. Unlike existing methods requiring pre-aligned coordinate systems, robots initialize with arbitrary reference frame orientations, achieving automatic alignment through transformation matrices in both prediction and update stages. A dual-landmark evaluation framework leveraging static environmental features and mobile robots as dynamic landmarks enhances robustness in feature-sparse terrains. The framework successfully performs detection and feature extraction during sharp robot turns, with prediction accuracy improved through knowledge sharing from mutual observations. Performance eval-uations conducted in Gazebo simulator and real-world basement environments demonstrate that DCL outperforms centralized cooperative localization (CCL) in estimation accuracy (34% RMSE reduction), while the dual-landmark variant achieves 56% improvement. These results establish DCL’s applicability to challenging domains including enclosed areas, underwater envi-ronments, and featureless terrains where traditional localization methods fail. 
+
+Index Terms —cooperative localization, multi-robot systems, extended Kalman filter, decentralized estimation, asynchronous sensor fusion 
+
+I. I NTRODUCTION 
+
+Multi-robot systems (MRS) have demonstrated widespread applications across diverse fields including surveillance and monitoring [1], search and rescue operations [2], space explo-ration [3], agriculture [4], logistics and warehousing [5], and military operations [6]. These systems efficiently cover exten-sive areas, perform coordinated tasks, and provide enhanced robustness compared to single-robot approaches. Cooperation between multiple robots addresses challenges more effectively than individual approaches [7]. Research has demonstrated that cooperative localization (CL) where robots improve position estimates through mutual observations and information exchange significantly enhances accuracy com-pared to individual localization [8], particularly in unknown environments with insufficient landmarks. Localization deter-mines a mobile robot’s position and orientation by fusing noisy measurements from proprioceptive sensors (wheel encoders, inertial measurement units) and exteroceptive sensors (laser scanners, cameras) [9]. In multi-robot contexts, cooperative localization enables robots to determine relative positions through communication, interconnecting with simultaneous localization and mapping (SLAM) wherein relative estimates inform environment map construction [10], [11]. Cooperative localization methodologies are categorized as centralized, decentralized, or multi-centralized [12], [13]. Cen-tralized approaches aggregate sensor data at a single process-ing unit, providing theoretically optimal estimates but suffering from communication bandwidth constraints, single-point-of-failure vulnerability, and scalability limitations. Decentralized methods distribute computation across robots, offering en-hanced scalability and robustness if cross-correlations between robot estimates are properly maintained. Recent research emphasis stems from cooperative localization advantages: increased redundancy ensuring continued operation despite individual robot failures, enhanced coverage for large-scale environments, and improved robustness in dynamic uncertain conditions [2], [5]. 
+
+A. Related Work 
+
+Cooperative localization has been extensively studied using various estimation frameworks. Early work by Thrun et al. [14] applied Monte Carlo methods to dual-robot systems, though without maintaining cross-correlation terms. Roumeliotis and Rekleitis [15] introduced rigorous uncertainty propagation analysis for Kalman filter-based approaches in three-robot configurations. Subsequent interlaced filter formulations [16], [17] often ignored cross-correlations to reduce computational burden, while covariance intersection methods [18], [19] ap-plied conservative fusion to maintain consistency at the cost of accuracy. More recently, Luft et al. [21] presented recur-sive decentralized algorithms with pairwise communication 
+
+national Conference on Robotics and Mechatronics (ICRoM 2025), Dec. 16-18, 2025, Tehran, Iran 
+
+> arXiv:2603.12075v1 [cs.RO] 12 Mar 2026
+
+through filter decoupling, and G¨ uler et al. [20] developed particle-based frameworks demonstrating accuracy but facing scalability constraints. Despite these advances, most existing methods impose restrictive assumptions: globally aligned coordinate frames known a priori , synchronous or near-synchronous sensor sam-pling across the team, or continuous communication band-width for state exchange. These conditions are rarely satisfied in GPS-denied field environments such as underground mines, subsea operations, or enclosed industrial facilities, where com-munication is intermittent, sensors operate at heterogeneous rates, and robots initialize with arbitrary orientations. Further-more, centralized architectures introduce single points of fail-ure and communication bottlenecks that degrade performance under realistic network constraints. 
+
+B. Contributions 
+
+This work addresses these practical limitations through four key innovations. First , we develop a distributed EKF that maintains full cross-correlation consistency through selective, event-triggered information exchange, transmitting compact packets only during mutual observations rather than con-tinuous state broadcasts, reducing bandwidth by 65% while preserving estimator consistency. Second , we enable operation with arbitrary initial reference frames via transformation matri-ces embedded in the measurement model, coupled with ROS message filters for timestamp-based fusion of asynchronous sensor streams (6 Hz odometry, 10 Hz LiDAR), eliminating the need for global alignment or strict synchronization. Third ,we integrate a dual-landmark strategy wherein robots observe both static environmental features and each other as dynamic beacons, improving observability in feature-sparse scenes. 
+
+Fourth , we validate the framework through comprehensive ex-periments in simulation and real-world basement environments under communication-impaired conditions, including intermit-tent WiFi, concrete multipath effects, and aggressive nonholo-nomic maneuvers, demonstrating 34% RMSE improvement over centralized approaches despite their theoretical optimality. Our design explicitly targets failure modes that limit field deployment: correlation neglect causing filter divergence, syn-chronization brittleness under heterogeneous sensing, and bandwidth saturation in centralized pipelines. The framework remains compatible with standard middleware (ROS) and commercial sensors, enabling practical deployment in GPS-denied domains. II. P ROPOSED DECENTRALIZED COOPERATIVE 
+
+LOCALIZATION 
+
+A. Problem Formulation and System Architecture 
+
+We consider two differential-drive mobile robots operating in GPS-denied environments with: (1) nonholonomic motion in 2D space; (2) proprioceptive wheel encoders; (3) Robot 1 equipped with RPLiDAR A2 (10 Hz) for landmark and Robot 2 detection; (4) intermittent wireless communication. Figure 1 illustrates the measurement configuration.  
+
+> Fig. 1. Relative measurement between Robot 1 (with LiDAR) and Robot 2 (dynamic landmark).
+
+Each robot i ∈ { 1, 2} maintains pose Xi = [ xi, y i, θ i]T ,where (xi, y i) is the position in meters and θi is the heading orientation in radians. The task estimates both pose simultane-ously. Robot 1 observes Robot 2 (cylindrical landmark, 10-15 cm diameter) and static features. The kinematic model is: 
+
+Xi,k +1 = Xi,k +
+
+
+
+Vi∆t cos( θi + ∆ θ)
+
+Vi∆t sin( θi + ∆ θ)
+
+ωi∆t
+
+
+
+> k
+
+(1) with control input ui,k = [Vi,k , ω i,k ]T and noise co-variance Qi = diag[(0 .1 m/s) 2, (0 .1 rad /s) 2], R =diag[(0 .01 m) 2, (1 deg) 2].
+
+B. DCL Framework 
+
+The proposed DCL framework, extending [21], distributes computation across robots while maintaining cross-correlation consistency. Figure 2 illustrates the architecture. Each robot maintains its pose estimate, self-covariance, and cross-covariance locally, exchanging information only during mutual observations when communication is available. 
+
+1) Prediction Stage: Each robot performs local prediction upon receiving encoder data: 
+
+ˆX+ 
+
+> i
+
+= f ( ˆXi, u i), P + 
+
+> ii
+
+= FiPii F Ti + GiQiGTi (2) where Fi = ∂f ∂X i and Gi = ∂f ∂u i are Jacobians. Cross-covariance propagates locally without communication: 
+
+P +12 = F1P T
+
+> 12
+
+F T 
+
+> 2
+
+(3) 
+
+2) Measurement and Update: When Robot 1 detects Robot 2, it obtains relative measurements z1,2 = [ ρ, ϕ ]T . The mea-surement model with transformation for arbitrary reference frames is: 
+
+h( ˆX1, ˆX2) = 
+
+ cos ˆθ1 sin ˆθ1
+
+− sin ˆθ1 cos ˆθ1
+
+  ˆx2 − ˆx1
+
+ˆy2 − ˆy1
+
+
+
+(4) The innovation r = z1,2 − h( ˆX1, ˆX2) yields innovation covariance and Kalman gains: 
+
+S = H1P11 HT 
+
+> 1
+
++ H1P12 HT 
+
+> 2
+
++ H2P21 HT 
+
+> 1
+
++ H2P22 HT 
+
+> 2
+
++ R
+
+(5) Fig. 2. DCL framework with distributed processing, asynchronous sensor fusion via ROS message filters, and real-time feature extraction. Data exchange occurs only during mutual observations. 
+
+Ki = ( Pii HTi + Pij HTj )S−1, i̸ = j (6) Robot 1 transmits {P12 , P 22 , ˆX2, r, K 2} to Robot 2. Both update: 
+
+ˆX+ 
+
+> i
+
+= ˆXi + Kir, P + 
+
+> ii
+
+= ( I − KiHi)Pii − KiHj Pji (7) 
+
+P + 
+
+> ij
+
+= ( I − KiHi)Pij − KiHj Pjj (8) 
+
+C. Feature Extraction and Landmark Detection 
+
+Reliable feature extraction from LiDAR data is funda-mental to the proposed DCL framework. To ensure robust segmentation under sensor noise and environmental clutter, the Adaptive Breakpoint Detector (ABD) [23] is employed. The ABD criterion determines whether two consecutive scan points, ρi and ρi+1 , belong to distinct segments according to 
+
+D(ρi, ρ i+1 ) > D thd = rn−1
+
+sin λ
+
+sin( λ − ∆ϕ) + 3 σr (9) where ∆ϕ denotes the LiDAR angular resolution, λ is a geometric constant, and σr represents range measurement noise. The segmentation outcome is illustrated in Fig. 3. In the first stage, the ABD identifies discontinuities between consecutive points, segmenting the scan into linear environ-mental boundaries and circular features. Local minima in the range–angle plots correspond to candidate landmarks. In the subsequent cylindrical feature extraction stage, the dynamic landmark is isolated as a single distinct feature point. The method proved highly reliable during experiments, with minor failures occurring only when the robot was within 0.3 m of walls, leading to geometric ambiguity. This adaptive segmentation and feature extraction process provides stable and precise landmark observations, forming a robust foundation for cooperative localization within the DCL framework.  
+
+> Fig. 3. LiDAR segmentation and cylindrical landmark extraction results. Left: ABD-based segmentation showing detected environmental and landmark features in polar and Cartesian views. Right: cylindrical feature extraction isolating the dynamic landmark as a single detected point.
+
+D. Asynchronous Data Synchronization Implementation 
+
+A critical practical challenge is handling asynchronous sensor measurements. Encoders operate at 6 Hz while LiDAR completes scans at 10 Hz. Direct fusion without temporal alignment causes estimation inconsistencies. We employ ROS message_filters 
+
+with ApproximateTimeSynchronizer policy for timestamp-based buffering: 1) Upon LiDAR measurement arrival at tL, check encoder data availability 2) If most recent encoder update occurred at tE < t L,buffer the LiDAR measurement 3) Perform prediction to propagate state from tE to tL
+
+using interpolated odometry: 
+
+utL 
+
+> i
+
+= utE 
+
+> i
+
++ utE 
+
+> i
+
+− utE −∆tE
+
+> i
+
+∆tE
+
+(tL − tE ) (10) 4) Apply buffered LiDAR update at synchronized times-tamp tL
+
+This ensures proper time-alignment before fusion, maintain-ing temporal consistency despite heterogeneous sensor rates. 
+
+E. Dual-Landmark Integration Strategy 
+
+To enhance performance in feature-sparse environments, Robot 1 observes known static environmental landmarks Lk =[xk, y k]T , k = 1 , . . . , N , in addition to using Robot 2 as a dynamic landmark. Static landmark observations follow: 
+
+z1,k = hL( ˆX1, L k) + nk (11) where hL applies the same rotational transformation as the cooperative measurement model but with fixed landmark positions. The key distinction between DCL and DCL-LM lies in mea-surement frequency. Baseline DCL receives corrections only during intermittent mutual observations with Robot 2, causing uncertainty growth between visibility gaps. DCL-LM provides continuous corrections through static features, maintaining bounded uncertainty. These ”private measurements” update only Robot 1’s local state ( ˆX1, P11 ) without communication, while cross-covariance updates ( P12 , P21 ) occur exclusively during cooperative events. This continuous observability ex-plains the performance improvement in Table I. III. S IMULATION VALIDATION 
+
+Preliminary validation was performed in the Gazebo simu-lator using two custom-built differential-drive robots operating in a 6 × 7 m2 environment for 100 s with a timestep of 0.1 s. The methods were comparatively evaluated:  
+
+> •
+
+DR: Odometry-only localization using encoder data.  
+
+> •
+
+SL: Individual localization with known static land-marks [24].  
+
+> •
+
+CCL: Centralized cooperative localization [22].  
+
+> •
+
+DCL: Proposed decentralized cooperative localization.  
+
+> •
+
+CCL-LM: Centralized cooperative localization with static landmarks.  
+
+> •
+
+DCL-LM: Proposed decentralized cooperative localiza-tion with dual landmarks. The ”-LM” variants combine static and dynamic landmarks for continuous corrections. Simulation results confirmed the framework’s correctness. DCL achieved 19% and 38% RMSE reductions compared with CCL for Robot 1, while DCL-LM obtained sub-5-cm positioning errors. These findings verified expected performance improvements and provided a foundation for real-world experimentation. IV. E XPERIMENTAL VALIDATION 
+
+A. Real-World Experimental Setup 
+
+Environment: The experiments were conducted in a base-ment laboratory covering approximately 30 m 2 (6 m × 7 m operational area). The setting was designed to emulate GPS-denied environments characterized by weak WiFi signals, concrete walls producing multipath effects, and limited visual landmarks similar to underground or enclosed facilities. 
+
+Hardware Configuration: Robot 1 was equipped with an RPLiDAR A2 sensor (10 Hz, σd = 0 .02 m, σϕ = 2 deg )and EMG 49 wheel encoders (6 Hz, σV = 0 .1 m/s, σω =0.1 rad/s). Robot 2 used identical encoders and carried a cylindrical landmark with a diameter of 12 cm. 
+
+Ground Truth System: A six-camera OptiTrack motion capture system using Motive 2.0 software provided high-precision position references at 120 Hz, downsampled to 10 Hz to match the LiDAR sampling frequency for fair comparison. 
+
+Experimental Protocol: Ten independent trials were per-formed, each consisting of 130 time steps with an interval of 0.166 s (21.58-s total duration). Robots began from different initial poses and executed time-varying linear and angular ve-locities. The motion patterns included curved trajectories and intermittent mutual visibility. This configuration introduced realistic dynamics that tested EKF consistency and robustness. Figures 4 and 5 illustrate the experimental setup and LiDAR data visualization.        
+
+> Fig. 4. Experimental workspace showing two differential-drive robots. Robot 2 (right) carries a cylindrical landmark.
+
+B. Experimental Results 
+
+Figure 6 presents representative estimated trajectories com-pared with OptiTrack ground truth. Dead reckoning accumu-lates considerable drift due to wheel slip and encoder bias, with maximum errors exceeding 26 cm (x-axis) and 50 cm (y-axis) for both robots within 21.5 s. Both centralized and decentralized cooperative localization methods substantially reduced these errors. Each correction event, corresponding to a mutual observation, brought estimated trajectories closer to ground truth. DCL-LM demonstrated the highest accuracy and smoothest trajectories, while DCL provided robust results when static landmarks were unavailable. Fig. 5. RViz visualization displaying RPLiDAR scan data during experimental trials. TABLE I PERFORMANCE METRICS AVERAGED OVER 10 EXPERIMENTAL TRIALS                                                      
+
+> Robot Metric Method DCL DCL-LM CCL DR Robot 1 RMSE X (m) 0.037 0.025 0.056 0.152 RMSE Y (m) 0.053 0.031 0.070 0.181 Var X (m 2)0.0054 0.0029 0.0178 0.0927 Var Y (m 2)0.0149 0.0041 0.0349 0.1338 Max Err X (m) 0.087 0.056 0.129 0.268 Max Err Y (m) 0.132 0.092 0.196 0.528 Robot 2 RMSE X (m) 0.041 0.024 0.062 0.125 RMSE Y (m) 0.056 0.045 0.075 0.298 Var X (m 2)0.0063 0.0026 0.0184 0.0885 Var Y (m 2)0.0112 0.0050 0.0386 0.3050 Max Err X (m) 0.098 0.058 0.128 0.253 Max Err Y (m) 0.162 0.119 0.201 0.559
+
+Table I summarizes averaged results from ten trials. Both decentralized methods outperformed centralized and dead reckoning approaches across all evaluated metrics. 
+
+C. Performance Analysis 
+
+The performance gap is explained by the estimator archi-tecture and by the communication model. Updates in DCL are computed on board at the sensing rate, which preserves timeliness when the platform executes fast turns or experiences packet delays, whereas centralized corrections can arrive after the state has evolved and thus have reduced effect. DCL maintains explicit cross-correlations between robots inside the distributed EKF, which prevents covariance miscalibra-tion during prediction and cooperative updates and keeps the estimator consistent when relative measurements resume after periods without cooperation. Communication is event triggered, so robots exchange compact innovations, gains, and cross-covariances only when a mutual observation is available, which concentrates bandwidth on informative moments. These properties yield graceful degradation, meaning that during short losses of visibility or connectivity each robot relies on locally consistent odometry and uncertainty grows smoothly rather than failing abruptly. The sensing and fusion pipeline remains stable under asyn-chronous sampling. Timestamp-based synchronization aligns 6 Hz encoder data with 10 Hz LiDAR scans, which avoids discontinuities at update boundaries and prevents artificial covariance contraction. The landmark front end based on ABD is reliable under aggressive motion, and ambiguities near walls are screened by Mahalanobis-distance gating so that spurious returns have limited influence while valid cooperative measurements are retained. Error behavior is consistent with these mechanisms. Maximum-error excursions are smaller for DCL and smallest for DCL-LM; for Robot 1 the maxima are 0.087 m and 0.056 m in x and 0.132 m and 0.092 m in y for DCL and DCL-LM respectively, and for Robot 2 the corresponding maxima are 0.098 m and 0.058 m in x and 0.162 m and 0.119 m in 
+
+y. Variances are reduced relative to CCL for both robots, as seen in Table I. Between mutual observations the uncertainty envelopes expand predictably, and when visibility resumes the corrections draw the estimates toward ground truth in Fig. 6. There is a practical trade-off between accuracy and prior knowledge. DCL-LM is preferred when a sparse set of static features can be exploited. DCL remains attractive when no map is available because it relies only on mutual observations while retaining favorable accuracy and lower bandwidth usage. These properties make decentralized cooperative localization suitable for underground inspection with limited RF coverage, underwater operations with acoustic links, warehouse automa-tion with intermittent WiFi, disaster response in enclosed structures, and multi-robot field exploration where infrastruc-ture is minimal. V. C ONCLUSIONS AND FUTURE WORK 
+
+This paper presented a decentralized cooperative local-ization framework that brings together a distributed EKF with explicit tracking of inter-robot cross-correlations, atransformation-aware measurement model that handles arbi-trary reference-frame alignment, timestamped fusion for asyn-chronous sensors, and a dual-landmark strategy that combines static environmental features with robots acting as dynamic beacons. Communication is event triggered, so only compact, informative messages are exchanged at mutual-observation instants. The combined design delivers accurate and timely estimates in simulation and real-world trials under realistic communication and sensing constraints. The estimator exhibits graceful degradation, meaning that short interruptions in visi-bility or connectivity lead to smoothly increasing and bounded uncertainty rather than abrupt failure. Future work includes scaling to larger teams through struc-tured cross-covariance management, integrating complemen-tary asynchronous sensors (IMU, visual odometry, UWB) with adaptive noise tuning, and analyzing observability and filter consistency under sporadic communication. Additional directions are learning-based detection and data association, validation in more demanding field settings, and coupling the estimator with distributed, risk-aware planning. Target appli-cations include underground inspection, underwater robotics. Fig. 6. Experimental trajectories over 21.6 s for Robot 1 (left) and Robot 2 (right). DCL-LM tracks ground truth most closely with visible corrections during mutual observations. 
+
+ACKNOWLEDGMENT 
+
+The authors gratefully acknowledge the Robotics Labora-tory at Yazd University for providing experimental facilities and technical support. REFERENCES [1] L. Collins, P. Ghassemi, E. T. Esfahani, D. Doermann, K. Dantu, and S. Chowdhury, “Scalable coverage path planning of multi-robot teams for monitoring non-convex areas,” in Proc. IEEE Int. Conf. Robotics Autom. (ICRA) , Xi’an, China, 2021, pp. 7393–7399. [2] J. P. Queralta et al. , “Collaborative multi-robot search and rescue: Planning, coordination, perception, and active vision,” IEEE Access ,vol. 8, pp. 191617–191643, 2020. [3] S. Govindaraj et al. , “Multi-robot cooperation for lunar base assembly and construction,” in Proc. Int. Symp. Artificial Intelligence, Robotics Autom. Space , Pasadena, CA, USA, 2020. [4] A. Ribeiro and J. Conesa-Mu˜ noz, “Multi-robot systems for preci-sion agriculture,” in Advances in Robotics for Precision Agriculture .Springer, 2021, pp. 151–175. [5] X. An, C. Wu, Y. Lin, M. Lin, T. Yoshinaga, and Y. Ji, “Multi-robot systems and cooperative object transport: Communications, platforms, and challenges,” IEEE Open J. Comput. Soc. , vol. 4, pp. 1–12, 2023. [6] M. H. Kim, J. M. Tanchoco, S. Y. Nof, D. K. Y. Yau, and S. Lee, “Distributed task allocation for multi-robot systems in military domain,” Ph.D. dissertation, Purdue Univ., West Lafayette, IN, USA, 2023. [7] T. Arai, E. Pagello, and L. E. Parker, “Advances in multi-robot systems,” 
+
+IEEE Trans. Robot. Autom. , vol. 18, no. 5, pp. 655–661, Oct. 2002. [8] D. Fox, W. Burgard, H. Kruppa, and S. Thrun, “A probabilistic approach to collaborative multi-robot localization,” Auton. Robots , vol. 8, no. 3, pp. 325–344, Jun. 2000. [9] W. Burgard, D. Fox, D. Hennig, and T. Schmidt, “Estimating the absolute position of a mobile robot using position probability grids,” in Proc. Nat. Conf. Artif. Intell. , Portland, OR, USA, 1996, pp. 896– 901. [10] M. S. Bahraini, M. Bozorg, and A. B. Rad, “SLAM in dynamic environments via ML-RANSAC,” Mechatronics , vol. 49, pp. 105–118, Feb. 2018. [11] M. S. Bahraini, “On the efficiency of SLAM using adaptive unscented Kalman filter,” Iranian J. Sci. Technol., Trans. Mech. Eng. , vol. 44, pp. 665–685, 2020. [12] S. S. Kia, S. Rounds, and S. Martinez, “Cooperative localization for mobile agents: A recursive decentralized algorithm based on Kalman-filter decoupling,” IEEE Control Syst. Mag. , vol. 36, no. 2, pp. 86–101, Apr. 2016. [13] T. R. Wanasinghe, G. K. I. Mann, and R. G. Gosine, “Decentralized cooperative localization for heterogeneous multi-robot system using split covariance intersection filter,” in Proc. Canadian Conf. Comput. Robot Vision , Montreal, QC, Canada, 2014, pp. 167–174. [14] S. Thrun, D. Fox, and W. Burgard, “Monte Carlo localization with mixture proposal distribution,” in Proc. AAAI/IAAI , Austin, TX, USA, 2000, pp. 859–865. [15] S. I. Roumeliotis and I. M. Rekleitis, “Analysis of multirobot localization uncertainty propagation,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. (IROS) , Las Vegas, NV, USA, 2003, pp. 1763–1770. [16] S. Panzieri, F. Pascucci, and R. Setola, “Multirobot localisation using interlaced extended Kalman filter,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. , Beijing, China, 2006, pp. 2816–2821. [17] J. Yuan, Y. Huang, T. Tao, and F. Sun, “A cooperative approach for multi-robot area exploration,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. ,Taipei, Taiwan, 2010, pp. 1390–1395. [18] L. C. Carrillo-Arce, E. D. Nerurkar, J. L. Gordillo, and S. I. Roumeliotis, “Decentralized multi-robot cooperative localization using covariance intersection,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. , Tokyo, Japan, 2013, pp. 1412–1417. [19] H. Li and F. Nashashibi, “Cooperative multi-vehicle localization using split covariance intersection filter,” IEEE Intell. Transp. Syst. Mag. ,vol. 5, no. 2, pp. 33–44, Summer 2013. [20] S. G¨ uler, M. Abdelkader, and J. S. Shamma, “Peer-to-peer relative localization of aerial robots with ultrawideband sensors,” IEEE Trans. Control Syst. Technol. , vol. 29, no. 5, pp. 1981–1996, Sep. 2021. [21] L. Luft, T. Schubert, S. I. Roumeliotis, and W. Burgard, “Recursive decentralized localization for multi-robot systems with asynchronous pairwise communication,” Int. J. Robot. Res. , vol. 37, no. 10, pp. 1152– 1167, Sep. 2018. [22] S. I. Roumeliotis and G. A. Bekey, “Distributed multirobot localization,” 
+
+IEEE Trans. Robot. Autom. , vol. 18, no. 5, pp. 781–795, Oct. 2002. [23] G. A. Borges and M.-J. Aldon, “Line extraction in 2D range images for mobile robotics,” J. Intell. Robot. Syst. , vol. 40, no. 3, pp. 267–297, Jul. 2004. [24] J. J. Leonard and H. F. Durrant-Whyte, “Mobile robot localization by tracking geometric beacons,” IEEE Trans. Robot. Autom. , vol. 7, no. 3, pp. 376–382, Jun. 1991.

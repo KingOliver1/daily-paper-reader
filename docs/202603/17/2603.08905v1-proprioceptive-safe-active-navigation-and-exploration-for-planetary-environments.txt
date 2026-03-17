@@ -1,0 +1,312 @@
+Title: Proprioceptive Safe Active Navigation and Exploration for Planetary Environments
+
+URL Source: https://arxiv.org/pdf/2603.08905v1
+
+Published Time: Wed, 11 Mar 2026 00:11:53 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Proprioceptive Safe Active Navigation and Exploration for Planetary Environments 
+
+Matthew Y. Jiang ∗, Feifei Qian †, Shipeng Liu †§ ∗Georgia Institute of Technology, Atlanta, GA 30332, USA 
+
+†University of Southern California, Los Angeles, CA 90089, USA 
+
+§Corresponding author Email: matthewjiang@gatech.edu, {shipengl, feifeiqi }@usc.edu 
+
+Abstract —Deformable granular terrains introduce significant locomotion and immobilization risks in planetary exploration and are difficult to detect via remote sensing (e.g., vision). Legged robots can sense terrain properties through leg–terrain interactions during locomotion, offering a direct means to assess traversability in deformable environments. How to systemati-cally exploit this interaction-derived information for navigation planning, however, remains underexplored. We address this gap by presenting PSANE, a Proprioceptive Safe Active Navigation and Exploration framework that leverages leg–terrain interaction measurements for safe navigation and exploration in unknown deformable environments. PSANE learns a traversability model via Gaussian Process regression to estimate and certify safe regions and identify exploration frontiers online, and integrates these estimates with a reactive controller for real-time navigation. Frontier selection is formulated as a multi-objective optimization that balances safe-set expansion probability and goal-directed cost, with subgoals selected via scalarization over the Pareto-optimal frontier set. PSANE safely explores unknown granular terrain and reaches specified goals using only proprioceptively estimated traversability, while achieving performance improve-ments over baseline methods. 
+
+I. I NTRODUCTION 
+
+Planetary exploration systems rely heavily on exteroceptive sensing modalities such as vision and LiDAR for mapping and safe traversal. For example, the Mars 2020 rover employs HazCams and NavCams for geometric reconstruction and hazard detection [1]. More broadly, robotic navigation frame-works typically construct geometric maps using visual–inertial SLAM or LiDAR pipelines [2], [3], and infer traversability from geometric features such as slope, roughness, step height, and local surface structure [4]–[7], sometimes augmented with semantic or material recognition cues [8]. These approaches have been effective in rigid environments where mobility constraints are strongly correlated with observable surface geometry. On deformable terrains, however, surface geometry and appearance are often insufficient for estimating traversal risks. Locomotion performance in granular soils and regolith-like media depends on subsurface mechanical properties such as shear strength, compaction state, and sinkage resistance [9]– [11]. These properties are not reliably inferable from remote sensing alone [12]. The Spirit rover’s entrapment [13] exem-plifies this limitation: visually benign terrain can still induce immobilization due to weak underlying layers. These failures motivate moving beyond geometry-only risk assessment. 
+
+Fig. 1: Overview of safe reactive navigation. (Red) Unsafe zones for the robot to avoid. (Brown) Measured terrain pen-etration resistance. (Blue Solid) Executed and planned paths. (Blue Dotted) Naive path to goal. (Yellow) Navigation Goal. Recent work has explored interaction-informed perception by leveraging proprioceptive signals, including motor positions and currents, to either classify terrain types [14], [15] or esti-mate terrain mechanical properties through continuous spatial inference [12], [16]–[21] based on robot–ground interaction dynamics. In existing work, interaction-derived information is primarily used for locomotion adaptation or low-level con-trol rather than navigation-level decision-making. Even when interaction-derived estimates inform higher-level planning in multi-robot settings [22], the scouting robot’s own navigation problem, which must balance exploration and safety under uncertainty, remains largely underexplored. This paper considers navigation in settings where proprio-ception is the primary source of terrain information. Such mea-surements are localized, available only at discrete contact loca-tions, and must be transformed into a spatially continuous rep-resentation to support planning. Moreover, navigation is goal-directed and safety-critical: the robot must reach a specified goal while ensuring that the executed trajectory remains within traversable regions, even though much of the environment is initially unknown. Consequently, navigation on deformable terrain induces a coupled estimation–exploration–control prob-lem, in which the robot must actively acquire informative in-
+
+> arXiv:2603.08905v1 [cs.RO] 9 Mar 2026
+
+teraction data, use it to certify safe regions, and simultaneously make progress toward the goal. To support such safety-critical navigation, the robot must construct a spatially continuous, uncertainty-aware model of terrain risk. Gaussian Processes (GPs) provide a suitable structure for this inference, with predictive means and cal-ibrated uncertainties to resolve sparse interaction data [23], [24]. These uncertainty estimates enable safety certification via high-confidence bounds on predicted risk. Prior GP-based safe learning methods primarily address safe query selec-tion, choosing evaluation points that expand knowledge while avoiding unsafe regions [25]–[28]. In contrast, safe naviga-tion on deformable terrain requires synthesizing continuous, dynamically feasible trajectories that both expand the certified safe set through interaction and guarantee safety along the entire path while progressing toward a spatial goal. This shifts the problem from pointwise safe sampling to trajectory-level decision-making under uncertainty, which existing frameworks do not directly address. To this end, we present PSANE, a Proprioceptive Safe 
+
+Active Navigation and Exploration framework for safe naviga-tion and exploration in unknown deformable planetary envi-ronments using only interaction-derived information. PSANE learns a traversability model online via GP regression from proprioceptive leg–terrain measurements, and uses the result-ing predictive mean and uncertainty to conservatively certify safe regions and identify frontier regions for exploration. A frontier-based subgoal selection strategy balances goal-directed progress with safe-region expansion, and is integrated with a diffeomorphic reactive controller [29], [30] that outputs real-time velocity commands while treating uncertified regions as obstacles. Our main contributions are:  
+
+> •
+
+A formulation of safe navigation on deformable terrain as continuous risk estimation from sparse interaction mea-surements with uncertainty-aware safe-set certification.  
+
+> •
+
+A multi-objective frontier subgoal selection strategy that balances safe-set expansion and goal progress, integrated with a reactive controller for real-time safe navigation.  
+
+> •
+
+Extensive simulation validation using field-measured LHS-1 regolith terramechanics data, demonstrating reli-able identification of high-risk regions and safe explo-ration of unknown environments. II. P ROBLEM FORMULATION 
+
+We consider a legged robot [31] operating in an unknown deformable granular terrain with spatially varying strength (Fig. 1). In such environments, locomotion performance de-pends strongly on local substrate mechanics, particularly ter-rain penetration resistance [32]. During locomotion, the robot interacts intermittently with the terrain through discrete leg– ground contacts. At each contact event, it can estimate the local terrain penetration resistance from proprioceptive force–depth measurements. The estimated penetration resistance is then used to predict locomotion performance, including forward speed and slip ratio s, using an existing “rotary-walking” model [32]. Since large slip ratios indicate degraded traction and possible immobilization, regions that induce high slip are considered high-risk. Based on this discrete sensing model, we formulate safe navigation as a probabilistic learning and control problem over a bounded planar workspace W ⊂ R2. For computation, we discretize the workspace into a finite set of query points D ⊂W, and perform all GP inference and safe-set operations on 
+
+D. Let 
+
+f : W → R (1) denote an unknown slip-ratio field, where larger f (x) corre-sponds to larger slip and thus higher immobilization risk. The robot can estimate f (x) only at contacted locations xt through noisy measurements: 
+
+yt = f (xt) + εt, εt ∼ N (0 , σ 2
+
+> noise
+
+). (2) From measurements collected up to time t, the robot main-tains a probabilistic slip-ratio map 
+
+Tt = {μt(x), σ t(x) | x ∈ W} , (3) where μt(x) and σt(x) denote the posterior mean and uncer-tainty, respectively. Given a safety threshold h (e.g., h = 0 .8), a location is considered safe if its slip ratio satisfies f (x) ≤ h.The objective is to design an algorithm that leverages Tt to (1) safely explore and expand the certified safe region through informative exploration and (2) navigate toward a specified goal xg ∈ W while ensuring the robot’s safety at all times. III. P ROPRIOCEPTIVE SAFE NAVIGATION AND 
+
+EXPLORATION 
+
+Building on Sec. II, PSANE consists of (i) GP-based online traversability mapping from proprioceptive leg–terrain interac-tions, (ii) uncertainty-aware safe-set certification and frontier extraction, and (iii) multi-objective frontier subgoal selection integrated with a reactive controller for real-time navigation (Fig. 2). The terrain mapping and slip-ratio estimation compo-nents build upon existing interaction-based modeling methods (e.g., [12]) and are integrated here as a perception module within the broader safe navigation framework. The mapping module fits force–depth curves to obtain scaled penetration resistance measurements and constructs a terrain strength map based on their spatial locations. The risk estimation module converts the terrain strength map into a slip-ratio–based risk map. The safety module then uses the pre-dicted slip ratio and its associated uncertainty to identify a safe region and generate candidate frontier subgoals. Each frontier candidate is evaluated at (i) a probability of expanding the safe region and (ii) a normalized to-goal cost in ([0,1]). The final subgoal is selected to maximize the probability of reaching the goal while minimizing the associated cost. This subgoal is passed to a diffeomorphic reactive controller [29], [30], which generates velocity commands while avoiding unsafe geome-tries. While the terrain-strength estimation and rotary-walking slip model follow established formulations [32], the novelty of this work lies in using uncertainty-aware risk estimates for Localization 
+
+> Proprioceptive Sensing
+> Penetration resistance Force/Depth
+
+RHex Robot 
+
+> Proprioceptive Terrain Mapping
+> Radial Basis Function Kernel Rotary Walking Model
+> Safe Region Characterization
+> Lipschitz-based safety guarantees Compute safe region mask
+> Subgoal Selection
+> Frontiers Calculation
+> Pareto Set with objectives:
+> Goal heuristic value Expansion probability Multiple-objective balance
+> Reactive Controller
+
+ 
+
+  
+
+> 
+> Predicted Slip-ratio Variance Subgoal
+
+Fig. 2: Overview of the proposed PSANE navigation framework. conservative safe-set certification and multi-objective frontier-based navigation under safety constraints. 
+
+A. Proprioceptive Terrain Mapping 
+
+Given the measurement history Dt = {(xi, y i)}ti=1 from Equation 2, the terrain penetration resistance and slip ratio Tt
+
+are maintained as a Gaussian Process (GP) posterior using the RBF kernel, k(x, x′) = σ2 
+
+> f
+
+exp 
+
+
+
+− ∥x−x′∥2
+
+> 2ℓ2
+
+
+
+. The GP provides predictive means μt(x) and variances σ2 
+
+> t
+
+(x) at any location 
+
+x for terrain-strength and slip-ratio predictions, which guide safe exploration. (Fig. 3A, Fig. 3B) 
+
+B. Confidence-guided Safe Region Characterization 
+
+To characterize which areas are safe for traversal, we first quantify the confidence of the predicted slip ratio at each location x using the predictive mean μt−1(x) and the predictive standard deviation σt−1(x). We then compare this confidence interval with a predefined safety threshold h to determine whether a location can be certified as safe. 
+
+1) Slip-ratio Prediction Confidence Interval: A confidence parameter β > 0 is introduced to control how conservatively the predicted slip ratio is interpreted. The uncertainty-aware confidence bounds are defined as: 
+
+ct(x) = 
+
+h
+
+μt−1(x) ± pβ σ t−1(x)
+
+i
+
+(4) The confidence bounds are iteratively intersected with prior confidence sets to ensure consistency: 
+
+Ct(x) = Ct−1(x) ∩ ct(x) (5) We initialize C0(x) = ( −∞ , ∞) for all x ∈ D.From Ct(x), the lower and upper bounds of slip ratio are defined as: 
+
+ℓt(x) = min Ct(x), ut(x) = max Ct(x) (6) Since higher slip ratios indicate higher traversal risk, the upper confidence bound ut(x) represents the worst-case slip consistent with model uncertainty. A location x is certified as safe only if ut(x) ≤ h, meaning that even under the largest slip-ratio estimate, the safety threshold is still not violated. The lower confidence bound ℓt(x) provides an optimistic estimate of traversability. The interval width ut(x) − ℓt(x) quantifies uncertainty and highlights regions where additional explo-ration may reduce risk. Larger β increases ut(x) and decreases 
+
+ℓt(x), making safety certification stricter and resulting in more conservative behavior. 
+
+2) Safe Region Characterization: At iteration t, safety is certified conservatively using the GP upper bound ut(x).Assuming the true slip field is Lipschitz continuous with constant L [25], a point x′ is certified safe if it can be reached from a previously safe point x ∈ St−1 such that 
+
+ut(x) + L∥x − x′∥ ≤ h. (7) Intuitively, this condition propagates safety from already certified locations to nearby states. The upper confidence bound accounts for model uncertainty by considering the worst-case slip consistent with the GP posterior, while the Lipschitz constant bounds how rapidly slip can vary spatially. Together, they ensure that even under uncertainty and bounded spatial variation, the slip at x′ remains below the safety thresh-old. For granular terrains, the Lipschitz assumption reflects the observation that soil mechanical properties typically vary smoothly over local regions due to similar formation and loading conditions. The safe region is therefore updated as 
+
+St = [
+
+> x∈St−1
+
+{x′ ∈ D | ut(x) + L∥x − x′∥ ≤ h} . (8) The robot begins with an initial safe set S0 determined from its starting location and initial measurements. As new             
+
+B. Variance 
+
+
+
+A. Slip-ratio C. Safety-map  
+
+> Goal
+>   
+> Safe region
+
+
+
+## xgxrx Pareto front 
+
+> Subgoal
+
+Fig. 3: Overview of terrain-aware traversal risk estimation and safety-aware planning. (A) The slip-ratio field and (B) its predictive uncertainty are inferred using a Gaussian Process. (C) The resulting confidence bounds are used to construct a conservative safety map, from which frontier boundaries are extracted via a border-following algorithm and filtered to obtain the Pareto-optimal frontier set. (D–F) For each Pareto frontier candidate, the expansion probability (D) and goal-directed heuristic (E) are evaluated and combined to produce an overall score (F) that balances safe-region expansion and goal progress. observations reduce uncertainty, the upper confidence bounds shrink in certain regions, enabling the safe set to expand iteratively into previously uncertified areas. 
+
+C. Frontiers Detection and Subgoal Selection 1) Frontiers Detection: Frontiers are defined as the bound-aries between the certified safe region and uncertified terrain, representing locations where safe-set expansion may occur. We apply the Suzuki border-following algorithm [33] to the discretized safety map to extract these boundaries as frontier candidates. Since the safe region may contain multiple disjoint compo-nents, not all frontiers are reachable from the robot’s current position. We therefore retain only frontier points that belong to the same connected safe component as the robot, denoted by 
+
+Gt, ensuring that selected subgoals are physically reachable within certified safe terrain. 
+
+2) Subgoal Selection: Ideally, there exists an optimal fron-tier location x∗ 
+
+> t
+
+that minimizes the total path cost from the start to the goal while satisfying safety constraints. However, such a node cannot be computed in practice because the true cost-to-go depends on terrain properties beyond the currently certified safe region. In particular, the future slip ratio and the associated motion cost from a candidate frontier to the final goal remain unknown. To address this uncertainty, we approximate the long-horizon planning problem using heuristic objectives that bal-ance goal progress and safe-region expansion (Fig. 3C). At each planning step, the robot evaluates all frontier candidates 
+
+x ∈ Gt according to two complementary criteria: an expansion probability and a goal heuristic value. The expansion probability , shown in Fig. 3D, is defined as 
+
+Pe(x) = 1 − exp( −ke gt(x)) , (9) where ke > 0 (0.1 in our implementation) controls the growth rate and ensures Pe(x) ∈ [0 , 1) with diminishing returns as the expansion potential increases. The quantity gt(x) measures the conservative expansion capability of frontier x and is defined as 
+
+gt(x) = |{ x′ ∈ D \ St | ℓt(x) + L∥x − x′∥ ≤ h}| , (10) which counts the number of previously uncertified states (D \ St) that can be conservatively guaranteed safe by ex-panding from frontier x. In practice, evaluation is restricted to uncertified states within the Lipschitz-certified radius 
+
+r(x) = h − ut(x)
+
+L , (11) since states outside this radius cannot satisfy the safety condi-tion. This restriction reduces computational complexity while preserving the conservative safety guarantee. The goal heuristic value function , shown in Fig. 3E, is defined as 
+
+Vgoal (x) = exp( −kg (∥x − xg ∥ + ∥x − xr ∥)) , (12) where xg denotes the mission goal (Fig. 3C), xr is the current robot position, and kg > 0 (0.1 in our implementation) is a decay parameter controlling the emphasis on shorter paths. The exponential form ensures that Vgoal (x) ∈ (0 , 1] , yielding a bounded and smoothly decreasing preference for frontier points that are farther from the goal or more costly to reach. When the robot operates in pure exploration mode without a specified mission goal, the distance-to-goal term is removed and the value function reduces to 
+
+Vgoal (x) = exp( −kg ∥x − xr ∥) ,
+
+which prioritizes frontiers that are locally efficient to reach. Given the two value functions, we first compute the Pareto front [34] with respect to Pe(x) and Vgoal (x), thereby preserv-ing the multi-objective structure. From the resulting Pareto set, we evaluate two selection strategies. The first strategy selects a frontier according to a predefined priority order between the objectives (denoted as PGH in Sec. IV). The second strategy scalarizes the objectives by defining an overall frontier score (PSANE): 
+
+Voverall (x) = Vgoal (x) · Pe(x), (13) and selects the frontier with the highest Voverall . We compare the performance of these two strategies in Sec. IV. 
+
+Algorithm 1 Proprioceptive Safe Active Navigation and Ex-ploration (PSANE). 
+
+Require: Workspace D, GP prior (μ0, k, σ 0), Lipschitz L,initial safe set S0, safety threshold h, goal xg , decay parameters kg , k e > 0 
+
+> 1:
+
+Initialize GP posterior; S0 ← S0 
+
+> 2:
+
+for t = 1 , 2, . . . do  
+
+> 3:
+
+Compute GP bounds ℓt, u t on D; St ←
+
+SafeExpand( St−1, u t, L, h ) 
+
+> 4:
+
+Ot ← D \ St; Gt ← Frontier( St, xr (τ ))  
+
+> 5:
+
+for all x ∈ Gt do  
+
+> 6:
+
+Vgoal (x) ← exp   − kg (∥x − xg ∥ + ∥x − xr ∥) 
+
+> 7:
+
+r(x) ← max  0, h−ℓt(x)
+
+> L
+
+ 
+
+> 8:
+
+gt(x) ← |{ x′ ∈ D \ St | ∥ x − x′∥ ≤ r(x)}|  
+
+> 9:
+
+Pe(x) ← 1 − exp( −ke gt(x))  
+
+> 10:
+
+Voverall (x) ← Vgoal (x) · Pe(x) 
+
+> 11:
+
+end for  
+
+> 12:
+
+xt ← arg max x∈Gt Voverall (x) 
+
+> 13:
+
+Navigate to xt using obstacle set Ot 
+
+> 14:
+
+Update Dt with (xt, y t) ; update GP with Dt 
+
+> 15:
+
+end for 
+
+D. Reactive Navigation 
+
+While the planner determines the subgoal, safely traversing between these points requires a robust local navigation strat-egy. Classical global planners typically necessitate frequent Goal xgxr
+
+> Local workspace
+> Polygon Reactive Controller
+
+A BSafety margin 
+
+Fig. 4: Integration with the reactive controller. The certified safe region (green) is converted into obstacle polygons by subtracting it from the local workspace. The resulting bound-aries are conservatively buffered by a safety margin (red) and geometrically simplified to obtain the final obstacle set (purple). The reactive controller then generates a velocity command consisting of forward speed and angular velocity. replanning as the environment evolves, which can become computationally inefficient in dynamic terrain settings. To address this limitation, we adopt a reactive control framework adapted from [30]. This enables real-time adaptation without repeated global replanning. 
+
+1) Geometric Obstacle Construction: For reactive naviga-tion, the certified safe region St (Sec. III-C) is converted into a continuous geometric representation of free space (Fig. 4A). To remain conservative with respect to discretization and polygon approximation errors, we shrink the outer boundary and enlarge interior holes by a fixed safety margin (Fig. 4B, red margin). We then simplify the resulting polygons using a bounded tolerance while preserving their topology. Next, we define a local workspace by computing the mini-mum x and y coordinates of the refined region (Fig. 4A purple rectangle). The area outside this refined free-space region (Fig. 4B, purple polygons) is treated as obstacles and provided to the navigation controller. 
+
+2) Diffeomorphic Reactive Control: We adopt the reactive navigation framework from [30], which constructs a diffeo-morphic transformation between the physical workspace and a simplified model space. This enables obstacle avoidance using simple potential fields in the transformed domain. The method guarantees that smooth trajectories in model space correspond to safe, obstacle-free paths (Fig. 4B, black curve) in physical space, provided the obstacle set is polygonal. This allows real-time control generation without full replanning as the known obstacle set evolves. 
+
+E. System Integration 
+
+The complete system integrates terrain mapping, frontier and subgoal selection, and local reactive control within a unified exploration framework: proprioceptive measurements update the GP-based terrain model, the planner selects a sub-goal from the certified safe region, and the reactive controller generates real-time motion commands toward the selected subgoal (Algorithm 1). IV. R ESULTS 
+
+A. Simulation Setup 
+
+Terrain penetration resistance is critical for robot perfor-mance on highly deformable substrates, such as granular media common in planetary environments. However, preparing a deformable substrate at controlled compaction levels is labor-intensive and difficult to reproduce consistently, limiting large-scale data collection for navigation experiments. To address this challenge, we used a Chrono simulation [35] (Fig. 5) which supports multiple terramechanics models. To emulate Goal xg  
+
+> ABStart Start Goal xg
+
+Fig. 5: Chrono simulation environments. Environment 1 (A) features smoother terrain variations, whereas Environment 2 (B) exhibits sharper spatial changes in terrain properties. Green denotes high penetration resistance (LHS-1), and yellow denotes low. lunar simulant behavior under different compaction levels, we parameterize the Chrono terrain model using experimentally measured regolith mechanical properties reported in [22]. Specifically, we instantiate a Soil Contact Model (SCM) terrain in Chrono [36], [37], which supports spatially varying terrain parameters over a 2D domain. We then simulate legged locomotion on the validated SCM terrain. Chrono computes the interaction forces between the robot’s legs and body and the deformable terrain, and integrates the full-body dynamics to evolve both the robot and terrain states. 
+
+B. Experimental Design 
+
+In this section, we evaluate the performance and efficiency of PSANE against three baselines: the Naive Goal Heuristic (NGH), the Safe-Goal Heuristic (SGH), and the Pareto-Goal Heuristic (PGH) for goal-directed navigation tasks. For safe terrain exploration without a predefined goal, we compare PSANE against PGH, which selects the frontier with maxi-mum Pe(x) and Vg (x), iteratively. The Naive Goal Heuristic directly commands the legged robot toward the goal without considering terrain safety risks. The Safe-Goal Heuristic incorporates terrain safety estimation but does not explicitly reason about safe-region expansion. The Pareto-Goal Heuristic iteratively selects frontier subgoals from the Pareto set defined by the goal value Vgoal and the expansion probability Pe, thereby preserving the multi-objective structure without scalarization. To select a single subgoal from the Pareto set, PGH applies an a priori rotating preference schedule: at each decision step it prioritizes one objective and breaks ties using the other. In our implemen-tation, the schedule rotates in a repeating pattern of {goal, goal, expansion }, biasing selection toward goal progress while periodically forcing safe-set expansion. We conduct experiments in two environments. Environ-ment 1 (Fig. 5A) features a smooth transition in terrain penetration resistance, resulting in gradual changes in slip ratio and traversability. Environment 2 (Fig. 5B) features highly heterogeneous terrain characterized by abrupt spatial variations in penetration resistance, inducing sharp transitions in traversability. In both environments, the robot is initialized within averified safe region with three proprioceptive samples to bootstrap the GP terrain model. We evaluate three tasks: (1) goal-directed navigation in Environment 1, (2) goal-directed navigation in Environment 2, and (3) safe terrain exploration in Environment 2 without a predefined goal. All methods share identical GP hyperparameters, safety thresholds, and controller settings. Performance is measured using: (1) success rate, defined as reaching the goal while maintaining full compliance with the ground-truth safety constraint; (2) completion time; and (3) total path length. Each experiment is executed three times per environment, and reported results are averaged across trials. 
+
+C. Experimental Results 
+
+We evaluate PSANE against NGH, SGH, and PGH for goal-directed navigation in Environment 1 (Fig. 6A) and Environment 2 (Fig. 6B), and quantitative results are shown in Fig. 6C–E. For the safe exploration task in Environment 2, we compare PSANE against PGH to isolate the effect of scalarized frontier selection under safety constraints. 
+
+1) Goal-Directed Navigation: In both Environment 1 and Environment 2, NGH tends to follow nearly straight trajecto-ries toward the goal. As a result, it enters regions with ex-tremely high slip ratios, leading to immobilization and failure, resulting in a 0% success rate in both environments. SGH incorporates safety estimation and reduces unsafe incursions. However, because it does not explicitly encourage safe-set expansion, it often stalls near the boundary of St, repeatedly selecting subgoals with high cost-to-go values but limited feasibility. In some cases, when the unsafe region is narrow or weakly curved, the robot may eventually progress after prolonged stagnation (Fig. 6B, SGH). This occurs because the subgoal is projected onto the interior of the current safe boundary, allowing incremental advancement. Nevertheless, SGH fails to systematically traverse large, unsafe regions and frequently becomes trapped at frontiers (Fig. 6A, SGH), resulting in a success rate of 66.7% and 0% in Environment 1 and Environment 2, respectively. In contrast, PGH and PSANE achieve 100% success rates in both environments by explicitly considering both the cost-to-go value and safe-set expansion probability. The certified safe region guarantees trajectory safety, while the consideration of expansion probability enables the robot to enlarge the safe set and recover a feasible path whenever one exists. Beyond Env. 1             
+
+> ANGH SGH PGH PSANE
+> Env. 2
+> B
+> Env. 1 Env. 2 0.00 0.25 0.50 0.75 1.00 Success C0.0 0.0 0.7 0.0 1.0 1.0 1.0 1.0 Success Rate Env. 1 Env. 2 0200 400 600 Time (s) DN/A N/A N/A Time Elapsed Env. 1 Env. 2 020 40 Dist (m) EN/A N/A N/A Path Length
+> NGH SGH PGH PSANE
+
+Fig. 6: Comparison of navigation-to-goal behavior and perfor-mance across different algorithms. (A) and (B) show repre-sentative path visualizations in Environments 1 and 2, respec-tively. The green dot indicates the robot’s starting position, the red dot its final position, and the yellow star the navigation goal. A blue (low)–yellow–red (high) colormap represents the ground-truth slip-ratio distribution across the terrain. (C), (D), and (E) report the success rate (goal reached), completion time, and path length, respectively, averaged over three trials in each environment. success rate, PSANE achieves more than a twofold improve-ment in efficiency, measured by reduced completion time (111.81 ± 17.93 s) and shorter path length (14.54 ± 2.41 m), compared to PGH (209.02 ± 64.07 s and 31.89 ± 11.60 m, respectively) in Environment 1. This efficiency gain arises from its cost-aware expansion mechanism. Unlike PGH, which alternates between expansion and goal-seeking phases and may incur detours due to phase switching (Fig. 6A, 6B, PGH), PSANE selects frontiers using a unified scalarized objective Voverall (x), which jointly weighs safe-set expansion probability and cost-to-go. When multiple frontiers exhibit similar expansion likelihood, PSANE favors those with lower path cost, thereby avoiding unnecessary detours (Fig. 6A, 6B, PSANE) while still promoting systematic safe-set expansion. Moreover, in Environment 2, we introduce stronger spa-tial gradients and sharper local variations, increasing model uncertainty and making the task more challenging for all methods. The success of both PGH and PSANE in this setting demonstrates the effectiveness of the proposed safety characterization and indicates that it generalizes robustly under moderate environmental variability. 
+
+2) Safe Exploration Task: We further demonstrate that the proposed framework generalizes to safe exploration tasks in which no predefined goal is specified. In this setting, the objective is to efficiently expand the certified safe region while maintaining conservative safety guarantees, as the robot A PGH PSANE     
+
+> 0250 500 750 1000 Time (s) 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 Coverage B
+> PGH PSANE
+
+Fig. 7: Comparison of exploration behavior and performance between PGH and PSANE. (A) Path and safe-region visualiza-tion. The black contour outlines the final certified safe region learned by the algorithm, with the green dot indicating the start position and the red dot the final position. (B) Coverage over time during the exploration phase. Coverage is computed as the ratio of the certified safe region area to the ground-truth safe region area. autonomously collects interaction measurements from the en-vironment. We conduct exploration simulations for 1000 s in Environment 2. Both PGH and PSANE safely explore the environment (Fig. 7A, black contour), progressively enlarging the certified safe region. When the explored area remains relatively small, PSANE achieves coverage growth comparable to PGH. How-ever, as the explored region expands (e.g., after approximately 400 s), PSANE demonstrates improved efficiency due to its cost-aware frontier selection, resulting in greater overall cov-erage (0.67 ± 0.05) compared to PGH (0.59 ± 0.12). Notably, the lower region of the environment remains unex-plored. Although this area does not violate the safety threshold, it exhibits relatively high predicted risk and low expansion score. Consequently, the robot prioritizes exploration of the upper region, where expansion potential and safety confidence are higher. V. C ONCLUSION AND DISCUSSION 
+
+We presented PSANE, a proprioceptive safe active naviga-tion and exploration framework for legged robots operating in unknown deformable granular environments where exte-roceptive geometry is insufficient to reliably assess mobility risk. PSANE learns a GP-based slip-ratio model from sparse leg–terrain interaction measurements and uses uncertainty-aware confidence bounds to certify and iteratively expand a conservative safe region. A frontier-based subgoal plan-ning algorithm integrated with a reactive controller enables simultaneous safe-set expansion and goal-directed navigation, while avoiding uncertified regions during execution. Simula-tions parameterized by field-measured LHS-1 terramechanics data show that PSANE improves success rate and maintains efficient trajectories relative to NGH, SGH, and PGH in both smoothly varying and highly heterogeneous environments. This work establishes a framework for integrating interaction-derived terrain models into safety-critical navi-gation under uncertainty. By formalizing navigation on de-formable terrain as a coupled estimation–exploration–control problem with explicit safety certification, PSANE provides a foundation for longer-horizon decision-making, multi-robot coordination, and multimodal terrain reasoning in future plan-etary exploration systems. REFERENCES [1] J. N. Maki, D. Gruel, C. McKinney, M. A. Ravine, M. Morales, D. Lee, R. Willson, D. Copley-Woods, M. Valentin, T. Goodsall, J. McGuire, R. G. Sellar, J. A. Schaffner, K. D. Supulver, J. Tu, A. Wong, P. Bru-garolas, S. A. Hayati, M. Kasper, S. Reddy, and J. Umland, “The mars 2020 engineering cameras and microphone on the perseverance rover: A next-generation imaging system for mars exploration,” Space Science Reviews , vol. 216, no. 8, pp. 1–48, 2020. [2] R. Mur-Artal, J. M. M. Montiel, and J. D. Tardos, “Orb-slam: A versatile and accurate monocular slam system,” IEEE transactions on robotics ,vol. 31, no. 5, pp. 1147–1163, 2015. [3] C. Campos, R. Elvira, J. J. G. Rodr´ ıguez, J. M. Montiel, and J. D. Tard´ os, “Orb-slam3: An accurate open-source library for visual, visual– inertial, and multimap slam,” IEEE transactions on robotics , vol. 37, no. 6, pp. 1874–1890, 2021. [4] M. Wermelinger, P. Fankhauser, R. Diethelm, P. Kr¨ usi, R. Siegwart, and M. Hutter, “Navigation planning for legged robots in challenging terrain,” in 2016 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2016, pp. 1184–1189. [5] J. Wang, L. Xu, H. Fu, Z. Meng, C. Xu, Y. Cao, X. Lyu, and F. Gao, “Towards efficient trajectory generation for ground robots beyond 2d environment,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2023, pp. 7858–7864. [6] S. Fahmi, V. Barasuol, D. Esteban, O. Villarreal, and C. Semini, “Vital: Vision-based terrain-aware locomotion for legged robots,” IEEE Transactions on Robotics , vol. 39, no. 2, pp. 885–904, 2022. [7] L. Wellhausen, R. Ranftl, and M. Hutter, “Safe robot navigation via multi-modal anomaly detection,” IEEE Robotics and Automation Letters ,vol. 5, no. 2, pp. 1326–1333, 2020. [8] T. Guan, D. Kothandaraman, R. Chandra, A. J. Sathyamoorthy, K. Weer-akoon, and D. Manocha, “Ga-nav: Efficient terrain segmentation for robot navigation in unstructured outdoor environments,” IEEE Robotics and Automation Letters , vol. 7, no. 3, pp. 8138–8145, 2022. [9] Y. Zhuang, W. Chen, T. Jin, B. Chen, H. Zhang, and W. Zhang, “A review of computer vision-based structural deformation monitoring in field environments,” Sensors , vol. 22, no. 10, p. 3789, 2022. [10] S. Liu, M. Sagare, S. Patil, and F. Qian, “Bio-inspired tail oscillation enables robot fast crawling on deformable granular terrains,” arXiv preprint arXiv:2509.12468 , 2025. [11] S. Liu, B. Huang, and F. Qian, “Adaptation of flipper-mud interactions enables effective terrestrial locomotion on muddy substrates,” IEEE Robotics and Automation Letters , vol. 8, no. 12, pp. 7978–7985, 2023. [12] E. Fulcher, J. Caporale, Y. Zhang, J. Ruck, and F. Qian, “Effect of gait design on proprioceptive sensing of terrain properties in a quadrupedal robot,” arXiv preprint arXiv:2509.22065 , 2025. [13] J. L. Callas, “Mars exploration rover spirit end of mission report,” Jet Propulsion Laboratory, California Institute of Technology, Pasadena, CA, United States, Tech. Rep. JPL-Publ-16-2, December 2015, document ID: 20160001767. [Online]. Available: https://ntrs.nasa.gov/ api/citations/20160001767/downloads/20160001767.pdf [14] S. Dey, D. Fan, R. Schmid, A. Dixit, K. Otsu, T. Touma, A. F. Schilling, and A.-A. Agha-Mohammadi, “Prepare: Predictive proprioception for agile failure event detection in robotic exploration of extreme terrains,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2022, pp. 4338–4343. [15] Z. Fu, A. Kumar, A. Agarwal, H. Qi, J. Malik, and D. Pathak, “Coupling vision and proprioception for navigation of legged robots,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2022, pp. 17 273–17 283. [16] E. Fulcher, J. D. Caporale, Y. Zhang, J. C. Bush, R. C. Ewing, K. R. Fisher, D. J. Jerolmack, S. Liu, M. Nachan, F. Rivera-Hernandez, J. Ruck, T. Shipley, C. Wilson, D. E. Koditschek, and F. Qian, “Making Every Step an Experiment: Proprioceptive Sensing During Locomotion for Enhanced Mobility and Data Collection in Planetary-Analogue Explorations,” in 55th Lunar and Planetary Science Conference , ser. LPI Contributions, vol. 3040, Mar. 2024, p. 1806. [17] J. C. Bush, Y. Zhang, S. Liu, E. Fulcher, C. Franklin, D. J. Jerolmack, R. C. Ewing, K. R. Fisher, and F. Qian, “Robotic Legs as Novel Planetary Instrumentation to Explore the Mechanical Properties of Regolith,” in 54th Lunar and Planetary Science Conference , ser. LPI Contributions, vol. 2806, Mar. 2023, p. 1733. [18] M. Elnoor, A. J. Sathyamoorthy, K. Weerakoon, and D. Manocha, “Pronav: Proprioceptive traversability estimation for legged robot navi-gation in outdoor environments,” IEEE Robotics and Automation Letters ,vol. 9, no. 8, pp. 7190–7197, 2024. [19] F. Qian, D. Lee, G. Nikolich, D. Koditschek, and D. Jerolmack, “Rapid In Situ Characterization of Soil Erodibility With a Field Deployable Robot,” Journal of Geophysical Research: Earth Surface , vol. 124, no. 5, pp. 1261–1280, 2019. [20] S. Liu, C. G. Wilson, Z. I. Lee, and F. Qian, “Modelling experts’ sampling strategy to balance multiple objectives during scientific explorations,” in Proceedings of the 2024 ACM/IEEE International Conference on Human-Robot Interaction , ser. HRI ’24. New York, NY, USA: Association for Computing Machinery, 2024, p. 452–461. [Online]. Available: https://doi.org/10.1145/3610977.3635112 [21] S. Liu, C. G. Wilson, B. Krishnamachari, and F. Qian, “Understanding human dynamic sampling objectives to enable robot-assisted scientific decision making,” J. Hum.-Robot Interact. , vol. 13, no. 1, Jan. 2024. [Online]. Available: https://doi.org/10.1145/3623383 [22] S. Liu, J. Caporale, Y. Zhang, X. Liao, W. Hoganson, W. Hu, S. Misra, N. Peddinti, R. Holladay, E. Fulcher et al. , “Scout-rover cooperation: on-line terrain strength mapping and traversal risk estimation for planetary-analog explorations,” arXiv preprint arXiv:2602.18688 , 2026. [23] A. Leininger, M. Ali, H. Jardali, and L. Liu, “Gaussian process-based traversability analysis for terrain mapless navigation,” 2024. [Online]. Available: https://arxiv.org/abs/2403.19010 [24] M. Ghaffari Jadidi, J. Valls Miro, and G. Dissanayake, “Gaussian pro-cesses autonomous mapping and exploration for range-sensing mobile robots,” Autonomous Robots , vol. 42, pp. 273–290, 2018. [25] Y. Sui, A. Gotovos, J. Burdick, and A. Krause, “Safe exploration for optimization with gaussian processes,” in Proceedings of the 32nd International Conference on Machine Learning , ser. Proceedings of Machine Learning Research, F. Bach and D. Blei, Eds., vol. 37. Lille, France: PMLR, 07–09 Jul 2015, pp. 997–1005. [Online]. Available: https://proceedings.mlr.press/v37/sui15.html [26] J. Schreiter, D. Nguyen-Tuong, M. Eberts, B. Bischoff, H. Markert, and M. Toussaint, “Safe exploration for active learning with gaussian pro-cesses,” in Machine Learning and Knowledge Discovery in Databases ,A. Bifet, M. May, B. Zadrozny, R. Gavalda, D. Pedreschi, F. Bonchi, J. Cardoso, and M. Spiliopoulou, Eds. Cham: Springer International Publishing, 2015, pp. 133–149. [27] A. Wachi, Y. Sui, Y. Yue, and M. Ono, “Safe exploration and optimiza-tion of constrained mdps using gaussian processes,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 32, no. 1, 2018. [28] T. Lew, A. Sharma, J. Harrison, A. Bylard, and M. Pavone, “Safe active dynamics learning and control: A sequential exploration–exploitation framework,” IEEE Transactions on Robotics , vol. 38, no. 5, pp. 2888– 2907, 2022. [29] O. Arslan and D. E. Koditschek, “Sensor-based reactive navigation in unknown convex sphere worlds,” The International Journal of Robotics Research , vol. 38, no. 2-3, pp. 196–223, 2019. [Online]. Available: https://doi.org/10.1177/0278364918796267 [30] V. Vasilopoulos, G. Pavlakos, K. Schmeckpeper, K. Daniilidis, and D. E. Koditschek, “Reactive navigation in partially familiar planar environments using semantic perceptual feedback,” 2021. [Online]. Available: https://arxiv.org/abs/2002.08946 [31] U. Saranli, M. Buehler, and D. E. Koditschek, “Rhex: A simple and highly mobile hexapod robot,” The International Journal of Robotics Research , vol. 20, no. 7, pp. 616–631, 2001. [32] C. Li, P. B. Umbanhowar, H. Komsuoglu, D. E. Koditschek, and D. I. Goldman, “Sensitive dependence of the motion of a legged robot on granular media,” Proceedings of the National Academy of Sciences , vol. 106, no. 9, pp. 3029–3034, 2009. [33] S. Suzuki and K. Abe, “Topological structural analysis of digitized binary images by border following,” Computer Vision, Graphics, and Image Processing , vol. 30, no. 1, pp. 32–46, 1985. [34] P. Ngatchou, A. Zarei, and A. El-Sharkawi, “Pareto multi objective optimization,” in Proceedings of the 13th international conference on, intelligent systems application to power systems . IEEE, 2005, pp. 84– 91. [35] A. Tasora, R. Serban, H. Mazhar, A. Pazouki, D. Melanz, J. Fleis-chmann, M. Taylor, H. Sugiyama, and D. Negrut, “Chrono: An open source multi-physics dynamics engine,” in High Performance Computing in Science and Engineering , T. Kozubek, R. Blaheta, J. ˇ S´ ıstek, M. Ro-zloˇ zn´ ık, and M. ˇ Cerm´ ak, Eds. Cham: Springer International Publishing, 2016, pp. 19–49. [36] R. Serban, J. Taves, and Z. Zhou, “Real-time simulation of ground ve-hicles on deformable terrain,” Journal of Computational and Nonlinear Dynamics , vol. 18, no. 8, p. 081007, 2023. [37] N. M. Batagoda, B.-H. Chen, H. Zhang, R. Serban, and D. Negrut, “A physics-based sensor simulation environment for lunar ground opera-tions,” in 2025 IEEE Aerospace Conference . IEEE, 2025, pp. 1–20.

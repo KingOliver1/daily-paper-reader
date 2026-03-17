@@ -1,0 +1,408 @@
+Title: Perception-Aware Communication-Free Multi-UAV Coordination in the Wild
+
+URL Source: https://arxiv.org/pdf/2603.08379v1
+
+Published Time: Tue, 10 Mar 2026 02:19:41 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+> 1
+
+# Perception-Aware Communication-Free Multi-UAV Coordination in the Wild 
+
+Manuel Boldrer, Michal Kamler, Afzal Ahmad, and Martin Saska 
+
+Abstract —We present a communication-free method for safe multi-robot coordination in complex environments such as forests with dense canopy cover, where GNSS is unavailable. Our approach relies on an onboard anisotropic 3D LiDAR sensor used for SLAM as well as for detecting obstacles and neighboring robots. We develop a novel perception-aware 3D navigation framework that enables robots to safely and effectively progress toward a goal region despite limited sensor field-of-view. The approach is evaluated through extensive simulations across diverse scenarios and validated in real-world field experiments, demonstrating its scalability, robustness, and reliability. 
+
+Index Terms —Multi-robot systems, Distributed control, Lloyd-based algorithms. 
+
+Å https://mrs.fel.cvut.cz/irbl 
+
+I. I NTRODUCTION 
+
+In recent years, aerial robots have been successfully deployed in a wide range of applications, including agriculture, wildlife monitoring, and disaster response [1]. Across all these domains, the ability to navigate safely and efficiently through complex environments, while sharing the space with other robots, is a fundamental requirement. Unstructured environments with narrow spaces and limited visibility of dynamic obstacles (other robots), exacerbate the complexity of the navigation problem. While single-robot autonomous navigation methods have achieved impressive high-speed flights in cluttered environ-ments like forests [2], the multi-robot setting still remains an open challenge. Existing solutions rely on sharing current state and future trajectory information over a communication network [3] (e.g. WiFi, UWB). Common issues that can lead to unsafe behavior include communication delays, dropouts, and unreliable global localization system. Thus, the communication network becomes a single point of failure, limiting the scala-bility to larger number of robots and reducing the reliability of the overall system. Removing the reliance on communication can make the method scalable, secure and fault-tolerant, but brings its own set of challenges. In [4], the authors propose a promising approach that uses onboard sensors to detect the obstacles and other robots and safely navigates the multi-robot system to the goal location. However, the method exhibits three main limitations: (i) the robots are constrained to planar motion (2D), thus preventing the exploitation of full three-dimensional mobility; (ii) the robots lack the capability to re-plan their paths online during the mission, and (iii) the robots motion capabilities are constrained by the algorithm’s conservative speed selection. These limitations can result in slow flights and potential deadlock conditions in complex environments  
+
+> Manuel Boldrer, Michal Kamler, Afzal Ahmad, and Martin Saska are with the Department of Cybernetics, Czech Technical University in Prague, Karlovo namesti 13, 121 35 Prague 2, Czechia, {name.surname }@fel.cvut.cz .
+
+Figure 1: Snapshot during a real-world experiment in the forest with 
+
+3 UAVs. 
+
+containing dense vegetation (e.g., branches, tree crowns or bushes) or maze-like structures. We propose a decentralized, communication-free perception-aware navigation strategy, which specifically account for limited sensors field-of-view. By communication-free, we mean that the robots coordinate their motions without explicitly exchanging messages nor relying on a shared communication network. Instead, coordination emerges implicitly through each robot’s local perception and interaction with the surrounding environment. Our contributions are threefold. (i) We introduce a de-centralized framework enabling seamless three-dimensional navigation of multiple aerial robots in complex environments under anisotropic sensing constraints. The proposed controller explicitly accounts for limited and directional perception, guar-anteeing safety without inter-robot communication, an aspect largely overlooked in existing multi-robot systems. (ii) We integrate a high-level path planner and adapt the Configuration-space Iterative Regional Inflation (CIRI) method [2] to the Lloyd-based multi-robot framework [4], enabling high nav-igation performance in densely cluttered environments. (iii) We validate the approach through extensive simulations and real-world field experiments in GNSS-denied environments, demonstrating scalability, repeatability, and robustness, which are critical requirements for real-world multi-robot deployment. 
+
+A. Related Work 
+
+Modern methods enable a single robot to operate safely and efficiently in relatively complex environments [2], [13]–[15]. However, solutions for coordinating multiple robots in such environments remain limited. Popular approaches rely on a communication network [3], [5], [8], [16] to share unobservable information and use a common reference frame among the robots for safe motion planning. These approaches, however,                                                      
+
+> arXiv:2603.08379v1 [cs.RO] 9 Mar 2026 2EGO2 [3] RMADER [5] PACNAV [6] RBL [4] HDSM [7] RVC-NMPC [8] Chen et al. [9] DREAM [10] AMSWARM [11] Choi et al. [12] iRBL (our)
+> Þpp✓✓ppppp✓✓
+> 4pppppp✓
+> ✓p✓✓pppp✓✓
+> 7(("(((("(
+
+Table I: Qualitative comparison with state-of-the-art algorithms on the aspects of interest (i.e., implicit coordination ( Þ), anisotropic perception ( 4), test in the wild ( ) and operational speed ( 7)). We indicate with “ p” if the algorithm does not implement the feature, “✓” if it does, and “ ” if it does only partially. In the last row the operational speed is indicated with arrows, where “ ” indicates poor performance, “ ” indicates high performance, while “ "” and “ (” indicate intermediate low and intermediate high performance respectively. 
+
+are not always practical in the real-world scenarios and often require a level of reliability of the communication network that is difficult to achieve. Motivated by these challenges, communication-free reactive methods have also been pro-posed [4], [6], [12] and validated in challenging environments. However, these approaches still exhibit limitations, particularly in crowded scenarios, where performance and mission success rate can degrade significantly. Our approach eliminates the need for inter-robot communication while advancing multi-robot navigation capabilities in complex environments. Specifically, we show that iRBL provides a safe and reliable solution that outperforms optimization-based methods such as [17] in challenging settings. We see our contributions as a key step towards robust, implicit multi-robot cooperation in the wild, where coordination naturally emerges from the robot behavior rather than through explicit message exchange. In Table II, we provide a qualitative comparison with the most relevant approaches across the following aspects:  
+
+> •
+
+Implicit Coordination (Þ): the approach supports decen-tralized coordination without explicit inter-agent commu-nication;  
+
+> •
+
+Anisotropic Perception (4): the system relies on percep-tion to avoid obstacles and other robots, and it explicitly accounts for limited field-of-view;  
+
+> •
+
+Testing in the Wild (): the algorithm has been evaluated in real-world and GNSS-denied environments, as opposed to simulation-only or motion-capture based experiments;  
+
+> •
+
+Operational Speed (7): The average speed maintained during the mission. This representation enables quick visual comparison across approaches, emphasizing qualitative aspects important for real-world UAV deployments. II. P ROBLEM DESCRIPTION AND BACKGROUND MATERIAL 
+
+The problem we aim to solve reads as follows: 
+
+Problem 1. Given a group of N aerial robots, we want to safely navigate them to an assigned goal region in an unknown environment. The robots operate without sharing any information, and only use onboard sensors and computational power, which imposes limited sensing and computational capabilities. The mission space is unstructured with arbitrarily shaped obstacles. 
+
+The proposed approach rely on the Rule-Based Lloyd (RBL) algorithm [4], [18]. The main idea presented in [4] can be summarized with the following steps: i. Compute a safe convex set Fi ⊂ R2, where the robot position pi ⊆ F i;ii. Discretize the set Fi and weight each point q ∈ F i
+
+according to a desired density function φi(q) : R2 → R+;iii Compute the centroid position 
+
+cFi =
+
+P 
+
+> q∈F i
+
+qφ i(q)
+
+P 
+
+> q∈F i
+
+φi(q) ;
+
+iv. Use an MPC-based motion control method to navigate the robot i to the position cFi ;Each robot in the system uses the same procedure to iteratively compute, at high frequency, cFi which guides their motion towards the goal region. However, this solution comes with several limitations. Firstly, the robots are constrained to move on a 2D plane, which severely limits their motion in cluttered environments. Secondly, the purely reactive approach may lead to navigation deadlocks in constrained spaces like narrow pathways and maze-like obstacle settings. Lastly, the algorithm is over conservative, resulting in relatively slow flights. Inspired by these limitations, we introduce the improved RBL (iRBL). III. P ROPOSED APPROACH 
+
+The iRBL algorithm executed by each i-th robot can be summarized as follows: i. Compute a safe convex region Bi ⊆ R3 and a visible region Wi ⊆ R3 depending on the sensor field-of-view (FoV) i.e., Wi = Bi ∩ F oV i, such that pi ⊆ W i;ii. Discretize and weight each point q ∈ B i, according to the desired density function ψi(q) : R3 → R+;iii. Compute the centroid position 
+
+cBi =
+
+P 
+
+> q∈B i
+
+qψ i(q)
+
+P 
+
+> q∈B i
+
+ψi(q) ;
+
+iv. Compute the projection of the centroid position cBi onto the Wi set 
+
+proj Wi (cBi ) = arg min 
+
+> y∈W i
+
+∥cBi − y∥
+
+v. Steer the robot i to the position proj Wi (cBi ) if 
+
+⟨ cBi −pi  
+
+> ∥cBi−pi∥
+
+, h ⟩ > cos( fx/2) , where h is the heading unit vector and fx is the horizontal field-of-view (see Figure 2), otherwise adjust the heading towards cBi ;The above procedure defines the core steps of the proposed iRBL algorithm, which is executed independently by each robot only using locally observable information. The behavior of each robot is determined by the sets Bi and Wi and the density function ψi(q), which jointly specify a desired point to be tracked at high frequency by the underlying low-level controller. 3
+
+A. Computing the set Bi and Wi
+
+To determine the centroid position cBi , we first need to define the set Bi = {S i ∩A i ∩C i}. The set Si = {q ∈ R3 | ∥ q −pi∥ <rs,i } is the set of all points within a distance rs,i from the current position of the robot pi. This set does not account for other robots and obstacles and thus specifies the largest set of points that can be selected to compute the centroid. In order to prevent collisions with other robots, we compute the set Ai
+
+which accounts only for nearby robots. We extend the Convex Weighted Voronoi Decomposition (CWVD) [4] method to 3D space and generate the set Ai as follows. Given the set of the points in the mission space q ∈ R3, let us define two half-spaces H1 
+
+> ij
+
+and H2 
+
+> ij
+
+, as follows: 
+
+H1 
+
+> ij
+
+= q ∈ R3 | npij · (q − apij ) ≤ 0 ,
+
+H2 
+
+> ij
+
+= q ∈ R3 | npij · (q − ˜pj ) > 0 , (1) where npij = ˜ pj − ˜pi defines the normal to the hyperplane separating the robots i and j, while apij = ˜ pi + ϵ n pj is a point along the normal, with ϵ ∈ [0 , 1] . The points ˜pi and ˜pj
+
+are given by 
+
+˜pi = pi + ∆ i,j 
+
+pj − pi
+
+∥pj − pi∥ , ˜pj = pj + ∆ i,j 
+
+pi − pj
+
+∥pi − pj ∥ , (2) where ∆i,j = δi + δj , and δi and δj represent the radius of the robots, respectively. The set associated with the i-th robot is then computed as 
+
+Ai =
+
+(
+
+H1 
+
+> ij
+
+if ∥˜pi − pi∥ ≤ ∥ ˜pj − pi∥,
+
+H2 
+
+> ij
+
+otherwise . (3) The intersection of sets Si and Ai contains points which are safe from collisions into other robots but do not account for the static obstacles in the environment. In Figure 3, we provide a two-dimensional graphical representation of the set Ai (3). To avoid collisions with static obstacles, we rely on the Configuration-space Iterative Regional Inflation (CIRI) method [2]. CIRI was designed for single robot applications so we adapt the method to our multi-robot setting. The approach directly operates on the obstacle pointcloud (other robots are removed from the pointcloud), and represents each input point as a sphere with radius matching the radius of the 
+
+i-th robot. It selects two points Di = {sa, s b}, which are used for the generation of the convex decomposition. Starting from the pointcloud and the seeds, CIRI computes the convex decomposition of the configuration space by iteratively inflating an ellipsoid, parameterized by the focal set Di, until it reaches collision with an obstacle. By directly operating on the obstacle pointcloud, it provides a computationally efficient way of computing a collision-free convex decomposition of the space around the robot. We initialize CIRI with the robot position as the seeds Di = {pi, p i} and use the proj Wi (cBi ) once it is computed Di = {pi, proj Wi (cBi )}. The set Wi is defined as the intersection between the set Bi and the set of points within the robot field-of-view (FoV) i.e., Wi = Bi ∩ FoV i. We define the field-of-view as FoV = {fx, f z , f a} (deg) , where fx and 
+
+fz represent the horizontal and vertical FoV, respectively, and 
+
+fa denotes the sensor pitch angle relative to the robot body frame (see Fig. 2). xyyxzfxfzfaF oV F oV 
+
+Figure 2: Graphical representation of the sensor field-of-view FoV = 
+
+{fx, f z , f a} (deg) .piδipjδj˜pi˜pj∆ij apij ∆ij Ai ≡ H 1 
+
+> ij piδipjδj˜pi˜pj∆ij ∆ij Ai≡ H 2
+> ij
+
+Figure 3: 2D Graphical representation of the set Ai. On the left, the case where the robots are separated by more than 2∆ ij ; on the right, the case where they are separated by less than 2∆ ij . The half-spaces are constructed according to (1) such that all the points are collision-free. 
+
+In comparison to the CWVD method, CIRI can generate a con-vex decomposition with a desired directionality, which is more suitable and effective for our navigation purposes. In Figure 4, we provide a two-dimensional graphical representation of the set Ci.
+
+Remark 1. The need for different set definitions for static and dynamic obstacles arises from safety considerations. In principle, the CIRI formulation can be applied to both static and dynamic obstacles; however, doing so would lead to overly aggressive (and selfish) robot behavior. Hence we choose to combine CWVD for dynamic obstacles (other robots) and CIRI for static obstacles. B. The density function ψi(q)
+
+The density function ψi(q) assigns a weight to each point in the region of interest Bi and is used to compute the centroid 
+
+cBi . Points q ∈ B i are weighted according to their distance from the target location of robot i. By assigning higher weights to points closer to the target, the density function biases the centroid toward the target, thereby driving the robot in that direction. Inspired by [18], we define ψi(q) as 
+
+ψi(q) = exp 
+
+
+
+− ∥q − ¯pi∥
+
+βi
+
+
+
+, (4) where the spreading factor βi ∈ R is time-varying, and evolves according to 
+
+˙βi =
+
+
+
+−kβ βi if ∥cBi − pi∥ < d 1 ∧∥cBi − cSi ∥ > d 2,
+
+−kβ (βi − βDi ) otherwise, (5) 4proj Wi(cBi)pieiCi
+
+Figure 4: 2D Graphical representation of the set Ci (which in this particular case correspond also with the set Bi) computed using the proposed seeds. The obstacles are represented by grey circles. 
+
+where, cSi ∈ S i is the centroid of set Si and βDi , d 1, d 2, k β
+
+are positive constants. As the robots often suffer from tracking errors due to model mismatch and external disturbances, and since the estimation of the other robot’s pose may also be inaccurate, we limit βi as 
+
+βmin  
+
+> i
+
+= arg min 
+
+> βi
+
+(∥cBi − p∂Bi ∥ − du)2 , (6) where ∂Bi represents the contour of the set Bi, while du ≥ 0
+
+is the parameter that quantifies the level of uncertainties in the system, i.e., the sum of the measurement uncertainties and the tracking error (refer to [4] for more details). The local point of interest ¯pi ∈ R3 evolves according to 
+
+˙¯pi =
+
+
+
+−kwp (¯ pi − R(π/ 2 − ε)wp i) if ∥cBi − pi∥ < d 3 ∧∥cBi − cSi ∥ > d 4
+
+−kwp (¯ pi − wp i), otherwise, 
+
+¯pi = wp i if ∥pi − ¯cBi ∥ > ∥pi − cBi ∥ ∧ ¯pi = R(π/ 2 − ε)wp i.
+
+(7) where, d3, d 4, and kwp are positive constants. The matrix 
+
+R(θ) denotes a xy -planar rotation, wp i represents the desired waypoint location of i-th robot. ¯cBi corresponds to the centroid computed over the cell Bi when ¯pi ≡ wp i. ε is a small offset introduced to prevent rotations exactly equal to π/ 2.The update laws in (5) , (6) , and (7) are adaptive mechanisms (rules). The rules in (5) and (6) modulate how aggressively robot i advances toward its target, whereas (7) enforces a consistent right- or left-hand motion preference among all robots, thereby promoting collective coordination under conditions of strong symmetric congestion. The main difference introduced here with respect to [4] resides in the different definition of ¯pi, in fact, similarly to [19], we select it as a time-varying waypoint location computed through a replanning algorithm. The re-planner strongly affects the performance of the system, nevertheless it can be selected arbitrarily. For our pipeline, we select a variation of the A∗
+
+algorithm [20]. The core idea is to select the waypoint wp i
+
+as a moving point, which depends on the generated path and on the robot position pi. The input for the path planner are the robot position pi, its goal ei, and the global map, which is built as the robot advances. Our solution adds a replanning component to the reactive approach (e.g., RBL), which is crucial to enhance navigation performance to avoid deadlocks, ei
+
+wp i
+
+cBi
+
+pj
+
+Wi
+
+pi
+
+Figure 5: Illustration of the main variables associated with the i-th robot during a real-world experiment. The robot’s pose pi is shown as an axis reference frame. The set Wi is represented by the magenta set, and the centroid position cBi is shown in orange. The planned path is depicted by a red line. The wp i and ei indicate respectively the active waypooint and the final goal positions. Other robots positions 
+
+pj are indicated by a grey box. The colored point cloud illustrates obstacles, with different colors corresponding to different z-values. 
+
+especially in complex scenarios, as we show in Section IV. In Figure 5, we depict the main variables associated with the i-th robot. 
+
+C. Low-level controller 
+
+Once we know the centroid position cBi and the set Wi, we can compute the control inputs for the robot i, accounting for its dynamics. To this end, we rely on an MPC formulation [21]. Each robot i independently solves a model predictive control problem. For notational convenience, the robot index is omitted in the following. The optimization problem is defined as minimize   
+
+> {xk,u k}
+> Nt
+
+X
+
+> k=0
+
+J(xk, h k, u k, c B, W), (8a) s.t.: xk = f (xk−1, u k−1), ∀k = 1 , . . . , N t, (8b) 
+
+xk ∈ X , u k ∈ U , ∀k = 0 , . . . , N t, (8c) 
+
+x0 = xinit , (8d) where k denotes the discrete-time index and Nt is the prediction horizon. The system state is defined as xk = [ p⊤ 
+
+> k
+
+, ˙p⊤ 
+
+> k
+
+, ¨p⊤ 
+
+> k
+
+]⊤,and uk represents the control input. The function f (·) describes the robot dynamics, X and U denote the admissible state and input sets, respectively, and x0 = xinit specifies the initial condition. The cost function J(·) is designed to reduce the error with respect to the desired position ep,k = pk − pDk and heading eh,k = hk − hDk , while simultaneously regularizing the control effort. In particular, we set the desired heading as 
+
+hDk = cB − pk
+
+∥cB − pk∥ , (9) and the desired position as 
+
+pDk =
+
+(
+
+proj W (cB) if ⟨hk, h Dk ⟩ > cos( fx/2) ,pk otherwise. (10) In Figure 6, we provide a graphical representation of the overall block diagram for the proposed pipeline. 5iRBL MPC UAV iSLAM UAV estimator cBi , WiuipipjLIVOX pc iNeighboring ei
+
+Figure 6: Block diagram representation of the proposed pipeline. 
+
+IV. S IMULATION RESULTS 
+
+In this section, we validate the proposed approach through extensive simulations using the MRS simulator [21], which models full rigid-body UAV dynamics. At first, we draw a comparison of the proposed iRBL method with RBL [4] and EGO2 [17] using a single robot operating in environments with different traversability. Traversability, as defined in [22], quantifies how easily a robot can move through an environment. Unlike metrics like mean obstacle density, traversability is calculated using a Monte Carlo approach. In particular, we can compute it by randomly sample the initial position and direction of motion of the robot and by displacing the robot in a straight line until it collides with an obstacle. For each trial l, the collision-free travel distance dl is recorded. After performing n independent trials, traversability is computed as 
+
+τ = 1
+
+n
+
+> n
+
+X
+
+> l=1
+
+dl, (11) which corresponds to the average distance traveled by the robot before encountering an obstacle. Therefore, higher values of τ
+
+indicate an easy-to-navigate environment, while lower values correspond to more cluttered spaces. After the single robot experiments, we showcase an ablation study to evaluate the impact of different field-of-view (FoV) configurations and robot dimensions when operating in a multi-robot setting. We examine three scenarios: (i) a circle-crossing scenario without obstacles using N = 10 robots, (ii) a circle-crossing scenario with obstacles using N = 10 
+
+robots, and (iii) a team of N = 5 robots navigating through a cluttered environment. We use identical parameters across all the simulations to ensure a fair comparison and demonstrate the robustness of the proposed method in different conditions. 
+
+A. Single-robot simulations 
+
+To rigorously quantify the advantages of our method over established baselines, we evaluate iRBL against RBL and EGO2 across a suite of cluttered environments. The comparison with RBL is direct and fair, however, additional clarifications are required for EGO2. The simulator used by EGO2 does not model full robot dynamics which simplifies the motion control and it allows the exchange of information in multi-robot settings (position and future trajectories) which would be unobservable in practice. To ensure methodological fairness and to explicitly capture the inherent limitations of the approach, we restrict the comparison with EGO2 to the single-agent setting. As summarized in Table II, iRBL consistently achieves higher per-
+
+Figure 7: Top view of the robot’s trajectory using iRBL in an environment with low traversability ( τ = 1 .57 ), where EGO2 [17] and RBL [4] are unable to successfully navigate. The color scale represents the robot’s velocity, as indicated by the colorbar.                                                                       
+
+> τ(m) l(m) t(s) ¯v(m/s) domin (m) SR EGO2 [17] 3.566 31.37 15.17 2.07 0.486 0.4 |1|12.036 36.01 20.32 1.82 0.46 0|1|11.142 35.25 23.20 1.51 0.52 0.2 |0.2 |0.8 0.984 ----0.0 |0.0 |0.8 RBL [4] 3.566 36.31 52.9 0.68 0.45 1|0.6 |12.036 34.56 71.92 0.48 0.43 1|0.4 |11.142 ----1|0|10.984 ----1|0|1iRBL (full FoV) 3.566 33.08 25.36 1.33 0.460 1|1|12.036 36.54 41.85 0.90 0.39 1|1|11.142 39.03 57.04 0.699 0.373 1|1|10.984 42.68 53.78 0.81 0.404 1|1|1
+
+Table II: Comparison with state-of-the-art. Simulation with N = 1 
+
+robot and δi = 0 .2 m in 4 different cluttered environments. We report the traversability τ , the length of the path l, the time to reach the goal t, the average speed ¯v, the minimum distance to obstacles domin ,and the success rate SR in terms of violation of acceleration limits, covergence to the goal, and safety ( domin ≥ δi). We repeat each scenario 10 times, and report the average results. All the parameters are kept the same for all the different scenarios. 
+
+formance than RBL across all tested environments. Conversely, EGO2 often achieves better results (time-to-goal t, average speed ¯v) yet exhibits a lower success rate, particularly in low-traversability regimes. We further observe frequent activation of the emergency-braking mechanism, which results in the violation of the maximum acceleration constraints. We also noticed frequent deadlocks under dense clutter and occasional safety violations (collision with obstacles). These findings indicate that optimization-based methods like EGO2 are more failure-prone in low-traversability settings because their planned trajectories need to satisfy multiple, potentially incompatible feasibility constraints (e.g., smoothness, dynamic limits, and collision avoidance). In contrast, the re-planning component in iRBL, though simple and focused on obstacle avoidance, practically enhances robustness and overall performance in such challenging environments. In Figure 7, we show the trajectory of a single robot simulation with the iRBL in an dense cluttered environment with τ = 1 .57 .
+
+B. Multi-robot simulations 
+
+This section presents the results of the proposed method in a multi-robot setting under different field-of-view (FoV) config-urations and compares the performance with RBL [4]. For all simulations, we select the following parameters: du = 0 .3 (m), 
+
+βD = 0.5, ϵ = 0.5, d1 = d2 = d3 = d4 = 1.0 (m), 
+
+rs,i = 5 .0 (m), and kwp = kβ = 1 . We consider different 6                                                                       
+
+> τ(m) δi(m) l(m) t(s) ¯v(m/s) dmin (m) iRBL (lim.FoV) -0.2 33.14 23.43 1.41 0.737 -0.5 33.99 26.72 1.26 1.155 -1.0 35.51 33.95 1.04 2.17 iRBL (half FoV) -0.2 33.56 22.14 1.50 0.729 -0.5 34.30 25.09 1.35 1.402 -1.0 35.14 27.62 1.26 2.092 iRBL (full FoV) -0.2 34.30 20.48 1.67 0.709 -0.5 34.35 24.95 1.36 1.176 -1.0 35.62 28.67 1.23 2.218 RBL (2d) -0.2 34.17 41.58 0.83 0.827 -0.5 36.67 71.66 0.51 1.385 -1.0 38.39 65.58 0.59 2.373
+
+Table III: Simulation results with N = 10 robots in a crossing circle scenario without obstacles. We report the length of the path l, the time to reach the goal t, the average speed ¯v, and the minimum distance between the robots dmin . We considered 4 different field-of-views (FoV). The limited FoV {180,59,-20 } (deg), half FoV {180,180,-90 } (deg), full FoV {180,360,0 } (deg), and the two-dimensional case 
+
+{360,0,0 } (deg). 
+
+fields-of-view 
+
+FoV = {180 , 59 , −20 }, {180 , 180 , −90 }, {180 , 360 , 0},
+
+{360 , 0, 0} (deg) 
+
+and different robot sizes δi = [0 .2, 0.5, 1.0] (m). Figure 8 shows the trajectories obtained for the three selected scenarios for the case of δi = 0 .2 (m) and FoV = {180 , 180 , −90 } (deg) .For each scenario, the quantitative results are reported in Tables III, IV, and V. The obtained results consistently demonstrate a clear improvement of iRBL over RBL and underscore the robustness of the proposed method. A single, shared set of parameters is used across all experiments despite substantial variations in robot size, sensing configuration, and environmental complexity. While performance naturally degrades as traversability decreases (e.g., with increasing robot size) and tends to improve with larger fields-of-view, the method maintains stable and consistent behavior across all tested conditions. These observations indicate that the proposed approach is not overly sensitive to parameter selection and generalizes well across different robot morphologies, sensing capabilities, and levels of environmental complexity. V. E XPERIMENTAL RESULTS 
+
+To further validate iRBL, we deploy and evaluate the framework on real robotic platforms. Each platform is equipped with a Livox MID-360 LiDAR with a field-of-view specified as 
+
+{180 , 59 , −20 } (deg). The Livox sensor is central to our pipeline: (i) it supplies measurements for real-time odometry estimation via Point-LIO [23]; (ii) it enables construction of a 3D environmental map, allowing obstacle avoidance and replanning; and (iii) it facilitates relative localization of neighboring UAVs by detecting reflective markers mounted on their frames. The relative positions of the neighbors are obtained by fusing observations using a Kalman filter [24], [25]. The entire navigation pipeline (see Figure 6) runs on an Intel NUC (i7-10750H CPU and 16 GB RAM) mounted on each robot. We successfully evaluated the proposed approach across multiple scenarios. Figure 9 showcases representative environments: (a) a dense forest, (b) an open area adjacent to                                                                        
+
+> τ(m) δi(m) l(m) t(s) ¯v(m/s) dmin (m) iRBL (lim. FoV) 6.56 0.2 32.46 23.24 1.40 0.661 4.60 0.5 35.83 33.07 1.08 1.165 2.21 1.0 38.54 55.06 0.69 2.199 iRBL (half FoV) 6.56 0.2 32.70 23.74 1.37 0.878 4.60 0.5 35.99 34.47 1.04 1.178 2.21 1.0 38.17 43.75 0.86 2.119 iRBL (full FoV) 6.56 0.2 32.97 23.91 1.37 0.791 4.60 0.5 35.38 31.03 1.14 1.224 2.21 1.0 37.31 38.36 0.96 2.074 RBL (2d) 6.56 0.2 33.60 41.87 0.80 0.924 4.60 0.5 38.01 58.86 0.64 1.329 2.21 1.0 ----
+
+Table IV: Simulation results with N = 10 robots in a crossing circle scenario with obstacles. We report the traversability τ , the length of the path l, the time to reach the goal t, the average speed ¯v, and the minimum distance between the robots dmin . We considered 4
+
+different field-of-views (FoV). The limited FoV {180,59,-20 } (deg), half FoV {180,180,-90 } (deg), full FoV {180,360,0 } (deg), and the two-dimensional case {360,0,0 } (deg).                                                                        
+
+> τ(m) δi(m) l(m) t(s) ¯v(m/s) dmin (m) iRBL (lim. FoV) 8.67 0.2 34.58 26.83 1.28 0.976 7.01 0.5 36.51 30.94 1.18 1.723 4.17 1.0 39.60 52.31 0.76 2.216 iRBL (half FoV) 8.67 0.2 35.10 26.52 1.33 1.151 7.01 0.5 36.94 30.25 1.22 1.768 4.17 1.0 37.31 34.77 1.07 2.235 iRBL (full FoV) 8.67 0.2 35.49 26.48 1.33 1.192 7.01 0.5 36.57 25.66 1.42 1.492 4.17 1.0 38.90 34.09 1.14 2.278 RBL (2d) 8.67 0.2 34.75 38.03 0.91 1.372 7.01 0.5 39.29 37.16 0.95 1.566 4.17 1.0 39.36 74.05 0.53 2.321
+
+Table V: Simulation results with N = 5 robots in a forest-like environment. We report the traversability τ , the length of the path l,the time to reach the goal t, the average speed ¯v, and the minimum distance between the robots dmin . We considered 4 different field-of-views (FoV). The limited FoV {180,59,-20 } (deg), half FoV {180,180,-90 } (deg), full FoV {180,360,0 } (deg), and the two-dimensional case 
+
+{360,0,0 } (deg). 
+
+a forest, and (c) a backyard near a residential structure with trees. Across all experiments, we retain identical parameter settings, demonstrating robustness to environmental variation and scalability to different team sizes In particular, we select 
+
+rs,i = 5 .0 (m), d1 = d2 = d3 = d4 = 1 .0 (m), βD = 0 .5,
+
+du = 0 .5 (m), dv = 0 .1 (m), FoV = {180 , 59 , −20 } (deg) ,and δi = 0.7 (m). Quantitative performance metrics are summarized in Table VI, which reports additional results for the scenarios illustrated in Figure 9. In Figure 10 we show the trajectories followed by two robots in the scenario #1 reported in Table VI. More experimental results are provided in the multimedia material. VI. C ONCLUSIONS , LIMITATIONS AND FUTURE WORK 
+
+We presented a novel multi -robot coordination framework for GNSS - denied environments that operates solely with onboard anisotropic 3D -LiDAR sensing. Our approach does not rely on inter-robot communication and it explicitly handles limited and directional sensor field-of-view. Simulation studies indicate that the proposed approach outperforms state - of - the -art baselines, particularly in low - traversability scenarios. Moreover, we show 7
+
+Figure 8: Top view for the robots’ trajectories with the iRBL half FoV case and δi = 0 .2 (m), in three different scenarios. The crossing circle without obstacle ( N = 10 ), crossing circle with obstacles ( N = 10 ) and forest-like environment ( N = 5 ). The color indicates the velocities according to the colorbars. 
+
+(a) (b) (c) 
+
+Figure 9: Different experimental scenarios. The top row contains snapshots from the camera, while the bottom row shows the corresponding snapshots extracted from RViz for the same experiment. Similarly to Figure 5, the robot pose is represented by an axis reference frame. The set Wi is depicted as blue dots, and the centroid cBi as an orange sphere. The planned path is shown as a red line. The active waypoint wp i
+
+lies on the planned path and is represented by a purple sphere. The grey boxes represent the positions of the other robots. The colored point cloud represents obstacles, where different colors correspond to different z-values. The “eye” symbol indicates the robot whose viewpoint is currently shown in the bottom RViz visualization.                                                     
+
+> scenario uav τ(m) l(m) t(s) ¯v(m/s) vmax (m/s) #1 (40m) 13.10 45.77 23.00 1.99 2.60 23.10 41.98 23.45 1.79 2.85 #2 (80m) 116.02 86.97 35.07 2.48 2.79 216.02 91.02 45.51 2.00 2.69 316.02 94.34 53.00 1.78 2.81 #3 (40m) 16.73 46.06 23.03 2.00 3.32 26.73 41.83 29.25 1.43 2.90 36.73 46.21 32.54 1.42 2.79
+
+Table VI: Quantitative results of experiments in three different scenarios. All the scenarios involve UAVs starting from close positions and with close goal locations. For all the scenarios we report the traversability τ , the length of the path l, the time to reach the goal t,the average speed ¯v, and the maximum velocity achieved vmax . The mission environments of scenario 1,2 and 3 are illustrated respectively in Figure 9-(a),(b) and (c). 
+
+strong generalization across robots of different sizes, sensing profiles, and environmental conditions. Finally, real -world deployments validate the effectiveness of the framework, demonstrating robustness to parameters’ selection across dif-ferent scenarios. The major limitation of the proposed approach lies in the selection of the parameter du, which accounts for tracking errors and measurement uncertainties. In practice, the uncer-tainty bound must be tuned with care to prevent collisions. Its admissible range is not solely dictated by measurement uncertainty, but it is also a function of the controller design, and the underlying dynamics. Choosing a value of du that is too large can erode performance, whereas selecting it too small can jeopardize system safety. Hence an initial tuning of du is required to find a balance between performance and safety. In our future research, we will extend our estimation pipeline beyond relative positions to include additional observable states of nearby robots, and leverage these estimates to further improve implicit coordination. We will validate the proposed 8
+
+Figure 10: Different viewpoints from experiment #1 in Table VI. We depict the trajectories followed by the two robots during the mission. The robots’ velocities can be inferred from the color-bars on the right-hand side. Different colors in the point cloud indicate different z-values. 
+
+algorithm on smaller, more agile platforms to enable operation in denser forests and other challenging environments. Lastly, we will explore adding minimal explicit communication to support high-level mission coordination while preserving the decentralized nature of our method. REFERENCES [1] A. Papalia, C. Dawson, L. L. Anton, N. M. Bayomi, B. Champenois, J.-H. Cho, L. Cai, J. DelPreto, K. Edwards, B.-C. Githinji, et al. , “A roadmap for climate-relevant robotics research,” arXiv preprint arXiv:2507.11623 ,2025. [2] Y. Ren, F. Zhu, G. Lu, Y. Cai, L. Yin, F. Kong, J. Lin, N. Chen, and F. Zhang, “Safety-assured high-speed navigation for mavs,” Science Robotics , vol. 10, no. 98, p. eado6187, 2025. [3] X. Zhou, X. Wen, Z. Wang, Y. Gao, H. Li, Q. Wang, T. Yang, H. Lu, Y. Cao, C. Xu, et al. , “Swarm of micro flying robots in the wild,” Science Robotics , vol. 7, no. 66, p. eabm5954, 2022. [4] M. Boldrer, V. Kr ´atk `y, V. Walter, and M. Saska, “Distributed lloyd-based algorithm for uncertainty aware multi-robot under-canopy flocking,” arXiv preprint arXiv:2504.18840 , 2025. [5] K. Kondo, J. Tordesillas, R. Figueroa, J. Rached, J. Merkel, P. C. Lusk, and J. P. How, “Robust mader: Decentralized and asynchronous multiagent trajectory planner robust to communication delay.” in ICRA , 2023, pp. 1687–1693. [6] A. Ahmad, D. B. Licea, G. Silano, T. B ´a ˇca, and M. Saska, “Pacnav: a collective navigation approach for uav swarms deprived of communication and external localization,” Bioinspiration & Biomimetics , vol. 17, no. 6, p. 066019, 2022. [7] C. Toumieh and D. Floreano, “High-speed motion planning for aerial swarms in unknown and cluttered environments,” IEEE Transactions on Robotics , vol. 40, pp. 3642–3656, 2024. [8] V. Kratky, R. Penicka, P. M. Gupta, O. Prochazka, and M. Saska, “Rvc-nmpc: Nonlinear model predictive control with reciprocal velocity constraints for mutual collision avoidance in agile uav flight,” arXiv preprint arXiv:2512.08574 , 2025. [9] Y. Chen, C. Wang, M. Guo, and Z. Li, “Multi-robot trajectory planning with feasibility guarantee and deadlock resolution: An obstacle-dense environment,” IEEE Robotics and Automation Letters , vol. 8, no. 4, pp. 2197–2204, 2023. [10] B. S¸ enba s¸ lar and G. S. Sukhatme, “Dream: Decentralized real-time asyn-chronous probabilistic trajectory planning for collision-free multirobot navigation in cluttered environments,” IEEE Transactions on Robotics ,vol. 41, pp. 573–592, 2024. [11] V. K. Adajania, S. Zhou, A. K. Singh, and A. P. Schoellig, “Amswarm: An alternating minimization approach for safe motion planning of quadrotor swarms in cluttered environments,” arXiv preprint arXiv:2303.04856 ,2023. [12] M.-Y. Choi, H. Ko, H. Cho, C. Kim, S. Kim, J. Seo, and H. Oh, “Communication-free collective navigation for a swarm of uavs via lidar-based deep reinforcement learning,” arXiv preprint arXiv:2601.13657 ,2026. [13] Y. Ren, F. Zhu, W. Liu, Z. Wang, Y. Lin, F. Gao, and F. Zhang, “Bubble planner: Planning high-speed smooth quadrotor trajectories using receding corridors,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2022, pp. 6332–6339. [14] B. Zhou, J. Pan, F. Gao, and S. Shen, “Raptor: Robust and perception-aware trajectory replanning for quadrotor fast flight,” IEEE Transactions on Robotics , vol. 37, no. 6, pp. 1992–2009, 2021. [15] P. Pochobradsk `y, O. Proch ´azka, R. P ˇeni ˇcka, V. Von ´asek, and M. Saska, “Geometric model predictive path integral for agile uav control with online collision avoidance,” arXiv preprint arXiv:2510.12924 , 2025. [16] L. Yin, Y. Ren, F. Zhu, L. Shi, F. Kong, B. Tang, W. Liu, X. Lyu, and F. Zhang, “Visibility-aware cooperative aerial tracking with decentralized lidar-based swarms,” arXiv preprint arXiv:2512.01280 , 2025. [17] F. Zhu, Y. Ren, L. Yin, F. Kong, Q. Liu, R. Xue, W. Liu, Y. Cai, G. Lu, H. Li, et al. , “Swarm-lio2: Decentralized, efficient lidar-inertial odometry for uav swarms,” IEEE Transactions on Robotics , 2024. [18] M. Boldrer, A. Serra-Gomez, L. Lyons, V. Kr ´atk `y, J. Alonso-Mora, and L. Ferranti, “Rule-based lloyd algorithm for multi-robot motion planning and control with safety and convergence guarantees,” arXiv preprint arXiv:2310.19511 , 2023. [19] M. Boldrer et al. , “Multi-agent navigation in human-shared environments: A safe and socially-aware approach,” Robotics and Autonomous Systems ,vol. 149, p. 103979, 2022. [20] M. Elbanhawi and M. Simic, “Sampling-based robot motion planning: A review,” Ieee access , vol. 2, pp. 56–77, 2014. [21] T. Baca et al. , “The mrs uav system: Pushing the frontiers of repro-ducible research, real-world deployment, and education with autonomous unmanned aerial vehicles,” Journal of Intelligent & Robotic Systems , vol. 102, no. 1, p. 26, 2021. [22] G. De Croon and C. De Wagter, “Challenges of autonomous flight in indoor environments,” in 2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2018, pp. 1003–1009. [23] D. He, W. Xu, N. Chen, F. Kong, C. Yuan, and F. Zhang, “Point-lio: robust high-bandwidth light detection and ranging inertial odometry,” 
+
+Advanced Intelligent Systems , vol. 5, no. 7, p. 2200459, 2023. [24] V. Pritzl, M. Vrba, Y. Stasinchuk, V. Kr ´atk ´y, J. Horyna, P. ˇSt ˇep ´an, and M. Saska, “Drones guiding drones: Cooperative navigation of a less-equipped micro aerial vehicle in cluttered environments,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2024, pp. 10 597–10 604. [25] M. Vrba, V. Walter, V. Pritzl, M. Pliska, T. B ´a ˇca, V. Spurn ´y, D. He ˇrt, and M. Saska, “On onboard lidar-based flying object detection,” IEEE Transactions on Robotics , vol. 41, pp. 593–611, 2025.

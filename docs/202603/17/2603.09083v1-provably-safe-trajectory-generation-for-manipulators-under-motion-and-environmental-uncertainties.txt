@@ -1,0 +1,571 @@
+Title: Provably Safe Trajectory Generation for Manipulators Under Motion and Environmental Uncertainties
+
+URL Source: https://arxiv.org/pdf/2603.09083v1
+
+Published Time: Wed, 11 Mar 2026 00:26:37 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+> JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 1
+
+# Provably Safe Trajectory Generation for Manipulators Under Motion and Environmental Uncertainties 
+
+Fei Meng, Zijiang Yang, Xinyu Mao, Haobo Liang, and Max Q.-H. Meng, Fellow, IEEE 
+
+Abstract —Robot manipulators operating in uncertain and non-convex environments present significant challenges for safe and optimal motion planning. Existing methods often struggle to provide efficient and formally certified collision risk guaran-tees, particularly when dealing with complex geometries and non-Gaussian uncertainties. This article proposes a novel risk-bounded motion planning framework to address this unmet need. Our approach integrates a rigid manipulator deep stochastic Koopman operator (RM-DeSKO) model to robustly predict the robot’s state distribution under motion uncertainty. We then introduce an efficient, hierarchical verification method that combines parallelizable physics simulations with sum-of-squares (SOS) programming as a filter for fine-grained, formal certification of collision risk. This method is embedded within a Model Predictive Path Integral (MPPI) controller that uniquely utilizes binary collision information from SOS decomposition to improve its policy. The effectiveness of the proposed framework is validated on two typical robot manipulators through extensive simulations and real-world experiments, including a challenging human-robot collaboration scenario, demonstrating sim-to-real transfer of the learned model and its ability to generate safe and efficient trajectories in complex, uncertain settings. 
+
+Note to Practitioners —Robot arms working alongside humans must move safely even when their own motions are imprecise and the workspace is cluttered. Existing solutions typically impose overly conservative safety margins, sacrificing efficiency. This paper provides a framework that gives a mathematical guarantee that the robot’s collision probability stays below a user-defined threshold, while still allowing efficient motion. A learned predictive model captures how the real robot moves under uncertainty, and a two-stage verification process quickly filters unsafe trajectories before execution. The system replans at 6 Hz, making it responsive enough for human-robot collaboration tasks such as assembly and packaging. A key practical limitation is the requirement to have both an example path for each start-
+
+Manuscript received April 19, 2021; revised August 16, 2021. This work was partially funded by Hong Kong ITC-sponsored InnoHK Center (HKCRC) (Corresponding author: Haobo Liang )Fei Meng and Haobo Liang are with the Hong Kong Center for Construction Robotics, The Hong Kong University of Science and Technology, Hong Kong, China (e-mail: {feimeng, hbliang }@ust.hk) Zijiang Yang is with the Department of Mechanical and Automation Engineering, The Chinese University of Hong Kong, Hong Kong, China (e-mail: jimmyyang@link.cuhk.edu.hk) Xinyu Mao is with the Department of Electronic Engineering, The Chinese University of Hong Kong, Hong Kong, China (e-mail: maoxinyu@link.cuhk.edu.hk) Max Q.-H. Meng is with Shenzhen Key Laboratory of Robotics Perception and Intelligence and the Department of Electronic and Electrical Engineering at Southern University of Science and Technology, Shenzhen, China, and also a Professor Emeritus in the Department of Electronic Engineering at The Chinese University of Hong Kong, Hong Kong, China (e-mail: max.meng@ieee.org) 
+
+goal pair (for training the model) and the polynomial equations of the obstacles. Future work will focus on reducing this setup cost and improving computational speed for faster replanning. 
+
+Index Terms —Motion planning under uncertainty, Robotic manipulators, Koopman operator, Model predictive control. 
+
+I. I NTRODUCTION 
+
+# ROBOT manipulators are increasingly deployed to address challenges such as labor shortages, worker fatigue, and the need for operation in diverse and hazardous conditions. However, their practical application is often hindered by im-perfect perception and significant tracking errors, which pose considerable challenges to their safe and efficient operation. A long-standing problem in robotics is the motion planning of high-dimensional robots, which involves quickly finding a safe and optimal trajectory [1]–[3]. To address uncertainty, chance-constrained motion planners have been developed to ensure that constraints are satisfied with a high probability. These planners have been applied to robots with both simplified [4]– [7] and more complex [8] geometric models. For instance, Dawson et al. proposed a chance-constrained trajectory gen-eration approach for high-dimensional robots that accounts for observation and motion uncertainty [9]. However, this method is limited by its assumptions of Gaussian uncertainty and con-vex obstacles. While techniques exist to convexify non-convex obstacles, they can negatively impact the feasibility of the resulting solution. Much of the existing literature focuses on either uncertain obstacles [6], [10], [11] or uncertainty in the robot’s state [5], [8], [12], [13]. While some recent works have begun to consider non-Gaussian uncertainties and non-convex obstacles [14]–[16], these studies are often restricted to mobile robots approximated as a single convex rigid body and involve computationally demanding collision risk checks. Novel neural networks are proposed to generate risk bounded paths quickly in challenging uncertain nonconvex environments [17], [18]. However, the generated paths are geometric and require many successful expert paths to learn. Time-informed set can be built as heuristics based on the deep Koopman operator to accelerate finding the optimal kinodynamic solution; however, it is hard to transfer to robotic manipulators [19]. Model Predictive Path Integral (MPPI) control has emerged as a sampling-based stochastic control algorithm for motion planning of high-dimensional robot arms [20]. While effective for the example manipulators [21], its performance degrades 
+
+0000–0000/00$00.00 © 2021 IEEE  
+
+> arXiv:2603.09083v1 [cs.RO] 10 Mar 2026 JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 2
+
+when significant tracking errors in joint space are present. Although some works have been developed to handle system dynamics with neural networks [22], propagate uncertainty [23], or address parameter uncertainty [24], they often focus on deterministic systems with noisy inputs or are limited to mobile robots in deterministic environments [25], [26]. In this article, we address the unmet need for risk-bounded trajectory generation for uncertain robot manipulators oper-ating in uncertain, non-convex environments. The proposed workflow is illustrated in Fig. 1. Our approach builds upon the success of deep stochastic Koopman operator (DeSKO) in soft manipulator end-effector control [27], adapting it to the unique motion planning challenges of rigid manipulators where the state space, objectives, and constraints are fun-damentally different. Notably, without collecting real data, our neural network trained in simulation generalizes well to real-world scenarios. Our primary contribution is a novel framework that integrates a rigid manipulator DeSKO (RM-DeSKO) model for robust state prediction with a hierarchical verification method for efficient and formally certified colli-sion risk assessment. The RM-DeSKO model propagates the distribution of observables in a lifted linear space to predict future states over a planning horizon. We leverage the inferred state distribution and contact force tensors from IsaacGym [21] to efficiently compute stable collision costs. To ensure both planning efficiency and formal certification, our hierarchical method uses sum-of-squares (SOS) programming to filter control signals, guaranteeing a bounded collision probability in a risk contours map. Our MPPI-based controller reuses the binary collision results from failed controls to update its policy, leveraging the gradient-free nature of the algorithm. Our main contributions are summarized as follows:  
+
+> •
+
+We formulate and solve, for the first time to our knowl-edge, the risk-bounded motion planning problem for uncertain robot manipulators facing nonconvex obstacles with probabilistic geometry, size, and location.  
+
+> •
+
+We develop a Koopman operator neural network model to predict the states of high-dimensional robot arms under motion uncertainty and develop an efficient, hierarchical collision risk verification method that combines risk con-tours with formal certification.  
+
+> •
+
+We demonstrate the efficiency of our framework through extensive experiments. We further successfully transfer the policy from simulation to the real robot in a chal-lenging human-robot collaboration scenario. II. P RELIMINARIES AND PROBLEM STATEMENT 
+
+A. Risk Contours Map 
+
+We denote W ⊂ R3 as the robot workspace. A set of static but uncertain 3D obstacles in the workspace are denoted by 
+
+O = {O 1, . . . , Ono } ⊂ W , and each one has a polynomial representation in coordinate positions p
+
+Oi (ωi) = {p ∈ W : oi (p, ω i) ≤ 0} , i = 1 , · · · , n o, (1) where oi ∈ R4 → R is the polynomial and ωi is a random variable with an arbitrary probability distribution provided, not necessarily Gaussian. Eq. (1) can describe convex and RM-DeSKO  MPPI    
+
+> 〰
+> noise
+> Uncertain Robot Bounded Collision Risk ?
+> Yes No
+> Polycam + Risk Contours Map
+
+Fig. 1: Risk-bounded motion planning framework for a ma-nipulator under environmental and motion uncertainties. It combines a RM-DeSKO neural network model predicting states XN,H and costs ˆCN,H , with a MPPI refining control inputs u∗. A supervisory logic enforces environment safety by computing contact force-based collision costs in simulation and checking bounded collision risk for the next predicted state before execution. Noisy state xt closes the perception-action loop. The new cost function ˆc(xt, u ∗) quickly guides stochastic optimization while ensuring risk constraints. nonconvex probabilistic obstacles with uncertain size, location, or geometry. For instance, a spherical uncertain obstacle is 
+
+o(p, ω ) ≤ 0 : {(x, y, z ) : x2 +y2 +z2 −ω2 ≤ 0, ω ∼ U (1 , 2) }.Its radius ω is uncertain and follows a uniform distribution. Inflating nonconvex obstacles influences solutions’ feasi-bility in cluttered unstructured environments. We use the risk contours map M to describe the continuous acceptable safe subspace [28]. Risk contours enable analytical moment computation and Cantelli-based hard risk bounds that are valid for any uncertainty distribution. Given a predefined risk tolerance ∆ ∈ [0 , 1] , the sets of all relatively safe positions where the probability of collision with any of the obstacle 
+
+Prob( ·) is no greater than ∆ are represented as follows: 
+
+C∆ 
+
+> ri
+
+= {p ∈ W : Prob( p ∈ O i) ≤ ∆}, |no
+
+> i=1
+
+. (2) Denote P1i(p, ω i) = Eo2 
+
+> i
+
+(p, ω i) and P2i(p, ω i) =
+
+E[oi(p, ω i)] as the polynomials in terms of the moments of order 2 and 1 of two specific probabilistic distributions of 
+
+ωi, respectively. The deterministic inner approximations of C∆
+
+> ri
+
+using the moment-based approximation method are as follows: 
+
+bC∆ 
+
+> ri
+
+=
+
+
+
+p ∈ W:P1i(p, ω i)−P 22i(p, ω i)
+
+P1i(p, ω i) ≤ ∆, P 2i(p, ω i) ≤ 0
+
+
+
+(3) 
+
+B. Problem Statement 
+
+This work considers an nq degrees of freedom serial robotic manipulator with configuration space Q. Given a compact time interval T ⊂ R, we define a trajectory for the configuration as q : T → Q ⊂ Rnq and for the velocity as ˙q : T → Rnq .Let the robot state be defined as xt = [ qt, ˙qt] ∈ R2nq and the commanded action, ut, be the desired joint velocity. The tracking configurations along the nominal trajectory during execution are subjected to the unknown time-varying process noise ωd ∈ R2nq . The dynamical equation of the robot arm under motion uncertainty is 
+
+xt+1 = f (xt, ut) + ωd. (4) JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 3
+
+Given a collision-free start configuration q0 ∈ Qfree , a goal region Wgoal ⊆ { W \ O} , and a risk tolerance ∆, we aim to find the actions to steer the end effector of the uncertain manipulator into the Wgoal while the probability of collision of its rigid body links L (qt) ⊆ W is bounded by ∆. Thus, the goal is to find a sequence of actions {u0, · · · , uT −1}
+
+connecting the start and goal to solve the following risk-bounded motion planning problem 
+
+min  
+
+> T−1
+
+X
+
+> 0
+
+C(xt, ut) (5) s.t. {q0, qT } ⊆ Qfree , FK (qT ) ∈ Wgoal (6) 
+
+xt+1 = f (xt, ut) + ωd (7) 
+
+hlim (xt, ut) ≤ 0 (8) 
+
+Prob( pt ∈ O i | ∀ pt ∈ L(qt)) ≤ ∆ |no
+
+> i=1
+
+, (9) where Prob( ·) is the probability of collision between the arm’s volume and uncertain obstacles, FK (·) is the forward kinematic model, and hlim (·) denotes the set of inequality constraints, including control, joint position, and velocity limitations. III. R ECEDING -H ORIZON RISK -B OUNDED TRAJECTORY 
+
+GENERATION FOR MANIPULATORS UNDER MOTION AND 
+
+ENVIRONMENTAL UNCERTAINTIES 
+
+In this section, we first introduce a sampling-based MPC incorporated with IsaacGym to pave the path of real-time trajectory generation for manipulators. Then, to address the misleading costs of rollouts influenced by unknown motion uncertainty, we propose a data-driven method that iteratively predicts the batched states that are most likely to be reached. In order to guarantee a risk-bounded solution rapidly, we develop a hierarchical collision risk verification approach based on parallelizable physics simulations and sum-of-squares pro-gramming. 
+
+A. Background on Sampling-based MPC for Manipulators 
+
+Benefiting from parallelizable computation, the sampling-based MPC exhibits remarkable planning efficiency in high-dimensional robot arms. In general, the MPPI control opti-mizes time-invariant Gaussian policies πϕt = QH−1 
+
+> h=0
+
+πϕt,h 
+
+over open-loop controls with parameters ϕt, comprising means 
+
+μt and covariances Σt across a horizon H. At each iteration, a batch of N control sequences of length H, UN,H ∈
+
+RN ×H×nq , are sampled. B-splines of degree 3 are used to fit controls sampled via a Halton sequence, ensuring smoothness and improved exploration of the action space [20]. Then, people parallelize the rollout of a batch of N future states 
+
+XN,H ∈ RN ×H×2nq either by a simple integral model [20] or the IsaacGym environment [21], and compute associated batched costs ˆCN,H ∈ RN ×H .The cost function ˆc(xn,h , un,h ), where n ∈ [0 , N ) and 
+
+h ∈ [0 , H ), is structured as a weighted combination of specialized terms, each enforcing a critical aspect of robotic control. The weights balance these competing objectives, while the individual costs are designed for computational efficiency and parallel evaluation. The whole state-cost ˆCn (xt, ut) of a control input sequence is discounted over the planning horizon, i.e., PH−1 
+
+> h=0
+
+γh ˆc (xt,h , ut,h ), where γ ∈ [0 , 1] discounts future rewards. It is involved in the risk-seeking objective function to be minimized by ϕ. The mean and covariance of the policy are updated with the following sample-based gradient of weighted sampled control sequences, 
+
+Σt,h = (1 −ασ ) Σ t−1,h +ασ
+
+PNi=1 wi (ut,h −μt,h ) ( ut,h −μt,h )⊤
+
+PNi=1 wi
+
+μt,h = (1 − αμ) μt−1,h + αμ
+
+PNi=1 wiut,h 
+
+PNi=1 wi
+
+(10) where ασ and αμ are constants and wi are importance weights. Independent adaptation of joint covariances is also enabled to allow optimization of diverse cost terms. We execute the first control input from the mean sequence u∗, then shift the mean and covariance forward while appending default values to warm-start the next optimization cycle. Interested readers are referred to [20], [21] for more details. 
+
+B. Deep Stochastic Koopman Operator Model for Uncertain Rigid Manipulator to Propagate in MPPI 
+
+The accuracy of the forward rollouts plays a key role in the success of MPPI control. Although the effects of the errors in the unreal model can be overcome to some extent by a receding-horizon manner, a nonlinear transition function with high uncertainty can still cause the algorithm to fail. Inspired by [27], we learn rigid arm dynamics with deep stochastic Koopman operators for kinodynamic motion planning. It predict the next states of rigid manipulators under tracking errors, which robustly simulates batched state-control pairs at a low cost. We roll out with the RM-DeSKO in the MPPI method to obtain the state evolution of the robot manipulator under uncertainty, as shown in Fig. 2. Given a batch of N iden-tical current states xn,t (where t = 0 , · · · , T ), RM-DeSKO performs iterative parallel propagation using random control signals un,h across the full time horizon H. Here is the underlying mechanism of this network model. At each time step, it lift the batched noised states xt to have the probabilistic distributions of the observables ψ. Generally, we assume each observable is subject to a Gaussian distribution. The mean vector λθ1 (xt) and diagonal covariance vector σθ2 (xt) are two encoders parameterized by θ1 and θ2, respectively, leading to 
+
+ψt = λθ1 (xt) + ϵσ θ2 (xt) , ϵ ∼ N (0 , I ).A Koopman operator iteratively propagates the inferred distribution forward, fed with the control inputs, as below. 
+
+ψt+k = Aψ t+k−1 + Bu t+k−1, k ∈ [1 , H ]. (11) The Koopman matrix A and control matrix B are represented by the networks of affine linear transformations without biases of suitable sizes. Finally, we convert the next observables in the lift space to obtain the predicted states by a decoder parameterized by θ3, i.e., ¯xt+k = Cθ3 ψt+k. The RM-DeSKO model is trained to minimize the H-step mean squared error loss with a constraint on the entropy of ψ.JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 4𝑁  Trajectories 
+
+## Time -Horizon 𝐻 
+
+## 𝑥 !,!
+
+## 𝜔 #
+
+## RM -DeSKO 𝑥 !,$
+
+## 𝑢 !,!
+
+## 𝜔 #
+
+## RM -DeSKO 𝑥 %&$,$
+
+## 𝑢 %&$,!
+
+## 𝜔 #
+
+## RM -DeSKO 𝑥 !,'
+
+## 𝑢 !,$
+
+## 𝜔 #
+
+## RM -DeSKO 𝑥 %&$,'
+
+## 𝑢 %&$,$
+
+## RM -DeSKO 𝑥 !,(
+
+## 𝑢 !,(&$
+
+## RM -DeSKO 𝑥 %&$,(
+
+## 𝑢 %&$,(&$
+
+## …. 
+
+## …. 
+
+> ….
+> ….
+> ….
+
+𝑥 !"# = 𝐶 $! 𝜓 !"#
+
+(Koopman Propagation )
+
+(Observable Encoder) 
+
+(State Decoder) 
+
+Linear Lifted space 
+
+𝑥 % 𝑥 &
+
+Nonlinear State space 𝑥 !"# = 𝑓 𝑥 !, 𝑢 ! + 𝜔 '
+
+> 𝜓 !
+> 𝜓 "
+
+𝜓 !"# = 𝐴 𝜓 ! + 𝐵 𝑢 !
+
+Rigid Manipulator 
+
+Deep Stochastic 
+
+Koopman Operator 
+
+(RM -De SKO )
+
+𝑝 𝜓 ! 𝑥 ! = 𝑁 𝜆 $" 𝑥 ! , 𝜎 $# 𝑥 !
+
+## 𝑥 %&$,!
+
+Fig. 2: Schematic diagram of proposed forward dynamics propagation in MPPI under RM-DeSKO model with key equations for N sampled trajectories over a horizon H.
+
+C. Hierarchical Collision Risk Verification 
+
+We introduce a theorem that verifies whether a tube is inside the risk-bounded region ˆC∆ 
+
+> r
+
+(t).
+
+Theorem 1. [29] A given tube E(L(t)) =p ∈ R3 : ( p − L (t)) T Q(p − L (t)) ≤ 1 along a polynomial trajectory L(t) satisfies the constraint (9) over the time horizon t ∈ [t0, t f ] if the polynomials of ˆC∆ 
+
+> r
+
+(t) take the following SOS representation: 
+
+P 22i (L(t) + ˆ p0, t ) − (1 − ∆) P1i (L(t) + ˆ p0, t ) = σ0i (t, ˆp0)+ σ1i (t, ˆp0) ( t − t0) ( tf − t) + σ2i (t, ˆp0)  1 − ˆpT 
+
+> 0
+
+Q ˆp0
+
+ no
+
+> i=1
+
+,P2i (L(t) + ˆ p0, t ) = σ3i (t, ˆp0) + σ4i (t, ˆp0) ( t − t0) ( tf − t)+ σ5i (t, ˆp0)  1 − ˆpT 
+
+> 0
+
+Q ˆp0
+
+ no 
+
+> i=1
+
+, (12) 
+
+where Q ∈ R3×3 is a given positive definite matrix, ˆp0 ∈ R3
+
+is the variable vector, and σji (t, ˆp0), j = 0 , . . . , 5 are SOS polynomials with appropriate degrees. 
+
+We assume the robot has state qt during a small time step interval dt . Given suitable Qj , the movable rigid body links are embraced by consecutive closed ellipsoids whose geometric centers pc,j t (qt), j = 1 , · · · , n q − 1 are obtained by forward kinematics. Namely, as shown in Fig. 3, we have E(qt) = 
+
+Snq −1 
+
+> j=1
+
+Ej (qt), where 
+
+Ej (qt)= 
+
+n
+
+p ∈ R3:( p−pc,j t (qt)) T Qj (p−pc,j t (qt)) ≤ 1
+
+o
+
+. (13) Similar to the proof in [29], the theorem 1 still holds given 
+
+t0 = 0 and tf = dt . In other words, considering the hyper-ellipsoids E(qt) within a small time interval [t0, t f ] instead of the long tube E(L(t)) maintains the validity of the theorem. We can verify the constraint (9) using SOS programming for the ellipsoidal volumes at each step. Ideally, at each iteration, we check the collision risk for the number of N × H × (nq − 1) rigid bodies within each planning horizon using SOS programming. The results are then assigned to collision costs of ˆc(xn,h , un,h ) for MPPI controller. It is feasible because they will be binary and MPPI does not need gradients for collision avoidance. However, a trajectory of length H = 15 for six ellipsoids even takes about 3.8 s on a parallel pool of CPU workers by an off-the-shelf SOS solver, which would be quite computationally expensive for the rollouts. Furthermore, domain randomization of mesh obstacles in IsaacGym does not support probabilistic geometries and sizes, while sensor noises and limited FOV make the online occupancy map unreliable for the nonconvex obstacles. Therefore, we develop a hierarchical collision risk verification method that leverages parallelizable physics simu-JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 5
+
+Fig. 3: Ellipsoidal body description example of a robot arm to be verified for collision risk. lations based on a high-fidelity 3D scanner and conducts SOS decomposition as a safety filter for the optimized trajectory before execution. We use Polycam to scan the uncertain nonconvex ob-stacles and extract their meshes offline. The collision cost 
+
+ccol = α P Fcontact can be obtained quickly using the contact forces Fcontact come with IsaacGym [21]. After obtaining an optimized control signal u∗ by MPPI, we simulate the model forward one step with our NN model. Since the meshes are fixed, we apply the analytical SOS decomposition for the predicted robot arm and polynomial obstacles to determine whether the collision probability is no greater than ∆ before execution. Thus, we do not need to build the map again when facing probabilistic obstacles. We also give stronger certifica-tion handling any probability distribution (e.g., uniform, Beta) via moments – non-Gaussian assumption. The risk-bounded motion planning algorithm for the manip-ulator under uncertainties is outlined in Alg. 1. If any ellipsoid fails to satisfy the SOS condition, which means the probability of collision is greater than ∆ for the next move, we update the corresponding cost and optimize again (Lines 9-12, Alg. 1). By combining the contact forces for primary cost computation and the analysis method for falsification, we realize certifiably safe, fast, gradient-free collision risk verification. Theoretical proof of the bounded collision risk for the manipulator is provided in Appendix A. IV. E XPERIMENTS 
+
+A. Data Collection and Implementation Details 
+
+We address the risk-bounded motion planning problem for a manipulator without a gripper under environmental and motion uncertainties in both simulation and the real world. We employ the sampling-based MPC [21] as our baseline. Given a pair of start and goal states in an obstacle-free environment, we collect the nominal trajectory of ln steps connecting them using the baseline without 
+
+Algorithm 1 Risk Bounded Motion Generation for Manipu-lators under Uncertainties 
+
+Require: q0, W goal , H, N, K, M 
+
+> 1:
+
+while pee /∈ Wgoal do  
+
+> 2:
+
+πq ← shif t ()  
+
+> 3:
+
+for i = 1 . . . K do  
+
+> 4:
+
+UN,H ← sample control (πϕt , H, N ) 
+
+> 5:
+
+XN,H ← deep Koopman operator (xt, UN,H ) 
+
+> 6:
+
+ˆCN,H ← rollout costs in IsaacGym (XN,H ) 
+
+> 7:
+
+ϕt ← update policy ( ˆCN,H , UN,H ) 
+
+> 8:
+
+u∗ = command selection (πϕt ) 
+
+> 9:
+
+xt+1 , ˆc(xt, u∗) ← deep Koopman operator (xt, u∗) 
+
+> 10:
+
+while NOT SOS CONDITION (L(qt+1 ), M) do  
+
+> 11:
+
+ϕt ← update (ˆ c(xt, u∗), ˆCN,H , UN,H ) 
+
+> 12:
+
+repeat lines 8 − 9 
+
+> 13:
+
+apply control (u∗) 
+
+> 14:
+
+xt, pee ← read state & end ef f ector position () 
+
+uncertainties. We sample N states, xt, around each waypoint of the nominal trajectory and propagate the samples for 
+
+H = 15 steps with unknown time-varying tracking errors 
+
+ωd ∈ R2nq added at each step. The actions are collected by sampling Halton splines. A dataset containing the number of ln × N × H trajectories under the noise ωd, D =Xln×N, H ∈ R(ln×N )×H×2nq , U ln×N, T ∈ R(ln×N )×H×nq
+
+
+
+is collected. We configure an Adam optimizer in PyTorch with different learning rates 1e−2 and 1e−3 for different parameter groups for training. The experiments are implemented in Python on Ubuntu 20.04 with an Intel Core i7-10700 CPU processor, 32 GB RAM, and a NVIDIA RTX 4090 GPU. 1
+
+B. Comparison Results of State Prediction Performance 
+
+We conduct the comparison experiments on a Franka Emika Panda ( nq = 7 ) to evaluate the state prediction accuracy for the uncertain manipulator among the well-known neural networks, including Deep Koopman operator with control (DKU) [30], Long Short-Term Memory (LSTM) [31], Multi-Layer Per-ceptron (MLP), Transformer [32], Deep stochastic Koopman operator (RM-DeSKO), and its variants, RM-DeSKO-N and RM-DeSKO-A. We set xt ∼ U [−0.2, 0.2] × U [−0.05 , 0.05] 
+
+and ωd ∼ N (0 .2, 0.2) during trajectory sampling. The hidden layer size of the MLP is [32 , 64 , 128 , 64 , 32] and activated with ReLU. The observable function in DKU is parameterized by an encoder with multiple linear layers [14 , 128 , 128 , 128 , 128 , 34] 
+
+concatenated with the state xt. The state and control matrices 
+
+A ∈ R34 ×34 and B ∈ R34 ×7 are represented as linear layers, respectively. DKU is trained with the H-step mean squared error (MSE) loss. There are 64 features in the hidden state and 
+
+4 recurrent layers in the LSTM model. The Transformer-based model processes historical state trajectories and control inputs to predict future states, using embedding layers to project states and controls into a shared 64-dimensional space, a 2-layer Transformer encoder to capture temporal patterns in the  
+
+> 1The video recording of simulation and physical experiments is available at https://youtu.be/eAU9YXxO7bA. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 6
+
+TABLE I: Statistical Results of State Prediction Errors Under State Uncertainty Over the Planning Horizon                                                 
+
+> Transformer DKU LSTM MLP RM-DeSKO RM-DeSKO-N RM-DeSKO-A Max Err 0.801 ±0.086 0.860 ±0.077 0.816 ±0.091 0.852 ±0.078 0.789 ±0.097 0.816 ±0.119 0.827 ±0.093
+> Mean Err −1.175 ±0.010 −0.980 ±0.014 −1.074 ±0.049 −0.893 ±0.022 −1.061 ±0.037 −1.082 ±0.040 −1.075 ±0.040
+
+Fig. 4: Comparison results of the log 10 of maximum (top) and mean (bottom) prediction errors for a robot arm under state uncertainty across the planning horizon. state history, and a multi-head attention mechanism to relate controls to the encoded state memory, finally decoding the at-tended features through an MLP head to produce H-step-ahead predictions of state x. As for RM-DeSKO, the mean vector and the observation matrix, λθ1 and Cθ3 , are parameterized by single-layer linear neural networks with width 64 followed by a ReLU, respectively, while the covariance vector, σθ2 ,has an additional softplus layer. Different from RM-DeSKO, the control net of RM-DeSKO-A is parameterized by a single hidden layer with 64 units fed with the state, B(xt), and the counterpart of RM-DeSKO-N is B(xt, ut).We run four times with each of the number of 30 k tra-jectories of length 15 for prediction accuracy evaluation, and Figure 4 plots the prediction errors across multiple time steps. Statistical performance over the entire planning horizon is reported in Table I. The Transformer model attains the lowest mean error, while RM-DeSKO generates the lowest maximum error. LSTM, RM-DeSKO, RM-DeSKO-N, and RM-DeSKO-A models exhibit similar and slightly higher mean errors. DKU and MLP have poor prediction performance due to their simple architectures. These results underscore the Transformer’s capa-bility to predict sequential trajectory data effectively, which is attributed to the attention mechanism and hierarchical feature extraction. The modified RM-DeSKO model also achieves acceptable error reduction given a single-step input. The less complex structure also makes it more practical compared with the variants. The results demonstrate that the RM-DeSKO model is competitive for trajectory prediction, particularly in mitigating unknown noise, which is critical for MPPI control TABLE II: Comparison Results of Risk-Bounded Motion Plan-ning for Manipulator under Environment and State Uncertainty                 
+
+> Methods Success Rate [%] TTG [s] Length Baseline 89 47.249 2.273 Transformer 0--LSTM 0--Ours 94 34.587 1.168
+
+under uncertainty. 
+
+C. Simulation Experiments for Motion Planning Problem 
+
+In this section, a set containing 10 tasks is tested on the Franka robot in IsaacGym. In each task, there are random start and goal configurations and two heart-shaped, uncertain, nonconvex obstacles, whose mathematical expressions are defined as follows: (25 x2 
+
+> i
+
++ 225 4 y2 
+
+> i
+
++ 25 z2 
+
+> i
+
+− 1) 3 − 3125 x2 
+
+> i
+
+z3 
+
+> i
+
+− 
+
+> 5625 16
+
+y2 
+
+> i
+
+z3 
+
+> i
+
+= ωi, where i = {1, 2}, ω 1 ∼ U [−0.1, 0.1] and 
+
+ω2 ∼ N (0 .05 , 0.01) . Since we can directly generate the 3D meshes for the boundaries of risk contours in simulation, we skip the procedures of Polycam scanning. The key parameters of MPPI, including the number of samples, tracking error, and the weights of robot-to-goal position, robot orientation, and collision, are set as N = 1000 , ωd ∼ N (0 .2, 0.2) , and 
+
+αp = 10 , αo = 0 .1, and αc = 10 , respectively. The successful distance between the end-effector and the goal is 0.1. Without loss of generality, we use the end three ellipsoids of the robot for collision risk verification. We run ten times for each task using Alg. 1 under four dynamics, i.e., the original one in IsaacGym (baseline), Trans-former, LSTM, and RM-DeSKO (Ours), and report the success rate, time to goal (TTG), and trajectory length (Length) of the end-effector in Table II. We also present snapshots of executing the planned trajectories in one task under ∆ = 30% 
+
+in Fig. 5. The rollouts of end effector are plotted in cyan, and the meshes of obstacle boundaries are in red. In the first row, we can see that the guiding rollouts of the baseline are quite transient, causing misleading sample-based gradients of the objective function and wandering in front of the obstacles. The second row shows that the rollouts based on the Transformer model cannot navigate to the goal. This is because only the current state and sampled control sequences are fed when rolling out the model at each iteration, whereas the high prediction accuracy for the next possible state depends on the past sequential states as in the last section. Although we retrain the Transformer with single-step input, it will degrade the effect of the attention mechanism and generate bad rollouts. As a result, the deviated propagation and policy distribution lead the actions to drive the robot to pass around the obstacles instead of approaching the goal. It also fails to compute accurate costs when rolling out based on the LSTM model. In addition, they require plenty of computational resources, JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 7
+
+Fig. 5: Snapshots of the planned trajectories by the MPPI control using four kinds of nonlinear dynamical systems, i.e., baseline, Transformer, LSTM, and Ours (from top to bottom). The arm tries to reach the goal (green ball) while keeping the probability of collision with uncertain nonconvex obstacles (red heart-shaped) guaranteed. Only our method succeeds in time because of the correct guiding rollouts (cyan) benefited from our neural network dynamical model and collision risk verification. holding them back in MPPI control. In contrast, our method reaches the goal within the planning time budget with fewer numbers of steps, less time consumed, and a higher success rate than the baseline. The end effector navigates through the narrow space between the two nonconvex obstacles, as shown in the fourth sub-figure in the bottom row of Fig. 5. It is the predicted noised states by our neural network that pave the path to update the policy parameters appropriately. We conduct comparison experiments under different track-ing errors, numbers of samples, and pairs of position and orientation cost weights to evaluate the robustness. In Table III, we can observe that our method scales to the unseen uncertainties. Since our neural network dynamical model has learned the action trend of the uncertain arm, the rollouts based on it are still useful under the noise outside the domain. When drawing fewer numbers of samples, our method can consistently find the solution, while the baseline method fails in the first two cases as reported in IV. Furthermore, our method can efficiently find shorter trajectories than the baseline under different pairs of cost weights, as shown in Table V. However, our method has lower success rates than the baseline when given a low position or a high orientation cost weight. Since our model is fed by control sequences with reasonable importance sampling weights wi(ˆ c(·)) during training, the influenced costs ˆc(·) make the sequences have a deviation from those in the dataset. In short, our approach is robust and efficient for finding risk-bounded trajectories under diverse parameter settings and uncertainties. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 8
+
+TABLE III: Planning Results under Different Tracking Errors 
+
+ωd                  
+
+> Metric N(0 .2,0.2) N(0 .22 ,0.22) N(0 .25 ,0.25)
+> TTG [s] 34.587 65.992 100.210 Length 1.168 1.720 1.731 Success Rate [ %]94 91 83
+
+TABLE IV: Planning Results under Different Numbers of Samples N            
+
+> Metric 200 500 1000 TTG [s] 40.529 21.147 34.587 Length 1.723 0.953 1.168 Success Rate [ %]88 93 94
+
+D. Sim-to-Real Transferred Physical Experiments 
+
+In this section, we validate our method in a human-robot collaboration task where a UR5e manipulator (nq = 6)approaches and ties the two vertical rebars held by a sole worker with a rebar tying tool (Makita DTR181) fixed at the end-effector, as shown in Fig. 6. Since it is hard to construct a complete occupancy map online for this nonconvex environment under the third-view camera’s FOV constraints, one scans the worker’s body via the Polycam app and ex-tract the corresponding scene collision meshes for collision costs computation. The obstacles, horizontal human arms, have probabilistic locations due to fatigue after mapping. The uncertain and eccentric tying machine payload ([2.7,3.2]kg, caused by consumed tie wires) produces joint state noise. Therefore, we need to plan a risk-bounded trajectory that accounts for motion and environmental uncertainties. Different tracking errors ωd ∼ N (0 , σ ), where σ = {0.15 , 0.20 , 0.25 },are added to the robot state observations to test our robustness before physical experiments. Along the nominal trajectory of length ln = 177 and range of xt ∼ U [−0.1, 0.1] around its waypoints, we collect the dataset with N = 400 batched noise 
+
+ωd at each step in the simulation environment to train the NN model. We construct several ellipsoids whose centers are subjected to normal distribution which account for the possible occupation area of arms for collision risk verification under 
+
+αc = 0 .01 . λθ1 and σθ2 of RM-DeSKO are parameterized by [64 , 128 , 64] linear layers and the other settings are as the same as those for the simulated Franka arm. We only verify the collision risk between the tying gun and the human arm ellipsoids. The objective is to let the nozzle of the tying tool arrive the place to be spliced between the hands under TABLE V: Planning Results under Different Pairs of Weights                                 
+
+> Methods Metric
+> (αp, α o)(10 ,0.1) (5 ,0.1) (1 ,0.1) (10 ,1)
+> Ours TTG [s] 34.587 46.839 49.586 48.325 Length 1.168 1.358 1.971 2.568 Success Rate [ %]94 87 11 8baseline TTG [s] 47.249 37.849 42.913 49.130 Length 2.273 2.074 2.065 2.692 Success Rate [ %]89 86 79 71
+
+a guaranteed collision risk ∆ = 10% , and the tying gun automatically binds the two rebars together. Given a limited time budget, the baseline fails to converge to the target across all three noise levels due to high noised state variance. In contrast, our method achieves a consistent 90% success rate (9 out of 10 trials) under the noises tested, and it takes 8.32 s , 8.46 s , and 10 .21 s on average, respectively. The failure is caused by the consistent disturbance if the small tying tool nozzle misses the tying position of slender reinforcing bars. Finally, we deploy our method with the same weight file trained before on the real UR5e. We keep manually added 
+
+ωd ∼ N (0 , 0.15) at each step and the control loop operated at a frequency of 6 Hz . Just like the simulation results, the baseline method failed to reach the target. We present a successful execution of our method from front and left views in Fig. 6. It can be observed that the robot continuously adjusts its configuration to avoid the worker’s arms under an acceptable risk tolerance, and ultimately reach the goal and tie. As shown on the screen, the stable rollouts in cyan predicted by our RM-DeSKO support accurate computation costs and safe trajectory generation. The superior performance demonstrates the zero-shot sim-to-real transfer and planning efficiency. V. C ONCLUSION 
+
+We presented a receding-horizon motion planning method that guarantees a bounded collision probability for the uncer-tain manipulators in uncertain nonconvex environments. Our developed neural network model and hierarchical collision risk verification method significantly improve the obstacle avoidance performance of the MPPI control for the robot arm suffering from joint position and velocity noises, and uncertain surrounding objects. Scalability in different settings and goal arrival performance with theoretical safety guaran-tees, shown in the experiment results, validates the robustness and effectiveness. The Gaussian splatting renderer provides a photorealistic view from any viewpoint. This can be leveraged for perception-aware planning and dynamic risk contour inte-gration for different kinds of obstacles in the future. APPENDIX 
+
+THEORETICAL GUARANTEES OF BOUNDED RISK FOR 
+
+MANIPULATORS UNDER UNCERTAINTIES 
+
+Since we infer the joint positions qt using a deep neural network model, the ellipsoids E built based on them introduce a probability that any part of the forward occupancy pt ∈
+
+L(qt) stays inside the ellipsoid. It is greater than (1 − ∆ell ),where ∆ell is usually a quite small constant, e.g., 0.001 .Mathematically, for t ∈ [0 , T ], we have 
+
+Prob ( pt ∈ E (qt)) ≥ 1 − ∆ell . (14) We rely on risk contours to verify the collision risk for the rigid bodies in uncertain environments. If every ellipsoid is inside the risk-bounded set ˆC∆ 
+
+> r
+
+, then the collision risk constraint (9) becomes 
+
+Prob 
+
+
+
+pt ∈ O | pt ∈ E (qt) ⊆ ˆC∆
+
+> r
+
+
+
+≤ ∆o. (15) JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 9
+
+Fig. 6: Snapshots of the rebar tying experiment under uncertainty from the left and front views (top and bottom). The rollouts in cyan on the screen stably point to the goal despite the eccentric payload and tracking errors of the manipulator. The robot successfully generates a risk-bounded trajectory to bypass the uncertain nonconvex human arms and reach the tying target using our method, which transfers directly from simulation to a real robot. We optimize configurations qt that make the total cost as small as possible during online MPC optimization. We set a high weight αc to ensure the links are inside ˆC∆r , leading the probability of collision between the robot and any obstacle to be bounded by ∆o + ∆ ell as 
+
+Prob 
+
+
+
+pt ∈ O | E (qt) ⊆ ˆC∆
+
+> r
+
+
+
+≤ Prob 
+
+
+
+pt ∈ O | pt ∈ E (qt) ⊆ ˆC∆
+
+> r
+
+
+
+× Prob ( pt ∈ E (qt)) + Prob ( pt /∈ E (qt)) 
+
+≤ ∆o + ∆ ell .
+
+(16) The bound in (16) applies to the ellipsoids at one planning iteration. Suppose the MPC needs to take z = Tdt steps to complete the final solution. Therefore, we can derive the probability of the ellipsoids embracing the arm over all the planning iterations as follows 
+
+Prob ( pt ∈ E (qt)) z ≥ (1 − ∆ell )z . (17) As (16), the probability of collision over all the planning cycles is no greater than 
+
+∆o + (1 − (1 − ∆ell )z ) ≤ ∆o + z∆ell . (18) Given the user-defined risk tolerance ∆ and the number of 
+
+z planning cycles of upper bound guess, we can determine ∆o
+
+and ∆ell to have 
+
+∆o + z∆ell ≤ ∆. (19) The probability of collision between the uncertain arm and any uncertain nonconvex obstacle over the entire planning horizon 
+
+Prob is bounded by ∆ as below 
+
+Prob ≤ ∆o + z∆ell ≤ ∆o + z∆ell ≤ ∆, (20) where z ≤ z is the actual number of planning iterations. REFERENCES [1] S. M. LaValle, Planning algorithms . Cambridge university press, 2006. [2] L. Zhang, K. Cai, Z. Sun, Z. Bing, C. Wang, L. Figueredo, S. Haddadin, and A. Knoll, “Motion planning for robotics: A review for sampling-based planners,” Biomimetic Intelligence and Robotics , p. 100207, 2025. [3] C. Li, F. Meng, H. Ma, J. Wang, and M. Q.-H. Meng, “Relevant region sampling strategy with adaptive heuristic for asymptotically optimal path planning,” Biomimetic Intelligence and Robotics , vol. 3, no. 3, p. 100113, 2023. [4] B. Axelrod, L. P. Kaelbling, and T. Lozano-P´ erez, “Provably safe robot navigation with obstacle uncertainty,” The International Journal of Robotics Research , vol. 37, no. 13-14, pp. 1760–1774, Dec. 2018. [5] Masahiro Ono and B. C. Williams, “Iterative Risk Allocation: Anew approach to robust Model Predictive Control with a joint chance constraint,” in 2008 47th IEEE Conference on Decision and Control .Cancun, Mexico: IEEE, 2008, pp. 3427–3432. [6] A. Jasour, W. Han, and B. C. Williams, “Convex risk-bounded continuous-time trajectory planning and tube design in uncertain non-convex environments,” The International Journal of Robotics Research ,vol. 42, no. 10, pp. 705–728, Sep. 2023. [7] D. Zheng, J. Ridderhof, Z. Zhang, P. Tsiotras, and A.-A. Agha-Mohammadi, “CS-BRM: A Probabilistic RoadMap for Consistent Belief Space Planning With Reachability Guarantees,” IEEE Transactions on Robotics , vol. 40, pp. 1630–1649, 2024. [8] S. Dai, S. Schaffert, A. Jasour, A. Hofmann, and B. Williams, “Chance constrained motion planning for high-dimensional robots,” Proceedings -IEEE International Conference on Robotics and Automation , vol. 2019-May, pp. 8805–8811, 2019. [9] C. Dawson, A. Jasour, A. Hofmann, and B. Williams, “Chance-Constrained Trajectory Optimization for High-DOF Robots in Uncertain Environments,” Jan. 2023. [10] Dawson, Charles and Jasour, Ashkan and Hofmann, Andreas and Williams, Brian, “Provably Safe Trajectory Optimization in the Pres-ence of Uncertain Convex Obstacles,” in 2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , Oct. 2020, pp. 6237–6244. [11] C. Quintero-Pena, A. Kyrillidis, and L. E. Kavraki, “Robust Optimization-based Motion Planning for high-DOF Robots under Sens-ing Uncertainty,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) . Xi’an, China: IEEE, May 2021, pp. 9724– 9730. [12] B. Luders, M. Kothari, and J. How, “Chance Constrained RRT for Probabilistic Robustness to Environmental Uncertainty,” in AIAA Guid-ance, Navigation, and Control Conference . Toronto, Ontario, Canada: American Institute of Aeronautics and Astronautics, Aug. 2010. [13] J. Van Den Berg, P. Abbeel, and K. Goldberg, “LQG-MP: Optimized path planning for robots with motion uncertainty and imperfect state information,” The International Journal of Robotics Research , vol. 30, no. 7, pp. 895–913, Jun. 2011. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 10 
+
+[14] W. Han, A. Jasour, and B. Williams, “Non-Gaussian Risk Bounded Trajectory Optimization for Stochastic Nonlinear Systems in Uncertain Environments,” in 2022 International Conference on Robotics and Automation (ICRA) , May 2022, pp. 11 044–11 050. [15] Han, Weiqiao and Jasour, Ashkan and Williams, Brian, “Real-time tube-based non-gaussian risk bounded motion planning for stochastic nonlinear systems in uncertain environments via motion primitives,” in 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2023, pp. 2885–2892. [16] J. Liu, C. E. Adu, L. Lymburner, V. Kaushik, L. Trang, and R. Vasude-van, “RADIUS: Risk-Aware, Real-Time, Reachability-Based Motion Planning,” Feb. 2023. [17] F. Meng, L. Chen, H. Ma, J. Wang, and M. Q.-H. Meng, “Nr-rrt: Neural risk-aware near-optimal path planning in uncertain nonconvex environ-ments,” IEEE Transactions on Automation Science and Engineering ,vol. 21, no. 1, pp. 135–146, 2022. [18] Meng, Fei and Chen, Liangliang and Ma, Han and Wang, Jiankun and Meng, Max Q-H, “Learning-based risk-bounded path planning under environmental uncertainty,” IEEE Transactions on Automation Science and Engineering , 2023. [19] F. Meng, J. Liu, H. Shi, H. Ma, H. Ren, and M. Q.-H. Meng, “Online time-informed kinodynamic motion planning of nonlinear systems,” 
+
+IEEE Robotics and Automation Letters , 2024. [20] M. Bhardwaj, B. Sundaralingam, A. Mousavian, N. Ratliff, D. Fox, F. Ramos, and B. Boots, “STORM: An Integrated Framework for Fast Joint-Space Model-Predictive Control for Reactive Manipulation,” Sep. 2021. [21] C. Pezzato, C. Salmi, E. Trevisan, M. Spahn, J. Alonso-Mora, and C. H. Corbato, “Sampling-based model predictive control leveraging parallelizable physics simulations,” IEEE Robotics and Automation Letters , 2025. [22] G. Williams, N. Wagener, B. Goldfain, P. Drews, J. M. Rehg, B. Boots, and E. A. Theodorou, “Information theoretic mpc using neural network dynamics,” in 30th Conference on Neural Information Processing Sys-tems , 2016. [23] I. S. Mohamed, J. Xu, G. S. Sukhatme, and L. Liu, “Towards efficient mppi trajectory generation with unscented guidance: U-mppi control strategy,” IEEE Transactions on Robotics , 2025. [24] I. Abraham, A. Handa, N. Ratliff, K. Lowrey, T. D. Murphey, and D. Fox, “Model-based generalization under parameter uncertainty using path integral control,” IEEE Robotics and Automation Letters , vol. 5, no. 2, pp. 2864–2871, 2020. [25] J. Higgins, N. Mohammad, and N. Bezzo, “A model predictive path integral method for fast, proactive, and uncertainty-aware uav planning in cluttered environments,” in 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2023, pp. 830–837. [26] J. Yin, Z. Zhang, and P. Tsiotras, “Risk-Aware Model Predictive Path Integral Control Using Conditional Value-at-Risk,” Sep. 2022. [27] M. Han, J. Euler-Rolle, and R. K. Katzschmann, “DeSKO: Stability-Assured Robust Control with a Deep Stochastic Koopman Operator,” in 
+
+International Conference on Learning Representations , Jan. 2022. [28] A. M. Jasour and B. Williams, “Risk Contours Map for Risk Bounded Motion Planning under Perception Uncertainties,” 2019. [29] A. Jasour, W. Han, and B. Williams, “Real-Time Risk-Bounded Tube-Based Trajectory Safety Verification,” Oct. 2021. [30] H. Shi and M. Q.-H. Meng, “Deep Koopman Operator With Control for Nonlinear Systems,” IEEE Robotics and Automation Letters , vol. 7, no. 3, pp. 7700–7707, Jul. 2022. [31] S. Hochreiter and J. Schmidhuber, “Long short-term memory,” Neural computation , vol. 9, no. 8, pp. 1735–1780, 1997. [32] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” Advances in neural information processing systems , vol. 30, 2017.

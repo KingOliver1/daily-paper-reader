@@ -1,0 +1,380 @@
+Title: Dual-Horizon Hybrid Internal Model for Low-Gravity Quadrupedal Jumping with Hardware-in-the-Loop Validation
+
+URL Source: https://arxiv.org/pdf/2603.07999v1
+
+Published Time: Tue, 10 Mar 2026 01:49:16 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Dual-Horizon Hybrid Internal Model for Low-Gravity Quadrupedal Jumping with Hardware-in-the-Loop Validation 
+
+Haozhe Xu ∗, Yifei Zhao ∗, Wenhao Feng, Zhipeng Wang, Hongrui Sang Cheng Cheng, Xiuxian Li, Zhen Yin and Bin He 
+
+Abstract — Locomotion under reduced gravity is commonly realized through jumping, yet continuous pronking in lunar gravity remains challenging due to prolonged flight phases and sparse ground contact. The extended aerial duration increases landing impact sensitivity and makes stable attitude regulation over rough planetary terrain difficult. Existing approaches primarily address single jumps on flat surfaces and lack both continuous-terrain solutions and realistic hardware validation. This work presents a Dual-Horizon Hybrid Internal Model for continuous quadrupedal jumping under lunar gravity using proprioceptive sensing only. Two temporal encoders capture complementary time scales: a short-horizon branch models rapid vertical dynamics with explicit vertical velocity estima-tion, while a long-horizon branch models horizontal motion trends and center-of-mass height evolution across the jump cycle. The fused representation enables stable and continuous jumping under extended aerial phases characteristic of lunar gravity. To provide hardware-in-the-loop validation, we develop the MATRIX (Mixed-reality Adaptive Testbed for Robotic Integrated eXploration) platform, a digital-twin-driven system that offloads gravity through a pulley-counterweight mechanism and maps Unreal Engine lunar terrain to a motion platform and treadmill in real time. Using MATRIX, we demonstrate continuous jumping of a quadruped robot under lunar-gravity emulation across cratered lunar-like terrain. 
+
+I. INTRODUCTION Recent advances in deep-space missions have renewed interest in lunar surface exploration. Regions such as perma-nently shadowed craters, steep crater rims, and lava tubes are considered scientifically and economically valuable [1], [2]. However, these areas are characterized by irregular terrain, loose regolith, and significant slope variations. Conventional wheeled rovers exhibit limited mobility under such condi-tions due to slip and sinkage. Legged robots, in contrast, provide discrete footholds and adaptable contact configura-tions, making them promising candidates for future planetary exploration tasks in complex environments. Under lunar gravity, locomotion characteristics change substantially [3]. Reduced gravitational acceleration leads to prolonged flight phases, sparse ground contact, and increased sensitivity to landing impact. Dynamic gaits such as jumping or pronking are therefore more energy-efficient than continu-ous walking [4], yet achieving stable and continuous jumping over rough lunar terrain requires coordinated mid-air attitude regulation, impact-aware landing control, and terrain adap-tation. Several studies have addressed low-gravity jumping. Kolvenbach et al. [5] introduced the SpaceBok quadruped designed specifically for lunar exploration, demonstrating      
+
+> ∗Equal Contributions
+> Fig. 1. Left: Training the quadruped robot in the Isaac Gym simulator under lunar gravity. Right: Deploying the learned policy on our MATRIX system while simultaneously emulating low gravity and lunar terrain.
+
+energy-efficient repetitive jumping enabled by parallel elastic leg actuation and reaction-wheel-based attitude stabilization under simulated lunar gravity. Rudin et al. [6] further ex-plored deep reinforcement learning for low-gravity locomo-tion, enabling cat-like mid-air reorientation and controlled landing through non-holonomic limb coordination. The Lu-nar Leap Robot [3] adopts a hybrid reinforcement learn-ing architecture with multitask experience sharing to learn obstacle-crossing jumps under lunar gravity. However, these paradigms primarily address isolated jumps or aerial attitude control [7], [8], while continuous sequential pronking across three-dimensional rough terrain remains largely unexplored. Achieving continuous jumping demands robust state esti-mation throughout the prolonged aerial phase. Under Earth gravity, early studies on quadrupedal jumping primarily relied on model-based trajectory optimization and model pre-dictive control [9]–[11]. Although these approaches provide rigorous dynamic feasibility, they depend heavily on accurate system models and exhibit limited scalability to adaptive or consecutive jumps over irregular terrain. In recent years, deep reinforcement learning has shown promising results in learning agile quadrupedal locomotion behaviors [12]– [14]. Hierarchical learning-control frameworks have been introduced to combine reinforcement learning with model-based controllers, enabling continuous and adaptive jump-ing behaviors by generating high-level motion commands that are tracked by low-level optimization-based leg con-trollers [15]. In [16], a curriculum-based reinforcement learning framework is proposed to facilitate the learning of dynamic jumping skills without relying on reference trajectories, where progressively structured training tasks guide the policy from simple vertical jumps to long-distance and obstacle-crossing maneuvers. More recent studies extend learning-based jumping toward omnidirectional and height-
+
+> arXiv:2603.07999v1 [cs.RO] 9 Mar 2026
+
+aware behaviors by jointly training locomotion policies with auxiliary state estimation modules that infer body and foot states during aerial motion [17]. Methods such as Hybrid Internal Model [18] and DreamWaQ [19] encode short proprioceptive histories to infer implicit terrain and state information. However, under lunar gravity the aerial phase is significantly prolonged and contact events become sparse and discontinuous, so that a single short observation window cannot capture the full state evolution across a complete jump cycle, limiting the effectiveness of short-horizon state reconstruction. To address this, we propose a Dual-Horizon Hybrid Internal Model employing two temporal encoders at complementary time scales, together with a Phase-Adaptive Gated Reward for stage-dependent regulation of takeoff, flight, and landing. Validating low-gravity locomotion on physical hardware is equally challenging. Air-bearing facilities approximate reduced gravity in constrained planar environments [6], [8], while suspension-based systems offset gravity via cables or springs. SpaceHopper [20] demonstrates vertical jumping via a pulley–counterweight setup and two-axis attitude reori-entation in a gimbal. Arm et al. [21] employ a constant-force spring offload system for lunar-gravity walking ex-periments with Magnecko, yet the tests are limited to flat-ground locomotion without terrain variation. More broadly, all existing setups operate over static flat terrain and validate only a single locomotion mode rather than continuous multi-jump trajectories over three-dimensional cratered surfaces. To close this gap, we develop the MATRIX (Mixed-reality Adaptive Testbed for Robotic Integrated eXploration) plat-form, a digital-twin-driven hardware-in-the-loop system that emulates lunar gravity through a pulley-counterweight mech-anism and reproduces lunar terrain in real time by mapping an Unreal Engine virtual environment to a motion platform and treadmill. The main contributions of this work are summarized as follows:  
+
+> •
+
+A Dual-Horizon control framework for continuous quadrupedal jumping over complex lunar terrain, incor-porating a multi-timescale internal model and a phase-adaptive reward design.  
+
+> •
+
+The development of the MATRIX hardware-in-the-loop digital twin platform, which enables real-time emulation of lunar gravity and three-dimensional terrain geometry.  
+
+> •
+
+Experimental demonstration of continuous quadrupedal jumping under lunar-gravity emulation across cratered lunar-like terrain using the proposed platform. II. D UAL -H ORIZON HYBRID INTERNAL MODEL FOR 
+
+LOW -G RAVITY JUMPING 
+
+A. Overview 
+
+The proposed framework targets stable, continuous quadrupedal jumping over complex terrain under lunar grav-ity using proprioceptive sensing only. The task is formulated as a Markov Decision Process and optimized with Proximal Policy Optimization (PPO), which constrains each update within a trust region for stable training. The Dual-Horizon Hybrid Internal Model (Sec. II-B) employs two temporal encoders: a short-horizon branch (Sec. II-B.3) explicitly estimates vertical velocity for phase awareness, while along-horizon branch captures horizontal motion trends and CoM height evolution across the full jump cycle, with their fused representation augmenting the policy input without external terrain sensing. A Phase-Adaptive Gated Reward (Sec. II-C) activates stage-dependent objectives inferred from physically interpretable quantities to regulate takeoff, flight, and landing. The training terrain curriculum is described in Sec. II-D. An overview of the system is shown in Fig. 2. 
+
+B. Dual-Horizon Hybrid Internal Model 
+
+Hybrid Internal Model encodes a short history of pro-prioceptive observations using an estimator network, which outputs an explicit velocity estimate and a latent vector rep-resenting implicit environmental response. This mechanism enables robust locomotion without external terrain sensing. The original formulation employs a short temporal win-dow of six time steps, corresponding to approximately 0.12 
+
+seconds at a control frequency of 50 Hz. This time scale is sufficient for ground locomotion under Earth gravity. In low-gravity continuous jumping, the system dynamics evolve over significantly longer time scales. For a quadruped robot, a jump that raises the center of mass by approximately 
+
+0.3 m results in an aerial duration of about 1.2 s under lunar gravity. Under Earth gravity, the same height change yields an aerial duration of about 0.5 s .Therefore, the flight phase under lunar gravity is more than twice as long as the Earth-gravity equivalent for the same jump height. Over such an extended aerial phase, ground contact events are sparse and body-state evolution is slow relative to the control frequency, so a short observation window covers only a small fraction of the jump cycle and cannot encode the state context needed for stable takeoff, flight, and landing. For this reason, multi-timescale response modeling is introduced through a dual-horizon internal model. 
+
+1) Observation Space: The proprioceptive observation at time step t is defined as ot = (vcmd  
+
+> t
+
+, ω t, g t, q t, ˙qt, a t−1),where vcmd  
+
+> t
+
+denotes the commanded linear velocity, ωt ∈ R3
+
+denotes the base angular velocity in the body frame, gt ∈ R3
+
+denotes the projected gravity vector, qt ∈ R12 denotes joint positions, ˙qt ∈ R12 denotes joint velocities, and at−1 ∈ R12 
+
+denotes the previous action. 
+
+2) Action Space: The action at ∈ R12 represents the desired joint position increment relative to a nominal con-figuration ¯q, where at = q∗ 
+
+> t
+
+− ¯q and q∗ 
+
+> t
+
+denotes the desired joint position. The desired joint position q∗ 
+
+> t
+
+is tracked by a joint-level proportional-derivative controller. 
+
+3) Dual-Horizon Temporal Modeling: Two temporal win-dows are constructed from proprioceptive observations. 
+
+Short Horizon. Hs = {ot−5, . . . , o t} (6 steps, ≈0.12 s) is encoded by fs into zs = [ˆ vz , h s], providing an explicit vertical-velocity estimate ˆvz for phase awareness and a short-horizon latent hs.Short-Horizon 
+
+Encoder 
+
+Long-Horizon 
+
+Encoder 
+
+𝑣𝑣 𝑥𝑥 , 𝑣𝑣 𝑦𝑦 , 𝑣𝑣 𝑧𝑧 
+
+ℎ
+
+Ground-Truth Supervision 
+
+> Current obs
+
+Policy Network  Feature Fusion 
+
+𝑙𝑙 𝑠𝑠 
+
+Pull Closer  Target Encoder 
+
+Pull Closer  Target Encoder 
+
+𝑙𝑙 𝑙𝑙 Fig. 2. Overview of the proposed Dual-Horizon Hybrid Internal Model. Two temporal encoders process proprioceptive history at complementary time scales. The short-horizon encoder fs operates on the recent window Hs (6 steps, ≈0.12 s) to capture rapid vertical dynamics, producing an explicit vertical-velocity estimate ˆvz for phase awareness and a latent vector hs. The long-horizon encoder fl operates on a subsampled window Hl (≈0.9 s) to track slow trends across the full jump cycle, producing horizontal-velocity estimates ˆvx, ˆvy , CoM-height estimate ˆh, and a latent vector hl. The fused representation 
+
+zt = [ˆ vx, ˆvy , ˆvz , ˆh, h s, h l] augments the current observation ot as input to the policy network. Training combines ground-truth regression supervision (Lreg ) for the explicit estimates with InfoNCE-style contrastive objectives for the latent vectors, where each branch is pulled toward a target-encoder embedding of a future observation. 
+
+Long Horizon. Hl = {ot−42 , o t−39 , . . . , o t} (15 sub-sampled frames, ≈0.9 s) is encoded by fl into zl =[ˆ vx, ˆvy , ˆh, h l], capturing horizontal motion trends and CoM height ˆh across the full jump cycle. 
+
+Feature Fusion. The fused representation zt =[ˆ vx, ˆvy , ˆvz , ˆh, h s, h l] augments the policy input: at ∼ πθ (at |
+
+ot, z t).
+
+Supervised regression losses. The estimator is supervised with ground-truth simulator signals via 
+
+Lreg = X  
+
+> q∈{ vx,v y,v z,h }
+
+∥ˆq − q∥22. (1) 
+
+Contrastive objectives. Both branches use an InfoNCE-style contrastive loss. For branch b ∈ { s, l } with temporal offset δb (δs = 1 , δl = ∆ ): 
+
+Lb = − log exp  sim  hb(t), ϕ (ot+δb )/τ P 
+
+> j∈B
+
+exp  sim  hb(t), ϕ (oj )/τ  , (2) where ϕ(·) is a target encoder, τ the temperature, B the minibatch, and oj denotes the proprioceptive input of sample 
+
+j. The offset ∆ = 6 (0.12 s) is chosen to match the near-ground contact phase, allowing hl to capture slow jump-cycle trends while reducing contact-event noise. 
+
+Overall loss. The estimator is trained by minimizing the weighted sum of the above objectives: 
+
+LDH = λreg Lreg + λsLs + λlLl, (3) where λreg , λs, λl are scalar weights. 
+
+C. Phase-Adaptive Gated Reward Design 
+
+Rather than using contact sensors or explicit phase vari-ables, the proposed reward infers the jumping stage from CoM height and vertical velocity, activating stage-specific objectives without a state machine. The total reward at time step t is defined as 
+
+Rt = Rglobal t + wtakeof f t Rtakeof f t
+
++ wf light t Rf light t + wland t Rland t . (4) 
+
+1) Phase Activation Factors: Three binary indicators are derived from CoM height ht and vertical velocity vz,t : a near-ground flag Gt = 1[ht ≤ hthr ], an upward flag 
+
+Iup t = 1[vz,t > vthr ], and a downward flag Idown t =
+
+1[vz,t < −vthr ], where vthr = αp2gmoon (hcmd − hstance )
+
+with α = 0 .5. The phase weights are then 
+
+wtakeoff  
+
+> t
+
+= GtIup t , wland  
+
+> t
+
+= GtIdown t , wflight  
+
+> t
+
+= 1 − Gt,
+
+(5) partitioning the motion into takeoff, aerial, and landing regimes without explicit phase scheduling. 
+
+2) Global Reward Terms: The global reward applied at every timestep is 
+
+Rglobal  
+
+> t
+
+= wv exp  −kv (vx,t − vcmd  
+
+> x
+
+)2 − wr Rt
+
++ Rpeak . (6) Fig. 3. Nine terrain types used for training. The top row includes Pure Flat, Flat, and Perlin Flat. The middle row includes Smooth Slope, Rough Slope, and Perlin Slope. The bottom row includes Discrete Obstacles, Crater, and Perlin Crater. The Crater and Perlin Crater terrains are defined by an exponential height function to approximate impact crater structures commonly observed on the lunar surface. 
+
+The first term tracks the commanded forward velocity 
+
+vcmd x . The second term Rt denotes a regularization penalty (e.g., action or torque regularization) weighted by wr .The sparse term Rpeak = 1[| max t ht − hcmd | ≤ δh]
+
+rewards jumps that reach the commanded height within tolerance δh = 0.04 m, following [17]. The commanded height hcmd is manually specified according to the task requirements. 
+
+3) Stage-Specific Rewards: The three stage rewards are 
+
+Rtakeof f t = exp  −kz (vz,t − vthr )2 ,Rf light t = −wf (roll 2 
+
+> t
+
++ pitch 2 
+
+> t
+
+), (7) 
+
+Rland t = −v2 
+
+> z,t
+
+− wh max  
+
+> i
+
+(hf oot,i ),
+
+encouraging sufficient takeoff velocity, mid-air attitude sta-bility, and coordinated touchdown, respectively. 
+
+D. Terrain Curriculum Design 
+
+To evaluate robustness under diverse surface conditions, a procedurally generated terrain with curriculum-based dif-ficulty scaling is constructed. The terrain is organized as a 10 × 20 grid of sub-terrain patches, each measuring 
+
+8 m × 8 m . Rows correspond to monotonically increasing difficulty levels d ∈ [0 , 1] , while columns are assigned to nine predefined terrain categories according to fixed proportions. All nine terrain categories are illustrated in Fig. 3. Perlin noise is introduced to further approximate the rough surface textures of the lunar terrain. 
+
+Surface Roughness Modeling: Continuous terrains em-ploy fractal Brownian motion based on two-dimensional Perlin noise. At octave k, the frequency and amplitude are defined as fk = f0λk and ak = zscale Gk, with f0 = 10 , λ =2.0, G = 0 .25 , and K = 2 octaves. The resulting noise fields are summed to generate multi-scale height perturbations. 
+
+Difficulty Scaling: The difficulty parameter d simulta-neously controls multiple terrain attributes, including slope inclination, exponential curvature coefficient, obstacle height and density, and Perlin noise amplitude. The amplitude is scaled linearly with d. This multi-parameter scaling ensures gradual and balanced increases in terrain complexity. III. T HE MATRIX P LATFORM 
+
+To validate the proposed locomotion policy on physical hardware under reduced-gravity and terrain-varied condi-tions, we develop the MATRIX (Mixed-reality Adaptive 
+
+Testbed for Robotic Integrated eXploration) platform, adigital-twin-driven hardware-in-the-loop testbed that can em-ulate configurable reduced-gravity conditions and reproduce terrain slope profiles in real time. As illustrated in Fig. 4, MATRIX comprises three tightly coupled subsystems: (i) a 
+
+Low-Gravity Simulation Subsystem consisting of an over-head pulley-and-counterweight mechanism; (ii) a Terrain and Motion Emulation Subsystem comprising a six-degree-of-freedom (6-DoF) Stewart-type motion platform with an integrated motorised treadmill; and (iii) a Digital Twin and Control System running in Unreal Engine (UE) that drives subsystems (i) and (ii) through a real-time closed-loop co-simulation pipeline. In this work, MATRIX is configured to emulate the lunar surface environment, characterised by a gravitational acceleration of glunar ≈ 1.62 m /s2 and irreg-ular, cratered regolith terrain. The actual MATRIX platform is shown in Fig. 1. 
+
+Low-Gravity Simulation Subsystem: The Low-Gravity Simulation Subsystem offloads the robot’s weight to the lunar gravity level using an overhead pulley-and-counterweight mechanism. A pair of motorised hoists mounted on a ceiling crane rail are connected to the robot’s torso harness through a 2:1 mechanical-advantage pulley block. A static counter-weight of mass mcw is attached to the opposite end of the cable; the pulley doubles the effective lifting force, so the total upward force is 2 mcw gearth . The counterweight mass is therefore set to mcw = 512 m, which yields an offload force of 56 m g earth and reduces the robot’s effective weight to 16 m g earth = m g lunar . The suspension point is spatially fixed; translational locomotion is provided entirely by the treadmill. 
+
+Terrain Emulation and Digital Twin Control: The 
+
+Terrain and Motion Emulation Subsystem and the Digital Twin and Control System operate as a tightly coupled closed-loop pair, as depicted in Fig. 4. The Stewart platform is com-manded to tilt in roll ( ϕ) and pitch ( θ) while the remaining four degrees of freedom are held at their neutral positions, and the integrated treadmill belt runs at a speed matching the robot’s forward velocity so that the robot locomote walk continuously within the finite laboratory workspace. These two commands are generated in real time by the UE digital twin: at each simulation tick, four vertical ray-casts are fired downward from the front (F), back (B), left (L), and right (R) positions of the robot’s platform footprint, each intersecting the terrain mesh collider and returning a ground-contact height hF, h B, h L, h R. A plane fitted to these four points yields unit normal n = ( nx, n y , n z )⊤. Adopting an extrinsic X-Y rotation convention, the platform tilt angles Fig. 4. The MATRIX hardware-in-the-loop simulation platform. Left – Physical World: the Low-Gravity Simulation Subsystem uses an overhead 2:1 pulley block with a counterweight ( mcw = 512 mrobot ) to reduce the robot’s effective weight to lunar gravity; the Terrain and Motion Emulation Subsystem        
+
+> comprises a 6-DoF Stewart platform and an integrated treadmill controlled by the Stewart Platform Controller and Treadmill Controller respectively. Right
+> – Digital Twin: the Digital Twin and Control Subsystem runs in Unreal Engine; four ray-casts query the Landscape Mesh Collider to obtain raycast heights, from which tilt angles (ϕ, θ )are computed and sent as a Tilt Command to the Stewart Platform Controller, while the virtual robot avatar’s moving speed is sent as a Speed Command vto the Treadmill Controller.
+
+are obtained as 
+
+ϕ = atan2( ny , n z ),θ = atan2  −nx,
+
+q
+
+n2 
+
+> y
+
++ n2
+
+> z
+
+, (8) where ϕ (roll) corresponds to a rotation about the forward axis x and θ (pitch) about the lateral axis y. The resulting 
+
+(ϕ, θ ) is forwarded to the motion platform controller, while the robot’s virtual forward velocity is sent simultaneously to the treadmill controller. 
+
+Digital Twin Terrain Integration in Unreal Engine: 
+
+To construct realistic extra-terrestrial test scenarios, a lunar environment is developed in Unreal Engine 5.6.1 using the 
+
+Brushify – Moon [22] asset package. This package provides high-fidelity terrain meshes including irregular regolith sur-faces, scattered rocks and pebbles, and large-scale crater formations. Representative lunar scenes considered in this work are illustrated in Fig. 5. The terrain distribution and geometric difficulty of the imported lunar level are systematically modified to align with the terrain curriculum described in Section II-D. Specifically, slope inclination, surface rough-ness amplitude, and crater curvature are adjusted to ensure consistency between the simulation training environments and the physical test scenarios. Using the plane-fitting and normal-vector-based tilt com-putation defined in (8), the terrain geometry of the Unreal Engine digital twin is mapped in real time to the Terrain and Motion Emulation Subsystem . This mapping enables approximate reproduction of the virtual lunar terrain on the physical motion platform, thereby achieving continuous hardware-in-the-loop terrain emulation. IV. EXPERIMENT RESULTS 
+
+A. Implementation Details 
+
+The proposed jumping policy is trained in the Isaac Gym simulation environment using the Unitree A1 quadruped robot. Training is conducted with 4096 parallel simulation environments to accelerate data collection. Each training run consists of 6000 episodes. The policy is optimized using Proximal Policy Optimization (PPO) with an asymmetric actor–critic architecture. The actor receives only propriocep-tive observations while the critic has access to privileged information available only in simulation. The proposed method introduces a dual-horizon represen-tation that encodes motion dynamics at different temporal scales. The short-horizon encoder adopts a multilayer percep-tron with layer dimensions [270,128,64,17], while the long-horizon encoder uses a similar architecture with dimensions [270,128,64,19]. The latent outputs of the two encoders are concatenated and provided to the policy network for action generation. 
+
+B. Sim-to-Real Gap Modeling for Suspension-Based Gravity Offloading 
+
+The pulley-counterweight mechanism used in our hard-ware experiments introduces dynamics discrepancies relative (a)  (b) 
+
+(c)  (d) Fig. 5. Representative lunar terrains configured in Unreal Engine. (a) relatively flat mare plains characterized by low surface roughness; (b) irreg-ular uneven ground with multi-scale surface perturbations; (c) undulating hilly terrain with moderate inclination; and (d) crater-like depressions with smooth radial curvature. 
+
+to ideal lunar gravity. Pulley friction, cable elasticity, and counterweight inertia cause tension fluctuations; lateral robot motion tilts the cable and produces horizontal disturbance forces; and rapid takeoff or landing can momentarily slacken the cable, altering the effective gravity. A tension sensor installed on the suspension cable records fluctuations of approximately 0–1.2 kg equivalent force for a 12.5 kg robot, representing a notable fraction of the target lunar-gravity load. To mitigate the sim-to-real gap caused by the suspension system, two simulation adaptations are introduced. 
+
+Gravity Domain Randomization: Instead of training the policy under a fixed lunar gravity value, the gravitational acceleration is randomized at the beginning of each episode, where g ∼ U (gmin , g max ). This randomization models varia-tions in effective gravity caused by rope tension fluctuations and mechanical imperfections of the suspension system. 
+
+Phase-Triggered Disturbance: Transient impulse distur-bances are injected during takeoff and landing phases. Slack events in the suspension system mainly occur near these transitions. To emulate this phenomenon, short downward force impulses are applied when the robot enters the takeoff or landing phases. These phase transitions are detected using the jump phase indicators defined in (5). The disturbances simulate sudden changes in effective gravity caused by cable slack. 
+
+C. Ablation Studies in Simulation 
+
+We conduct ablation studies in simulation to evaluate the effectiveness of the proposed Dual-Horizon Hybrid Internal Model and the Phase-Adaptive Gated Reward Design. The compared settings are as follows:  
+
+> •
+
+Dual-Horizon (Ours) : The complete method with the Dual-Horizon Hybrid Internal Model and the Phase-Adaptive Gated Reward Design.  
+
+> •
+
+Short-only : A single short-horizon encoder is used to estimate ˆvx, ˆvy , ˆvz , and ˆh from the short temporal window only.  
+
+> •
+
+Long-only : A single long-horizon encoder is used to estimate ˆvx, ˆvy , ˆvz , and ˆh from the long temporal window only. 0.8           
+
+> 0.6
+> 0.4
+> 0.2
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> vz (m/s)
+> (a) Vertical Velocity Estimation
+> Ground Truth
+> Dual-Horizon (Ours)
+> Short-only
+> Long-only
+> 0.0 0.2 0.4 0.6 0.8 1.0 1.2 1.4 1.6
+> Time (s)
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> Height  h (m)
+> (b) CoM Height Estimation
+> Ground Truth
+> Dual-Horizon (Ours)
+> Short-only
+> Long-only
+> Fig. 6. Comparison of state estimation across different temporal modeling strategies during a representative jump cycle.
+> •
+
+w/o Phase Reward : The proposed Dual-Horizon Hy-brid Internal Model is retained, while the Phase-Adaptive Gated Reward Design is removed and replaced by a non-phase-specific reward formulation. To quantitatively evaluate the effectiveness of the proposed Dual-Horizon Hybrid Internal Model and the Phase-Adaptive Gated Reward Design, we consider two categories of metrics: state estimation accuracy and jumping control performance. 
+
+State Estimation Metrics: The first category measures the accuracy of the internal state estimations produced by the temporal encoders. Specifically, we compute the mean squared error (MSE) between the estimated states and the ground-truth simulator states for vertical velocity, horizon-tal velocity, and center-of-mass (CoM) height, denoted as 
+
+MSE vz , MSE vx , MSE vy , and MSE h, respectively. These metrics evaluate how well different temporal modeling strate-gies capture the underlying motion dynamics. In particular, 
+
+MSE vz reflects the accuracy of vertical dynamic estimation during takeoff and landing transitions, while MSE h evaluates the ability to capture the long-term evolution of CoM height over the jump cycle. 
+
+Jumping Performance Metrics: The second category evaluates the locomotion performance of the learned policies. We measure the survival time , defined as the duration before the robot loses balance or falls during continuous jumping. We also compute the landing success rate , defined as the percentage of landings in which the robot reaches ground contact while maintaining near-level body orientation. In this work, a landing is considered successful if the body roll and pitch angles remain within a small tolerance around the upright configuration at touchdown. Therefore, the landing success rate reflects the quality of touchdown control, while the survival time measures long-horizon stability across consecutive jumps. In addition, we measure the peak height TABLE I ABLATION STUDY IN SIMULATION .Method vz MSE vx MSE vy MSE h MSE Survival (s) Landing SR (%) Height Err. (m) Short-only 0.041 0.013 0.013 0.028 13.6 71.2 0.054 Long-only 0.067 0.012 0.011 0.014 14.8 74.5 0.041 w/o Phase Reward 0.036 0.014 0.013 0.016 9.7 58.4 0.073        
+
+> Ours 0.031 0.010 0.009 0.012 18.9 86.7 0.026
+
+tracking error , which quantifies the deviation between the achieved maximum CoM height and the commanded jump height. These metrics collectively reflect the stability, con-trollability, and robustness of the jumping behavior. 
+
+a) Effectiveness of Dual-Horizon Temporal Modeling: 
+
+We first analyze the estimation accuracy of different tem-poral modeling strategies. Fig. 6 (a) compares the estimated vertical velocity ˆvz with the ground-truth signal during a representative jump cycle. The Short-only and Dual-Horizon models closely follow the rapid transitions of the vertical velocity at takeoff and landing, while the Long-only model exhibits noticeable delay and smoothing effects. The Short-only and Dual-Horizon models closely follow the rapid transitions of the vertical velocity at takeoff and landing, while the Long-only model exhibits noticeably degraded predictions. This result indicates that short temporal histories are more suitable for capturing fast vertical dynamics. Fig. 6 (b) shows the estimation of the center-of-mass height. In contrast to vertical velocity, the Long-only model provides a more accurate estimate of the height evolution across the jump cycle, while the Short-only model exhibits larger fluctuations due to the limited temporal context. By combining both time scales, the Dual-Horizon model achieves the most accurate estimation for both vertical dy-namics and long-term motion trends. 
+
+b) Quantitative Comparison: Table I presents the quan-titative comparison of all methods. The Dual-Horizon model achieves the lowest estimation errors across all state vari-ables, confirming that multi-timescale temporal modeling improves internal state inference under prolonged aerial phases. In addition, the proposed method achieves the longest survival time and the highest landing success rate, indicating more stable continuous jumping behavior. 
+
+c) Effectiveness of Phase-Adaptive Reward Design: 
+
+Removing the phase-adaptive reward leads to significant performance degradation. Although the state estimation ac-curacy remains comparable, the policy without phase-specific rewards exhibits unstable takeoff impulses and poorly con-trolled touchdown behaviors. As shown in Table I, the w/o Phase Reward setting results in shorter survival time, lower landing success rate, and larger height tracking error. These results demonstrate that phase-dependent reward regulation is essential for learning stable jumping behaviors under low-gravity conditions. 
+
+D. Real-World Experiments 
+
+We validate the proposed controller on a Unitree A1 quadruped robot using the MATRIX suspension testbed. We compare our method with several ablation settings in                                   
+
+> TABLE II AVERAGE SURVIVAL TIME (S)UNDER DIFFERENT TREADMILL SPEEDS .Method 0.3 m/s 0.5 m/s 0.7 m/s None 8.4 5.2 2.1 DR 12.7 9.3 5.4 PD 11.5 8.7 4.6
+> Ours 20.0 18.3 15.1
+> TABLE III AVERAGE SURVIVAL TIME (S)OF THE PROPOSED METHOD UNDER DIFFERENT LUNAR TERRAIN SCENARIOS AND TREADMILL SPEEDS .Terrain 0.3 m/s 0.5 m/s 0.7 m/s Mare Plains 20.0 18.3 15.1 Uneven Ground 18.6 15.9 11.8 Hilly Terrain 17.4 14.2 10.1 Crater Terrain 16.8 13.5 9.4
+
+real-world experiments. The compared configurations are as follows:  
+
+> •
+
+Ours : The proposed method with both Gravity Domain Randomization and Phase-Triggered Disturbance mod-eling.  
+
+> •
+
+DR : The policy trained with Gravity Domain Ran-domization only, without Phase-Triggered Disturbance modeling.  
+
+> •
+
+PD : The policy trained with Phase-Triggered Distur-bance modeling only, without Gravity Domain Random-ization.  
+
+> •
+
+None : The baseline policy trained without Gravity Domain Randomization and without Phase-Triggered Disturbance modeling. Experiments are conducted on a treadmill operating at three speeds: 0.3, 0.5, and 0.7 m/s. The validation terrain is selected from the Unreal Engine digital twin environment, where a relatively flat mare plains region is used to represent a typical lunar terrain for testing. The robot performs contin-uous pronking jumps for a maximum duration of 20 s. Each experimental setting is repeated 10 times and the averaged results are reported to evaluate robustness. Table II shows the average survival time of the robot before losing balance or falling under different treadmill speeds. Experimental results show that introducing either Gravity Domain Randomization or Phase-Triggered Disturbance modeling improves the ro-bustness of the system to some extent. The proposed method, which combines both DR and PD modeling, achieves the best performance under all treadmill speeds. The proposed method is further validated on the four representative lunar terrain scenarios shown in Fig. 5, in-cluding relatively flat mare plains, irregular uneven ground, undulating hilly terrain, and crater-like depressions. For each terrain, experiments are conducted at treadmill speeds of 0.3, 0.5, and 0.7 m/s, and the survival time before the robot loses balance or falls is recorded. The results in Table III indicate that the proposed controller maintains relatively stable continuous jumping across all four terrain scenarios at the low speed of 0.3 m/s. As the treadmill speed increases, the performance gradually degrades. The worst performance is observed on the crater terrain, which is likely caused by the exponential slope geometry that increases the difficulty of foothold stabilization and makes legged locomotion more prone to slipping. V. CONCLUSIONS This work presents a Dual-Horizon Hybrid Internal Model designed to enable stable and continuous quadrupedal jump-ing under low-gravity conditions. The framework introduces two temporal encoders that operate at different time scales, allowing the model to capture both rapid vertical dynamics and long-term motion trends across a complete jump cycle. This multi-timescale representation improves the ability of the control policy to handle the prolonged aerial phases that arise under lunar gravity. To evaluate the proposed approach on physical hardware, the MATRIX platform is developed as a hardware-in-the-loop experimental system. Experimental results demonstrate that the proposed method enables stable and continuous quadrupedal jumping across irregular lunar-like terrain under lunar-gravity emulation. Despite these encouraging results, several limitations re-main. Although the MATRIX platform is able to emulate reduced gravity while reproducing lunar terrain geometry, the suspension cable constrains robot motion within a limited spatial region. Furthermore, during highly dynamic move-ments, variations in cable tension and direction introduce disturbances that cannot be fully eliminated. Although partial compensation is incorporated in simulation, these distur-bances still influence the outcomes of physical experiments. In addition, the current platform reproduces only geometric variations of terrain and does not model the contact mechan-ics between the robot and lunar regolith. Accurate modeling of robot–regolith interaction dynamics remains an important direction for future research in planetary locomotion. REFERENCES [1] P. Arm, G. Waibel, J. Preisig, T. Tuna, R. Zhou, V. Bickel, G. Ligeza, T. Miki, F. Kehl, H. Kolvenbach, et al. , “Scientific exploration of challenging planetary analog environments with a team of legged robots,” Science robotics , vol. 8, no. 80, p. eade9548, 2023. [2] G. Valsecchi, C. Weibel, H. Kolvenbach, and M. Hutter, “Towards legged locomotion on steep planetary terrain,” in 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) .IEEE, 2023, pp. 786–792. [3] H. Sang and S. Wang, “Lunar leap robot: 3m architecture–enhanced deep reinforcement learning method for quadruped robot jumping in low-gravity environment,” Journal of Aerospace Engineering , 2024. [4] H. Kolvenbach, D. Bellicoso, F. Jenelten, L. Wellhausen, and M. Hut-ter, “Efficient gait selection for quadrupedal robots on the moon and mars,” in 14th International Symposium on Artificial Intelligence, Robotics and Automation in Space (i-SAIRAS 2018) . ESA Conference Bureau, 2018. [5] H. Kolvenbach, E. Hampp, P. Barton, R. Zenkl, and M. Hutter, “Towards jumping locomotion for quadruped robots on the moon,” 
+
+2019 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 5459–5466, 2019. [6] N. Rudin, H. Kolvenbach, V. Tsounis, and M. Hutter, “Cat-like jumping and landing of legged robots in low gravity using deep reinforcement learning,” IEEE Transactions on Robotics , vol. 38, pp. 317–328, 2021. [7] J. Qi, H. Gao, H. Su, L. Han, B. Su, M. Huo, H. Yu, and Z. Deng, “Re-inforcement learning-based stable jump control method for asteroid-exploration quadruped robots,” Aerospace Science and Technology ,vol. 142, p. 108689, 2023. [8] J. Qi, H. Gao, H. Su, M. Huo, H. Yu, and Z. Deng, “Reinforcement learning and sim-to-real transfer of reorientation and landing control for quadruped robots on asteroids,” IEEE Transactions on Industrial Electronics , vol. 71, pp. 14 392–14 400, 2024. [9] Q. Nguyen, M. J. Powell, B. Katz, J. Di Carlo, and S. Kim, “Optimized jumping on the mit cheetah 3 robot,” in 2019 International Conference on Robotics and Automation (ICRA) . IEEE, 2019, pp. 7448–7454. [10] H.-W. Park, P. M. Wensing, and S. Kim, “Jumping over obstacles with mit cheetah 2,” Robotics and Autonomous Systems , vol. 136, p. 103703, 2021. [11] Z. Song, L. Yue, G. Sun, Y. Ling, H. Wei, L. Gui, and Y. hui Liu, “An optimal motion planning framework for quadruped jumping,” 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 11 366–11 373, 2022. [12] Z. Zhuang, Z. Fu, J. Wang, C. G. Atkeson, S. Schwertfeger, C. Finn, and H. Zhao, “Robot parkour learning,” in Conference on Robot Learning , 2023. [13] X. Cheng, K. Shi, A. Agarwal, and D. Pathak, “Extreme parkour with legged robots,” 2024 IEEE International Conference on Robotics and Automation (ICRA) , pp. 11 443–11 450, 2023. [14] C. Zhang, J. Sheng, T. Li, H. Zhang, C. Zhou, Q. Zhu, R. Zhao, Y. Zhang, and L. Han, “Learning highly dynamic behaviors for quadrupedal robots,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 9183–9189. [15] Y. Yang, G. Shi, X. Meng, W. Yu, T. Zhang, J. Tan, and B. Boots, “Cajun: Continuous adaptive jumping using a learned centroidal controller,” in Conference on Robot Learning . PMLR, 2023, pp. 2791–2806. [16] V. Atanassov, J. Ding, J. Kober, I. Havoutis, and C. Della Santina, “Curriculum-based reinforcement learning for quadrupedal jumping: A reference-free design,” IEEE Robotics & Automation Magazine ,vol. 32, no. 2, pp. 35–48, 2024. [17] Y. Han, J. Zhang, Z. Luo, Y. Dong, J. Lin, L. Zhao, S. Dong, and P.-C. Lu, “Omninet: Omnidirectional jumping neural network with height-awareness for quadrupedal robots,” IEEE Robotics and Automation Letters , vol. 10, pp. 7915–7922, 2025. [18] J. Long, Z. Wang, Q. Li, L. Cao, J. Gao, and J. Pang, “Hybrid internal model: Learning agile legged locomotion with simulated robot response,” in The Twelfth International Conference on Learning Representations , 2024. [19] I. M. A. Nahrendra, B. Yu, and H. Myung, “Dreamwaq: Learning robust quadrupedal locomotion with implicit terrain imagination via deep reinforcement learning,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2023, pp. 5078–5084. [20] A. Spiridonov, F. Buehler, M. Berclaz, V. Schelbert, J. Geurts, E. Kras-nova, E. Steinke, J. Toma, J. Wuethrich, R. Polat, W. Zimmermann, P. Arm, N. Rudin, H. Kolvenbach, and M. Hutter, “Spacehopper: A small-scale legged robot for exploring low-gravity celestial bodies,” 
+
+2024 IEEE International Conference on Robotics and Automation (ICRA) , pp. 3464–3470, 2024. [21] P. Arm, O. Fischer, J. Church, A. Fuhrer, H. Kolvenbach, and M. Hutter, “Efficient learning-based control of a legged robot in lunar gravity,” ArXiv , vol. abs/2509.10128, 2025. [22] J. Garth, “Brushify - moon pack,” 2020. [Online]. Available: https: //www.fab.com/listings/ad04cb3a-df58-471d-9471-1ee5f0c0277e

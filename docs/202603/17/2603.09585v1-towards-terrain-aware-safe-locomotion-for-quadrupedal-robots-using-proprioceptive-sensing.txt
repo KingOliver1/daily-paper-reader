@@ -1,0 +1,470 @@
+Title: Towards Terrain-Aware Safe Locomotion for Quadrupedal Robots Using Proprioceptive Sensing
+
+URL Source: https://arxiv.org/pdf/2603.09585v1
+
+Published Time: Wed, 11 Mar 2026 01:01:55 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Towards Terrain-Aware Safe Locomotion for Quadrupedal Robots Using Proprioceptive Sensing 
+
+Peiyu Yang +, Jiatao Ding +,⋆ , Wei Pan, Claudio Semini, and Cosimo Della Santina 
+
+Abstract — Achieving safe quadrupedal locomotion in real-world environments has attracted much attention in recent years. When walking over uneven terrain, achieving reliable estimation and realising safety-critical control based on the obtained information is still an open question. To address this challenge, especially for low-cost robots equipped solely with proprioceptive sensors (e.g., IMUs, joint encoders, and contact force sensors), this work first presents an estimation framework that generates a 2.5-D terrain map and extracts support plane parameters, which are then integrated into contact and state estimation. Then, we integrate this estimation framework into a safety-critical control pipeline by formulating control barrier functions that provide rigorous safety guarantees. Experiments demonstrate that the proposed terrain estimation method pro-vides smooth terrain representations. Moreover, the coupled estimation framework of terrain, state, and contact reduces the mean absolute error of base position estimation by 64.8%, decreases the estimation variance by 47.2%, and improves the robustness of contact estimation compared to a decoupled framework. The terrain-informed CBFs integrate historical terrain information and current proprioceptive measurements to ensure global safety by keeping the robot out of hazardous areas and local safety by preventing body-terrain collision, relying solely on proprioceptive sensing. 
+
+I. INTRODUCTION Quadrupedal robots have garnered significant attention in robotics research due to their high mobility and adaptability across unstructured environments [1]–[4]. However, achiev-ing safe locomotion—whether global safety by avoiding hazardous regions or local safety that prevents body-terrain collision—over uneven terrain remains a major challenge, particularly in demanding applications such as exploration and rescue in hazardous areas. To this end, terrain-aware esti-mation and safety-critical control have emerged as promising research directions [5], [6]. In terms of terrain-aware estimation, the 2.5-dimensional (2.5-D) elevation map has been widely adopted for terrain representation due to its structured grid form [7], [8]. In existing work, the construction of 2.5-D maps with mobile robots typically relies on LiDARs or depth cameras. Some approaches, such as [9] and [10], fuse multiple scans from exteroceptive sensors to generate a complete elevation map.  
+
+> Peiyu Yang and Claudio Semini are with the Dynamic Legged Sys-tems, Istituto Italiano di Tecnologia (IIT), Italy (e-mail: peiyu.yang@iit.it; claudio.semini@iit.it). Jiatao Ding is with the Department of Industrial Engineering, University of Trento, Italy (e-mail: jiatao.ding@unitn.it). Wei Pan is with the Department of Computer Science, University of Manchester, UK (e-mail: wei.pan@manchester.ac.uk). Cosimo Della Santina is with Cognitive Robotics, Delft University of Technology, The Netherlands, and also with the Institute of Robotics and Mechatronics, German Aerospace Center (DLR), Germany (e-mail: c.dellasantina@tudelft.nl). Peiyu Yang and Jiatao Ding contributed equally. Jiatao Ding is the corresponding author.
+> Fig. 1. An example of the scenario we deal with in this work. A quadruped is capable of walking on uneven terrain without any prior knowledge of the environment or any exteroceptive sensors, using the proposed method.
+
+[11] and [12] integrate the robots’ motion poses with exte-roceptive measurements to build local terrain maps that are dynamically updated during locomotion. By combining pro-prioceptive and exteroceptive sensing modalities, the work in [13] proposed a novel probabilistic mapping method that integrates robot motion and range sensors, yielding a real-time, reliable estimation of terrain contours and confidence bounds. Additionally, based on terrain similarity, the work in [14] proposed an adaptive fusion method to estimate the local map. However, the aforementioned methods rely on high-precision range sensors, which not only increase system cost and payload, but are also susceptible to occlusion, dust, and illumination variations, thereby limiting the stability and reliability under degraded perceptual conditions [15], [16]. As a result, proprioception-based terrain estimation has attracted increasing attention as a complementary solution. By leveraging contact sensing and state estimation, these methods directly infer terrain information even when ex-teroceptive perception is limited or unavailable. The local slope approximation method [17]–[19] uses four contact points to calculate plane parameters, but only captures local planes and lacks global terrain mapping. Yang et al. [20] proposed a 2.5-D mapping method using historical foothold positions to retain terrain features, but the required smoothing filter can blur terrain edges. Several studies have examined terrain information in state [21] and contact [22] estimation, but they either assumed a stochastic terrain model or used pre-known ground angles. Consequently, terrain estimation remains decoupled from the state and contact estimation process, limiting the integration of cross-domain information. To address these limitations, we propose a novel terrain estimation method based on probabilistic fusion that outputs 
+
+> arXiv:2603.09585v1 [cs.RO] 10 Mar 2026
+
+both a smooth 2.5-D terrain map and plane parameters without post-processing. Furthermore, we realize coupled terrain, contact, and state estimation. Regarding motion control, control barrier functions (CBFs) have been widely adopted as an effective approach for achieving safe locomotion behaviors [23]–[25]. In con-trast to learning-based safety control methods [26], [27], CBFs offer rigorous safety guarantees [28]. By incorporating affine inequality constraints into a quadratic programming (QP) framework, the CBF-based approaches guarantee that the robot’s state is confined within a forward-invariant safe set. Following this idea, [29] combined CBFs with model predictive control (MPC) for safe foot placement and stabil-ity, while [30] and [31] addressed safe navigation in complex environments. Despite these advancements, existing studies remain dependent on exteroceptive sensors. In addition, safety is typically enforced at the task level, such as foot placement [29], climbing stairs [32], and navigation [30], ignoring the local safety of body orientation that prevents collision and maintains stability. From this perspective, we aim to take a step toward solving the above limitations by introducing a CBF-MPC framework that ensures both global and local safety using information estimated by the proposed terrain estimation module. To summarize, the main contributions of this work are:  
+
+> •
+
+A terrain estimation approach based on probabilistic fusion that generates a 2.5-D map and plane parameters, together with a coupled terrain–contact–state estimation framework based solely on proprioceptive sensing.  
+
+> •
+
+A CBF-MPC framework that leverages the estimated terrain information to provide guarantees for both global navigation safety and local body orientation safety.  
+
+> •
+
+Experimental validation of the terrain estimation frame-work on the Unitree Go1 platform (see Fig. 1), together with extensive simulation studies validating the coupled estimation and the CBF-MPC framework, demonstrat-ing safe locomotion over uneven terrain. The remainder of this paper is organized as follows: Sec-tion II provides an overview of the complete system. Section III details the estimation algorithm. Section IV introduces the CBF-MPC framework. Section V presents the experimental results. Section VI discusses the limitations and future work, and Section VII concludes the paper. II. O VERVIEW OF THE PROPOSED METHODOLOGY 
+
+As depicted in Fig. 2, the proposed pipeline follows a hierarchical architecture, integrating high-level control, mid-level control, low-level PD control, and estimation, to achieve robust and safe locomotion for quadrupedal robots over uneven terrain. This work focuses on the estimation module (blue block) and the CBF-MPC module (yellow block). In the estimation module, we establish a coupled esti-mation system that uses only IMU data, encoder data, and proportional values from force sensors. This system outputs the robot state XXX, contact probabilities P(c)i, a 2.5-D map, and plane parameters K1, K2, K3, and D that conform to the plane equation K1x + K2y + K3z + D = 0.  
+
+> Fig. 2. The block diagram of the proposed control system. The blue shading zone shows the terrain-aware estimation system, and the yellow shading zone presents the CBF-MPC. In the figure, KF stands for the Kalman filter.
+
+In the CBF-MPC module, we use the plane parameters and the hazardous point SSS to establish global and local CBFs constraints. 
+
+Notations: In the following text, matrices and vectors are denoted using bold symbols (e.g., A for matrices and vvv for vectors). The notation (·)[ k] refers to the k-th element of a vector or a matrix. Scalars are represented using regular italic symbols (e.g., a). Subscripts and superscripts are used to indicate specific indices or contexts, where necessary. In pseudocode, parameters are denoted using italic symbols (e.g., param ), while functions are represented using regular text (e.g., FunctionName). III. E STIMATION 
+
+This section details the proprioceptive-based estimation module, including terrain estimation, contact estimation, and state estimation. 
+
+A. Terrain estimation 
+
+The proposed terrain estimation method relies solely on proprioceptive measurements. Unlike the local slope approx-imation [17] and foothold history filtering [20], our algorithm obtains both a 2.5-D map and fitted plane parameters by probabilistically fusing the contact support areas during locomotion. As shown in Algorithm 1, the procedure can be divided into three main phases: plane parameter computation, terrain map update, and local support plane computation. The inputs to this algorithm are: 1) Terrain , representing the 2.5-D map; 2) Pcontact , which is the list of contact probability; and 3) P f oot , denoting the list of foot contact positions. In the first phase, for each leg, three points are selected: the position of the leg itself and those of its two neighboring legs, forming a triangle. The plane parameters of each triangle 
+
+locPlane is calculated via the ComputePlane () function: 
+
+K1
+
+K2
+
+K3
+
+ =
+
+ (y2 − y1)( z3 − z1) − (z2 − z1)( y3 − y1)(z2 − z1)( x3 − x1) − (x2 − x1)( z3 − z1)(x2 − x1)( y3 − y1) − (y2 − y1)( x3 − x1)
+
+ ,
+
+D = −(K1x1 + K2y1 + K3z1).
+
+(1) In addition, the confidence value for each plane, denoted as probPlane , is computed as the mean contact probability of the corresponding foot positions (extracted from the list 
+
+Pcontact ), using the Mean () function. In the second phase, points in the terrain map 1 are updated following the rules: 1) For points whose projections on the ground are not covered by the projections of any triangle 2,the height information remains unchanged, 2) If a point’s projection on the ground lies within at least one triangle, its height is updated via the Update () function, where the weighted position is computed considering the corresponding plane confidences. In the final phase, the plane parameters are determined using the principal component analysis (PCA). Assuming there are N points from the 2.5-D map projected beneath the robot’s body, these N points are combined into the point set Points . Then the parameters are calculated by 
+
+X =
+
+
+
+x1 − ¯x y1 − ¯y z1 − ¯z
+
+... ... ...
+
+xN − ¯x yN − ¯y zN − ¯z
+
+ ,
+
+C = 1 
+
+> N−1
+
+XT X,
+
+K1, K2, K3
+
+ = vvvmin ,
+
+D = −(K1 ¯x + K2 ¯y + K3 ¯z),
+
+(2) where [xi, yi, zi] is the position of i-th point in Points , [ ¯x, ¯y, ¯z] is the average position, X is the decentralized position matrix and C is the corresponding covariance matrix. vvvmin is the eigenvector corresponding to the smallest eigenvalue of C.
+
+B. Contact estimation 
+
+In quadrupedal locomotion, we define pseudo-contact as the situation in which physical foot-ground contact occurs, but the measured force falls below the detection threshold of force-based contact judgment. Such missed detections are detrimental to terrain and state estimation. To address this issue and to enhance the contact continuity over complex terrain, we propose a contact estimation method that fuses foot force measurements with estimated terrain information. For each leg, the contact probability is formulated as 
+
+P(c) = kpos P(c)pos + kforce P(c)force , (3) where k[·] is the confidence weights of [·], and P(c)[·] is the probability of contact from [·]. kpos and kforce are normalized such that kpos + kforce =1. 
+
+P(c)pos is designed as an inverse sigmoid function, assign-ing higher probabilities to smaller distances, and vice versa. Specifically, 
+
+P(c)pos = 1 − δ
+
+−σpos 
+
+ K1x + K2y + K3z
+
+q
+
+K21 + K22 + K23
+
+− Pmid 
+
+ , (4) 
+
+> 1The map can be represented at different resolutions; see Section V.
+> 2In the first phase, four triangles are constructed, each associated with one leg.
+
+Algorithm 1: Terrain Estimation and Plane Update 
+
+Input: Terrain , Pcontact , P f oot 
+
+Output: Terrain , Plane 
+
+for legIdx ← 0 to 3 do 
+
+Points ← NeighborPoints( legIdx , P f oot ); 
+
+locPlane (legIdx ) ← ComputePlane( Points ); 
+
+probPlane (legIdx ) ← Mean( Pcontact .at( Points )); 
+
+for Px ∈ Terrain.x do for Py ∈ Terrain.y do 
+
+Pos ← (Px , Py ); 
+
+NumUnderPlanes ← 0; 
+
+for Idx ← 0 to 3 do if IsUnderPlane (Pos,locPlane(Idx)) then 
+
+NumUnderPlanes ++ 
+
+if NumUnderPlanes = 0 then 
+
+Terrain.at (Pos ) ← Terrain.at (Pos ); 
+
+else 
+
+Terrain.at (Pos ) ← Update( locPlane ,
+
+probPlane ); 
+
+Plane ← pointCloud2Plane( terrainEst )where σpos is a scaling factor that controls the sensitivity of the sigmoid function to positional changes. K1, K2, and K3
+
+are the estimated plane parameters. [x, y, z]T denotes the 3D leg position. Pmid is the midpoint of the sigmoid function. 
+
+δ is a sigmoid activation function that maps input values to the range [0, 1] and is defined as 
+
+δ (a) = 11 + e−a . (5) 
+
+P(c)force is designed as a sigmoid function, assigning higher probabilities to larger forces, and vice versa: 
+
+P(c)force = δ (−σforce (F − Fmid )) , (6) where σforce is the force scaling factor and Fmid is the midpoint for the force sigmoid function, F is the measured contact force 3.
+
+C. State estimation 1) State definition: For state estimation, we define the state variables as 
+
+XXX = pppcom , vvvcom , pppi
+
+T , (7) where pppcom represents the robot body position, vvvcom repre-sents the velocity of the body, and pppi represent the positions of the i-th foot. All states are represented in the world coordinate system. 
+
+> 3Note that we do not need to measure the directional contact force with a high-precision sensor. Instead, the proportional values from low-cost force sensors are enough.
+
+The state dynamics are described by 
+
+
+
+˙pppcom = vvvcom ,
+
+˙vvvcom = aaacom + ggg,
+
+˙pppi = 0 ∀i ∈ contact ,
+
+˙pppi
+
+.
+
+= vvvcom − Ji ˙qqqi ∀i /∈ contact .
+
+(8) where, Ji is the Jacobian matrix of the i-th leg, and qqqi is the joint variable vector of the i-th leg. Furthermore, we define the observation vector as 
+
+ZZZ = pppcom − pppi vvv zzzT , (9) where pppcom − pppi represents the relative position of the body and the i-th foot, vvv represents the velocity vector of the feet in the body frame, and zzz represents the z-coordinate vector of the feet in the world frame. The observation equation is formulated as 
+
+
+
+pppcom − pppi = Ji · qqqi,
+
+vvvi = oRB
+
+
+
+(ωωωBOB )× · Bi ppp + dBi pppdt 
+
+
+
+,
+
+zi = ( 1 − P(c)i) · pppi[2] + P(c)i · zest i,
+
+zest i = ( −K1 · pppi[0] − K2 · pppi[1] + D) /K3,
+
+(10) where the parameters are defined as follows:  
+
+> •o
+
+RB is the rotation matrix from the body frame to the world frame.  
+
+> •
+
+ωωωBOB is the angular velocity expressed in the robot’s body frame.  
+
+> •
+
+(·)× represents the skew-symmetric operator.  
+
+> •
+
+vvvi is the velocity vector of the i-th foot.   
+
+> •Bi
+
+ppp is the position vector of the i-th foot expressed in the body frame.  
+
+> •
+
+zi is the vertical position of the i-th foot.  
+
+> •
+
+zest i is the esitmated vertical position of the i-th foot.  
+
+> •
+
+P(c)i is the contact probability of the i-th foot.  
+
+> •
+
+K1, K2, K3, D are the plane parameters obtained from the terrain estimation module. In contrast to [21], this estimation method updates the leg height components in the measurement vector using the estimated plane parameters and contact probabilities. 
+
+2) Kalman Filter (KF) formulation: The predicted error covariance is computed as 
+
+Pk− = AkPk−1AkT + Q, (11) where Q is the process noise covariance matrix. It is updated based on estimated contact, such that the foot-end velocity residuals of the swing leg are ignored. Ak is the discrete-time state transition matrix derived from (8). The estimated states are updated as 
+
+Kk = Pk−HT (HP k−HT + R)−1,
+
+¯Xk = ¯X− 
+
+> k
+
++ Kk
+
+ Zk − H ¯ X−
+
+> k
+
+ ,
+
+Pk = ( I − KkH)Pk−,
+
+(12) where R is the measurement noise covariance matrix, H is the observation matrix derived from (10), I is the identity matrix and Pk denotes the state covariance. Similar to the process covariance matrix, R is adjusted to only offer high confidence when the leg is in contact. IV. S AFETY GUARANTEES IN MID -LEVEL CONTROL 
+
+To provide rigorous safety guarantees, we design con-straints using CBFs. Specifically, by constraining the control input such that the state of the robot satisfies the inequality in (13), the state can be ensured to remain within the safe set defined as S = {xxx ∈ Rn | h(xxx) ≥ 0}.˙h(xxx) + α(h(xxx)) ≥ 0, (13) where α(·) is a class κ function. To ensure both global safety (Subsection. IV-A) and local safety (Subsection. IV-B), CBF-MPC is formulated as min 
+
+> {X[k],u[k]}
+> N−1
+
+# ∑
+
+> k=0
+
+ ∥X[k] − Xref [k]∥2 
+
+> Qw
+
++ ∥u[k]∥2
+
+> Rw
+
+ ,
+
+s.t. X[k + 1] = Ad X[k] + Bd u[k] + Cd ,
+
+X[0] = xxx0,
+
+WiRiui[k] ≤ 0, i = 1, . . . , 4,
+
+fmin ≤ (Riui[k]) z ≤ fmax , i = 1, . . . , 4,
+
+δi[k]ui[k] = 0, i = 1, . . . , 4,
+
+˙hglob (X[k]) + α1(hglob (X[k])) ≥ 0˙hlocal (X[k]) + α2(hlocal (X[k])) ≥ 0(14) where the parameters are defined as follows:  
+
+> •
+
+X ∈ R12 ×N , Xref ∈ R12 ×N , and u ∈ R12 ×N are the state sequence, the reference sequence, and the ground reac-tion force within the prediction horizon, respectively.  
+
+> •
+
+Qw is the state weighting matrix.  
+
+> •
+
+Rw is the control input weighting matrix.  
+
+> •
+
+Ad is the discrete-time state transition matrix.  
+
+> •
+
+Bd is the discrete-time control input matrix.  
+
+> •
+
+Cd is the gravity term.  
+
+> •
+
+xxx0 is the initial state.  
+
+> •
+
+Wi is the friction cone constraint matrix of leg i. 
+
+> •
+
+Ri is the rotation matrix mapping the ground reaction force of leg i to the plane frame.  
+
+> •
+
+fmin , fmax are the bounds on the ground reaction forces component along the plane normal direction.  
+
+> •
+
+δi is the binary contact decision variable at leg i. 
+
+> •
+
+hglob (·) is the global CBF-based constraint.  
+
+> •
+
+hlocal (·) is the local CBF-based constraint.  
+
+> •
+
+α1, α2 are class κ functions for corresponding con-straints. The details about the MPC formulation and solution can be found in [3]. Here, we focus on the CBF-based constraints. 
+
+A. Global safety 
+
+To achieve global safety, namely keep away from unsafe regions, we first identify potentially hazardous locations along the commanded motion direction using the 2.5-D map. Then, we define the CBF-based constraints. As illustrated in Fig. 3(a), along the commanded (Cmd) motion direction, we search the recorded 2.5-D map to iden-tify a potential hazardous point. Specifically, we determine the closest point SSS that satisfies the following conditions: the height difference between SSS and PPP, hdiff = |PPPz − SSSz|, exceeds Fig. 3. Global safety CBF design. (a) Side view. (b) Top view. The gray point cloud represents previously recorded terrain points during locomotion. The green dotted line denotes the critical safety boundary. θthr is the angle relative to the horizontal plane and represents the maximum traversable slope of the robot.  
+
+> Fig. 4. Constrained body rotation for local safety in side and front views.
+
+the predefined threshold hthr , and the horizontal distance l
+
+between SSS and the robot satisfies 
+
+lmin ≤ l ≤ lmax . (15) Here, lmin and lmax denote the minimum and maximum detection distances, which prevent overly close disturbances or distant terrain variations from being falsely identified as hazardous 4.Once the hazardous point SSS is identified, given the thresh-old slope angle θthr , SSS is further projected onto the current support plane to obtain the projected point SSS′.Then, the safe set is defined as the region on the robot’s side of the safety boundary (shown in Fig. 3(b)) after γ
+
+relaxation, mathematically expressed as: 
+
+S = PPPxy ∈ R2 | dddxy · (SSS′′′ 
+
+> xy
+
+− PPPxy ) ≥ γ , (16) where PPPxy , dddxy , and SSS′′′ 
+
+> xy
+
+denote the projections of PPP, ddd,and SSS′′′ onto the x-y plane, respectively. ddd is the direction vector marking the commanded walking direction, as shown in Fig. 3(a) and (b). Following the formulation in (13), the CBF-based con-straint of the above safe set is established as: 
+
+−dddxy · ˙PPPxy ≥ − αglob 
+
+ dddxy · SSS′′′ 
+
+> xy
+
+− dddxy · PPPxy − γ (17) where αglob is a positive constant. 
+
+B. Local safety 
+
+To guarantee local safety, we define the safe set for pitch and roll motions based on the estimated plane parameters, thereby adapting the body orientation to the terrain to mit-igate body-terrain collisions. As illustrated in Fig. 4. The                               
+
+> 4The point SSSdoes not exist if no point on the 2.5-D map meets this requirement, indicating that no hazardous area is detected. TABLE I LIST OF PARAMETERS USED IN SAFETY GUARANTEES
+> Parameter Value Parameter Value
+> hthr 0.5 m γ0.15 m
+> Lmax 1.2 m ∆φ10 ◦
+> Lmin 0.5 m ∆ψ10 ◦
+> θthr 60 ◦αglobal 1.5
+> αlocal 0.5TABLE II LIST OF PARAMETERS FOR CONTACT ESTIMATION .
+> Parameter Value Parameter Value
+> kpos 0.40 kforce 0.60
+> σpos 1.28 Pmid 0.01
+> σforce 0.78 Fmid 5.00
+
+safety set is expressed as: 
+
+Sφ = φ ∈ R | θpitch − ∆φ ≤ φ ≤ θpitch + ∆φ
+
+Sψ = {ψ ∈ R | θroll − ∆ψ ≤ ψ ≤ θroll + ∆ψ} (18) where θpitch and θroll are the estimated slope angles, ∆φ and 
+
+∆ψ are relaxation tolerances. Four independent CBF-based constraints are established as the upper and lower bounds of the safe set, following ˙φ ≥ − αlocal (φ − φmin )
+
+− ˙φ ≥ αlocal (φ − φmax )
+
+˙ψ ≥ − αlocal (ψ − ψmin )
+
+− ˙ψ ≥ αlocal (ψ − ψmax )
+
+, (19) where αlocal is a positive constant. The boundary values of the safe sets are defined as φmin = θpitch − ∆φ , φmax =
+
+θpitch + ∆φ , ψmin = θroll − ∆ψ, and ψmax = θroll + ∆ψ. The corresponding numerical parameter values are summarized in Table I. V. R ESULTS 
+
+This section presents experimental results. To validate the estimation module, four simulation experiments were con-ducted to evaluate terrain, contact, and state estimation sepa-rately. In addition, a real-world experiment was performed to assess terrain estimation. For safety guarantees, a simulation experiment was designed to evaluate the effectiveness of the CBF-based constraints. The parameters in Table I and Table II were determined through empirical tuning, with the selection process guided by estimation stability considera-tions and hardware constraints. All simulation experiments were conducted in Gazebo 11, while the real-world experi-ments were carried out in a physical environment consisting of slopes, flat planes, and steep cliffs. The Unitree Go1 robot was used as the experimental platform for all tests. The video of the experimental results is available at: [Link to Video]. 
+
+A. Terrain estimation performance 
+
+As shown in Fig. 5, we evaluated the terrain estimation performance in an environment with varying slopes. The proposed method was compared with two baselines: the point updating method from [20] and the local slope approximation method from [18] and [19]. In terms of 2.5-D map generation, as the map resolution increases, the point updating method in [20] results in a Fig. 5. The comparative experimental results of terrain estimation. For the 2.5-D map, we compare our method with the point updating method [20] when generating terrain maps with varying accuracy levels (low, medium, and high from left to right), corresponding to pixel lengths of 0.2m, 0.1m, and 0.05m, respectively. For the support plane, we compare our method with the local slope approximation strategy [19]. The experiments are implemented in an environment with slopes and a platform.  
+
+> Fig. 6. Terrain estimation on unstructured terrain. (a) Motion trajectory; (b) top view of the 2.5-D map; (c) oblique side view of the terrain; (d) oblique side view of the 2.5-D map. (b) and (d) share the same colorbar.
+
+noticeable trench-like gap between the point clouds updated by the left and right legs, whereas the proposed method consistently produces a smooth terrain reconstruction. Con-sequently, our approach eliminates the need for additional convolutional averaging filtering, ensuring a clearly delin-eated terrain representation. Regarding the estimation of the support plane, the proposed method achieves a consistent overall result compared with the local slope approximation [19]. Quantitative experiment indicates that the proposed method achieves mean angular errors of 0 .1399 ◦ and 0 .3320 ◦
+
+on the first and second slopes 5, respectively, with a platform height error of -0.1987 cm. In contrast, the local slope approximation method yields mean errors of 0 .1490 ◦ and 0.2271 ◦ on the two slopes, along with a platform height error of -0.1775 cm. Overall, the estimation errors of both methods remain at a low level, indicating accurate support plane estimation. Nevertheless, the proposed method further enables high-resolution 2.5-D map reconstruction, achieving unified terrain reconstruction and support plane estimation. In addition, a qualitative experiment was conducted on un-structured terrain. As shown in Fig. 6, the environment con-tains randomly generated irregular depressions and slopes. The robot traverses the environment along a closed-loop path. The estimated 2.5-D map effectively reflects the geo- 
+
+> 5The errors on the slopes are defined as the angle between the normal vectors of the predefined terrain model and the estimated plane.
+> Fig. 7. Hardware experiments for terrain estimation when walking across a slope (top panel) and a flat ground (bottom panel).
+
+metric characteristics and elevation variations of the terrain. The experimental results indicate that the proposed method maintains stable estimation performance on non-uniform and irregular surfaces. To further validate the effectiveness of terrain estimation, we conducted a hardware experiment. As shown in Fig. 7, the estimated point cloud on flat terrain remains close to zero elevation (white point in the bottom right image). On the slope, the estimated point cloud captures the terrain profile, i.e., the height of the point cloud increases as the robot moves forward. These results demonstrate that the proposed method achieves reliable terrain estimation when the robot operates on both flat and sloped surfaces, confirming its reliability in real-world deployments. 
+
+B. Contact estimation performance 
+
+For the contact estimation, we use the parameters listed in Table II. As shown in Fig. 8, the contact judgment with terrain information effectively handles pseudo-contact (light blue area in Fig. 8(b)) compared to the contact judgment Fig. 8. Contact estimation with and without terrain information. Pseudo-contact refers to instances where contact occurs, but the measured force remains below the sensor threshold. For clarity, the contact judgment from (a) is overlaid in (b) as a dashed curve for direct comparison.  
+
+> Fig. 9. Estimated CoM height profiles, with and without incorporating terrain information.
+
+derived from only force measurements. Specifically, the con-tact judgment with terrain information covers pseudo-contact and maintains the continuity of contact in the presence of variations in contact force. 
+
+C. State estimation performance 
+
+The performance of state estimation is evaluated by com-paring the estimated state with the ground truth provided by the Gazebo simulator. In this scenario, the robot was commanded to walk in a scenario with multiple plane-slope switches, and ten repeatable experiments were conducted, each with and without terrain information. As mentioned in Section III-C, the proposed method uses terrain information and contact probability to update leg heights. Since this change primarily influences the estimation of the CoM height, the experimental results presented here focus only on vertical motion. The experimental results are reported in Fig. 9. Analysis of the data showed that we reduced the mean absolute error (MAE) between state estimates and true values by 64.8%,  
+
+> Fig. 10. An illustration of CBF constraints for avoidance in hazardous areas. The blue arrow represents the terrain collection route, the red arrow indicates the command direction, and the blue point marks the corrected hazard points. Upon approaching the hazardous boundary (highlighted by the red segment), the robot executes a stop-approaching maneuver. The continuous behavior is demonstrated in the supplementary video.
+
+while also decreasing the error variance across experiments by 47.2%. That is, incorporating terrain information effec-tively improves the accuracy of state estimation. 
+
+D. Safety guarantee 
+
+To evaluate the role of CBF constraints in safety guaran-tees, we designed a test environment with slopes and planes. The robot was first commanded to follow a predefined route to gather sufficient terrain information. Subsequently, it was directed toward the hazardous boundary with actions that could violate safety constraints. The results demonstrate that, without CBF constraints, the robot entered the hazardous region and finally tipped over (see the supplementary video). In contrast, with CBF constraints, the robot detected the hazardous points, acti-vated a safety-critical boundary, and generated safe motions. Consequently, the robot successfully moved away from the hazardous region and prevented tipping over. The safe motion is visualized in Fig. 10. Note that after stopping on the front edge, we commanded the robot to turn left. With the CBF-MPC approach, the robot could move again until it reached the left hazardous boundary. The resultant CoM trajectory is plotted by the green curve. VI. L IMITATIONS AND FUTURE WORK 
+
+Although the proposed framework enables safe locomotion under degraded external perception conditions, such as poor lighting or smoke, the perception range of the current work is limited to the local region and areas covered by the historical trajectory. Consequently, the method can provide safety guarantees only within explored regions and cannot impose anticipatory constraints on unknown areas. Notably, the 2.5-D map constructed by the estimation module is compatible with external perception modalities. In future work, we plan to integrate our method with exter-nal perception-based simultaneous localization and mapping (SLAM) methods to provide critical safety redundancy for the system in cases of illumination degradation, smoke, or dust occlusion. VII. C ONCLUSION 
+
+This work achieves safe locomotion for quadrupedal robots relying solely on proprioceptive sensing. Specifically, we start with a novel terrain estimation method and then couple the terrain information with state and contact estima-tion. Incorporating the estimation into the MPC framework, we further introduce CBF constraints to provide safety guarantees at both global and local levels. Experiments have demonstrated that the coupled estimation system contributes to more accurate estimation, and the CBF constraints effec-tively guarantee safety. ACKNOWLEDGEMENT 
+
+We thank Fabio Boekel, Weilin Xia, and Qifan Luo from TU Delft for their valuable contributions to this work. REFERENCES [1] E. Panichi, J. Ding, V. Atanassov, P. Yang, J. Kober, W. Pan, and C. Della Santina, “On-the-fly jumping with soft landing: Leveraging trajectory optimization and behavior cloning,” IEEE/ASME Transac-tions on Mechatronics , vol. 30, no. 4, pp. 3142–3151, 2025. [2] V. Atanassov, J. Ding, J. Kober, I. Havoutis, and C. Della Santina, “Curriculum-based reinforcement learning for quadrupedal jumping: A reference-free design,” IEEE Robotics & Automation Magazine ,vol. 32, no. 2, pp. 35–48, 2024. [3] J. Ding, V. Atanassov, E. Panichi, J. Kober, and C. Della Santina, “Robust quadrupedal jumping with impact-aware landing: Exploiting parallel elasticity,” IEEE Transactions on Robotics , vol. 40, pp. 3212– 3231, 2024. [4] D. Hoeller, N. Rudin, D. Sako, and M. Hutter, “Anymal parkour: Learning agile navigation for quadrupedal robots,” Science Robotics ,vol. 9, no. 88, p. eadi7566, 2024. [5] S. Gangapurwala, M. Geisert, R. Orsolino, M. Fallon, and I. Havoutis, “Rloc: Terrain-aware legged locomotion using reinforcement learning and optimal control,” IEEE Transactions on Robotics , vol. 38, no. 5, pp. 2908–2927, 2022. [6] H. Shi, Q. Zhu, L. Han, W. Chi, T. Li, and M. Q.-H. Meng, “Terrain-aware quadrupedal locomotion via reinforcement learning,” arXiv preprint arXiv:2310.04675 , 2023. [7] M. Wermelinger, P. Fankhauser, R. Diethelm, P. Kr¨ usi, R. Siegwart, and M. Hutter, “Navigation planning for legged robots in challenging terrain,” in 2016 IEEE/RSJ International Conference on Intelligent Robots and Systems . IEEE, 2016, pp. 1184–1189. [8] J. Norby, Y. Yang, A. Tajbakhsh, J. Ren, J. K. Yim, A. Stutt, Q. Yu, N. Flowers, and A. M. Johnson, “Quad-sdk: Full stack software framework for agile quadrupedal locomotion,” in ICRA Workshop on Legged Robots , 2022. [9] I.-S. Kweon and T. Kanade, “High-resolution terrain map from multi-ple sensor data,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 14, no. 2, pp. 278–292, 1992. [10] G. Jiang, L. Yin, S. Jin, C. Tian, X. Ma, and Y. Ou, “A simultaneous localization and mapping (slam) framework for 2.5 d map building based on low-cost lidar and vision fusion,” Applied sciences , vol. 9, no. 10, p. 2105, 2019. [11] D. Belter, P. Łabcki, and P. Skrzypczy´ nski, “Estimating terrain eleva-tion maps from sparse and uncertain multi-sensor data,” in 2012 IEEE International Conference on Robotics and Biomimetics . IEEE, 2012, pp. 715–722. [12] P. Fankhauser and M. Hutter, “A universal grid map library: Imple-mentation and use case for rough terrain navigation,” Robot Operating System The Complete Reference (Volume 1) , pp. 99–120, 2016. [13] P. Fankhauser, M. Bloesch, and M. Hutter, “Probabilistic terrain mapping for mobile robots with uncertain localization,” IEEE Robotics and Automation Letters , vol. 3, no. 4, pp. 3019–3026, 2018. [14] H. Xie, C. Cui, X. Zhong, X. Zhong, and Q. Liu, “Real-time support terrain mapping and terrain adaptive local planning for quadruped robots,” IEEE Robotics and Automation Letters , vol. 9, no. 12, pp. 11 018–11 025, 2024. [15] Y. Wang, Y. Liu, L. Chen, H. Chen, and S. Zhang, “Degradation-aware lidar-thermal-inertial slam,” IEEE Robotics and Automation Letters ,vol. 10, no. 8, pp. 8035–8042, 2025. [16] D. Dhrafani, Y. Liu, A. Jong, U. Shin, Y. He, T. Harp, Y. Hu, J. Oh, and S. Scherer, “Firestereo: Forest infrared stereo dataset for uas depth perception in visually degraded environments,” IEEE Robotics and Automation Letters , 2025. [17] G. Bledt, M. J. Powell, B. Katz, J. Di Carlo, P. M. Wensing, and S. Kim, “Mit cheetah 3: Design and control of a robust, dynamic quadruped robot,” in 2018 IEEE/RSJ International Conference on Intelligent Robots and Systems . IEEE, 2018, pp. 2245–2252. [18] H.-C. Lin and M. Mistry, “Contact surface estimation via haptic perception,” in 2020 IEEE International Conference on Robotics and Automation . IEEE, 2020, pp. 5087–5093. [19] J. Wang, Z. Pan, Z. Niu, S. Liu, S. Zhou, and R. Wang, “Estimation of ground posture angle for quadruped robots based on imu,” in 2023 6th International Conference on Electronics Technology . IEEE, 2023, pp. 1269–1275. [20] Y. Yang, J. Norby, J. K. Yim, and A. M. Johnson, “Proprioception and tail control enable extreme terrain traversal by quadruped robots,” in 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems . IEEE, 2023, pp. 735–742. [21] S. Yang, “A1-qp-mpc-controller: Quadruped mpc controller,” https: //github.com/ShuoYangRobotics/A1-QP-MPC-Controller, 2021, ac-cessed: 2024-11-30. [22] G. Bledt, P. M. Wensing, S. Ingersoll, and S. Kim, “Contact model fusion for event-based locomotion in unstructured terrains,” in 2018 IEEE International Conference on Robotics and Automation . IEEE, 2018, pp. 4399–4406. [23] J. Ding, P. Yang, F. Boekel, J. Kober, W. Pan, M. Saveriano, and C. Della Santina, “Versatile, robust, and explosive locomotion with rigid and articulated compliant quadrupeds,” arXiv preprint arXiv:2504.12854 , 2025. [24] J. Lee, J. Kim, W. Ubellacker, T. G. Molnar, and A. D. Ames, “Safety-critical control of quadrupedal robots with rolling arms for autonomous inspection of complex environments,” in 2024 IEEE International Conference on Robotics and Automation . IEEE, 2024, pp. 3485– 3491. [25] A. Shamsah, Z. Gu, J. Warnke, S. Hutchinson, and Y. Zhao, “Integrated task and motion planning for safe legged navigation in partially observable environments,” IEEE Transactions on Robotics , vol. 39, no. 6, pp. 4913–4934, 2023. [26] T. He, C. Zhang, W. Xiao, G. He, C. Liu, and G. Shi, “Agile but safe: Learning collision-free high-speed legged locomotion,” arXiv preprint arXiv:2401.17583 , 2024. [27] L. Schneider, J. Frey, T. Miki, and M. Hutter, “Learning risk-aware quadrupedal locomotion using distributional reinforcement learning,” in 2024 IEEE International Conference on Robotics and Automation .IEEE, 2024, pp. 11 451–11 458. [28] L. Brunke, M. Greeff, A. W. Hall, Z. Yuan, S. Zhou, J. Panerati, and A. P. Schoellig, “Safe learning in robotics: From learning-based control to safe reinforcement learning,” Annual Review of Control, Robotics, and Autonomous Systems , vol. 5, no. 1, pp. 411–444, 2022. [29] R. Grandia, A. J. Taylor, A. D. Ames, and M. Hutter, “Multi-layered safety for legged robots via control barrier functions and model predictive control,” in 2021 IEEE International Conference on Robotics and Automation . IEEE, 2021, pp. 8352–8358. [30] H. U. Unlu, V. M. Gonc ¸alves, D. Chaikalis, A. Tzes, and F. Khorrami, “A control barrier function-based motion planning scheme for aquadruped robot,” in 2024 IEEE International Conference on Robotics and Automation . IEEE, 2024, pp. 12 172–12 178. [31] A. Saradagi, S. Fredriksson, A. Koval, and G. Nikolakopoulos, “Body-aware local navigation for asymmetric holonomic robots using control barrier functions,” in 2024 European Control Conference . IEEE, 2024, pp. 968–973. [32] C. Li, X. Peng, W. Lan, and X. Yu, “Autonomous and safety-critical stair climbing via nonlinear model predictive control for quadrupedal robots,” in 2023 IEEE International Conference on Robotics and Biomimetics . IEEE, 2023, pp. 1–6.

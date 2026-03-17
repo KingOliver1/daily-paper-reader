@@ -1,0 +1,362 @@
+Title: CyboRacket: A Perception-to-Action Framework for Humanoid Racket Sports
+
+URL Source: https://arxiv.org/pdf/2603.14605v1
+
+Published Time: Tue, 17 Mar 2026 01:52:06 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+> JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2015 1
+
+# CyboRacket: A Perception-to-Action Framework for Humanoid Racket Sports 
+
+Peng Ren 1,2,* , Chuan Qi 3,2,* , Haoyang Ge 4,2,* , Qiyuan Su 5, Xuguo He 5, Cong Huang 2,6 , Pei Chi 1, †, Jiang Zhao 1, Kai Chen 2,5,6, †,
+
+> 1
+
+BUAA 2BZA 3USTC 4TJU 5DeepCybo 6ZGCI 
+
+> *
+
+Equal contribution. 
+
+> †
+
+Corresponding authors: Pei Chi (peichi@buaa.edu.cn), Kai Chen (kaichen@zgci.ac.cn). 
+
+Abstract —Dynamic ball-interaction tasks remain challenging for robots because they require tight perception-action coupling under limited reaction time. This challenge is especially pronounced in humanoid racket sports, where successful interception depends on accurate visual tracking, trajectory prediction, co-ordinated stepping, and stable whole-body striking. Existing robotic racket-sport systems often rely on external motion capture for state estimation or on task-specific low-level controllers that must be retrained across tasks and platforms. We present CyboRacket ,a hierarchical perception-to-action framework for hu-manoid racket sports that integrates onboard visual perception, physics-based trajectory prediction, and large-scale pre-trained whole-body control. The frame-work uses onboard cameras to track the incoming ob-ject, predicts its future trajectory, and converts the es-timated interception state into target end-effector and base-motion commands for whole-body execution by SONIC on the Unitree G1 humanoid robot. We evalu-ate the proposed framework in a vision-based humanoid tennis-hitting task. Experimental results demonstrate real-time visual tracking, trajectory prediction, and successful striking using purely onboard sensing. 
+
+Index Terms —Humanoid Robotics; Vision-Based Control; Ball Trajectory Prediction; Whole-Body Mo-tion Control 
+
+I. Introduction 
+
+# RECENT years have seen substantial progress in robotic control across diverse platforms, from quadrupeds traversing challenging terrain to industrial manipulators performing precise assembly and humanoids achieving stable locomotion and whole-body coordina-tion [1]–[3]. However, tasks involving fast-moving objects remain significantly more challenging, as they require tight perception-action coupling under limited reaction time. Robotic racket sports, including table tennis, badminton, and tennis, exemplify such dynamic visuomotor problems: the robot must track a high-speed ball, predict its future trajectory, and generate coordinated striking motions with accurate spatial and temporal alignment. Existing approaches to robotic racket-sport interaction can be broadly divided into two categories. End-to-end learning methods map sensory observations directly to 
+
+Equal contribution. 
+
+low-level actions without explicit intermediate represen-tations. For example, Tebbe et al. showed that rein-forcement learning can acquire rallying behavior from scratch in fewer than 200 trials [4], while the Gemini Robotics team demonstrated amateur human-level robotic table tennis through large-scale hierarchical reinforcement learning and sim-to-real transfer [5], [6]. In contrast, hier-archical methods separate projectile-state prediction and interception planning from low-level motion execution, typically combining model-based trajectory prediction and strike-point generation with specialized controllers such as MPC [7] or task-specific learned policies [8], [9]. While more modular and interpretable, existing hierarchical sys-tems still face two key limitations: many depend on exter-nal motion capture or other instrumented sensing for accu-rate state estimation [8], and their low-level controllers are often task-specific, requiring retraining when the task or platform changes [9]. This motivates a hierarchical frame-work that integrates onboard closed-loop perception with a reusable pre-trained whole-body execution backbone. Among these dynamic racket-sport settings, humanoid platforms are particularly challenging. Unlike fixed-base manipulators, humanoid robots must coordinate percep-tion, locomotion, balance maintenance, and arm swinging within a single whole-body control loop. The reachable striking region is not determined by the arm alone, but also depends on timely base repositioning and stable lower-body support. As a result, errors in state estima-tion or interception timing can propagate not only to racket contact, but also to stepping behavior and whole-body balance. These characteristics make humanoid racket sports a demanding testbed for dynamic perception-action integration. In this work, we present CyboRacket , a hierarchi-cal perception-to-action framework for humanoid racket sports that integrates onboard visual perception, physics-based trajectory prediction, and large-scale pre-trained whole-body control. The system uses a YOLO-based de-tector running entirely on onboard cameras to track fast incoming projectiles in real time, without relying on exter-nal motion capture. A physics-based predictor estimates the future trajectory, including the landing region and arrival time, and converts these predictions into target  
+
+> arXiv:2603.14605v1 [cs.RO] 15 Mar 2026 JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2015 2
+
+end-effector states and base motion commands for inter-ception. To realize these commands on a humanoid plat-form, we build the execution layer on top of SONIC [10], a recently open-sourced large-scale motion tracking foun-dation model for humanoid control. We instantiate the proposed framework on the Unitree G1 humanoid robot in a vision-based tennis-hitting task. By coupling closed-loop perception and interception planning with pre-trained whole-body motion execution, the framework enables time-critical projectile interaction through coordinated stepping and swinging. Experimental results show that the proposed system supports real-time projectile tracking, trajectory prediction, and successful striking using purely onboard visual sensing, demonstrating the feasibility of perception-driven dynamic racket-sport interaction on a humanoid platform. The main contributions of this work are as follows:  
+
+> •
+
+We propose a hierarchical perception-to-action frame-work for humanoid racket sports that combines on-board visual trajectory prediction with a large-scale pre-trained humanoid motion executor, avoiding task-specific retraining of the full low-level controller.  
+
+> •
+
+We develop a purely onboard visual closed-loop pipeline for fast-projectile perception and trajectory prediction, removing the dependence on external mo-tion capture systems.  
+
+> •
+
+We demonstrate vision-based tennis hitting on the Unitree G1 humanoid robot, showing the effectiveness of integrating pre-trained whole-body motion control with closed-loop perception and planning for dynamic humanoid interaction. 
+
+II. Related Work 
+
+A. Robotic Racket Sports and Dynamic Object Interaction 
+
+Robotic racket sports provide a representative bench-mark for dynamic perception, prediction, and time-critical control. Early table-tennis systems established the founda-tions for high-speed striking through biologically inspired trajectory generation, kinesthetic teach-in, and anticipa-tory action selection [11]–[14]. More recent work has in-creasingly adopted learning-based methods. The Gemini Robotics team demonstrated amateur human-level robotic table tennis using hierarchical learning with sim-to-real transfer [5], [6], while Tebbe et al. showed that reinforce-ment learning can acquire rallying behavior from scratch in fewer than 200 trials [4]. Related developments in other racket-sport and dynamic-manipulation settings have further extended these ideas beyond fixed-base platforms. Zaidi et al. developed an athletic mobile manipulator for wheelchair tennis [15], and Ma et al. demonstrated coordinated badminton skills on legged manipulators with onboard perception and whole-body visuomotor coordination [9]. On humanoid platforms, Xiong et al. demonstrated table tennis with impedance control but were limited to static standing [16], whereas Su et al. combined model-based planning with RL-based whole-body control to enable dynamic humanoid table tennis [8]. Despite this progress, current systems still exhibit two recurring limitations: many depend on external motion capture or other privileged sensing setups for accurate projectile-state estimation [8], and their control policies are often specialized for a specific task or platform [9]. These limitations make it difficult to achieve deployable onboard perception together with reusable whole-body execution for humanoid racket-sport tasks. 
+
+B. Humanoid Whole-Body Control and Scalable Motion Tracking 
+
+In parallel, humanoid control has evolved from task-specific imitation toward scalable whole-body motion tracking. Early work focused on learning controllers for in-dividual motions or motion families through large-scale re-inforcement learning and manually designed rewards [17], [18]. Subsequent approaches improved coordination by decoupling upper- and lower-body control [19], [20], while more recent methods developed general whole-body mo-tion trackers capable of reproducing a broad range of human movements [21], [22]. A growing line of work has further explored large-scale pre-trained models as reusable control backbones for humanoid robots. Luo et al. showed that scaling motion tracking to 100 million frames can yield universal tracking capabilities across diverse behaviors, suggesting motion tracking as a practical foundation for humanoid con-trol [10]. SONIC [10] and contemporaneous systems [23], [24] further demonstrated that such pre-trained controllers can support multimodal command interfaces, including teleoperation, video-driven control, and integration with higher-level vision-language-action models [25]. However, these methods mainly focus on tracking externally pro-vided motion references and remain weakly connected to task-level closed-loop perception. As a result, although they provide strong reusable whole-body motion priors, they do not by themselves solve dynamic interactive tasks such as racket sports, where perception, prediction, and action must be tightly coupled in real time. 
+
+III. System Overview 
+
+We address real-time tennis interception on the Unitree G1 humanoid as an onboard perception-to-action problem, where noisy RGB-D observations of a fast incoming pro-jectile must be converted into dynamically feasible whole-body striking behaviors under tight latency constraints. As shown in Fig. 1, our framework closes this loop through three tightly coupled stages: projectile state estimation from a head-mounted RGB-D camera, interception target generation from short-horizon trajectory prediction, and whole-body execution through a SONIC-based control in-terface. The robot is equipped with a 100 Hz RGB-D cam-era mounted on the head, whose synchronized color and depth streams are processed together with proprioceptive robot states for visual tracking, geometric reconstruction, and frame transformation. From image-space projectile JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2015 3
+
+Fig. 1: System overview of the humanoid humanoid racket sports framework. observations, the system maintains temporally consistent 2D measurements, reconstructs 3D projectile positions in the robot frame, and estimates a filtered projectile state using an EKF. This state estimator further rolls out the short-horizon trajectory of the projectile and continuously provides the downstream planner with updated intercep-tion candidates. Given the estimated projectile trajectory, the plan-ner selects a dynamically feasible interception target by jointly considering timing, reachability, body stability, and swing effectiveness. The planning process runs online in a receding-horizon manner and is coupled with a swing state machine, allowing the robot to revise its inter-ception decision as new visual evidence arrives. Instead of directly producing joint-level commands, the planner outputs structured motion targets, including the desired head orientation for maintaining visual continuity, wrist targets for racket interception, body height adjustment, and navigation velocity. These targets are mapped to the low-dimensional SONIC command interface, which drives coordinated locomotion and striking behaviors at the whole-body level. This design separates fast visual updates from motion generation while preserving a tight closed loop between onboard perception, interception planning, and physically executable humanoid control. 
+
+IV. Onboard RGB-D projectile Perception and State Estimation 
+
+This section presents an onboard RGB-D perception pipeline that estimates the state of the incoming racket-sport projectile and provides the planner with a tempo-rally consistent 3D trajectory prediction. In the current implementation, we instantiate this module for tennis-ball perception. The main challenge is that the projec-tile appears as a small, fast-moving target under limited sensing resolution and short reaction horizons, while ag-gressive head and body motions can further amplify local-ization noise and timing error. Motivated by the closed-loop requirements of dynamic interception, we formulate this perception module not as isolated detection and tracking components, but as a unified estimation process that converts synchronized RGB-D measurements into uncertainty-aware 3D projectile states and short-horizon trajectory predictions. 
+
+A. Projectile Observation and 2D Tracking 
+
+We first extract image-space projectile observations from synchronized RGB and depth frames captured by the head-mounted RGB-D camera. A YOLO-based detector is applied to the RGB image to produce candidate tennis-ball bounding boxes. To preserve geometric consistency between the network input and the original image co-ordinates, the RGB image is resized with aspect-ratio-preserving padding before inference, and the predicted boxes are mapped back to the original image plane af-terward. Since generic sports ball detections are prone to false positives in real scenes, we further apply task-specific filtering based on geometry and appearance. In particular, for the tennis instantiation used in this work, we reject candidates with implausible scale or aspect ratio JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2015 4
+
+and retain only regions whose color statistics are consistent with the typical yellow-green appearance of a tennis ball. The resulting output is a timestamped 2D observation stream containing the projectile bounding box, confidence, and image metadata. To improve robustness against single-frame errors, missed detections, and motion blur, we maintain alightweight single-object temporal tracker in image space. The tracker propagates the current observation with a constant-velocity model and associates new detec-tions using center proximity, scale consistency, and motion-direction agreement. This produces a temporally smoothed 2D projectile observation and also serves as an observation manager: when detections are briefly un-available, the tracker extrapolates the object center for a small number of frames; when the observation gap exceeds a threshold, the trajectory is reset. Compared with raw frame-wise detections, this representation provides a substantially more stable visual signal for downstream 3D reconstruction and state estimation. 
+
+B. RGB-D 3D Localization and Measurement Uncertainty 
+
+The tracked 2D observation is then lifted to 3D using the aligned depth measurement from the RGB-D camera. Rather than directly querying depth at a single pixel, we estimate the projectile depth from a local region cen-tered at the tracked image location, which is more robust for small distant objects whose depth measurements are easily corrupted by background leakage, invalid samples, and boundary noise. Invalid or out-of-range values are removed, and a foreground-biased robust statistic is used to recover the depth value. Let (ut, v t) denote the tracked projectile center in the RGB image at time t, and let Zt denote the aggregated depth value obtained from the aligned depth map within a local region around the projectile center. Given the RGB-D camera intrinsics 
+
+K =
+
+
+
+fx 0 cx
+
+0 fy cy
+
+0 0 1
+
+ ,
+
+where (fx, f y ) are the focal lengths and (cx, c y ) is the principal point, the 3D projectile position in the camera frame is recovered by pinhole back-projection as 
+
+Xt = (ut − cx)Zt
+
+fx
+
+, Yt = (vt − cy )Zt
+
+fy
+
+, pc,t =
+
+
+
+Xt
+
+Yt
+
+Zt
+
+ .
+
+(1) The point is then transformed into the robot base frame as 
+
+pb,t = Rb←cpc,t + tb←c, (2) where Rb←c ∈ SO (3) and tb←c ∈ R3 are the calibrated extrinsic rotation and translation from the camera frame to the robot base frame. To quantify the reliability of each 3D observation, we further associate the reconstructed point with a measure-ment covariance matrix Rmeas  
+
+> t
+
+. We model uncertainty in the image-plane localization and depth estimate by 
+
+ΣuvZ,t = diag (σ2
+
+> u,t
+
+, σ 2
+
+> v,t
+
+, σ 2
+
+> Z,t
+
+) , (3) where σu,t and σv,t denote the standard deviations of the projectile center in pixel coordinates, and σZ,t denotes the standard deviation of the aggregated depth estimate. We then propagate this uncertainty through the nonlinear mapping from (ut, v t, Z t) to the base-frame position pb,t 
+
+using first-order error propagation: 
+
+Rmeas  
+
+> t
+
+≈ Jt ΣuvZ,t J⊤ 
+
+> t
+
+, Jt = ∂pb,t 
+
+∂(ut, v t, Z t) . (4) Here, Jt ∈ R3×3 denotes the Jacobian of the mapping from (ut, v t, Z t) to the reconstructed base-frame position 
+
+pb,t , and thus characterizes how image-plane and depth uncertainties are amplified in 3D space. This construction yields a range-dependent measurement covariance: as the projectile moves farther away, a given pixel or depth error induces a larger 3D localization error. The resulting covariance is used in the EKF update step to weight each observation according to its geometric reliability. 
+
+C. EKF-Based projectile State Estimation 
+
+On top of these reconstructed 3D measurements, we maintain a continuous estimate of the projectile state using an extended Kalman filter (EKF). The EKF state consists of the 3D projectile position and velocity, 
+
+xt = [ p⊤ 
+
+> t
+
+, v⊤ 
+
+> t
+
+]⊤ = [ px,t , p y,t , p z,t , v x,t , v y,t , v z,t ]⊤, (5) where pt = [ px,t , p y,t , p z,t ]⊤ denotes the projectile position and vt = [ vx,t , v y,t , v z,t ]⊤ denotes the projectile velocity in the robot base frame. The measurement vector contains only the reconstructed 3D position, 
+
+zt = Hx t + nt, H = [ I3 03×3], nt ∼ N (0, Rmeas  
+
+> t
+
+),
+
+(6) where H extracts the position component from the full state and Rmeas  
+
+> t
+
+is the measurement covariance defined in (4). During the prediction step, the projectile state is propa-gated with a discrete flight model that accounts for gravity and aerodynamic drag. Starting from the current state estimate (pt, vt) and time step ∆t, we update the position and velocity as 
+
+pt+1 = pt + vt∆t + 12 a(vt)∆ t2, vt+1 = vt + a(vt)∆ t, 
+
+(7) where the acceleration term is defined as 
+
+a(v) = g − k1v − k2∥v∥v, g = [0 , 0, −g]⊤, (8) with g the gravitational acceleration and k1, k 2 the co-efficients of linear and quadratic drag, respectively. In compact form, the EKF process model is written as 
+
+xt+1 = f (xt, ∆t) + wt, wt ∼ N (0, Qt), (9) where wt models process uncertainty and Qt is the corre-sponding process covariance. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2015 5
+
+During the measurement update, we first validate each incoming 3D observation using a Mahalanobis-distance gate on the innovation, in order to reject outliers caused by false detections, depth corruption, or abrupt mismatches. The innovation is defined as 
+
+rt = zt − Hˆxt|t−1, (10) where ˆxt|t−1 is the predicted EKF state and H is the measurement matrix defined in (6). The corresponding innovation covariance is 
+
+St = HP t|t−1H⊤ + Rmeas  
+
+> t
+
+, (11) with Pt|t−1 the predicted state covariance. We then com-pute the Mahalanobis distance 
+
+d2 
+
+> t
+
+= r⊤ 
+
+> t
+
+S−1 
+
+> t
+
+rt, (12) and accept the measurement only if d2 
+
+> t
+
+< τ , where τ
+
+is chosen according to a χ2 threshold. Otherwise, the update is skipped and the filter continues prediction-only propagation, which allows the estimator to bridge short observation gaps without being corrupted by unreliable measurements. To better capture near-ground projectile motion, we additionally apply a simplified bounce update when the estimated projectile height in the robot base frame falls below a bounce threshold zb and the vertical velocity is downward, i.e., ˆpz < z b and ˆvz < 0. In this case, the post-bounce vertical velocity is approximated by 
+
+v+ 
+
+> z
+
+= −e v − 
+
+> z
+
+, e ∈ (0 , 1) , (13) where v− 
+
+> z
+
+and v+ 
+
+> z
+
+denote the pre- and post-bounce vertical velocities, respectively, and e is an effective restitution co-efficient. Optionally, the corresponding covariance can be inflated after the bounce event to reflect additional uncer-tainty introduced by ground contact. This approximation is sufficient for short-horizon interception prediction while avoiding the complexity of a more detailed contact model. 
+
+D. Short-Horizon Trajectory Prediction 
+
+Beyond recursive filtering, we further perform short-horizon trajectory prediction for interception planning. Starting from the current filtered state estimate, we roll out the same projectile dynamics model forward in time by discrete integration and obtain a sequence of future trajectory samples 
+
+ˆT = {ˆp(τi), ˆv(τi)}Ni=1 , (14) where τi = i∆tpred denotes the prediction horizon. From this rollout, we compute interception-relevant quantities, including the predicted hitting point phit , the correspond-ing hitting time thit , the projectile velocity at interception 
+
+vhit , and the predicted landing point. In particular, the candidate hitting point is determined as the earliest feasible intersection between the predicted trajectory and a designated hitting-height plane within the prediction horizon, 
+
+ˆpz (thit ) = z0, (15) where z0 is the desired hitting height. A candidate in-terception state is exported to the planner only when the EKF state covariance remains below a threshold, the predicted hitting time lies within a feasible reaction win-dow, and the target remains inside the robot’s reachable workspace. In this way, the estimator provides the planner not only with a filtered instantaneous projectile state but also with a dynamically consistent short-horizon forecast for online interception. 
+
+V. Interception Planning and Pre-trained Whole-Body Control 
+
+This section converts the estimated projectile state into executable whole-body interception commands. Rather than synthesizing joint-space trajectories directly, the planner outputs a structured interception intent, includ-ing the desired contact time and location, target base placement, swing direction, and execution phase, while locomotion realization, balance maintenance, and coordi-nated whole-body motion are delegated to the pre-trained SONIC execution stack. This decomposition keeps the planning problem compact and interpretable while lever-aging SONIC as a scalable whole-body control backbone. 
+
+A. Interception Planning 
+
+At each planning cycle, the planner receives the filtered projectile state, a short-horizon trajectory prediction, and the current robot base pose. Let 
+
+ˆT = {ˆp(τi), ˆv(τi)}Ni=1 
+
+denote the predicted projectile trajectory sampled at fu-ture time instants τi, where ˆp(τi) ∈ R3 and ˆv(τi) ∈ R3
+
+are the predicted position and velocity, and N is the number of prediction samples. The planner first identifies a candidate interception state (phit , t hit ) from the earliest feasible intersection between the predicted trajectory and the designated hitting-height plane, subject to predefined temporal and workspace constraints. Given the candidate contact point, we compute a desired base placement from a nominal racket-contact template. Let rhit ∈ R3 denote the preferred offset from the robot base to the racket contact point at impact, expressed in the base-heading frame. Given a desired base yaw ψdes ,the corresponding target base position is 
+
+pdes base = phit − Rz (ψdes )rhit , (16) where Rz (ψdes ) ∈ SO (3) denotes the planar rotation matrix about the vertical axis. Intuitively, the planner selects a base pose such that the nominal racket contact point aligns with the predicted projectile position at the desired contact time. The resulting interception plan at planning cycle t is represented as 
+
+Πt = (thit , phit , pdes base , ψ des , dswing , m t, valid ), (17) where dswing ∈ R3 denotes the desired swing direction, 
+
+mt ∈ {APPROACH , SWING , RECOVER } denotes the current JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2015 6
+
+swing mode, and valid ∈ {0, 1} indicates whether the candidate is dynamically feasible. In practice, feasibility is checked through simple reachability and timing tests: the target is accepted only if the robot can translate and rotate its base into the desired pose within the available reaction time and if the predicted contact lies inside the arm-reachable hitting region. This formulation avoids full-body trajectory search and instead reduces interception planning to geometric reasoning over the predicted pro-jectile trajectory and the reachable contact manifold. 
+
+B. Online Replanning and Swing Coordination 
+
+To maintain responsiveness under fast projectile motion, the overall system is organized as three asynchronous loops running at different rates. The perception loop 
+
+continuously updates the latest projectile-state estimate and handles short observation dropouts. The planning loop periodically invokes the interception planner in (17) and maintains both the current valid plan and the most recent valid fallback plan. The command loop runs at the highest frequency and converts the active plan into SONIC-compatible motion targets. This multi-rate design decouples fast state refresh from more expensive replan-ning while preserving smooth command output to the controller. On top of this replanning mechanism, we maintain a swing state machine with three stages: 
+
+APPROACH → SWING → RECOVER .
+
+During APPROACH , the robot moves toward the desired base pose while keeping the racket arm in a ready configuration and the head oriented toward the incoming projectile. Once the robot is sufficiently close to the target base pose and the predicted contact time enters a narrow execution window, the planner commits to SWING . In this stage, the racket arm follows a staged impact template consisting of a backswing ( cock ), contact, and follow-through phase. After the predicted impact window has passed, the state machine transitions to RECOVER , where the upper body and head are smoothly returned toward a neutral ready posture for the next interception cycle. This design separates when to swing from how the full body realizes the motion. The planner reasons over contact timing, base placement, and phase transitions, while the low-level realization of locomotion, balance, and coordinated whole-body motion is handled by SONIC. 
+
+C. Task-Space Target Generation 
+
+The active interception plan Πt is converted into a set of structured task-space targets rather than joint-level commands. These targets define what motion should be realized at the task level, while the low-level realization of locomotion, balance, and whole-body coordination is handled by SONIC. The head target pose, denoted by Thead ∈ SE (3) ,is generated online to maintain visual attention on the incoming projectile. Specifically, the desired head orienta-tion is chosen such that the nominal head forward axis aligns with the current projectile direction in the robot frame. This allows the robot to continuously observe the projectile during both the approach and swing phases. The wrist targets are generated from a phase-dependent strike template. For the non-dominant arm, we maintain a relatively stable support pose to avoid unnecessary upper-body disturbance. For the racket arm, the target wrist pose is computed from the current swing mode mt, the desired contact point phit , the desired base placement 
+
+pdes base , and the desired swing direction dswing . Let 
+
+Tready wrist , Tcock wrist , Tcontact wrist , Tfollow wrist ∈ SE (3) 
+
+denote the nominal racket-wrist poses for the ready, back-swing, contact, and follow-through phases, respectively. The commanded wrist poses for the left and right wrists are denoted by TL 
+
+> wrist
+
+∈ SE (3) and TR 
+
+> wrist
+
+∈ SE (3) ,respectively. In practice, the active wrist command is obtained by phase-dependent interpolation between the nominal templates, with the contact pose additionally aligned to the predicted interception geometry. This yields a smooth upper-body motion prior while still allowing the whole-body controller to compensate for balance and timing errors. In addition to the head and wrist targets, the planner outputs a desired base height and a navigation command. The desired base height, denoted by hbase , is adjusted to keep the hitting posture within a comfortable arm workspace. The navigation command, denoted by unav ,drives the base toward the target placement pdes base with the desired heading ψdes . Together, these quantities define a compact high-level motion intent: 
+
+uplan = (Thead , TL
+
+> wrist
+
+, TR
+
+> wrist
+
+, h base , unav 
+
+), (18) where Thead and TL/R  
+
+> wrist
+
+are SE (3) targets for the head and wrists, hbase is the desired base height, and unav is the planar navigation command for root motion. 
+
+D. Execution Interface to SONIC 
+
+To decouple perception from execution, the visual esti-mation stack is exposed to the planner through a unified projectile-state interface. Internally, this module encapsu-lates RGB-D acquisition, 2D detection, temporal tracking, 3D localization, EKF filtering, and short-horizon trajec-tory prediction. Externally, however, the planner consumes only a compact projectile-state representation 
+
+Bt = ( pt, vt, c t),
+
+where pt ∈ R3 and vt ∈ R3 are the filtered projectile position and velocity estimates, and ct ∈ [0 , 1] denotes the current confidence. This abstraction hides perception-specific details from the planning layer and allows the planner to operate on a clean dynamical state interface. Given Bt, the interception planner computes the active plan Πt in (17) and converts it into the task-space com-mand uplan in (18). The planner output is then streamed JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2015 7
+
+Fig. 2: Representative motion sequence of humanoid badminton hitting in simulation. 
+
+Fig. 3: Representative sequence of vision-based tennis hitting on the humanoid robot. 
+
+Fig. 4: Representative sequence of vision-based badminton hitting on the humanoid robot. to SONIC as structured motion commands. These com-mands include the locomotion mode, planar movement and facing commands, desired speed, base height, and the 
+
+SE (3) targets for the head and wrists. SONIC interprets them as hybrid kinematic commands and realizes them through its whole-body tracking policy. Importantly, this interface does not require SONIC to reason about detection, tracking, or projectile-state estimation; it only consumes compact task-level motion targets. Conversely, the planner does not solve inverse kinematics or whole-body balance explicitly. The resulting architecture forms a clean perception–planning–control stack: the perception module produces an uncertainty-aware projectile state, the planner converts it into an interception intent, and SONIC realizes that intent as dynamically feasible whole-body motion. 
+
+VI. Experiments 
+
+We evaluate CyboRacket in both simulation and the real world, focusing on integrated hitting performance in simulation and transfer to Unitree G1. Representative motion sequences are shown in Fig. 2 for simulation, and in Fig. 3 and Fig. 4 for real-world tennis and badminton hitting, respectively. 
+
+A. Simulation Experiments in MuJoCo 
+
+We evaluate the complete CyboRacket pipeline in a Mu-JoCo simulation environment that includes the humanoid robot, racket geometry, tennis ball dynamics, and court layout. In each rollout, the robot starts from a nominal ready stance, while the incoming object is launched under varying conditions. In each trial, the robot perceives the incoming object, predicts its future trajectory, plans an interception target, and executes the corresponding whole-body motion. A representative simulation sequence is shown in Fig. 2. The evaluation is conducted over 20 simulated trials. The proposed system achieves a hit rate of 75% and a return rate of 70%. 
+
+B. Real-World Experiments 
+
+We evaluate CyboRacket on the Unitree G1 humanoid robot, equipped with a racket mounted on the right arm and an external Intel RealSense D455 RGB-D cam-era mounted on the head for onboard ball perception. The camera streams synchronized RGB-D observations at 90 Hz. In the tennis setting, incoming balls are launched by a ball machine under varying speeds and directions. The complete CyboRacket pipeline is deployed in a vision-based tennis-hitting task, where the robot starts from a JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2015 8
+
+ready pose, perceives the incoming tennis ball using the onboard RGB-D camera, predicts its future trajectory, plans an interception target, and executes the correspond-ing whole-body motion through SONIC. A representative real-world tennis-hitting sequence is shown in Fig. 3. These results demonstrate that the proposed perception-to-action pipeline can be transferred from simulation to the real humanoid platform using purely onboard sensing. To further illustrate the generality of the proposed framework beyond tennis, we additionally present a vision-based badminton-hitting sequence on the humanoid robot, as shown in Fig. 4. This result further suggests that the proposed perception-to-action pipeline can be extended to broader humanoid racket-sport interaction scenarios. 
+
+VII. Conclusion 
+
+In this work, we have presented CyboRacket , a hi-erarchical perception-to-action framework for humanoid racket sports that has combined onboard visual percep-tion, physics-based trajectory prediction, and large-scale pre-trained whole-body control. We have instantiated the framework on the Unitree G1 humanoid robot and have validated it in a vision-based tennis-hitting task using purely onboard sensing. The experimental results have shown that the proposed system has supported real-time object tracking, trajectory prediction, and success-ful striking through coordinated whole-body execution. These findings have demonstrated the potential of in-tegrating closed-loop perception and planning with pre-trained humanoid motion control for dynamic racket-sport interaction, and have provided a practical foundation for extending such capabilities to broader humanoid athletic skills. 
+
+References 
+
+[1] J. Long, J. Ren, M. Shi, Z. Wang, T. Huang, P. Luo, and J. Pang, “Learning humanoid locomotion with perceptive inter-nal model,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025. [2] T. Zhang, B. Zheng, R. Nair, Y. Hu, Y.-J. Wang, G. Chen, F. Lin, J. Li, C. Hong, K. Sreenath et al. , “Hub: Learning extreme humanoid balance,” arXiv preprint arXiv:2505.07294 ,2025. [3] X. Cheng, Y. Ji, J. Chen, R. Yang, G. Yang, and X. Wang, “Expressive whole-body control for humanoid robots,” in 20th Robotics: Science and Systems (RSS 2024) . MIT Press Jour-nals, 2024. [4] J. Tebbe, L. Krauch, Y. Gao, and A. Zell, “Sample-efficient reinforcement learning in robotic table tennis,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) .IEEE, 2021, pp. 4171–4178. [5] D. B. D’Ambrosio, N. Jaitly, V. Sindhwani, K. Oslund, P. Xu, N. Lazic, A. Shankar, J. Abelian, E. Coumans et al. , “Robotic table tennis: A case study into a high speed learning system,” in Proceedings of Robotics: Science and Systems (RSS) , Daegu, Republic of Korea, 2023. [6] D. B. D’Ambrosio, S. Abeyruwan, L. Graesser, A. Is-cen, H. Ben Amor, A. Bewley, B. J. Reed, K. Reymann, L. Takayama, Y. Tassa et al. , “Achieving human level competi-tive robot table tennis,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025. [7] D. Nguyen, K. D. Cancio, and S. Kim, “High speed robotic table tennis swinging using lightweight hardware with model predictive control,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025. [8] Z. Su, B. Zhang, N. Rahmanian, Y. Gao, Q. Liao, C. Regan, K. Sreenath, and S. S. Sastry, “Hitter: A humanoid table tennis robot via hierarchical planning and learning,” arXiv preprint arXiv:2508.21043 , 2025. [9] Y. Ma, A. Cramariuc, F. Farshidian, and M. Hutter, “Learning coordinated badminton skills for legged manipulators,” Science Robotics , vol. 10, no. 102, p. eadu3922, 2025. [10] Z. Luo, Y. Yuan, T. Wang, C. Li, S. Chen, F. Casta neda, Z.-A. Cao, J. Li, D. Minor, Q. Ben, X. Da, R. Ding, C. Hogg, L. Song, E. Lim, E. Jeong, T. He, H. Xue, W. Xiao, Z. Wang, S. Yuen, J. Kautz, Y. Chang, U. Iqbal, L. J. Fan, and Y. Zhu, “Sonic: Supersizing motion tracking for natural hu-manoid whole-body control,” arXiv preprint arXiv:2511.07820 ,2025. [11] K. Mülling, J. Kober, and J. Peters, “A biomimetic approach to robot table tennis,” in 2010 IEEE/RSJ International Confer-ence on Intelligent Robots and Systems (IROS) . IEEE, 2010, pp. 1921–1926, also published in Adaptive Behavior , vol. 19, no. 5, pp. 359–376, 2011. [12] K. Mülling, J. Kober, O. Kroemer, and J. Peters, “Learning to select and generalize striking movements in robot table tennis,” 
+
+The International Journal of Robotics Research (IJRR) , vol. 32, no. 3, pp. 263–279, 2013. [13] Z. Wang, C. H. Lampert, K. Mülling, B. Schölkopf, and J. Pe-ters, “Learning anticipation policies for robot table tennis,” in 
+
+2011 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2011, pp. 332–337. [14] Z. Wang, A. Boularias, K. Mülling, B. Schölkopf, and J. Peters, “Anticipatory action selection for human–robot table tennis,” 
+
+Artificial Intelligence , vol. 247, pp. 399–414, 2017, special Issue on AI and Robotics. [15] Z. Zaidi, D. Martin, N. Belles, V. Zakharov, A. Krishna, K. M. Lee, P. Wagstaff, S. Naik, M. Sklar, S. Choi et al. , “Athletic mobile manipulator system for robotic wheelchair tennis,” IEEE Robotics and Automation Letters (RA-L) , vol. 8, no. 4, pp. 2245–2252, 2023. [16] R. Xiong, Y. Sun, Q. Zhu, J. Wu, and J. Chu, “Impedance control and its effects on a humanoid robot playing table tennis,” 
+
+International Journal of Advanced Robotic Systems (IJARS) ,vol. 9, no. 5, p. 178, 2012. [17] X. B. Peng, P. Abbeel, S. Levine, and M. van de Panne, “Deep-mimic: Example-guided deep reinforcement learning of physics-based character skills,” ACM Transactions on Graphics (TOG) ,vol. 37, no. 4, pp. 1–14, July 2018, proceedings of SIGGRAPH 2018. [18] X. B. Peng, Z. Zhou, S. Luo, and M. van de Panne, “Amp: Adversarial motion priors for stylized physics-based character control,” ACM Transactions on Graphics (TOG) , vol. 40, no. 4, pp. 1–20, July 2021, proceedings of SIGGRAPH 2021. [19] T. He, Z. Luo, W. Xiao, C. Zhang, W. Zhang, K. Kitani, C. Liu, and G. Shi, “Omnih2o: Universal and dexterous human-to-humanoid whole-body teleoperation and learning,” in 8th Annual Conference on Robot Learning (CoRL) . PMLR, 2024. [20] Y. Zhang, Y. Yuan, P. Gurunath, T. He, S. Omidshafiei, A. Aghamohammadi, M. Vazquez-Chanlatte, L. Pedersen, and G. Shi, “Falcon: Learning force-adaptive humanoid loco-manipulation,” arXiv preprint arXiv:2505.06776 , 2025. [21] Q. Liao, T. E. Truong, X. Huang, G. Tevet, K. Sreenath, and C. K. Liu, “Beyondmimic: From motion tracking to ver-satile humanoid control via guided diffusion,” arXiv preprint arXiv:2508.08241 , 2025. [22] Z. Chen, M. Ji, X. Cheng, X. Peng, X. B. Peng, and X. Wang, “Gmt: General motion tracking for humanoid whole-body con-trol,” arXiv preprint arXiv:2506.14770 , 2025. [23] Y. Ze, Z. Chen, J. P. Araujo, Z.-a. Cao, X. B. Peng, J. Wu, and K. Liu, “Twist: Teleoperated whole-body imitation system,” in 
+
+Proceedings of The 9th Conference on Robot Learning , vol. 305. PMLR, 2025, pp. 2143–2154. [24] Z. Zhang, J. Guo, C. Chen, J. Wang, C. Lin, Y. Lian, H. Xue, Z. Wang, M. Liu, H. Liu et al. , “Track any motions under any disturbances,” arXiv preprint arXiv:2509.13833 , 2025. [25] J. Bjorck, F. Castañeda, N. Cherniadev, X. Da, R. Ding, L. J. Fan, Y. Fang, D. Fox, F. Hu, S. Huang et al. , “Gr00t n1: An open foundation model for generalist humanoid robots,” arXiv preprint arXiv:2503.14734 , 2025.

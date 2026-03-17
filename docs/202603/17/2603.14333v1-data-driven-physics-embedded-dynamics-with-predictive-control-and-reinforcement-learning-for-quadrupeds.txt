@@ -1,0 +1,439 @@
+Title: Data-Driven Physics Embedded Dynamics with Predictive Control and Reinforcement Learning for Quadrupeds
+
+URL Source: https://arxiv.org/pdf/2603.14333v1
+
+Published Time: Tue, 17 Mar 2026 05:32:18 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Data-Driven Physics Embedded Dynamics with Predictive Control and Reinforcement Learning for Quadrupeds 
+
+Prakrut Kotecha ∗1, Aditya Shirwatkar ∗1, Shishir Kolathaya 2
+
+Abstract — State-of-the-art quadrupedal locomotion ap-proaches integrate Model Predictive Control (MPC) with Rein-forcement Learning (RL), enabling complex motion capabilities with planning and terrain-adaptive behaviors. However, they often face compounding errors over long horizons and have limited interpretability due to the absence of physical inductive biases. We address these issues by integrating Lagrangian Neu-ral Networks (LNNs) into an RL–MPC framework, enabling physically consistent dynamics learning. At deployment, our inverse-dynamics infinite-horizon MPC scheme avoids costly matrix inversions, improving computational efficiency by up to 4× with minimal loss of task performance. We validate our framework through multiple ablations of the proposed LNN and its variants. We show improved sample efficiency, reduced long-horizon error, and faster real-time planning compared to unstructured neural dynamics. Lastly, we also test our framework on the Unitree Go1 robot to show real-world viability. 
+
+Keywords: Legged Robots, Reinforcement Learning, Model Predictive Control, Lagrangian Neural Networks 
+
+I. I NTRODUCTION 
+
+The ability to accurately model and predict system dynam-ics is important for planning and control in quadruped robots. Traditional approaches derive explicit equations of motion using first principles, yielding interpretable and physically consistent models [1], [2], [3]. However, they can be compu-tationally intensive and require precise knowledge of system parameters, which may not always be available or practical to obtain. In complex systems, such as legged robots, the interplay of multiple degrees-of-freedom (DoF), nonlinear interactions, and external disturbances further complicates the task of deriving accurate dynamics models. Advances in machine learning have introduced data-driven methods as an alternative to classical dynamics modeling. We refer to them as Opaque Neural Network (ONN) dynamics in our context. These approaches leverage large datasets to learn system behavior without explicit reliance on laws of physics [4], [5]. However, these models lack interpretability, struggle to generalize to unseen scenarios, and accumulate long-horizon errors that degrade control performance. Here, lack of interpretability means that the learned dynamics cannot explicitly map to physical quantities like generalized coordinates, energies, and mass–inertia matrices.  
+
+> ∗Equal Contribution, This project is funded by ARTPARK and Kotak IISc AI-ML Centre (KIAC)-Google
+> 1A. Shirwatkar, P. Kotecha, are with the Robert Bosch Center for Cyber-Physical Systems, Indian Institute of Science, Bengaluru.
+> 2S. Kolathaya is with the Robert Bosch Center for Cyber-Physical Systems and the Department of Computer Science & Automation, Indian Institute of Science, Bengaluru. Email: stochlab@iisc.ac.in, Website: link
+> Fig. 1: Overview of our inverse dynamics-based planner. At each control step, the method samples candidate joint trajectories, computes the corre-sponding torques, evaluates them using learned reward and value functions, and updates the distribution for the next sampling round.
+
+This limitation has spurred interest in hybrid approaches that combine the strengths of physics-based modeling and data-driven learning [6], [7]. Lagrangian Neural Networks (LNNs) [8], [9] represent one such direction, where instead of fitting dynamics directly, the model parameterizes the system’s Lagrangian and derives equations of motion via the Euler-Lagrange formulation. LNNs embed Lagrangian mechanics into learned dynamics, producing physically con-sistent, interpretable predictions that improve generalization and reliability for planning. A related paradigm, Hamiltonian Neural Networks (HNNs) [10], similarly enforces physical structure, and can be reformulated as an LNN through a Legendre transformation. In this work, we focus on LNNs due to their suitability for the control problem at hand, while noting the close theoretical connection between the two approaches. The application of physics-informed learning frameworks to real-world systems, particularly in robotics, remains an active area of research. Deep Lagrangian Networks (DeLaN) [14], [15] was among the first works to demonstrate the viability of LNNs in low DoF systems using model-based control. LNNs have also been applied in model-based RL [16], however, the computational cost of real-time inference limits their use in high-DoF systems like quadrupeds, where contact dynamics and underactuation. To address these limitations, there exist hybrid approaches that combine the structure of model-based control with the                     
+
+> arXiv:2603.14333v1 [cs.RO] 15 Mar 2026 TABLE I: Comparison of proprioceptive quadruped locomotion methods, including our approach. The table summarizes key trade-offs across inference speed (higher rank is faster), planning capability, model interpretability, and terrain generalization.
+> Quadruped Locomotion Methods Inference Speed (1-5) Planning Interpretable Dynamics Multi-Terrain
+> Nonlinear MPC [1], [2], [3] 3 to 4 ✓✓✗
+> DreamWaQ [11], HIMLoco [12] 5✗None ✓
+> PIP-Loco [13] 4✓✗✓
+> Ours 3✓✓✓
+
+flexibility of model-free RL. In particular, integrating RL policies with Model Predictive Control (MPC) has signif-icantly improved the performance of complex dynamical systems [13], [17], [18]. Here for training, they commonly employ a Dreamer module [13] to jointly learn an ONN dynamics model, a reward estimator, a policy and a value function for long-horizon control. For clarity, please note that the Dreamer module [13] is different from the Dreamer algorithm [19]. The Dreamer module is used to facilitate future state prediction and planning during deployment (see Section III-B.3 for more details). During inference, an ap-proximation of the infinite-horizon trajectory optimization problem via bootstrapping of the value function, is solved by warm-starting it using the RL policy for faster convergence. While effective, the ONN-based dynamics suffer from gen-eralization and long-horizon errors, motivating our use of an LNN-based counterpart. Further, since LNNs face practical challenges for real-time inference, their direct integration cannot be done in RL-MPCsetups. Hence, there is a pressing need for methods that strike a balance between computational efficiency and physical consistency, enabling robust real-time planning and control in such demanding systems. To address the challenges mentioned above, we propose a framework that integrates LNNs with RL-MPC frame-work for real-time quadrupedal locomotion. Specifically, the transition dynamics are learned concurrently as the model-free RL policy explores and are subsequently employed for planning during deployment. Table I summarizes how our approach compares with other propriocepive quadruped lo-comotion methods in terms of efficiency, planning capability, interpretability, and terrain adaptability. An overview of our inverse dynamics-based planner is shown in Fig. 1. Overall, our approach enhances the sample efficiency of the dynamics model while reducing rollout errors during deployment. To summarize, our key contributions include: 1) LNN-based RL-MPC Architecture - We present the first framework integrating physics-consistent LNNs into an RL-MPC pipeline for locomotion, enabling physically interpretable long-horizon predictions. 2) Planning with Learned Inverse Dynamics - We formulate an inverse dynamics optimization over joint trajectories that eliminates mass matrix inversions at deployment, achieving up to 4× lower latency than forward-dynamics LNN planners while maintaining competitive returns enabling real-time deployment. 3) Empirical validation in sim and real world - We benchmark across 5 dynamics model variants and validate on a Unitree Go1 across 6 terrain types. II. S ETUP 
+
+In this section, we present the mathematical setup, starting with the underlying problem formulation, followed by an overview of the RL training pipeline. 
+
+A. Preliminaries 
+
+We formulate our problem as an infinite-horizon dis-counted Partially Observable Markov Decision Process (POMDP), defined by the tuple: M = {S , A, O, r, P, γ, T } ,where S ⊂ Rn denotes the state space, O ⊂ Rp the observa-tion space, and A ⊂ Rm the action space. The observation history over the past M steps is denoted as OM ⊂ Rp×M .The system evolves according to the transition function P :
+
+S × A 7 → Pr( ·), where Pr denotes a probability distribution over successor states. Partial observability is governed by the observation function T : S 7 → O . The agent’s behavior is guided by a reward function r : S × A 7 → R, with γ ∈ (0 , 1) 
+
+denoting the discount factor. Further, we represent the full state of the quadruped using [q, ˙q], where q ∈ R18 denotes the generalized positions and ˙q ∈ R18 the generalized velocities. Input actuation in the form of torques is denoted by u ∈ R12 .
+
+1) Observations & Actions: The observation vector o ∈ O 
+
+comprises a combination of proprioceptive signals. Specif-ically, it includes joint angle Θ ∈ R12 , joint velocities 
+
+˙Θ ∈ R12 , projected gravity g p, and the previous action at−1.Additionally, desired linear and angular velocity commands for the base, v cmd , are provided to the policy. The action vector a ∈ A represents joint angle offsets applied to the nominal joint angles. The commanded joint positions at time step t are computed as Θcmd  
+
+> t
+
+= at +Θ nominal .These commanded positions are passed through an actuator network [20] to generate the required joint torques ( u). 
+
+2) Reward Function: The reward function is designed to promote desirable locomotion behaviors aligned with the control objectives. These objectives include accurately track-ing the commanded linear and angular velocities, maintaining a desired body height, and preserving a stable body orien-tation. A comprehensive description of the specific reward terms can be found in [21]. 
+
+B. RL Training 
+
+Our training design is based on an Asymmetric Actor-Critic [22] formulation of model-free RL from [13]. Here, an expert actor receives augmented inputs from a Dreamer module, and the critic takes privileged observations. The privileged observation comprises the height field around the robot, external forces, the robot’s linear velocity, and other Fig. 2: Our training framework where observation history is encoded into full-state estimates, and passed through a physics-informed Dreamer module to augment expert actor with future predictions for robust policy learning. 
+
+unobservable data, in addition to the proprioceptive observa-tions. The motivation for this is to address the information asymmetry between the actor and the critic. However, to our end, we make two key changes: (i) the encoder is trained to output full-body state estimates, and (ii) the Dreamer module is physics-informed through the use of LNNs (see Section III for more details). We provide an overview of this approach in Fig. 2. Running MPC planners during every training rollout across thousands of parallel environments [23], [21] is both slow and memory-intensive, making recent model-based RL methods [17], [18] impractical in our setting. To avoid this, we keep it simple and efficient by deferring planning to the deployment phase, similar to [13], where its benefits can be fully leveraged without affecting training time. III. M ETHODOLOGY 
+
+The previous section established the training pipeline. We now detail its three technical components: the LNN dynamics model, the encoder and Dreamer module built on top of it, and the deployment-time inverse-dynamics planner. 
+
+A. Lagrangian Neural Networks (LNNs) 
+
+Consider the Lagrangian, defined as the difference be-tween the kinetic and potential energies: L = 12 ˙qT M(q) ˙ q −V(q). The system’s equations of motion follow from the Euler-Lagrange equation: 
+
+M(q)¨ q + C(q, ˙q) ˙ q + G(q) = Bu + H(q, ˙q),
+
+where M is the mass matrix, C is for Coriolis and centrifugal forces, G represents gravitational forces, H denotes external forces, and B accounts for actuation mapping at the DoFs. 
+
+C(q, ˙q) and G(q) are derived from the partial derivatives, as follows: 
+
+C(q, ˙q) = ∇q M(q) ˙ q − 12 ∇q ( ˙ qT M(q)) , G(q) = ∇q V(q).
+
+To embed this physical structure into a learnable dynam-ics model, we adopt the DeLaN framework, which mod-els dynamics directly via the Lagrangian formulation. We parametrize M(q), V(q), and H(q, ˙q) using neural networks with parameters φ. However, this requires careful handling to ensure physical consistency, as discussed below. 
+
+1) Mass Matrix Parameterization: Following [14], [15], the mass matrix is parameterized as a symmetric positive-definite (SPD) matrix: Mφ(q) = Yφ(q)Yφ(q)T + εI , where 
+
+Yφ(q) is a learnable lower triangular matrix with entries produced by a multi-layer perceptron (MLP), and εI is a small diagonal matrix added for numerical stability. 
+
+2) Next State Prediction: The system’s continuous-time evolution can be expressed in state-space form: 
+
+ddt 
+
+q
+
+˙q
+
+
+
+=
+
+ ˙q
+
+M−1 
+
+> φ
+
+(q) ( Bu + Hφ(q, ˙q) − C φ(q, ˙q) ˙ q − G φ(q)) 
+
+
+
+.
+
+For practical implementation, the dynamics are discretized using first-order integration. Given the state vector [qt, ˙qt]
+
+and acceleration ¨qt at time t, the update to t + 1 is: 
+
+qt+1 
+
+˙qt+1 
+
+
+
+=
+
+qt + ˙ qt∆t + ¨ qt∆t2
+
+˙qt + ¨ qt∆t
+
+
+
+≡ fφ(qt, ˙qt, u t). (1) 
+
+Here, ∆t denotes the timestep size, and fφ represents the forward dynamics map. The control input u is generated via an actuator network [20]. This formulation ensures physically consistent state evolution while remaining computationally efficient. The forward dynamics map fφ defined above requires the full physical state [q, ˙q] as input. Since this state is not directly observable on hardware, we next describe the encoder that estimates it from proprioceptive history, and the Dreamer module that uses fφ to generate physics-informed imagined trajectories for policy training. 
+
+B. Encoder & Dreamer Module 
+
+To enable the expert actor to reason about the future, we augment its input using the predicted next full state. This is done through the Dreamer module, which consists of a learned dynamics model dφ, policy πφ, reward function rφ,and value function Vφ. All modules operate on full state information zt = (qt, ˙qt) ∈ R36 , which is not directly observed and must be inferred. This setup is conceptually related to [24] and [13], but here the dreamt trajectory is generated from a physics-informed model (LNN), ensuring consistent behavior even under out-of-distribution transitions. 
+
+1) Full-State Estimation: We learn an encoder network 
+
+Eφ : OM → R36 that maps a history of proprioceptive observations ot−M :t to the full physical state zt. The encoder is trained via supervised regression using simulation ground-truth states: LEncoder = ∥E φ(ot−M :t) − zt∥2                                          
+
+> Algorithm 1 Physics-Informed Dreaming
+> Require: Observation history ot−M:t, horizon H
+> 1: zt← E φ(ot−M:t)
+> 2: ˜zt←zt,yt← { ˜zt}
+> 3: for k= 0 to H−1do
+> 4: ak←πφ(˜ zt+k)
+> 5: ˜zt+k+1 ←dφ(˜ zt+k, a k)
+> 6: yt←yt∪ { ˜zt+k+1 }
+> 7: end for
+> 8: return Dreamt trajectory yt={˜zt+1 , . . . , ˜zt+H}
+
+2) Physics-Informed Dreaming: The estimated state zt is used to generate a predicted trajectory yt, where each future state is obtained by rolling out the Lagrangian dynamics model dφ under the dreamer policy πφ (see Algorithm 1). Here, dφ(z, a ) coincides with fφ in Equation (1) when ap-plied together with an actuator network [20], which converts actions a into the corresponding control inputs u (torques) required by the dynamics. The resulting dreamt trajectory is then combined with the current proprioceptive observations and provided as an augmented input to the expert actor. 
+
+3) Supervised Training of Dreamer Module: All networks within the Dreamer module are trained using supervised targets. For each timestep t in the replay buffer, we construct the training tuple (ot−M :t, a expert  
+
+> t
+
+, r sim  
+
+> t
+
+, z sim 
+
+> t+1
+
+, V target  
+
+> t
+
+), where: 
+
+aexpert  
+
+> t
+
+is the action from the expert actor, rsim  
+
+> t
+
+and zsim  
+
+> t+1
+
+are the ground-truth reward and next state from simulation, V target 
+
+> t
+
+is a value target provided by the privileged critic. Then each component is trained to minimize the following loss: 
+
+LDreamer = dφ(zt, a expert  
+
+> t
+
+) − zsim 
+
+> t+1
+> 2
+
+| {z }
+
+> Dreamer Dynamics
+
++ rφ(zt, a expert  
+
+> t
+
+) − rsim 
+
+> t
+> 2
+
+| {z }
+
+> Dreamer Reward
+
++ Vφ(zt) − V target 
+
+> t
+> 2
+
+| {z }
+
+> Dreamer Critic
+
++ πφ(zt) − aexpert 
+
+> t
+> 2
+
+| {z }
+
+> Dreamer Policy
+
+This loss is computed independently for each sample t in the offline buffer, and gradients are propagated only through the respective module. The use of supervised learning ensures sample-efficient training without backpropagation through imagined rollouts or the Proximal Policy Optimization (PPO) [25] loss of the expert actor. It is important to note the distinct roles of the two learned policies: the expert actor, trained via PPO, is the sole policy that interacts with the environment during training. The Dreamer policy warm-starts the inverse-dynamics MPC solver at inference time alongside the previous MPC solution and is never executed as a standalone controller. Further, the expert actor’s role is confined entirely to training. From now on, for simplicity, we omit the timestep subscripts in the following section on deployment. 
+
+C. Deployment: Planning with Inverse Dynamics 
+
+With the encoder and Dreamer module trained, we adopt a planning approach during inference. The optimization objective, using full state z = [ q, ˙q], is expressed as: 
+
+max 
+
+> a0: H−1
+> H−1
+
+X
+
+> k=0
+
+γk rφ(zk , a k ) + γH Vφ(zH )
+
+s.t. z0 = zinit ,zk+1 = dφ(zk , a k ), ∀k = 0 , . . . , H − 1.
+
+(2) 
+
+Solving this optimization yields an H-step action se-quence, using the learned reward and value functions from Section III-B. The sequence begins from the initial state zinit 
+
+and evolves according to the learned dynamics model dφ.
+
+1) Computational Challenges: Forward vs. Inverse Dy-namics: Although forward dynamics MPC policies have been successfully demonstrated on manipulators using De-LaN [26], applying them directly to Equation (2) introduces substantial computational challenges. These arise from re-peated mass matrix inversions during the forward pass. Even when exploiting the SPD structure, matrix decompositions remain a significant bottleneck, especially for sampling-based optimization algorithms that evaluate many trajectories in parallel. Consequently, direct forward-dynamics-based in-tegration becomes impractical for high-dimensional systems, such as quadrupeds, in real-time settings.                                                                                                                             
+
+> Algorithm 2 Inverse Dynamics-Based ∞Horizon MPC
+> Require: (μprev , σ prev ): Previous MPC solution; z= [ q, ˙q]: Full state estimate from encoder; 1: Generate (μRL , σ RL )from the Dreamer rollout starting at z
+> 2: (μ0, σ 0)←α(μprev , σ prev ) + (1 −α)( μRL , σ RL )
+> 3: for i= 1 to Ndo
+> 4: A← ∅ ,R← ∅
+> 5: // Sample trajectories
+> q(j)1: H∼ N (μi−1, σ i−1),∀j∈[1 , M ]
+> q(j)1: H∼ N (μRL , σ RL ),∀j∈[M+ 1 , M +Mπ]
+> 6: for all jin sampled trajectories do
+> 7: ¯R(j)= 0
+> 8: for k= 1 to H−1do
+> 9: ( ˙ q(j)
+> k,¨q(j)
+> k) = F(q(j)
+> k−1, q (j)
+> k, q (j)
+> k+1 )
+> 10: u(j)
+> k=gφ(q(j)
+> k,˙q(j)
+> k,¨q(j)
+> k)
+> 11: ¯R(j)= ¯R(j)+γkrφ(· · · )−λ·RootForcePenalty (Bu(j)
+> k)
+> 12: end for
+> 13: ¯R(j)= ¯R(j)+γHVφ(q(j)
+> H,˙q(j)
+> H)
+> 14: R←R∪ { ¯R(j)},A←A∪ { q(j)1: H}
+> 15: end for
+> 16: AE←Top Melite trajectories from Aby return R
+> 17: Fit Gaussian (μelite , σ elite )to AE
+> 18: (μi, σ i)←β(μelite , σ elite ) + (1 −β)( μi−1, σ i−1)
+> 19: end for
+> 20: return First action from N(μN, σ N)
+
+To address this, we propose an alternative optimization formulation expressed directly in terms of joint positions q,inspired by [1], [27]: 
+
+max 
+
+> q1: H
+> H−1
+
+X
+
+> k=0
+
+γk rφ(qk , ˙qk , u k ) + γH Vφ(qH , ˙qH )
+
+s.t. q0 = qinit , ˙q0 = ˙ qinit ,
+
+( ˙ qk , ¨qk ) = F(qk−1, q k , q k+1 ),uk = gφ(qk , ˙qk , ¨qk ), ∀k = 1 , . . . , H − 1.
+
+(3) 
+
+Here, the reward function rφ is defined directly in terms of 
+
+u instead of the policy action a, allowing inverse dynamics to be explicitly incorporated. The inverse dynamics model 
+
+gφ is defined as: 
+
+Bu = Mφ(q)¨ q + Cφ(q, ˙q) ˙ q + Gφ(q) − H φ(q, ˙q) ≡ gφ(q, ˙q, ¨q).
+
+Finally, the finite-difference operator F provides approxi-mations of velocity and acceleration: 
+
+F(qk−1, q k , q k+1 ) = 
+
+ qk − qk−1
+
+∆t , qk+1 − 2qk + qk−1
+
+∆t2
+
+
+
+.
+
+See Algorithm 2 for a detailed description of solving Equation (3). 
+
+2) Pros and Cons of Inverse Dynamics: An advantage of this formulation is that future states evolve through a simple linear rollout, with all nonlinearities encapsulated in the reward calculation via u. Equation (2) requires optimizing over a and rely on forward dynamics for state propagation, which introduces the aforementioned computational burdens. By leveraging inverse dynamics, we optimize directly over the joint trajectory q, bypassing explicit matrix inversions. However, for underactuated systems, it is not immediately obvious that the so-called root forces components of Bu
+
+should be zero in the optimal solution, since unactuated DoFs cannot generate torque or forces to evolve the state. Ensuring this property is particularly challenging when using the sampling-based optimization method we adopt. Gradient- or Hessian-based constrained optimization solvers can enforce this condition [1], but they introduce additional computa-tional overhead due to the need for gradient calculations of the learned function approximators. Instead, in our approach, we simply discard trajectories during the sampling step if they exhibit high root forces. However, we note that the frequency of trajectory rejection due to root force violations, and sensitivity to the penalty weight λ, remain open ques-tions that warrant systematic study in future work. IV. R ESULTS 
+
+In this section, we present the implementation details, followed by a comprehensive evaluation of our framework against baseline methods. We report results on training performance to capture sample efficiency, and deployment-time effectiveness to assess prediction accuracy, inference speed and performance. We validate our controller on real hardware, for robustness and generalization with minimal simulation-to-reality transfer issues.                       
+
+> TABLE II: Hyperparameters used for training and deployment. Separate configurations are used for the RL and MPC modules to balance perfor-mance and efficiency.
+> Hyperparameters Value
+> Training
+> Hidden layers for RL 512 ,256 ,128 
+> Hidden layers for Dreamer 256 ,256 
+> Activation function tanh
+> Number of environments 4096 Number of mini batches 25 Number of steps per environment 100
+> Deployment
+> Planning Horizon ( H)8Number of MPPI Iterations ( N)6Number of Sampled Trajectories ( M)500 Number of RL Policy Samples ( Mπ)30 Number of Elite Trajectories ( Melite )60 Discount Factor ( γ)0.99 Temporal Momentum ( β)0.95 Initialization Mix Factor ( α)0.5 Constraint Penalty Weight ( λ)1.0
+
+1) Implementation Details: In the RL framework, we employ an asymmetric actor-critic architecture implemented as an MLP. Similarly, the encoder and Dreamer module have been implemented as an MLP; the hyperparameter details of the same are described in Table II. During training, privileged information about the next state is stored in the buffer, enabling the training of the dynamics model. The base RL algorithm is PPO [25] with modifications tailored for our quadruped environment [21]. For deployment, we integrate the Dreamer module into our sampling-based MPC framework (section III-C), whose hyperparameters are also listed in Table II. 
+
+2) System Details: For training, we utilized an open-source massively parallel RL environment setup for the Unitree Go1 quadruped robot, based on Nvidia’s Isaac Gym simulator [23], [21]. The neural networks for PPO were implemented using PyTorch [28], while the Dreamer module was implemented using JAX [29]. Training was conducted on a desktop system with an Intel Xeon(R) Gold 5318Y CPU (48 cores, 2.10 GHz), 512 GB of RAM, and an NVIDIA RTX 6000 Ada Generation GPU. For hardware deployment, we used a system with an AMD Ryzen 9 7940HS @ 3.992 GHz, 32 GB of RAM, and an Nvidia GeForce RTX 4060 Laptop GPU. 
+
+3) Baselines: We compare our method against a range of baselines, including models without any inductive biases, LNN [8], [14], and its variants introduced for quadrupedal planning [30]. These baselines are categorized based on the type of dynamics modeling (forward or inverse), the state space structure incorporated, and the strategy used during training and inference. 
+
+ONN (Opaque Neural Network) serves as our unstruc-tured baseline. It directly maps current observations and actions to the next observation using a feedforward neural network, without incorporating any physics priors: 
+
+ˆot+1 = dONN  
+
+> φ
+
+(ot, a t), LONN = ∥ot+1 − ˆot+1 ∥2 .
+
+This baseline allows us to assess the effect of imposing physical structure on dynamics learning. We exclude base-lines such as LSTMs, as our framework operates on an estimated full state from a fixed observation window, making recurrence unnecessary. Moreover, these tend to obscure internal representations, making them less suitable for our goal of interpretable dynamics modeling. 
+
+LNN Forward [8] follows the standard Lagrangian Neural Network formulation, where the mass matrix is fully learned and inverted during both training and inference. This baseline evaluates the benefits and trade-offs of learning structured dynamics without the diagonalization simplification. 
+
+DeLaN [14] also models system dynamics using the Lagrangian formulation. However, unlike LNN Forward, it diagonalizes the mass matrix during both training and inference, significantly reducing computational complexity while maintaining physical consistency. 
+
+LNN Inverse uses an inverse dynamics formulation during training to predict joint torques required to produce observed state transitions. This design highlights how structured train-ing can influence generalization, even when inference follows a different formulation: 
+
+LLNN-Inverse = ∥τt − ˆτt∥2 + ∥RootForce (Bˆτt)∥2 , Bˆτt = gφ(· · · )
+
+CoM LNN simplifies the system representation by mod-eling the robot as a single rigid body and applying La-grangian dynamics to predict the center of mass (CoM) evolution. It is trained using the following loss: LCoM-LNN =∥ct+1 − ˆct+1 ∥2, where ct+1 is the ground-truth CoM state, and ˆct+1 is the predicted value obtained from CoM-based dynamics. This baseline isolates the effect of coarse-grained modeling and is useful for understanding the role of high level abstraction in learned dynamics. 
+
+> Fig. 3: Training loss curves across different dynamics models. Our method achieves strong sample efficiency while balancing compute cost, compared to LNN Forward and ONN baselines.
+
+A. Training and Sample Efficiency 
+
+We evaluate model learning efficiency from two perspec-tives: training efficiency , measured as the computational cost per iteration, and sample efficiency , defined as the number of samples required to reach convergence. Fig. 3 shows the normalized training loss over 60 million environ-ment steps. While ONN achieves lower per-iteration compute cost ( ≈ 4.5 secs per iteration), its loss remains significantly higher throughout training, indicating poor sample efficiency. In contrast, all the LNN-based methods converge faster. LNN Forward (with full mass matrix inversion) achieves the lowest training loss overall but at a high computational cost ( ≈
+
+22 secs per iteration), making it less suited for real-time applications. Our method (which is equivalent to DeLaN in training) exhibits lower training loss because of physics priors, while also keeping the per-iteration cost low using diagonalization while training ( ≈ 17.5 secs per iteration). Our approach achieves comparable loss to LNN Inverse while also offering advantages in inference speed and planning robustness. These results confirm that incorporating physical priors and Lagrangian structure improves sample efficiency. While structured models introduce additional overhead, this cost is compensated by faster convergence and improved long-term accuracy, particularly in high-dimensional tasks such as quadrupedal locomotion. 
+
+B. H-step Prediction Error 
+
+We evaluate the prediction accuracy of the dynamics models over the horizon, which is critical for planning in MPC. Specifically, we measure the mean squared error between the predicted and actual simulation states (different for each method) over different rollout lengths. Fig. 4 illustrates that the H-step prediction error across all models. ONN exhibits the highest prediction error, with severe compounding as the horizon increases. CoM LNN 
+
+> Fig. 4: H-step prediction error of different models. Our approach maintains stable error across horizons, with significantly lower compounding error than ONN and CoM LNN.
+
+shows moderate improvements but still accumulates notice-able drift. In contrast, our method maintains stable error profiles even as the horizon increases, closely matching the performance of LNN Forward and LNN Inverse. 
+
+C. Balancing Inference Speed and Performance 
+
+For deployment of MPC defined in Equation (2) and (3), a dynamics model must strike a delicate balance between inference speed and prediction accuracy. In this section, we evaluate all the methods for flat terrain in simulation across two key axes 1 : (i) MPC inference time per control step, and (ii) Episodic return as a measure of control quality. Results are reported across increasing prediction horizons in Fig. 5.                                                                                                       
+
+> Fig. 5: Trade-off between MPC inference time and control performance across planning horizons. Our inverse-dynamics-based planner achieves competitive returns with significantly lower inference latency.
+> 1While afull ablation of the warm-start component is beyond the scope of this work, MPPI is well known to benefit significantly from informed initialization [31], [13]; a cold-started sampler at H=8 with M=500 trajectories would require substantially more iterations to achieve the same solution quality, exceeding our real-time budget. TABLE III: Performance comparison across terrains in simulation. Reported values are average episodic rewards ± standard deviation. DeLaN achieves the highest rewards, while our method closely matches with much lower compute cost.
+> Method Flat Ground Slopes Rough terrain Stairs (12 cm) Stairs (14 cm) Stairs (16 cm)
+> HIMLoco 9.19 ±0.02 9.18 ±0.05 8.72 ±0.07 7.32 ±0.24 7.01 ±0.38 6.31 ±0.58
+> DeLaN (H=9) 9.38 ±0.19.38 ±0.11 9.1±0.11 8.33 ±0.29 7.81 ±0.28 7.31 ±0.31
+> CoM LNN (H=5) 9.05 ±0.26 8.26 ±0.38 7.98 ±0.62 6.83 ±0.59 Failed Failed ONN (H=9) 9.19 ±0.07 9.20 ±0.12 8.80 ±0.21 7.48 ±0.46 7.21 ±0.48 6.91 ±0.78
+> Ours (H=9) 9.23 ±0.17 8.67 ±0.42 8.64 ±0.42 7.74 ±0.53 7.51 ±0.58 7.18 ±0.53
+
+ONN achieves the lowest inference latency across all horizons. However, this comes at a clear cost: as the planning horizon grows beyond H = 8 , returns deteriorate signifi-cantly. The lack of physical priors leads to compounding errors and poor long-horizon reasoning. While ONN may be suitable for tasks with short lookahead, its utility in complex locomotion scenarios is limited. 
+
+LNN Forward provides a full-body Lagrangian model trained via forward dynamics and serves as a strong upper bound in terms of performance. It consistently achieves the highest returns across all horizon values. However, its use of full-matrix inversion during rollout leads to computational bottlenecks. While it can achieve near-optimal performance, it suffers from poor scalability, making it challenging to deploy under real-time constraints. 
+
+DeLaN exhibits strong performance across most horizons. Its structured formulation uses diagonalized mass matrices and energy-conserving properties to yield stable rollouts, even at high horizons. However, its inference time increases steeply with horizon length, reaching over 80 ms per control step at H = 16 , making it unsuitable for high-frequency MPC control (e.g., > 50 Hz). 
+
+CoM LNN , which models only the CoM dynamics using Lagrangian structure, reduces computational cost relative to DeLaN. However, even this coarse-grained formulation incurs increasing latency with horizon due to the need for forward integration and mass matrix inversion. In terms of performance, CoM LNN performs reasonably well at short horizons but struggles at H > 10 , suggesting that the sim-plified dynamics limit its long-term predictive capabilities. 
+
+Our method replaces forward integration with inverse dynamics-based rollout, optimizing directly over joint po-sitions q1: H . This key design choice allows for linear state propagation without matrix inversion, substantially reducing rollout cost. Our approach achieves an inference time of just 
+
+30 ms at H = 16 , which is nearly 4× faster than LNN Forward and DeLaN. Despite this efficiency, it maintains competitive returns across all horizons, outperforming ONN and CoM LNN at H > 10 , and closely matching DeLaN and LNN Forward up to H = 12 . This demonstrates that our formulation not only offers computational benefits but also enables accurate long-horizon planning. Concretely, at 
+
+H = 9 , our method achieves 98% of DeLaN’s episodic return on the most demanding stair terrain ( 7.18 vs. 7.31 ) while running at approximately 4× lower latency - making it the only planning-based method in our comparison capable of sustaining 50 Hz control. This is a deliberate Pareto trade-off: a marginal reduction in peak reward in exchange for a latency profile compatible with real-time deployment on resource-constrained hardware. To summarize, our MPC framework offers the best trade-off in the spectrum. It combines physical structure with effi-cient optimization, delivering strong returns and low latency even at large horizons. This makes it particularly suitable for real-world deployment where computational budgets are tight and long-term stability is essential. 
+
+D. Multi-Terrain Performance 
+
+We evaluate the proposed method’s robustness and gen-eralization across diverse terrains, both in simulation and on hardware. Our goal is to assess whether the inverse-dynamics-based controller retains long-horizon planning ca-pability and inference efficiency in real-world settings. 
+
+1) Simulation Results: Table III presents average rewards on flat ground, slopes, rough terrain, and stairs (of increasing height), comparing our method against baselines. Among the planning-based controllers, DeLaN achieves the highest re-wards, benefiting from its structured formulation and stability under forward rollouts. However, this performance comes at a significant computational cost. Our method performs competitively across all terrains, closely matching DeLaN on flat ground and outperforming CoM LNN and ONN on stairs. Despite using inverse dynam-ics for rollout, it maintains sufficient predictive consistency to enable effective long-horizon planning. Unlike ONN, which lacks physical priors and exhibits degraded performance in complex terrains, our model benefits from structured regularization without incurring high inference latency. We also include HIMLoco [12] as a non-planning, end-to-end RL baseline. While it performs reasonably on all terrains, it lacks interpretability or benefits of planning. 
+
+2) Hardware Validation: We deploy our method on a Uni-tree Go1 robot and test on unstructured outdoor environments including loose gravel, ramps, flat pavement, and staircases. Fig. 6 shows representative deployment scenarios alongside the absolute hardware rollout error over 1200 time steps. Our method maintains consistently lower, more stable error (averaging ∼0.1) than the ONN, and other LNN variants, which exhibit significantly higher variance and drift. On hardware, the controller remains reactive to terrain irregularities such as foot slippage or variable stair heights, thanks to its 50Hz on-device rollout speed and predictive consistency. In stair climbing, it recovers from foot pertur-bations without the use of pre-programmed heuristics. This robustness demonstrates successful sim-to-real transfer. Fig. 6: Hardware validation and absolute error tracking across 1200 time steps. Our method maintains significantly lower, more consistent rollout error than baselines (ONN, DeLaN, LNN variants) while navigating diverse terrain, including gravel, ramps, and stairs. 
+
+V. C ONCLUSION 
+
+We presented a control framework that integrates La-grangian Neural Networks with model predictive control and reinforcement learning for quadrupedal locomotion. By leveraging inverse dynamics, our method improves sample efficiency during training and reduces inference overhead during deployment. Simulation benchmarks show favorable trade-offs between prediction accuracy and runtime perfor-mance, and hardware tests on a Unitree Go1 robot confirm feasibility across diverse terrains with minimal tuning. Fu-ture work includes refining inverse dynamics formulations, incorporating contact dynamics, and extending the approach to more complex locomotion tasks involving perception. REFERENCES [1] V. Kurtz, A. Castro, A. Ö. Önol, and H. Lin, “Inverse dynamics trajectory optimization for contact-implicit model predictive control,” 
+
+arXiv preprint arXiv:2309.01813 , 2023. [2] H. Li, T. Zhang, W. Yu, and P. M. Wensing, “Versatile real-time motion synthesis via kino-dynamic mpc with hybrid-systems ddp,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) ,pp. 9988–9994, IEEE, 2023. [3] G. Kim, D. Kang, J.-H. Kim, and H.-W. Park, “Contact-implicit differential dynamic programming for model predictive control with relaxed complementarity constraints,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 11978– 11985, 2022. [4] R. T. Chen, Y. Rubanova, J. Bettencourt, and D. K. Duvenaud, “Neu-ral ordinary differential equations,” Advances in neural information processing systems , vol. 31, 2018. [5] D. Nguyen-Tuong, M. Seeger, and J. Peters, “Model learning with local gaussian process regression,” Advanced Robotics , vol. 23, no. 15, pp. 2015–2034, 2009. [6] M. Raissi, P. Perdikaris, and G. E. Karniadakis, “Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations,” 
+
+Journal of Computational Physics , vol. 378, pp. 686–707, 2019. [7] F. Djeumou, C. Neary, E. Goubault, S. Putot, and U. Topcu, “Neu-ral networks with physics-informed architectures and constraints for dynamical systems modeling,” in Learning for Dynamics and Control Conference , pp. 263–277, PMLR, 2022. [8] M. Cranmer, S. Greydanus, S. Hoyer, P. Battaglia, D. Spergel, and S. Ho, “Lagrangian neural networks,” arXiv preprint arXiv:2003.04630 , 2020. [9] M. Finzi, K. A. Wang, and A. G. Wilson, “Simplifying hamiltonian and lagrangian neural networks via explicit constraints,” Advances in neural information processing systems , vol. 33, pp. 13880–13889, 2020. [10] S. Greydanus, M. Dzamba, and J. Yosinski, “Hamiltonian neural networks,” Advances in neural information processing systems , vol. 32, 2019. [11] I. M. A. Nahrendra, B. Yu, and H. Myung, “Dreamwaq: Learning robust quadrupedal locomotion with implicit terrain imagination via deep reinforcement learning,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) , pp. 5078–5084, IEEE, 2023. [12] J. Long, Z. Wang, Q. Li, L. Cao, J. Gao, and J. Pang, “Hybrid internal model: Learning agile legged locomotion with simulated robot response,” in The Twelfth International Conference on Learning Representations , 2024. [13] A. Shirwatkar, N. Saxena, K. Chandra, and S. Kolathaya, “Pip-loco: A proprioceptive infinite horizon planning framework for quadrupedal robot locomotion,” arXiv preprint arXiv:2409.09441 , 2024. [14] M. Lutter, C. Ritter, and J. Peters, “Deep lagrangian networks: Using physics as model prior for deep learning,” in International Conference on Learning Representations , 2019. [15] M. Lutter, K. Listmann, and J. Peters, “Deep lagrangian networks for end-to-end learning of energy-based control for under-actuated systems,” in 2019 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 7718–7725, IEEE, 2019. [16] A. Ramesh and B. Ravindran, “Physics-informed model-based rein-forcement learning,” in Learning for Dynamics and Control Confer-ence , pp. 26–37, PMLR, 2023. [17] H. Sikchi, W. Zhou, and D. Held, “Learning off-policy with online planning,” in Conference on Robot Learning , pp. 1622–1633, PMLR, 2022. [18] N. Hansen, H. Su, and X. Wang, “Td-mpc2: Scalable, robust world models for continuous control,” arXiv preprint arXiv:2310.16828 ,2023. [19] D. Hafner, T. Lillicrap, J. Ba, and M. Norouzi, “Dream to control: Learning behaviors by latent imagination,” 2020. [20] J. Hwangbo, J. Lee, A. Dosovitskiy, D. Bellicoso, V. Tsounis, V. Koltun, and M. Hutter, “Learning agile and dynamic motor skills for legged robots,” Science Robotics , vol. 4, no. 26, p. eaau5872, 2019. [21] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk in minutes using massively parallel deep reinforcement learning,” in 
+
+Conference on Robot Learning , pp. 91–100, PMLR, 2022. [22] L. Pinto, M. Andrychowicz, P. Welinder, W. Zaremba, and P. Abbeel, “Asymmetric actor critic for image-based robot learning,” arXiv preprint arXiv:1710.06542 , 2017. [23] V. Makoviychuk, L. Wawrzyniak, Y. Guo, M. Lu, K. Storey, M. Mack-lin, D. Hoeller, N. Rudin, A. Allshire, A. Handa, and G. State, “Isaac gym: High performance gpu-based physics simulation for robot learning,” 2021. [24] S. Racanière, T. Weber, D. Reichert, L. Buesing, A. Guez, D. Jimenez Rezende, A. Puigdomènech Badia, O. Vinyals, N. Heess, Y. Li, et al. , “Imagination-augmented agents for deep reinforcement learning,” Advances in neural information processing systems , vol. 30, 2017. [25] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 , 2017. [26] L. Schulze, J. Peters, and O. Arenz, “Context-aware deep la-grangian networks for model predictive control,” arXiv preprint arXiv:2506.15249 , 2025. [27] E. Todorov, “Goal directed dynamics,” in 2018 IEEE International Conference on Robotics and Automation (ICRA) , pp. 2994–3000, 2018. [28] A. Paszke, S. Gross, S. Chintala, G. Chanan, E. Yang, Z. DeVito, Z. Lin, A. Desmaison, L. Antiga, and A. Lerer, “Automatic differen-tiation in pytorch,” 2017. [29] J. Bradbury, R. Frostig, P. Hawkins, M. J. Johnson, C. Leary, D. Maclaurin, G. Necula, A. Paszke, J. VanderPlas, S. Wanderman-Milne, and Q. Zhang, “JAX: composable transformations of Python+NumPy programs,” 2018. [30] P. Kotecha, A. Shirwatkar, and S. Kolathaya, “Investigating lagrangian neural networks for infinite horizon planning in quadrupedal locomo-tion,” arXiv preprint arXiv:2506.16079 , 2025. [31] G. Williams, A. Aldrich, and E. Theodorou, “Model predictive path integral control using covariance variable importance sampling,” arXiv preprint arXiv:1509.01149 , 2015.
