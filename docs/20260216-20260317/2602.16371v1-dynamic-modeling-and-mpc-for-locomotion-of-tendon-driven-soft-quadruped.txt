@@ -1,0 +1,699 @@
+Title: Dynamic Modeling and MPC for Locomotion of Tendon-Driven Soft Quadruped
+
+URL Source: https://arxiv.org/pdf/2602.16371v1
+
+Published Time: Thu, 19 Feb 2026 01:48:55 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+Preprint 
+
+# Dynamic Modeling and MPC for Locomotion of Tendon-Driven Soft Quadruped 
+
+Saumya Karan 1, Neerav Maram 2, Suraj Borate 1 and Madhu Vadali 1
+
+Abstract — SLOT (Soft Legged Omnidirectional Tetrapod), a tendon-driven soft quadruped robot with 3D-printed TPU legs, is presented to study physics-informed modeling and control of compliant legged locomotion using only four actuators. Each leg is modeled as a deformable continuum using discrete Cosserat rod theory, enabling the capture of large bending deformations, distributed elasticity, tendon actuation, and ground contact interactions. A modular whole-body modeling framework is introduced, in which compliant leg dynamics are represented through physically consistent reaction forces applied to a rigid torso, providing a scalable interface between continuum soft limbs and rigid-body locomotion dynamics. This formulation allows efficient whole-body simulation and real-time control without sacrificing physical fidelity. The proposed model is embedded into a convex model predictive control framework that optimizes ground reaction forces over a 0.495 s prediction horizon and maps them to tendon actuation through a physics-informed force–angle relationship. The resulting controller achieves asymptotic stability under diverse perturbations. The framework is experimentally validated on a physical prototype during crawling and walking gaits, achieving high accuracy with less than 5 mm RMSE in center of mass trajectories. These results demonstrate a generalizable approach for in-tegrating continuum soft legs into model-based locomotion control, advancing scalable and reusable modeling and control methods for soft quadruped robots. Codes and design available at SLOT Github. 
+
+Keywords — Soft Quadruped, Tendon-driven, Cosserat-Based Modeling, Dynamics, Model Predictive Control, Gait Validation I. INTRODUCTION Soft quadruped robots offer unique advantages that make them particularly helpful in various applications. Their in-herent flexibility and compliance allow for safer interactions with humans and the environment, making them well-suited for tasks in complex or sensitive settings [1]. However, the accurate modeling and real-time control of such soft robotic systems remain challenging due to their nonlinear, large deformation behaviors and dynamic interac-tions with varied terrains [2]. Traditional approaches to robot modeling have often relied on simplified representations, particularly for fixed-end manipulators, leading to limitations               
+
+> 1Saumya Karan is aPhD scholar in the Department of Electrical Engineering, IIT Gandhinagar, Gujarat, India.
+
+karansaumya@iitgn.ac.in  
+
+> 2Neerav Maram is a BTech scholar in the Department of Electronics and Computer Engineering, Sreenidhi Institute of Science and Technology, Telangana, India.
+
+22311a1901@ecm.sreenidhi.edu.in            
+
+> 1Suraj Borate is aPhD scholar in the Department of Mechanical Engineering, IIT Gandhinagar, Gujarat, India.
+
+surajb@iitgn.ac.in               
+
+> 1Madhu Vadali is an Associate Professor in the Department of Mechanical Engineering, IIT Gandhinagar, Gujarat, India.
+
+madhu.vadali@iitgn.ac.in 
+
+in position and velocity estimation accuracy. Conventional modeling approaches, such as rigid-body dynamics [3], constant-curvature assumptions [4], and lumped-mass-spring models [5] struggle with complex, deformable structures like soft robotic limbs. While computationally efficient, they fail to capture the nonlinear and large deformations of soft materials, leading to discrepancies between simulated and actual behaviors, particularly during foot-ground impacts, tendon-driven actuation, and load-bearing phases [6]. The finite element method (FEM) is a standard tool for modeling deformable structures due to its physical accuracy. However, its high computational cost, especially the repeated evaluation of stiffness matrices for nonlinear deformations, limits its suitability for real-time control in mobile robots [7]. While FEM yields detailed insights into stress and ma-terial behavior, its implementation in control loops remains impractical [8]. Particle-based models like mass-spring sys-tems and position-based dynamics offer better computational efficiency by representing structures as particle networks. Though intuitive and faster, these models lack the physical realism needed to capture complex material responses and volumetric deformation — critical for soft robotic legs in locomotion tasks. The boundary element method (BEM) reduces computation by modeling only surface deformations, but it assumes homogeneous interior properties, restricting its use in robots with complex, layered soft structures [9]. Constitutive models aim to capture the physical properties of materials with high fidelity, providing a foundation for realistic simulations. Examples include linear elastic mod-els like Hookean solids for small deformations [10], and hyperelastic models such as Neo-Hookean [11], Mooney-Rivlin, or Ogden [12] for large, nonlinear strains common in soft robotics. Viscoelastic models like Kelvin-Voigt also ac-count for time-dependent behavior. While these models offer excellent physical accuracy, the challenge lies in balancing detailed material representation with the need for real-time performance in mobile robot applications. Machine learning has become a powerful tool for robot modeling and control. Supervised learning can capture complex input-output mappings but demands large labeled datasets [13]. Reinforcement learning learns through trial and error but requires extensive training [14]. Imitation learn-ing offers a compromise by learning from demonstrations, though it may struggle to generalize beyond them. The Cosserat rod theory offers a high-fidelity frame-work for modeling slender, deformable structures in soft robotics, addressing key limitations of traditional approaches like rigid-link and constant-curvature models [15]. Unlike 
+
+> arXiv:2602.16371v1 [cs.RO] 18 Feb 2026 Preprint
+
+these simplified methods, Cosserat rods provide a contin-uum mechanics foundation capable of capturing complex deformation modes such as bending, twisting, and stretch-ing—features essential for soft limbs undergoing dynamic gait cycles [16]. This is particularly relevant for mobile quadrupeds, where real-time interaction with varying terrains demands accurate modeling of compliant leg mechanics to ensure stable and adaptive locomotion. Although a few soft and quasi-soft quadruped robots have been reported in the literature, most existing platforms primarily focus on demonstrating novel actuation mecha-nisms or locomotion capabilities. Representative works em-ploy pneumatic or inflatable soft actuators [25], distributed soft or tendon-driven actuation schemes [26], or learning-based gait generation with simplified internal models [27]. While effective for showcasing compliant locomotion, these approaches typically do not emphasize physics-based leg modeling integrated with real-time, model-predictive whole-body control. In contrast, tendon-driven soft quadrupeds with a minimal actuator count remain relatively underexplored from a first-principles dynamics and control perspective. The present work addresses this gap by combining Cosserat rod–based modeling of compliant TPU legs with a decoupled whole-body formulation and real-time convex MPC on em-bedded hardware, enabling experimentally validated, stable locomotion. Motivated by this gap, in this work we present SLOT, a tendon-driven soft quadruped robot with 3D-printed TPU legs, and develop a physics-informed modeling and control framework based on discrete Cosserat rod theory and real-time model predictive control to achieve stable and accurate locomotion using only four actuators. Cosserat rod theory is employed to model the compliant TPU legs, extending its application beyond traditional fixed-end continuum ma-nipulators to a mobile quadruped setting. The nonlinear viscoelastic behavior of TPU poses modeling challenges that require distributed force and moment application along the leg - something that Cosserat rods naturally handle. This enables a precise simulation of ground contact, load distri-bution, and coupled deformations critical for gait transitions such as walking and crawling. Leveraging this approach in a quadruped setting introduces new challenges, including the need to model multiple legs simultaneously and capture the dynamic coupling between leg deformation and torso motion. Given the computational complexity of simultaneously modeling torso and multiple compliant legs, we adopt a decoupled modeling approach inspired by the MIT Cheetah robot [17]. This modular approach simulates each leg’s dy-namics independently, aggregating resulting reaction forces and torques to update the torso dynamics efficiently. Such decoupling significantly reduces computational demands, making it feasible for real-time model predictive control (MPC). MPC is crucial for adaptive real-time multivariable control [18], enabling trajectory optimization and stable locomotion. SLOT, the soft quadruped robot under study, comprises a rigid cuboid torso supported by four 3D-printed flexible TPU legs, each tendon-actuated by a single servo motor for compliant, omnidirectional locomotion. This paper con-tributes by combining Cosserat rod-based decoupled mod-eling of SLOT with MPC, providing robust and compu-tationally efficient control strategies tailored explicitly for soft quadruped robots. Through experimental validation, this research demonstrates improved accuracy in predicting soft limb deformation and robot locomotion dynamics, represent-ing a significant advancement in physics-informed design for soft robotics. This paper contributes a physics-informed modeling and control framework that enables real-time, whole-body loco-motion control for tendon-driven soft quadruped robots. The key contributions are as follows: 1) A discrete Cosserat rod model is formulated for tendon-driven soft legs, capturing large deformation, distributed elasticity, and ground contact while remain-ing suitable for real-time locomotion control. 2) A modular whole-body modeling principle is intro-duced, in which continuum leg dynamics are interfaced with rigid-body torso motion through physically con-sistent reaction forces, enabling scalable integration of soft limbs into legged locomotion frameworks. 3) The resulting soft–rigid hybrid dynamics are embed-ded into a convex model predictive control (MPC) formulation that optimizes ground reaction forces and maps them to tendon actuation via a physics-informed force–angle relationship. 4) A full hardware-in-the-loop locomotion pipeline is im-plemented using a ROS2-based architecture, integrat-ing visual–inertial state estimation, predictive control, and low-level tendon actuation on embedded hardware. 5) The proposed framework is experimentally validated on a tendon-driven soft quadruped robot, demonstrat-ing accurate deformation prediction, stable multi-gait locomotion, and robustness to structured perturbations. II. SYSTEM OVERVIEW From our previous work, SLOT [19] is a novel tendon-driven, soft quadruped that employs only four actuators and demonstrates diverse capabilities: sit/stand postures, roll and pitch maneuvers, turning, lateral, longitudinal, as well as omnidirectional locomotion. SLOT has a total mass of 2.16 kg (2.0 kg for the torso and 0.04 kg per leg), with the rigid cuboid torso measuring 125.5 mm × 85.5 mm × 34 mm. Using only four Dynamixel XL430 servo motors (1.4 Nm torque) and flexible 3D printed TPU legs, SLOT achieves motion in six degrees of freedom while maintaining compli-ance. The robot, shown in Fig. 1, operates autonomously with a fully on-board stack running on an NVIDIA Jetson Xavier (8 GB RAM, 6-core ARM CPU, 384-core NVIDIA Volta GPU), requiring no off-board computation or teleoperation. Low-level PID controllers regulate body height, while an Intel RealSense D435 (1280×720 RGB-D at 30 Hz) supplies depth for visual SLAM and orientation estimation; a wireless link is used only for telemetry and logging. SLOT employs Preprint 
+
+handcrafted gaits for crawling, walking, turning, and omni-directional movement, with a unique diagonal leg placement enabling efficient maneuverability. The robot demonstrates a variety of motions, including crawling under obstacles, climbing inclines up to 20°, and maintaining stability under external disturbances [19]. Open-source and highly adapt-able, SLOT has the potential for real-world applications such as exploration, search-and-rescue, and bio-inspired robotics. III. SINGLE LEG DYNAMIC MODEL The design and diverse motions of SLOT, necessitate a robust model to capture the complex dynamics of its soft legs. A Cosserat rod framework is employed to simulate each leg, capturing its large, nonlinear deformations with high fidelity. The model incorporates internal elasticity, tendon-induced actuation, ground interaction, and damping effects. This modeling approach is essential not only to simulate realistic deformations but also to narrow down the feasible control space, enabling efficient optimization and stable locomotion. 
+
+A. Assumptions 
+
+Each leg, made of TPU, is modeled as a planar Cosserat rod constrained to deform in the XZ plane. This planar assumption is adopted to enable real-time simulation and control and reflects the observation that the dominant leg deformation arises from bending in the local sagittal plane, with out-of-plane bending and twist observed to be negligible for the tested gaits. It is discretized into N = 31 nodes along a total length of L = 0 .19 m, with a linearly tapered thickness from 13.5 mm at the node fixed to the torso to 3.5 mm at the free tip to approximate realistic leg geometry as shown in Fig. 2. The choice of discretizing each leg into 31 nodes is motivated by a trade-off between numerical accuracy and real-time computational cost. The TPU material is assumed to be homogeneous, isotropic, and linearly elastic with a Young’s modulus of E = 1 × 10 7 Pa and density 
+
+ρ = 1200 kg/m 3. This linear elastic approximation is adopted to capture dominant deformation trends relevant to loco-motion control, while higher-order viscoelastic effects are compensated through feedback control and MPC receding-horizon updates. Actuation is achieved via a tendon routed through a fixed virtual pulley positioned at a constant angle of 168° with respect to horizontal axis. Ground interaction is modeled through a penalty-based spring-damper system [21] that produces only vertical contact forces. Additionally, Coulomb friction is applied to the leg to resist sliding during ground contact. Table I shows all the simulation and material parameters for the single leg model. 
+
+B. From Continuous to Discrete Cosserat Rod Formulation 
+
+The Cosserat rod theory provides a continuum-mechanics description of slender deformable bodies, in which the rod configuration is parameterized by a spatial variable s ∈ [0 , L ]
+
+and time t. At each material cross-section, the state is described by a position vector r(s, t ) ∈ R3 and an orientation 
+
+R(s, t ) ∈ SO (3) . The governing equations follow from the TABLE I: Simulation and Material Parameters                                                    
+
+> Parameter Value Description
+> L0.190 m Total leg length
+> N31 Number of nodes
+> dx L/ (N−1) Segment length
+> w0.02 m Constant leg width
+> hbase 0.0135 m Thickness at fixed base
+> htip 0.0035 m Thickness at tip
+> E1×10 7Pa Young’s modulus (TPU)
+> ρ1200 kg/m 3Density of TPU
+> g-9.81 m/s 2Gravitational acceleration
+> μ0.1 Coulomb friction coefficient
+> c0.1 Linear damping coefficient
+> kcontact 1×10 5N/m Ground stiffness
+> dcontact 10 Ns/m Ground damping
+> kr800 N/m Restoring spring stiffness
+> θpulley 168 ◦Pulley angle relative to base
+> R00.03 m Pulley radius offset
+> ∆t1×10 −4sTime step
+> Tmax 1.5 Nm Max tendon tension Angle 116.28° Max servo pulling angle
+
+balance of linear and angular momentum and result in a coupled set of nonlinear partial differential equations (PDEs) along the rod length. In this work, a space-discretized Cosserat rod model is employed, in which the continuous rod is approximated by a finite number of rigid cross-sections connected through elas-tic constitutive relations. The arc-length domain is discretized into N nodes with uniform spacing ∆s = L/ (N − 1) . Each node i represents a Cosserat cross-section with generalized coordinates 
+
+qi = [ xi, z i, θ i]T, (1) corresponding to planar position and orientation. Spatial discretization converts the continuous Cosserat rod PDEs into a finite-dimensional system of ordinary differ-ential equations (ODEs), where internal elastic forces and moments arise from relative strains between adjacent nodes. Axial deformation is captured through stretch between neigh-boring nodes, while bending is modeled through changes in relative orientation, consistent with Cosserat rod constitutive laws. These internal forces and moments are computed locally at the segment level and assembled into nodal force and torque balances using Newton–Euler equations. Time remains continuous in the modeling stage, and no temporal discretization is introduced in the formulation. The resulting system preserves the essential characteristics of Cosserat rod mechanics, including distributed elastic-ity, large deformation capability, and force–moment trans-mission, while enabling efficient numerical simulation and integration with whole-body dynamics and control. This approach follows standard discrete Cosserat rod formulations commonly used in computational rod mechanics and soft robotics literature. The approach follows the methodology introduced by [22] and [23], where bending and stretching energies are defined between adjacent segments, resulting in a finite-dimensional system of ordinary differential equations governing the nodal dynamics. Unlike reduced-order Cosserat models [15] based on piecewise-constant strain approximations, the present Preprint 
+
+Fig. 1: SLOT robot hardware formulation directly computes internal forces and moments at the nodal level, preserving consistency with continuum Cosserat rod mechanics while enabling efficient numerical integration. 
+
+C. Model Calibration Procedure 
+
+Model parameters were calibrated prior to experimental validation using a physics-informed procedure. Geometric properties of each leg were taken directly from the CAD model used for fabrication. Material density and initial elastic modulus values for TPU were obtained from manufacturer specifications, with the Young’s modulus refined using quasi-static single-leg deflection tests under known tendon actua-tion. Ground contact stiffness, damping, and friction coeffi-cients were chosen based on standard penalty-based contact modeling practices commonly used in legged and soft robotic simulations. The selected values ensure numerically stable contact and were kept constant across all experiments. Lin-ear damping and restoring stiffness terms were introduced primarily for numerical stabilization of the discretized rod dynamics and were chosen sufficiently small so as not to dominate the physical elastic response. The mapping between servo pulling angle and vertical ground reaction force was obtained from independent single-leg experiments and fixed prior to whole-body locomotion trials. No model parameters were tuned using full-body locomotion data, ensuring an independent validation of the proposed model. 
+
+D. Force–Moment Balance and Numerical Simulation 
+
+The soft leg’s motion is governed by the balance laws of linear and angular momentum, ensuring equilibrium between internal and external forces. At each timestep, the following physical effects are computed: 
+
+a) Internal Forces and Moments: For each segment between nodes i and i + 1 , the axial strain is defined as: 
+
+εi = li − ∆s
+
+∆s
+
+where li = p(xi+1 − xi)2 + ( zi+1 − zi)2 is the current length of segment and ∆s is the natural/undeformed length. The resulting internal axial force is: faxial ,i = EiAiεi.This force is projected along the local orientation θi =arctan 2( zi+1 − zi, x i+1 − xi) and applied in opposite di-rections at the connected nodes in the local frame: 
+
+f loc  
+
+> i
+
+=
+
++faxial ,i 
+
+0
+
+
+
+, f loc  
+
+> i+1
+
+=
+
+−faxial ,i 
+
+0
+
+
+
+Transforming to the global (x, z ) frame, the forces are updated as, 
+
+Fx,i 
+
+Fz,i 
+
+
+
+←
+
+Fx,i 
+
+Fz,i 
+
+
+
++RT 
+
+> i
+
+f loc  
+
+> i
+
+,
+
+Fx,i +1 
+
+Fz,i +1 
+
+
+
+←
+
+Fx,i +1 
+
+Fz,i +1 
+
+
+
++RT 
+
+> i
+
+f loc 
+
+> i+1
+
+where, Ri =
+
+ cos θi sin θi
+
+− sin θi cos θi
+
+
+
+The change in orientation across segments, ∆θi = θi+1 −
+
+θi, is used to capture bending. The bending moment is computed as mbend ,i = EiIi 
+
+> ∆s
+
+∆θi, and applied as internal torques My,i ← My,i − mbend ,i , My,i +1 ← My,i +1 + mbend ,i .Here, Ei denotes the Young’s modulus, Ai is the cross-sectional area computed as w · hi, and Ii is the second moment of area given by wh 3 
+
+> i
+> 12
+
+, where hi is the local rod thickness and w is the constant rod width. These parameters determine the rod’s elastic and bending response at each segment. At every timestep, these internal forces ( Fx, Fz ) and moments (My ) are summed with other physical effects including tendon forces, damping, contact, and friction, to compute nodal accelerations using Newton-Euler equations. 
+
+b) Tendon Tension: A time-varying tendon force T (t)
+
+is applied along 23 rd of the leg length. The tendon force follows a time-dependent profile comprising three phases: a ramp-up phase using a sine function, a short hold phase where the maximum tension is maintained, and a decay phase modeled by a cosine function that gradually reduces the tension back to zero, emulating servo torque behavior. 
+
+c) Ground Contact and Friction: Each node exerts a ground contact force when penetrating below z = 0 ,
+
+Fcontact ,i =
+
+(
+
+kcontact · δi + dcontact · ˙δi if zi < 00 otherwise (2) Preprint 
+
+with penetration depth δi = −zi and normal velocity ˙δi =
+
+−vz,i . Assuming Coulomb friction, the force is applied only when the leg nodes are in contact with the ground: 
+
+Ffriction =
+
+(
+
+−μ(m + M 
+
+> 4
+
+)g · sign (vx) if z ≤ 00 otherwise (3) where μ is the coefficient of friction, m is the mass of the leg and M is the mass of the robot 
+
+d) Restoring Force to Initial Configuration: Each node is pulled back to its initial position using a virtual spring: 
+
+Fx, restore ,i = −kr (xi − xi, 0), and Fz, restore ,i = −kr (zi − zi, 0)
+
+where kr is the restoring stiffness. 
+
+e) Damping Force: Linear damping is applied to all degrees of freedom: 
+
+Fx, damp ,i = −c·vx,i , F z, damp ,i = −c·vz,i , and My, damp ,i = −c·ωi
+
+f) Cosserat Rod Dynamics Formulation: The system dynamics for a Cosserat rod can be written in the standard robot dynamics form: 
+
+M (q) ¨q + C(q, ˙q) ˙q + g(q) = T (q, t )
+
+where q = [ x0, z 0, θ 0, . . . , x N , z N , θ N ]⊤ is the generalized coordinate vector; ˙q and ¨q are the velocity vector and acceleration vectors, respectively. M(q) is the mass matrix, 
+
+C(q, ˙q) ˙ q represents the damping and restoring force term, 
+
+g(q) is the gravity vector and T (q, t ) is the net applied force vector. These are given by, 
+
+M(q) = diag( m0, m 0, I 0, m 1, m 1, I 1, . . . , m N , m N , I N )
+
+C(q, ˙q) ˙ q =
+
+
+
+c ˙x0 + k(x0 − x0,init )
+
+c ˙z0 + k(z0 − z0,init )
+
+cω 0
+
+...
+
+c ˙xN + k(xN − xN, init )
+
+c ˙zN + k(zN − zN, init )
+
+cω N
+
+
+
+g(q) = 0 −m0g 0 · · · 0 −mN g 0T
+
+T (q, t ) = Finternal + Ffriction + Fcontact + Ftendon 
+
+where mi is the mass of the i-th node and Ii = 12 ρA idx 2
+
+is the moment of inertia of the i-th segment. c is the linear damping coefficient, and k is the restoring stiffness to maintain structural integrity. 
+
+E. Node-Level Dynamic Equations 
+
+For each node i ∈ { 0, . . . , N }, the dynamic equations are, 
+
+Mi
+
+
+
+¨xi
+
+¨zi
+
+˙ωi
+
+ +
+
+
+
+c ˙xi + k(xi − xi, init )
+
+c ˙zi + k(zi − zi, init )
+
+cω i
+
+ +
+
+
+
+0
+
+−mig
+
+0
+
+ =
+
+
+
+F total 
+
+> x,i
+
+F total 
+
+> z,i
+
+M total 
+
+> y,i
+
+
+
+This formulation represents the Newton-Euler equations for each node, accounting for linear and angular accel-erations. The left-hand side aggregates inertial, damping, restoring, and gravitational effects, while the right-hand side represents the total forces and moments acting on the node due to elasticity, contact, friction, and tendon tension. Fig. 2 shows single leg deformation under tendon actuation. The velocities and positions are then updated according to the explicit Euler integration. A sufficiently small time step (∆t = 10 −4 s) is used to maintain numerical stability for the chosen timestep. This explicit integration scheme enables efficient forward simulation of the discrete Cosserat rod dynamics while maintaining consistency with the underlying Newton–Euler formulation. IV. SLOT WHOLE-BODY MODELING Building on the Cosserat rod formulation for individual legs, this section extends the model to the full SLOT system, integrating leg dynamics with torso motion. 
+
+A. Assumptions 
+
+The torso is modeled as a rigid cuboid with six degrees of freedom. Fig. 3 shows the force application from four Cosserat rod legs onto the rigid cuboid torso. Each of the four legs is modeled independently using a planar Cosserat rod formulation and is rigidly attached to the torso at predefined corner locations (FL, BR, BL, FR). Ground contact forces are applied only at the leg tips. The interaction between each leg and the torso is captured through reaction forces and torques transmitted at the attachment points. Tendon tension profiles are defined separately for each leg and evolve over time according to prescribed actuation schedules. Both the torso and legs are subjected to gravitational, damping, and restoring forces throughout the simulation. 
+
+B. Dynamics and Modular Coupling 
+
+The full-body system involves dynamic interactions be-tween the rigid torso and the four compliant Cosserat rod legs. Reaction forces from each leg are applied at the respective attachment points (i.e., the four corners) of the cuboid torso. In this study, a decoupled approach is adopted to reduce computational cost. This decoupled formulation is justified by the large mass disparity between the torso and individual legs and the relatively low angular velocities observed during the considered gaits, which limit the con-tribution of leg dynamics to the global angular momentum in the tested operating regimes. Under these conditions, the torso mass dominates the inertia contributions of the legs. A modular strategy is employed in which each leg is simulated independently, and the resulting reaction forces are used to update the torso’s translational motion. Further, it is assumed Preprint 
+
+Fig. 2: Single-leg deformation under tendon actuation. that the effect of precession and nutation of the torso is neglected, resulting in, 
+
+ddt (Iω) = I ˙ω + ω × (Iω) ≈ I ˙ω (4) This approximation, made in controllers such as [20], is admissible for bodies with small angular velocities For the locomotion scenarios considered in this work, the neglected precession and nutation terms were found to be small relative to the dominant inertial terms, due to the low torso angular velocities during walking and crawling gaits. Thus, the torso’s translational and rotational dynamics are governed by: 
+
+mc ¨p =
+
+> 4
+
+X
+
+> i=1
+
+Fi, Ic ˙ω =
+
+> 4
+
+X
+
+> i=1
+
+(ri × Fi) (5) where, mc is the torso mass, p its center of mass position, and Fi is the reaction force from leg i; Ic is the torso inertia matrix, ω the angular velocity, and ri is the vector from the torso’s centre of mass to the i-th leg attachment point. V. MODEL PREDICTIVE CONTROL (MPC) MPC is implemented to ensure stable, responsive, and adaptive locomotion for the SLOT robot by predicting and optimizing future states based on current observa-tions. The MPC algorithm integrates a predictive model derived from Cosserat rod dynamics and rigid body torso dynamics to maintain desired trajectories and velocities. The control architecture consists of a hierarchical feed-back loop for legged locomotion. A simple block dia-gram is shown in Fig. 4. The robot state at timestep 
+
+k is xk = [ϕ, θ, ψ, p x, p y , p z , ω x, ω y , ω z , v x, v y , v z ]⊤,where (ϕ, θ, ψ ) are roll, pitch, yaw, (px, p y , p z ) positions, 
+
+(ωx, ω y , ω z ) angular velocities, (vx, v y , v z ) linear veloci-ties, and gz represents gravity. The control input u =[Fx, 0, F y, 0, F z, 0, . . . , F x, 3, F y, 3, F z, 3]⊤ denotes the ground reaction forces in x, y, z for each of the four legs. A reference trajectory xref , together with gait cycle and gait parameter μ from the gait planner, is fed into the MPC controller, which computes the optimal control input udesired . The leg model converts this input into joint-level commands θdesired . These commands are tracked by a low-level PID controller, which compares θdesired with the actual joint angles θactual and generates motor torques to minimize the error. The robot, represented by its forward dynamics, executes the motion and produces the actual state 
+
+x. This state is estimated through a VSLAM-based state estimator that fuses visual and inertial data. The estimated state x is fed back to the MPC controller to close the loop, ensuring accurate trajectory tracking. Thus, the framework integrates high-level planning, mid-level modeling, and low-level control for robust locomotion. The average execution times for each component in the control pipeline were measured on the onboard NVIDIA Jetson Xavier platform. The Cosserat rod simulation for each leg required approximately 0.35 ms per integration step, while torso dynamics update required 0.18 ms. The MPC optimization (solved using SCS) required 6.2 ms per update at a control frequency of 30 Hz. The remaining components, including gait scheduling, force-to-angle mapping, and low-level PID control, collectively required less than 0.5 ms per cycle. The complete ROS2-based hardware-in-the-loop execution pipeline, detailing perception, state estimation, MPC opti-mization, and low-level tendon control, is summarized in Algorithm 1. 
+
+A. Gait Phase Scheduler 
+
+The MPC controller operates based on a predefined walk-ing gait with a 5-second cycle [19]. Fig. 7 shows the Preprint 
+
+Fig. 3: Force application from four Cosserat rod legs onto the rigid cuboid torso. 
+
+Fig. 4: Model Predictive Control block diagram. gait pattern for a forward walk gait. This gait schedule alternates the contraction and relaxation of the front legs while maintaining constant support from the back legs. This alternating activation is encoded as a time-based switching phase and used to modulate friction coefficients and control constraints for the MPC. Similarly, the gait phase scheduler schedules gait for omnidirectional motion as shown in fig. 11c. 
+
+B. Cost Function and Constraints 
+
+The MPC minimizes the following cost function: 
+
+J =
+
+> H−1
+
+X
+
+> k=0
+
+h
+
+(xk − xref ,k )⊤Q (xk − xref ,k ) + u⊤ 
+
+> k
+
+R u k
+
+i
+
+where H = 15 is the prediction horizon, xref ,k denotes the reference trajectory, Q is a state weighting matrix prioritizing desired trajectories, and R penalizes large control inputs to encourage efficient actuation. The weighting matrices are chosen as:                
+
+> Q=11000 diag(0 .1,0.1,0.1,0,0,100 ,0.01 ,0.01 ,0.01 ,20 ,0.1,0,0)
+
+R = 10 −8I12 (6) The weighting matrices Q and R in (6) were selected to reflect task priorities during locomotion. Higher weights were assigned to the vertical position and forward velocity to ensure stable body support and accurate velocity tracking, while roll and pitch were penalized to limit excessive body tilt. Lower weights were used for less critical states to avoid overly aggressive control actions. The control weighting matrix R was chosen to balance control authority and smooth actuation. All weights were tuned iteratively in simulation and kept fixed across all experiments. The control inputs are constrained by: 
+
+fz,i ≤ 6.0,
+
+> 4
+
+X
+
+> i=1
+
+fz,i = mg, and |fx,i | ≤ μifz,i , |fy,i | ≤ μifz,i 
+
+where fz,i is the normal force exerted by leg i, fmax = 6 .0
+
+N is the maximum allowable force per leg, and μi is the friction coefficient at leg i, varying with gait phase (e.g., 0.6 or 0.2 for front legs, 0.1 for back legs in case of Walk gait). Preprint 
+
+C. Solver and Real-Time Loop 
+
+All simulations and control implementations in this work were carried out using Python . The Cosserat rod-based leg dynamics and the rigid-body torso dynamics were imple-mented from scratch using the NumPy and SciPy scientific computing libraries. Visualization and post-processing were performed using Matplotlib .The Model Predictive Control (MPC) problem was for-mulated as a convex quadratic program and solved using the Splitting Conic Solver (SCS) via the CVXPY optimization framework. The MPC operates at a control frequency of 30 Hz with a prediction horizon of 15 steps (approximately 0.495 s). At each interval, optimal leg forces are computed to maintain desired forward velocity ( vx = 0 .08 m/s) and vertical body support (pz = 0.04 m). In addition, the cost function penalizes deviations in roll and pitch angles, encouraging minimal body tilt during locomotion. This helps ensure stable walking and consistent foot-ground contact over time. The MPC runs in batches (20 steps) followed by forward dynamics (5 steps) for real-time feasibility. The batches of MPC optimizations are followed by short forward-dynamics rollouts for analysis efficiency; during execution, the MPC is solved at every control timestep and no MPC updates are skipped. All experiments were executed on an onboard NVIDIA Jetson Xavier platform, matching the computational constraints of the physical robot. This unified software pipeline ensures consistency between simulation and experimental deployment. 
+
+D. Leg Model and Low-Level Control 
+
+The leg model converts MPC-generated ground reaction force commands into tendon actuation angles. Specifically, each leg’s desired normal force fz,i is mapped to a servo pulling angle θi using a closed-form relation derived from the Cosserat rod simulation of the leg. By simulating a series of single-leg Cosserat rod deformations under varying tendon angles, an empirical fit was obtained to relate the resulting vertical ground reaction force to the pulling angle: 
+
+θi = fz,i + 6 .91 0.107 (7) Dynamic effects such as tendon compliance, cable friction, TPU hysteresis, and motor dynamics are not explicitly mod-eled in this mapping and are instead handled implicitly by feedback control and the receding-horizon MPC framework. The low-level PID controller compares desired joint angles 
+
+θdesired with actual joint angles θactual and computes corrective motor commands. This ensures accurate tracking and smooth execution of the robot’s leg movements. For clarity and reproducibility, Algorithm 1 outlines the full closed-loop execution sequence implemented on the physical robot. 
+
+Algorithm 1 ROS2-Based Hardware-in-the-Loop MPC Lo-comotion Pipeline for SLOT  
+
+> 1:
+
+System Initialization:  
+
+> 2:
+
+Initialize ROS2 middleware and time synchronization  
+
+> 3:
+
+Load robot geometric, inertial, and Cosserat rod leg parameters  
+
+> 4:
+
+Initialize onboard computation for perception and control  
+
+> 5:
+
+Configure publishers and subscribers for all control nodes  
+
+> 6:
+
+Perception and Localization:  
+
+> 7:
+
+Start visual–inertial SLAM using RGB-D and IMU inputs  
+
+> 8:
+
+Publish robot odometry and pose estimates on /odom  
+
+> 9:
+
+Broadcast frame transformations via /tf  
+
+> 10:
+
+State Estimation Node:  
+
+> 11:
+
+Subscribe to /odom and inertial measurements  
+
+> 12:
+
+Extract position, orientation, linear and angular velocities  
+
+> 13:
+
+Construct MPC state vector 
+
+xk = [ ϕ, θ, ψ, p x, p y , p z , ω x, ω y , ω z , v x, v y , v z ] 
+
+> 14:
+
+Publish estimated state on /mpc state  
+
+> 15:
+
+Controller Initialization:  
+
+> 16:
+
+Initialize gait scheduler and phase manager  
+
+> 17:
+
+Initialize MPC controller with horizon H, timestep ∆t, and cost weights  
+
+> 18:
+
+Initialize low-level tendon motor controllers  
+
+> 19:
+
+while robot is operational do  
+
+> 20:
+
+State Update:  
+
+> 21:
+
+Receive latest robot state xk from /mpc state  
+
+> 22:
+
+Gait and Reference Generation:  
+
+> 23:
+
+Update gait phase (walk, crawl, omnidirectional)  
+
+> 24:
+
+Determine stance and swing legs  
+
+> 25:
+
+Generate desired body height and velocity references  
+
+> 26:
+
+Form reference trajectory xref ,k  
+
+> 27:
+
+MPC Optimization:  
+
+> 28:
+
+Linearize decoupled torso dynamics about xk 
+
+> 29:
+
+Formulate convex MPC using predicted ground reaction forces  
+
+> 30:
+
+Enforce force balance, friction cone, and contact constraints  
+
+> 31:
+
+Solve for optimal control input 
+
+u⋆k = [ fx, 1, f y, 1, f z, 1, . . . , f x, 4, f y, 4, f z, 4] 
+
+> 32:
+
+if optimization is infeasible then  
+
+> 33:
+
+Apply last feasible control input  
+
+> 34:
+
+end if  
+
+> 35:
+
+Force-to-Actuation Mapping:  
+
+> 36:
+
+for i = 1 to 4 do  
+
+> 37:
+
+Convert desired normal force fz,i to tendon angle θi 
+
+> 38:
+
+Use precomputed Cosserat rod–based force–angle relation  
+
+> 39:
+
+end for  
+
+> 40:
+
+Publish desired tendon angles on 
+
+/desired joint angles  
+
+> 41:
+
+Low-Level Motor Control:  
+
+> 42:
+
+Subscribe to /desired joint angles  
+
+> 43:
+
+Track tendon angles using PID control  
+
+> 44:
+
+Compensate actuator and tendon dynamics via feedback  
+
+> 45:
+
+Execution and Feedback:  
+
+> 46:
+
+Apply motor commands to the robot  
+
+> 47:
+
+Execute compliant leg motion  
+
+> 48:
+
+Advance control loop by ∆t 
+
+> 49:
+
+end while Preprint 
+
+E. Stability Analysis 
+
+Analyzing the long-term behavior of the MPC solution for the quadruped robot is crucial to ensure recursive feasi-bility and robustness. Recursive feasibility implies that the MPC problem remains solvable at each time step, satisfying all constraints (e.g., force limits, friction coefficients, and total force balance) throughout the simulation. To visually assess this property, a Dynamic Constraint Map (DCM) is employed, providing a comprehensive representation of constraint satisfaction across time and variables as a heatmap. Stability is also evaluated through a series of perturbation tests conducted over a 25 s simulation horizon, comprising 15 MPC optimization steps followed by 5 forward dynamics rollouts per cycle. These tests assess the MPC’s robustness across seven distinct scenarios: Baseline (initialized at the reference state with pz = 0 .04 m and vx = 0 .08 m/s), Roll (initial roll angle of 0.1 rad), Pitch (initial pitch angle of 0.1 rad), Height ( pz = 0 .01 m), Velocity ( vx = 0 .05 m/s), Combined (initial roll and pitch angles of 0.05 rad each, pz =0.02 m, vx = 0 .03 m/s), and Noise (Gaussian-distributed perturbations with standard deviation σ = 0 .001 applied to all states, followed by clipping to prevent divergence). Key performance metrics encompass the maximum, mean, and final costs; settling time (defined as the first instant when the cost remains below 0.01 persistently); and the number of infeasible optimization steps. VI. EXPERIMENTAL VALIDATION AND RESULTS Comparative analyses between simulated trajectories and experimental measurements from a physical prototype, equipped with ArUco markers, were conducted to validate the proposed Cosserat rod-based tendon-actuated leg model. Validation included single-leg tests, crawling, forward walk-ing and omnidirectional gaits. 
+
+A. Model Validation 
+
+Leveraging the decoupled Cosserat rod model developed in Section IV, this section outlines a validation pipeline to assess its accuracy in predicting SLOT’s whole-body locomotion. Experimental ground-truth measurements were obtained using an Intel RealSense D435 RGB-D camera operating at 30 Hz, with depth accuracy of approximately 
+
+±2% at a 1 m range. ArUco marker detection and pose estimation were performed using OpenCV-based methods. The validation pipeline consists of the following steps: 1) Data Collection: ArUco markers are placed on the physi-cal robot at key locations (CoM and leg segments (base, one-third length, two-third length, and tip)) to capture 3D motion trajectories using an external camera system; 2) Simulation Execution: The SLOT simulation is executed using predefined gaits (crawl, walk) with corresponding tendon schedules; 3) Time Alignment: Experimental data is aligned with simulated time vectors via interpolation to ensure synchronized comparisons; 4) Metric Computation: Error metrics (RMSE, MAE, NRMSE) are computed over key points on the body; 5) Visualization and Logging: Plots comparing simulation and experiment are generated for each gait, with detailed annotations to highlight agreement and deviations. This validation framework ensures repeatability, trans-parency, and quantitative rigor in evaluating the Cosserat rod model’s predictive performance for whole-body locomotion in soft quadrupeds. 
+
+B. Single-Leg Validation 
+
+A single-leg simulation was conducted to validate the core Cosserat rod model. Four representative points - fixed base, 1/3 leg length, 2/3 leg length, and tip - were tracked experimentally and compared with simulation outputs as shown in Fig. 5. The model showed strong agreement in vertical deformation patterns under tendon actuation. As it can be seen in Table II, the RMSE and MAE values are larger near the fixed base and one-third leg length, indicating greater absolute deviations at these segments due to their higher rigidity and resulting stress concentrations under tendon loading. The highest NRMSE observed at the leg tip (19.22%) arises from normalization over a small total displacement at this point, causing even minor absolute deviations to appear significant in relative terms and not reflecting large absolute positional errors. Overall accuracy remains high (above 95%) across all points, demonstrating that despite minor localized deviations, the Cosserat rod model robustly predicts overall leg deformation. These insights help pinpoint specific areas of the model re-quiring fine-tuning and also affirm the model’s effectiveness in capturing complex deformation behaviors accurately. 
+
+C. Forward Walking Gait Validation 
+
+As shown in Fig. 6, using a two-phase gait profile, the forward walking simulation matched experimental trends in forward propulsion and vertical body support. Fig. 7 shows the timelapse in simulation. The colored circles near the legs denote contraction of the respective leg. Overall, these results confirm that the Cosserat rod model offers physically realistic predictions of soft quadruped mo-tion across diverse gaits. 
+
+D. Crawling Gait Validation 
+
+The crawling gait simulation followed a four-phase activa-tion profile. The resulting center of mass (CoM) trajectories in X and Z directions were compared with experimental data as shown in Fig. 8. The model accurately reproduced the crawling behavior, with consistent ground contact and compliant vertical modulation. This confirms the model’s versatility across gaits with an RMSE shown in Table III for Forward Walk and Crawl gait respectively. 
+
+E. MPC-Driven Locomotion: Feasibility and Stability 
+
+Fig. 9 shows SLOT reaches a desired height of 0.04 me-tres, achieves forward velocity of 0.08 m/s while maintaining near-zero mean lateral velocity over each gait cycle for the walk gait. Preprint 
+
+Fig. 5: Comparison of experimental and simulated vertical position z(t) at four locations along the single leg—Node 0 (base), Node 10 (one-third length), Node 20 (two-thirds length), and Node 30 (tip). TABLE II: Single-Leg Validation Error Metrics                             
+
+> Metric Fixed Base 1/3 Length 2/3 Length Tip
+> RMSE (mm) 5.20 5.72 4.00 0.89 MAE (mm) 3.85 3.90 2.60 0.71 NRMSE (%) 5.87 6.94 7.88 19.22 Avg Error (mm) 2.23 2.87 2.32 0.15 Error (%) 2.51 3.47 4.56 3.21 Accuracy (%) 97.49 96.53 95.44 96.79
+
+Fig. 6: Comparison of simulated and experimental center-of-mass (CoM) trajectories for the forward walking gait in the x
+
+and z directions. Additionally, Fig. 10 provides a time-lapse sequence of the robot walking in a straight line under MPC control, demon-strating stable forward locomotion and visually confirming the controller’s effectiveness in maintaining gait consistency. Over a forward displacement of approximately 0.8 m, the maximum lateral deviation was 3.2 cm, corresponding to an average lateral RMSE of 1.4 cm. This drift is primarily attributed to unmodeled ground friction asymmetries and hardware tolerances, and does not affect local stability or vertical support, which are the primary objectives of the MPC formulation. The experimental ground-truth measurements were ob-Preprint 
+
+Fig. 7: SLOT walking in a straight line in the simulation environment. 
+
+Fig. 8: Comparison of simulated versus experimental center-of-mass (CoM) trajectories for the crawl gait. TABLE III: Quantitative Validation Metrics for Whole-Body Locomotion           
+
+> Gait RMSE in xCoM (mm) RMSE in zCoM (mm)
+> Forward Walk 4.0 4.8 Crawl 5.1 4.6
+
+tained using an Intel RealSense D435 RGB-D camera. According to the manufacturer’s specifications and prior benchmarking studies, the depth accuracy of the D435 is approximately ±2% at a range of 1 m, with sub-millimeter repeatability under indoor lighting conditions [24]. In our experiments, the robot operated within a distance range of 0.6–1.0 m from the camera, resulting in an expected depth uncertainty below 2 mm. This measurement noise is significantly smaller than the observed center-of-mass displacements and therefore does not affect the reported RMSE values or the qualitative conclusions drawn from the experimental validation. Figure 11 summarizes the 60 ◦ omnidirectional gait regu-lated by the MPC. In Fig. 11a, the longitudinal velocity vx
+
+closely follows the commanded constant v⋆x = 0 .052 m /s,with brief transients at phase switches. Fig. 11b shows similar behavior for the lateral velocity vy , tracking v⋆y =0.09 m /s; the small ripple visible in both traces is attributable to contact transitions and periodic leg actuation. Fig. 11b compares the desired diagonal path with the simulated body trajectory: the net motion aligns with the commanded direc-tion since v⋆y /v ⋆x ≈ 0.09 /0.052 ≈ 1.73 ≃ tan 60 ◦ with an RMSE of 3.5 cm. The simulated robot’s snapshots illustrate progression along the path, while numbered colored circles indicate which leg is contracting at each step. The gait plot beneath encodes the stance/relaxation timing for all four legs over one stride and matches the shown sequence. Table IV summarizes the MPC stability metrics using the Cosserat-integrated for walk gait. All deterministic pertur-bations (Baseline, Roll, Pitch, Height, Velocity, Combined) achieve zero final cost and settle within 14.553 s, confirming asymptotic stability and recursive feasibility (0 infeasible steps across cases). The Baseline, starting at the reference Preprint   
+
+> (a) Height tracking (b) Longitudinal velocity
+> (c) Lateral velocity (d) Desired joint angles
+
+Fig. 9: Experimental and simulated results of quadruped MPC for the walking gait. Leg 1: FL, Leg 2: RL, Leg 3: RR, Leg 4: RL. 
+
+Fig. 10: SLOT hardware robot walking in a straight line under MPC control, demonstrating stable forward locomotion. trajectory, provides the nominal benchmark. Height perturba-tion incurs the highest maximum cost (6.2248) and integral (38.0922), driven by the z weight. Velocity settles fastest (10.098 s) with the lowest mean cost (0.1720), reflecting efficient correction of vx error. The Combined case shows moderate performance (max cost 3.6959, settling 12.606 s), demonstrating robustness to multi-axis disturbances. The Noise case ( σ = 0 .001 ) does not settle, with a final cost of 0.4943 due to persistent oscillations, despite a low mean cost (0.2212). Unlike deterministic perturbations (e.g., initial roll=0.1 rad), this is an ongoing disturbance, preventing the system from converging to a stable equilibrium. This behavior is expected, as the applied noise constitutes a per-sistent disturbance rather than a bounded initial perturbation. Figure 12 illustrates the combined MPC cost trajectories. Baseline and Roll curves overlap initially (max costs 4.9739 Preprint  
+
+> (a) Longitudinal velocity (b) Lateral velocity
+> (c) Desired versus simulated path with desired gait sequence. Colored circles near the legs indicate leg contraction.
+
+Fig. 11: Simulation results for the 60 ◦ omnidirectional gait under MPC. and 4.9719), indicating negligible impact from small roll error. The Dynamic Constraint Map, depicted in Figure 13, illustrates the feasibility status for each of the four legs and the total system over the simulation period. In particular, Figure 13a shows the walk gait, while Figure 13b presents the omnidirectional gait. The map uses a color gradient where red indicates infeasibility, whereas green indicates feasibility. The map predominantly displays a uniform green color for walk gait, indicating consistent feasibility across all time steps and variables. For omnidirectional gait, the presence of red areas in the ”Total” column, suggests that the overall system feasibility was lost during those intervals. This could affect the robot’s stability or ability to follow the desired trajectory. The fact that Legs 1-4 show green indicates that individual leg constraints might still be feasible, but the combined system constraints were violated at 22.374 and 61.875 seconds. When infeasibility is detected during simulation, the controller reverts to the most recent feasible control input, preventing divergence and ensuring continued execution. VII. DISCUSSION AND CONCLUSION This work presents a detailed modeling and validation framework for SLOT, a soft-legged omnidirectional tetrapod robot actuated via tendon-driven flexible legs. By leveraging Cosserat rod theory, we accurately model the continuous deformation behavior of soft TPU legs under real-time actu-ation and ground interaction. The use of a decoupled torso-leg formulation offers significant computational efficiency. This modular architecture is especially well-suited for MPC Preprint 
+
+TABLE IV: Stability Metrics for Perturbations (Walk gait)                                 
+
+> Perturbation Max Cost Mean Cost Final Cost Settling Time (s) Baseline 4.9739 1.1665 0.0000 14.553 Roll 4.9719 1.1659 0.0000 14.553 Pitch 4.7920 1.1120 0.0000 13.695 Height 6.2248 1.5397 0.0000 14.553 Velocity 2.3827 0.1720 0.0000 10.098 Combined 3.6959 0.7873 0.0000 12.606 Noise 2.3828 0.2212 0.4943 Did not settle
+
+Fig. 12: Combined MPC cost trajectories under perturbations for Walk gait. Baseline and Roll overlap; Noise exhibits non-settling oscillations. 
+
+(a) Walk gait (b) Omnidirectional gait 
+
+Fig. 13: Dynamic Constraint Map (DCM) illustrating the feasibility status of the MPC solution. Preprint 
+
+for soft mobile robots, where scalability and latency are key challenges. Experimental validation across single-leg and whole-body locomotion scenarios confirms the physical fidelity of the proposed model. The single-leg validation achieved over 95% accuracy in Z-position tracking across key nodes, while crawling and walking gait comparisons showed strong alignment in CoM trajectories with 4-5 mm RMSE. These results demonstrate the robustness of the modeling approach and its ability to generalize across different motion patterns. These results confirm that the MPC achieves asymptotic stability with fast transient response and sustained equi-librium. The absence of infeasibility or cost divergence further validates the controller design for the given operating conditions. Overall, this study establishes a foundational framework for physics-informed modeling of soft quadrupeds. Future work will focus on real-time adaptation of the model for unstructured terrain. The SLOT platform, with its low-cost open-source design, serves as a testbed for advancing control and learning in mobile soft robotics. VIII. FUTURE WORK Building on this foundation, future work will focus on de-veloping a coupled torso-leg dynamic model that retains the physical accuracy of the current framework while improving computational efficiency through reduced-order formulations and parallelization strategies. This will allow tighter inte-gration between torso motion and leg compliance, espe-cially during unstructured terrain interactions. Additionally, we plan to incorporate model-based reinforcement learning (MBRL) to learn adaptive control policies directly from simulation, leveraging the physics-based model as a differ-entiable prior. This hybrid approach will allow data-efficient policy learning while preserving physical plausibility. IX. ACKNOWLEDGEMENT The authors thank the Government of India for supporting the Saumya Karan’s and Suraj Borate’s research through the Prime Minister’s Research Fellowship (PMRF) Scheme. Finally the authors thank IIT Gandhinagar and its donors for their unwavering support. X. FUNDING The authors received financial support from the Prime Minister’s Research Fellowship (PMRF), Government of India (Project File No. MIS/IITGN/PMRF/ME/MV/2023-24/053). REFERENCES [1] Q. Li, F. Cicirelli, A. Vinci, A. Guerrieri, W. Qi, and G. Fortino, “Quadruped robots: Bridging mechanical design, control, and appli-cations,” Robotics , vol. 14, no. 5, p. 57, 2025. [2] C. Della Santina, C. Duriez, and D. Rus, “Model-based control of soft robots: A survey of the state of the art and open challenges,” IEEE Control Systems Magazine , vol. 43, no. 3, pp. 30–65, 2023. [3] C. Armanini, F. Boyer, A. T. Mathew, C. Duriez, and F. Renda, “Soft robots modeling: A structured overview,” IEEE Transactions on Robotics , vol. 39, no. 3, pp. 1728–1748, 2023. [4] X. Huang, J. Zou, and G. Gu, “Kinematic modeling and control of variable curvature soft continuum robots,” IEEE/ASME Transactions on Mechatronics , vol. 26, no. 6, pp. 3175–3185, 2021. [5] H. Habibi, M. Hossein, J. Friesen, A. D. Marchese, and K. D. Wise, “A lumped-mass model for large deformation continuum surfaces actuated by continuum robotic arms,” Journal of Mechanisms and Robotics , vol. 12, no. 1, p. 011014, 2020. [6] M. Russo, S. M. H. Sadati, X. Dong, A. Mohammad, I. D. Walker, and C. Bergeles, “Continuum robots: An overview,” Advanced Intelligent Systems , vol. 5, no. 5, p. 2200367, 2023. [7] T. M. Bieze, C. Della Santina, L. A. Roch´ e, M. Cianchetti, and D. Rus, “Finite element method-based kinematics and closed-loop control of soft continuum manipulators,” Soft Robotics , vol. 5, no. 3, pp. 348– 364, 2018. [8] K.-H. Lee, J. Kim, S. Park, and Y. Choi, “FEM-based soft robotic control framework for intracavitary navigation,” in Proc. IEEE Int. Conf. Real-Time Computing and Robotics , Okinawa, Japan, 2017. [9] C. Duriez, “Control of elastic soft robots based on real-time finite element method,” in Proc. IEEE Int. Conf. Robotics and Automation (ICRA) , pp. 3982–3987, 2013. [10] A. C. Pipkin, “Small finite deformations of viscoelastic solids,” 
+
+Reviews of Modern Physics , vol. 36, no. 4, pp. 1034–1049, 1964. [11] A. S. Abdel-Rahman, “A semi-empirical approach model for neo-Hookean solids,” International Journal for Computational Methods in Engineering Science and Mechanics , vol. 24, no. 2, pp. 155–166, 2023. [12] G. P. Sugerman, S. Kakaletsis, E. Lejeune, and M. K. Rausch, “An introduction to the Ogden model in biomechanics: Benefits, implementation tools and limitations,” Philosophical Transactions of the Royal Society A , vol. 380, no. 2234, 2022. [13] K. Chin, T. Hellebrekers, and C. Majidi, “Machine learning for soft robotic sensing and control,” Advanced Intelligent Systems , vol. 2, no. 6, p. 1900171, 2020. [14] S. Bhagat, H. Banerjee, Z. T. Ho Tse, and H. Ren, “Deep reinforce-ment learning for soft, flexible robots: Brief review with impending challenges,” Robotics , vol. 8, no. 1, p. 4, 2019. [15] L. Xun, G. Zheng, and A. Kruszewski, “Cosserat-rod-based dynamic modeling of soft slender robots interacting with the environment,” 
+
+IEEE Transactions on Robotics , vol. 40, pp. 2811–2830, 2024. [16] A. A. Alqumsan, S. Khoo, and M. Norton, “Robust control of continuum robots using Cosserat rod theory,” Mechanism and Machine Theory , vol. 131, pp. 48–61, 2019. [17] J. Di Carlo, P. M. Wensing, B. Katz, G. Bledt, and S. Kim, “Dynamic locomotion in the MIT Cheetah 3 through convex model predictive control,” in Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS) , Madrid, Spain, 2018. [18] F. Farshidian, E. Jelavic, A. Satapathy, M. Giftthaler, and J. Buchli, “Real-time motion planning of legged robots: A model predictive control approach,” in Proc. IEEE-RAS Int. Conf. Humanoid Robots ,Birmingham, UK, 2017. [19] S. Karan, R. Harikrishnan, Y. Dodia, T. Phopalkar, S. Borate, and M. Vadali, “SLOT: A soft-legged omnidirectional tetrapod,” in Walking Robots into the Real World (CLAWAR 2024) , Lecture Notes in Net-works and Systems, vol. 1115, Cham: Springer, 2024. [20] M. Focchi, A. del Prete, I. Havoutis, R. Featherstone, D. G. Caldwell, and C. Semini, “High-slope terrain locomotion for torque-controlled quadruped robots,” Autonomous Robots , vol. 41, no. 1, pp. 259–272, 2017. [21] MathWorks, “Modeling contact force between two solids,” Simscape Multibody Documentation, 2023. [22] M. Bergou, M. Wardetzky, S. Robinson, B. Audoly, and E. Grinspun, “Discrete elastic rods,” ACM Transactions on Graphics , vol. 27, no. 3, 2008. [23] M. Gazzola, L. Van Rees, and E. Koumoutsakos, “Forward and inverse problems in the mechanics of soft filaments,” Reviews of Modern Physics , vol. 90, no. 4, 2018. [24] Intel Corporation, “Intel RealSense depth camera D435: Product specifications,” 2023. [25] Y. Li et al., “An untethered soft robotic dog standing and fast trotting with jointless and resilient soft legs,” Biomimetics , vol. 8, no. 8, p. 596, 2023. [26] X. Ji, Y. Zhang, and H. Liu, “Synthesizing optimal gaits of a quadruped robot with soft actuators,” Robotics and Computer-Integrated Manu-facturing , vol. 74, p. 102382, 2022. Preprint 
+
+[27] E. A. Theodorou, J. Buchli, and S. Schaal, “Learning motor skills in high dimensions: A motor primitive approach,” Robotics and Autonomous Systems , vol. 61, no. 9, pp. 1001–1016, 2013.

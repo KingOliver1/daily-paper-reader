@@ -1,0 +1,339 @@
+Title: Efficient Autonomous Navigation of a Quadruped Robot in Underground Mines on Edge Hardware
+
+URL Source: https://arxiv.org/pdf/2603.04470v1
+
+Published Time: Fri, 06 Mar 2026 01:02:52 GMT
+
+Number of Pages: 7
+
+Markdown Content:
+# Efficient Autonomous Navigation of a Quadruped Robot in Underground Mines on Edge Hardware 
+
+Yixiang Gao 1 and Kwame Awuah-Offei 2
+
+> PREPRINT , 2026
+
+Abstract — Embodied navigation in underground mines faces significant challenges, including narrow passages, uneven ter-rain, near-total darkness, GPS-denied conditions, and limited communication infrastructure. While recent learning-based approaches rely on GPU-accelerated inference and extensive training data, we present a fully autonomous navigation stack for a Boston Dynamics Spot quadruped robot that runs entirely on a low-power Intel NUC edge computer with no GPU and no network connectivity requirements. The system integrates LiDAR-inertial odometry, scan-matching localization against a prior map, terrain segmentation, and visibility-graph global planning with a velocity-regulated local path follower, achiev-ing real-time perception-to-action at consistent control rates. After a single mapping pass of the environment, the system handles arbitrary goal locations within the known map without any environment-specific training or learned components. We validate the system through repeated field trials using four target locations of varying traversal difficulty in an experi-mental underground mine, accumulating over 700 m of fully autonomous traverse with a 100% success rate across all 20 trials (5 repetitions × 4 targets) and an overall Success weighted by Path Length (SPL) of 0.73 ± 0.09 .
+
+I. INTRODUCTION Underground mines remain among the most hazardous workplaces worldwide, with roof falls, toxic gases, and flood-ing posing persistent risks to human workers. Autonomous mobile robots can reduce this exposure by performing routine inspection, mapping, and post-incident reconnaissance with-out placing personnel in danger. However, the subterranean mine environment presents a confluence of challenges rarely encountered together in surface robotics: narrow passages, uneven terrain with elevation changes, near-total absence of ambient light, GPS-denied conditions, and limited wireless communication infrastructure. Recent advances in embodied navigation have been driven predominantly by learning-based methods. Vision-Language-Action (VLA) models such as RT-2 [1] and OpenVLA [2] achieve impressive generalization but require billions of parameters and GPU-accelerated inference, with latencies of hundreds of milliseconds even on high-end hardware. Visual navigation models including ViNT [3] and NaVILA [4] demonstrate learned navigation for mobile and legged robots, but rely on camera inputs that fail in low-light conditions and computing resources that exceed edge platforms. These 
+
+> 1Yixiang Gao is with the Department of Mining and Explosive En-gineering, Missouri University of Science and Technology, Rolla, USA
+
+yg5d6@umsystem.edu 
+
+> 2Kwame Awuah-Offei is with the Department of Mining and Explosive Engineering, Missouri University of Science and Technology, Rolla, USA
+
+kwamea@mst.edu Start  
+
+> Goal
+> Robot
+> (a) (b)
+> (c)
+
+Fig. 1: (a) A third-person view of the environment and the robot during an autonomous navigation mission in an underground mine with no GPS, WiFi, or cellular signal. (b) The prior map point cloud overlaid with a real-time LiDAR scan and terrain classification (white = traversable, red = obstacle); insets show the fisheye camera view (near-dark, true lighting) and thermal image. (c) Localized map with traversed path (dashed) and robot current position; photo insets show the robot at the entrance (right), mid-journey (center), and approaching the goal (left). constraints are not merely inconvenient in underground mines; they are prohibitive: there is no network to offload computational tasks to, no ambient light for cameras, and no margin for nondeterministic inference latency on a power budget. In this paper, we present a fully autonomous navigation system for a Boston Dynamics Spot quadruped (Fig. 1) that operates entirely on a low-power Intel NUC edge com-puter with no GPU and no network connectivity. The sys-tem combines classical, interpretable components—LiDAR-inertial odometry, scan-matching localization, morphological terrain segmentation, visibility-graph planning, and velocity-regulated path following—into a pipeline that achieves deter-ministic perception-to-action rates on a CPU. After a single mapping pass of the environment, the system generalizes to arbitrary goal locations within the known map without 
+
+> arXiv:2603.04470v1 [cs.RO] 4 Mar 2026
+
+any environment-specific training or domain adaptation. We validate the system through 20 repeated field trials using four target locations of varying difficulty at the Missouri University of Science & Technology (Missouri S&T) Ex-perimental Mine, demonstrating 100% success rate and an SPL of 0.73 ± 0.09 over 717 m of autonomous traversal. The contributions of this paper are:  
+
+> •
+
+A fully open-sourced autonomous navigation stack 1 for quadruped robots in underground mines, which runs in real-time on a low-power edge computer without GPU acceleration, network connectivity, or learned compo-nents, enabling deployment in infrastructure-denied en-vironments.  
+
+> •
+
+Demonstration that the system generalizes to arbitrary goal locations within a known map after a single mapping pass, with no environment-specific training or domain adaptation.  
+
+> •
+
+Extensive field validation in a real underground mine across four target locations of varying difficulty (20 trials), with detailed analysis of navigation reliability, path efficiency, and system latency. II. RELATED WORK 
+
+A. Autonomous Navigation in Subterranean Environments 
+
+The DARPA Subterranean Challenge spurred the devel-opment of integrated autonomy systems for underground environments. Because the challenge focused on exploration 
+
+of unknown spaces with simultaneous artifact detection, the resulting systems required substantial computational re-sources: CERBERUS [5] paired onboard CPUs with a Jetson AGX Xavier GPU for learned traversability and neural-network-based detection; Team CoSTAR [6] equipped each ground robot with multiple high-power processors including GPU modules for semantic scene understanding; and Team MARBLE [7] reported peak power draws of 425 W from a Ryzen Threadripper system with discrete GPUs. Team Explorer [8] introduced the AEDE planning framework, including the FAR Planner used in our work. While these systems advanced the state of the art in subterranean ex-ploration, the operational need in mines is not exploration but reliable, repeated point-to-point navigation on hardware simple enough for industrial deployment. Our work addresses this need: we achieve fully autonomous navigation using only a single low-power CPU, with no GPU, no learned components. 
+
+B. Legged Robot Navigation 
+
+Quadruped robots have been increasingly deployed in unstructured environments. Recent work has explored pair-ing RGB cameras with learning-based methods to leverage generalization from pre-trained vision models [4], [9], [10]. However, these methods rely on camera inputs that degrade under poor lighting and require GPU resources for real-time inference. Miller et al. [11] demonstrated that LiDAR- and IMU-based systems can effectively navigate in completely 
+
+> 1Source code and field data: https://github.com/g1y5x3/spot-edge-nav
+
+dark areas of underground mines, using autonomous multi-robot exploration on Boston Dynamics Spot. Our system similarly relies on LiDAR and IMU sensors, which remain effective regardless of lighting conditions, while targeting repeated point-to-point navigation in a known map. 
+
+C. Localization in GPS-Denied Environments 
+
+Reliable state estimation without GPS is fundamental to subterranean navigation. LiDAR-inertial odometry methods [12], [13] fuse high-rate IMU data with LiDAR scans to achieve locally consistent, real-time pose estimation. To correct accumulated drift over long traverses, map-based lo-calization methods align incoming scans against a prior map; the Normal Distributions Transform (NDT) [14] represents the reference map as a collection of Gaussian distributions and optimizes scan alignment efficiently. Our system chains these two stages: FAST-LIO2 provides high-rate odometry, and NDT scan matching against a prior point cloud map provides global drift correction. Because a prior map is already available from the teleoperated mapping pass, NDT alignment is a natural fit that yields a globally consistent pose on the edge computer without maintaining or optimizing a full pose graph. 
+
+D. Path Planning for Unstructured Terrain 
+
+Classical planners for unstructured environments range from sampling-based methods (RRT*, PRM) to graph-based approaches on explicit representations. The Nav2 frame-work [15] provides a modular navigation stack for ROS 2 with plug-in planners and controllers, but its default config-urations and costmap-based planning are primarily validated in structured indoor settings. FAR Planner [16] constructs a dynamic visibility graph from terrain observations, en-abling efficient replanning in environments with elongated, branching topology such as mine tunnels. For terrain as-sessment, elevation mapping [17] produces high-resolution 2.5D traversability estimates suited to outdoor terrain with complex geometry. In mine environments, however, the dominant terrain challenge is distinguishing flat traversable ground from walls, rubble, and ceiling structures, which is well addressed by the Progressive Morphological Filter [18] that classifies ground versus obstacle points through itera-tive morphological opening. Our system uses PMF’s terrain segmentation to distinguish between ground and obstacles in mine passages, and leverages FAR Planner’s visibility graph for efficient route computation. III. SYSTEM OVERVIEW The entire navigation stack is built on ROS 2 [19] and consists of four tightly integrated subsystems: (1) a sensor suite and edge compute platform, (2) LiDAR-inertial state es-timation with map-based drift correction, (3) terrain percep-tion for traversability classification, and (4) visibility-graph global planning with regulated local path following. Fig. 2 shows the complete pipeline. Sensor data flows through FAST-LIO2, which produces both an odometry estimate and motion-undistorted point clouds. These feed two parallel FAST-LIO2     
+
+> 10 Hz
+> LiDAR
+> 10 Hz
+> IMU
+> 100 Hz
+> NDT Localization
+> Terrain Analysis
+> FAR Planner
+> 2.5 Hz
+> Regulated Pure Pursuit Spot
+> Initial Pose PCD Map Visibility Graph
+> Goal Pose
+> odometry (LIO)
+> LiDAR scan (filtered)
+> odometry (map)
+> LiDAR scan (segmented)
+> path velocity
+
+Fig. 2: System architecture of the autonomous navigation stack. Dashed lines indicate offline data loaded at startup. FAST-LIO2 fuses LiDAR and IMU inputs to produce odometry and motion-undistorted scans. Two parallel branches—NDT localization (drift correction against a prior map) and terrain analysis (ground/obstacle segmentation)—feed the FAR Planner, which computes a global path tracked by a regulated pure pursuit controller. branches—NDT localization for global pose correction and terrain analysis for ground/obstacle segmentation—whose outputs converge at the FAR Planner for path computation. 
+
+A. Hardware Platform 
+
+The robot platform is a Boston Dynamics Spot quadruped equipped with a custom sensor payload (Fig. 3). The sensor suite consists of:  
+
+> •
+
+A Velodyne VLP-16 3D LiDAR mounted at the top of the sensor stack, providing 16-channel point clouds at 10 Hz with a 360 ◦ horizontal field of view (range configured to 0.75 m –30 m in software).  
+
+> •
+
+A Yahboom IMU providing 6-axis inertial measure-ments at 100 Hz for LiDAR-inertial odometry fusion.  
+
+> •
+
+A TOPDON TC001 thermal camera at 30 Hz ,recorded for situational awareness and future use but not part of the autonomous control loop. All computation runs onboard on an Intel NUC 13 (13th Gen i7-1360P, 12 cores / 16 threads, 32 GB RAM) configured in performance mode with a sustained power limit of 40 W .Notably, the entire navigation stack runs on CPU (does not use any discrete GPUs). We do not use Spot’s built-in stereo cameras for navigation due to the low-light mine environment (see Fig. 1, panel a and b). 
+
+B. State Estimation and Localization 
+
+State estimation follows a two-stage pipeline: high-rate LiDAR-inertial odometry provides a locally consistent pose, which is then corrected against a prior map to maintain global accuracy. 
+
+1) LiDAR-Inertial Odometry: We employ FAST-LIO2 for real-time LiDAR-inertial odometry. The algorithm fuses 
+
+10 Hz LiDAR scans with 100 Hz IMU data through an iter-ated error-state Kalman filter, performing motion undistortion and point-to-plane scan matching against an incrementally maintained ikd-Tree map. To meet the computational budget of the edge computer, raw scans are decimated by a factor of two and voxel-filtered at 0.5 m resolution. The output is 6-DoF odometry and motion-undistorted registered point clouds at 10 Hz .
+
+> 2We used an external IMU because accessing the robot’s internal high-frequency IMU requires an extra license. Velodyne VLP16 Intel NUC PC thermal camera IMU
+
+Robot Navigation Payload 
+
+Fig. 3: Boston Dynamics Spot with the custom navigation payload. The sensor suite includes a Velodyne VLP-16 LiDAR, a Yahboom IMU 2, and a TOPDON TC001 thermal camera. All processing runs onboard on an Intel NUC 13 mini PC. 
+
+2) NDT Map-Based Localization: To correct accumulated odometry drift, we apply Normal Distributions Transform (NDT) [14] scan matching against a prior point cloud map of the mine. The prior map is captured in a single teleoperated mapping pass using the same sensor suite and downsampled to 0.1 m voxel resolution at startup. The localizer maintains a single corrective rigid-body transform Todom map that relates the FAST-LIO2 odometry frame to the global map frame. At each scan arrival, the body-frame point cloud is aligned against the NDT voxel grid of the prior map using the composed prediction 
+
+Tbase map = Todom map · Tbase odom 
+
+as the initial guess. If NDT converges (within 30 iterations at 1.0 m voxel resolution), it returns a refined pose ˆTbase map ,and the correction is updated: 
+
+Todom map ← ˆTbase map ·  Tbase odom 
+
+−1.
+
+Between NDT updates, the correction is applied to every odometry message, yielding a globally consistent pose with-out discontinuities. C. Terrain Perception 
+
+Each registered point cloud from FAST-LIO2 is pro-cessed by a terrain segmentation module that classifies points as traversable ground or obstacle. First, a ceiling filter discards points above 1.5 m in the robot body frame, removing roof structure and overhead infrastructure that are prevalent in mine tunnels. The remaining points are then segmented using an Approximate Progressive Morphological Filter (PMF) [18], which classifies ground versus obstacle through iterative morphological opening with parameters tuned for mine geometry. Each point is labeled via the intensity channel—ground ( 0.0) or obstacle ( 1.0)—and the segmented cloud is fed to the global planner. 
+
+D. Global Planning 
+
+For global path planning we employ FAR Planner [16], a visibility-graph-based planner [8]. The planner incrementally maintains a dynamic visibility graph from the segmented terrain cloud: obstacle contour polygons are extracted from a bird’s-eye occupancy image, convex vertices are promoted to navigation nodes, and Dijkstra’s algorithm computes shortest paths through observed or unknown space. In our deployment, a pre-computed visibility graph of the mine ( .vgh file, 846 nodes) is loaded at startup, enabling immediate path planning without an exploration phase. Dur-ing traversal, live LiDAR scans continuously update the graph so that new obstacles (e.g., fallen rock, parked equip-ment) not present in the prior map are incorporated and routed around. The planner runs at 2.5 Hz with a sensor range of 30 m , robot radius of 1.0 m , and voxel resolution of 0.05 m .
+
+E. Local Path Following 
+
+The global path is tracked by a Regulated Pure Pursuit controller [20] with a lookahead distance of 0.5 m and maximum linear velocity of 0.5 m /s. The controller com-putes the curvature of a circular arc to the lookahead point and regulates speed through curvature scaling, proximity deceleration near the goal, and a minimum velocity floor to prevent stalling. The controller runs at the upstream path publication rate ( 2.5 Hz ) with a goal tolerance of 0.3 m .Spot’s internal locomotion API interpolates between these velocity commands, so no higher-rate republishing is needed. IV. EXPERIMENTAL SETUP 
+
+A. Environment 
+
+We conducted experiments at the Missouri S&T Experi-mental Mine, an instructional facility with an underground mine in Rolla, Missouri. The mine features narrow passages (approximately 2 m –4 m wide), uneven terrain with mild el-evation changes (up to 0.3 m over the full route), multiple T-intersections, and complete absence of ambient light beyond the first few meters from the entrance. No GPS, cellular, or WiFi infrastructure is available underground. The prior point cloud map was captured in a single teleoperated pass using the same sensor suite and covers approximately 60 m × 30 m 
+
+of navigable mine passages. -20 -10 0 10     
+
+> -20
+> -10
+> 0
+> (m)
+> 10
+> (a) Goals 1 3
+> Goal 1
+> Goal 2
+> Goal 3
+> -20 -10 010 (m)
+> (b) Goal 4 (Entrance)
+> Goal 4
+> Starts
+> Shortest Path 1.0
+> 0.5
+> 0.0
+> 0.5
+> Elev.
+> (m)
+
+Fig. 4: Goal and start locations on the mine elevation map (20 trials total). (a) Goals 1–3 share a common start near the entrance. (b) Goal 4 (Entrance): all 5 start locations marked, each from a distinct position in the mine. Dashed lines show the geodesic shortest paths used to compute the reference distance ℓ for SPL evaluation. TABLE I: Navigation performance (mean ± std over 5 repetitions per goal; 20 trials total). SPL per Anderson et al. [21]. “All” reports the mean of per-goal means.                                                       
+
+> Goal Succ. Path (m) p/ℓ SPL Time (s) G1 (Easy) 5/5 13 .1±0.2 1 .16 ±0.02 0 .87 ±0.01 27 ±1
+> G2 (Inter.) 5/5 25 .5±1.7 1 .41 ±0.09 0 .71 ±0.05 60 ±6
+> G3 (Deep) 5/5 51 .3±1.0 1 .47 ±0.03 0 .68 ±0.01 127 ±7
+> G4 (Entr.) 5/5 53 .5±8.8 1 .53 ±0.09 0 .66 ±0.04 131 ±20
+> All 20/20 35.9 1.39 0.73 ±0.09 86
+
+B. Task Description 
+
+The navigation task requires the robot to autonomously traverse from a known start position near the mine entrance to one of four predefined target locations of increasing difficulty (Fig. 4):  
+
+> •
+
+Goal 1 (Easy): geodesic distance ℓ = 11 .2 m , a straight traverse requiring minimal maneuvering.  
+
+> •
+
+Goal 2 (Intersection): ℓ = 18 .1 m with −0.16 m 
+
+elevation change, through a mine intersection requiring turn decisions.  
+
+> •
+
+Goal 3 (Deep): ℓ = 34 .9 m with −0.32 m elevation change, deep into the mine.  
+
+> •
+
+Goal 4 (Arbitrary Start → Entrance): ℓ = 35 .1 m 
+
+(average), starting from five distinct positions through-out the mine and navigating to the entrance. This tests generalization beyond a fixed start. We repeated each experiment 5 times for a total of 20 trials. A trial is successful if the robot reaches within 1.0 m of the target without human intervention. Human observers, stationed at each goal location, verified success. V. RESULTS We adopt the evaluation protocol of Anderson et al. [21], reporting success rate (SR), success weighted by path length (SPL), path ratio ( pi/ℓ i), and completion time. (a) t1: Entrance 
+
+Elapsed: 19.19 s Dist: 8.35 m 
+
+(b) t2: Mid-Journey 
+
+Elapsed: 46.19 s Dist: 18.88 m 
+
+(c) t3: Goal Arrival 
+
+Elapsed: 100.19 s Dist: 36.65 m 
+
+(d) t1: Deep Start 
+
+Elapsed: 7.38 s Dist: 3.12 m 
+
+(e) t2: Intersection 
+
+Elapsed: 25.38 s Dist: 10.49 m 
+
+(f) t3: Entrance Arrival 
+
+Elapsed: 69.38 s Dist: 24.68 m 
+
+Fig. 5: Qualitative timeline and trajectory overview. Left (a–c): Goal 3 (Entrance →Deep)—the robot navigates through narrow, sloped, pitch-black passages. Right (d–f): Goal 4 (Deep →Entrance)—starting from a dark location, the robot returns to the entrance. 20                                          
+
+> 10
+> 0
+> 10
+> G1 (Easy)
+> Rep 1
+> pi=12.8m i=11.3m
+> Rep 2
+> pi=13.0m i=11.2m
+> Rep 3
+> pi=13.4m i=11.3m
+> Rep 4
+> pi=13.3m i=11.6m
+> Rep 5
+> pi=12.9m i=11.2m
+> 20
+> 10
+> 0
+> 10
+> G2 (Intersect.)
+> Rep 1
+> pi=27.1m i=18.0m
+> Rep 2
+> pi=24.3m i=18.1m
+> Rep 3
+> pi=27.9m i=18.2m
+> Rep 4
+> pi=24.3m i=18.4m
+> Rep 5
+> pi=24.0m i=17.9m
+> 20
+> 10
+> 0
+> 10
+> G3 (Deep)
+> Rep 1
+> pi=52.2m i=34.7m
+> Rep 2
+> pi=50.1m i=35.1m
+> Rep 3
+> pi=50.6m i=34.7m
+> Rep 4
+> pi=52.9m i=35.1m
+> Rep 5
+> pi=50.9m i=35.0m
+> 20 10 010
+> 20
+> 10
+> 0
+> 10
+> G4 (Entrance)
+> Rep 1
+> pi=57.7m i=35.5m
+> 20 10 010
+> Rep 2
+> pi=37.6m i=23.5m
+> 20 10 010
+> Rep 3
+> pi=51.8m i=37.6m
+> 20 10 010
+> Rep 4
+> pi=57.3m i=38.3m
+> 20 10 010
+> Rep 5
+> pi=63.3m i=40.6m
+> 1.0
+> 0.8
+> 0.6
+> 0.4
+> 0.2
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> Elevation (m)
+> Executed path piGeodesic i(A*) Start Goal
+
+Fig. 6: Executed paths (solid red) vs. geodesic shortest paths (dashed blue) on the elevation map for all 20 trials across the four target locations. pi is path length and ℓi is geodesic distance. 
+
+A. Navigation Performance 
+
+Table I summarizes the results of all 20 trials. The system achieved a 100% success rate (20/20), with every trial reach-ing within 1.0 m of the target without human intervention. The mean final distance to goal across all trials was 0.25 m 
+
+(range: 0.00 − 0.66 m ), well within the success threshold. The overall SPL of 0.73 ± 0.09 (mean of per-goal means) reflects a consistent trade-off between path optimality and the conservative behaviors of the planner and controller. Goal 1, a short straight traverse, achieved the highest SPL ( 0.87 ) with a path ratio of only 1.16 , indicating near-optimal routing. As task difficulty increases (longer distances, intersections, elevation changes) the path ratio grows from 1.16 (Goal 1) to 1.53 (Goal 4), and SPL decreases, respectively. This is expected: the FAR Planner routes through visibility graph nodes that may not lie on the geodesic shortest path, and the regulated pure pursuit controller introduces additional path deviation through curvature-limited tracking. Goal 4 (Entrance) exhibits the highest variance in path length ( ±8.8 m ) and completion time ( ±20 s ) because each of the five repetitions starts from a different location in the mine, resulting in geodesic distances ranging from 23 .5 m to 
+
+40 .6 m . Despite this variability, SPL remains tightly clustered (0.66 ± 0.04 ), demonstrating that the system generalizes reliably to arbitrary start-goal pairs within the known map. Completion times scale approximately linearly with path length at an effective speed of 0.38 m /s–0.48 m /s, below the 
+
+0.5 m /s maximum due to curvature and proximity decelera-tion. The total autonomous traverse across all 20 trials was 
+
+717 m over approximately 29 minutes of navigation time. 
+
+B. System Latency 
+
+We measured the end-to-end perception-to-action latency by tracing each velocity command back through the pipeline to the originating LiDAR scan timestamp across all 20 tri-als. The pipeline is parallel : NDT localization runs asyn-chronously and does not block the control path. The critical path follows the terrain branch: VLP-16 driver ( ∼84 ms ) →
+
+FAST-LIO ( ∼8 ms ) → terrain analysis ( ∼41 ms ) → FAR Planner ( ∼29 ms ) → regulated pure pursuit ( <1 ms ). The resulting end-to-end latency from LiDAR scan to velocity command has a median of 176 ms (mean 195 ms ), well within the 400 ms planning cycle, demonstrating con-sistent real-time performance across all goal difficulties. NDT localization, which provides global drift correction in parallel, has a median latency of 100 ms but occasionally takes up to 1.1 s when scan-matching converges slowly; because it runs asynchronously, these outliers do not affect control responsiveness. 
+
+C. Qualitative Analysis 
+
+Fig. 4 shows trajectories overlaid on the mine elevation map for all four goals. Goals 1–3 share a common start near the entrance, with the representative (median-SPL) run shown for each. The trajectories closely follow the mine passages, with deviations primarily occurring at intersections where the planner selects a visibility graph route that differs slightly from the geodesic path. Goal 4 demonstrates the system’s ability to plan from five distinct start positions throughout the mine, all converging to the entrance. Fig. 6 expands this view to all 20 individual trials, confirming consistent path quality across repetitions. Fig. 5 presents a visual timeline of two representative missions. The Goal 3 sequence (panels a–c) shows the robot traversing from the well-lit entrance area into progressively darker and narrower passages, reaching the deepest target at 
+
+36 .7 m of travel in 100 s . The Goal 4 sequence (panels d–f) illustrates the reverse: starting from a completely dark zone deep in the mine, the robot navigates through an intersection and returns to the entrance. These sequences confirm that the LiDAR-only perception pipeline operates identically regard-less of ambient lighting, as the 3D point clouds provide full geometric information in both the illuminated entrance area and the pitch-black interior. VI. DISCUSSION The 100% success rate over 20 trials and 717 m of au-tonomous traversal demonstrates that reliable point-to-point navigation in underground mines is achievable with clas-sical, interpretable components on a 40 W edge computer. Several design choices contribute to this reliability. Loading a pre-computed visibility graph at startup eliminates the exploration phase entirely, enabling immediate path planning to any reachable goal. The two-stage localization pipeline (FAST-LIO2 for local consistency, NDT for global drift correction) maintains accurate pose estimation throughout missions without the computational overhead of full graph-based SLAM. The regulated pure pursuit controller’s cur-vature scaling and proximity deceleration provide smooth velocity profiles suited to the uneven terrain and tight turns of mine passages. The system has several limitations. First, it requires a prior map: a teleoperated mapping pass must be performed before autonomous navigation, making the current system unsuit-able for unknown or dynamically changing environments. Second, the planner does not handle dynamic obstacles; the mine was cleared of personnel (except for the observer at the goal) during trials. Third, while the PMF terrain segmentation and ceiling filter parameters were tuned for this mine’s geometry, transferring to mines with significantly different passage dimensions or terrain characteristics may require re-tuning. Fourth, the thermal camera is currently used only for situational awareness and is not integrated into the navigation pipeline. To quantify the contribution of NDT localization, we analyzed the map →odom correction transform across all 20 trials. NDT applies a median per-step XY correction of 
+
+1.1 cm , keeping accumulated drift bounded to 31 cm –103 cm 
+
+depending on path length. Without these corrections, FAST-LIO2 odometry alone would accumulate sufficient drift on longer missions (Goals 3 and 4, >35 m ) to exceed the 
+
+1.0 m success threshold, particularly in the geometrically repetitive deep passages where odometry drift is highest. Z-axis corrections are larger (median 3.1 cm per update) due to the low-ceiling geometry providing weak vertical constraints for scan matching, but this does not affect navigation since the planner and controller operate in 2D. VII. CONCLUSIONS We presented an autonomous navigation system for a quadruped robot in underground mines that runs entirely on a 40 W edge computer without GPU acceleration, network connectivity, or learned components. The system integrates LiDAR-inertial odometry, NDT map-based localization, mor-phological terrain segmentation, visibility-graph global plan-ning, and regulated pure pursuit into a real-time perception-to-action pipeline. Field validation across 20 trials in an experimental underground mine achieved a 100% success rate and an SPL of 0.73 ± 0.09 , demonstrating that reliable autonomous navigation in challenging subterranean environ-ments does not require high-power compute or learning-based methods. Future work will: (1) extend the system to unknown environments through integrated exploration and incremental map building, (2) incorporate dynamic obstacle detection and avoidance for operation alongside mine personnel and equipment, and (3) integrate the thermal camera for miner state and location tracking. ACKNOWLEDGMENT This research was funded by a grant from the Centers for Disease Control’s National Occupational Safety and Health (grant no. U60OH012350-01-00). REFERENCES [1] B. Zitkovich, T. Yu, S. Xu, P. Xu, T. Xiao, F. Xia, et al. ,“RT-2: Vision-language-action models transfer web knowledge to robotic control,” in Proceedings of The 7th Conference on Robot Learning , ser. Proceedings of Machine Learning Research, J. Tan, M. Toussaint, and K. Darvish, Eds., vol. 229. PMLR, 06–09 Nov 2023, pp. 2165–2183. [Online]. Available: https: //proceedings.mlr.press/v229/zitkovich23a.html [2] M. J. Kim, K. Pertsch, S. Karamcheti, T. Xiao, A. Balakrishna, S. Nair, R. Rafailov, E. Foster, G. Lam, P. Sanketi, et al. , “OpenVLA: An open-source vision-language-action model,” in Proceedings of The 8th Conference on Robot Learning , 2024. [Online]. Available: https://openreview.net/forum?id=ZMnD6QZAE6 [3] D. Shah, A. Sridhar, N. Dashora, K. Stachowicz, K. Black, N. Hirose, and S. Levine, “ViNT: A foundation model for visual navigation,” in Proceedings of The 7th Conference on Robot Learning , 2023. [Online]. Available: https://openreview.net/forum?id=-K7-1WvKO3F [4] A.-C. Cheng, Y. Ji, Z. Yang, Z. Gongye, X. Zou, J. Kautz, E. Biyik, H. Yin, S. Liu, and X. Wang, “NaVILA: Legged robot vision-language-action model for navigation,” in Proceedings of Robotics: Science and Systems (RSS) , 2025. [5] M. Tranzatto, F. Mascarich, L. Bernreiter, C. Godinho, M. Camurri, S. Khattak, T. Dang, V. Reijgwart, J. Loeje, D. Wisth, et al. , “CER-BERUS: Autonomous legged and aerial robotic exploration in the tunnel and urban circuits of the DARPA subterranean challenge,” Field Robotics , vol. 2, no. 1, pp. 274–324, 2022. [6] A.-a. Agha, K. Otsu, B. Morrell, D. D. Fan, R. Thakker, A. Santamaria-Navarro, S.-K. Kim, A. Bouman, X. Lei, J. Edlund, 
+
+et al. , “NeBula: TEAM CoSTAR’s robotic autonomy solution that won phase II of DARPA subterranean challenge,” Field Robotics , vol. 2, pp. 1432–1506, 2022. [7] H. Biggie, E. R. Rush, D. G. Riley, S. Ahmad, M. T. Ohradzansky, K. Harlow, et al. , “Flexible supervised autonomy for exploration in subterranean environments,” Field Robotics , vol. 3, pp. 125–189, 2023. [8] C. Cao, H. Zhu, F. Yang, Y. Xia, H. Choset, J. Oh, and J. Zhang, “Autonomous exploration development environment and the planning algorithms,” in 2022 IEEE International Conference on Robotics and Automation (ICRA) , 2022, pp. 8921–8928. [9] Z. Fu, A. Kumar, A. Agarwal, H. Qi, J. Malik, and D. Pathak, “Coupling vision and proprioception for navigation of legged robots,” in 2022 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2022, pp. 17 252–17 262. [10] P. Roth, J. Nubert, F. Yang, M. Mittal, and M. Hutter, “ViPlanner: Visual semantic imperative learning for local navigation,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) ,2024. [11] I. D. Miller, F. Cladera, A. Cowley, S. S. Shivakumar, E. S. Lee, L. Jarin-Lipschitz, et al. , “Mine tunnel exploration using multiple quadrupedal robots,” IEEE Robotics and Automation Letters , vol. 5, no. 2, pp. 2840–2847, 2020. [12] W. Xu, Y. Cai, D. He, J. Lin, and F. Zhang, “FAST-LIO2: Fast direct LiDAR-inertial odometry,” IEEE Transactions on Robotics , vol. 38, no. 4, pp. 2053–2073, 2022. [13] T. Shan, B. Englot, D. Meyers, W. Wang, C. Ratti, and D. Rus, “LIO-SAM: Tightly-coupled lidar inertial odometry via smoothing and mapping,” in 2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2020, pp. 5135–5142. [14] P. Biber and W. Straßer, “The normal distributions transform: A new approach to laser scan matching,” in 2003 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2003, pp. 2743– 2748. [15] S. Macenski, F. Martin, R. White, and J. Gin´ es Clavero, “The Marathon 2: A navigation system,” in 2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2020, pp. 2718– 2725. [16] F. Yang, C. Cao, H. Zhu, J. Oh, and J. Zhang, “FAR planner: Fast, attemptable route planner using dynamic visibility update,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2022, pp. 9–16. [17] T. Miki, L. Wellhausen, R. Grandia, F. Jenelten, T. Homberger, and M. Hutter, “Elevation mapping for locomotion and navigation using GPU,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2022, pp. 2273–2280. [18] K. Zhang, S.-C. Chen, D. Whitman, M.-L. Shyu, J. Yan, and C. Zhang, “A progressive morphological filter for removing nonground measure-ments from airborne LIDAR data,” IEEE Transactions on Geoscience and Remote Sensing , vol. 41, no. 4, pp. 872–882, 2003. [19] S. Macenski, T. Foote, B. Gerkey, C. Lalancette, and W. Woodall, “Robot operating system 2: Design, architecture, and uses in the wild,” 
+
+Science Robotics , vol. 7, no. 66, p. eabm6074, 2022. [20] S. Macenski, S. Singh, F. Mart´ ın, and J. Gin´ es, “Regulated pure pursuit for robot path tracking,” Autonomous Robots , vol. 47, no. 6, pp. 685– 694, 2023. [21] P. Anderson, A. Chang, D. S. Chaplot, A. Dosovitskiy, S. Gupta, V. Koltun, et al. , “On evaluation of embodied navigation agents,” 
+
+arXiv preprint arXiv:1807.06757 , 2018. [Online]. Available: https: //arxiv.org/abs/1807.06757

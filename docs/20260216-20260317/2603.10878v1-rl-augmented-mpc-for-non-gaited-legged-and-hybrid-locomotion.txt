@@ -1,0 +1,439 @@
+Title: RL-Augmented MPC for Non-Gaited Legged and Hybrid Locomotion
+
+URL Source: https://arxiv.org/pdf/2603.10878v1
+
+Published Time: Thu, 12 Mar 2026 01:10:22 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+> 1
+
+# RL-Augmented MPC for Non-Gaited Legged and Hybrid Locomotion 
+
+Andrea Patrizi , Carlo Rizzardo , Arturo Laurenzi , Francesco Ruscelli ,Luca Rossini and Nikos G. Tsagarakis 
+
+Abstract —We propose a contact-explicit hierarchical architec-ture coupling Reinforcement Learning (RL) and Model Predictive Control (MPC), where a high-level RL agent provides gait and navigation commands to a low-level locomotion MPC. This of-floads the combinatorial burden of contact timing from the MPC by learning acyclic gaits through trial and error in simulation. We show that only a minimal set of rewards and limited tuning are required to obtain effective policies. We validate the architecture in simulation across robotic platforms spanning 50 kg to 120 kg and different MPC implementations, observing the emergence of acyclic gaits and timing adaptations in flat-terrain legged and hybrid locomotion, and further demonstrating extensibility to non-flat terrains. Across all platforms, we achieve zero-shot sim-to-sim transfer without domain randomization, and we further demonstrate zero-shot sim-to-real transfer without domain ran-domization on Centauro, our 120 kg wheeled-legged humanoid robot. We make our software framework and evaluation results publicly available at https://github.com/AndrePatri/AugMPC. 
+
+Index Terms —Whole-Body Motion Planning and Control; Reinforcement Learning; Legged Robots. 
+
+I. I NTRODUCTION 
+
+Legged biological systems leverage a combination of sen-sory feedback, reflexive responses and online re-planning, exhibiting remarkable agility and robustness. In particular, one key skill that natural systems possess is the ability to dynamically choose and adapt gaits based on task demands and sensory information. Interest in replicating these skills on artificial systems has long been a focus of research in legged locomotion [1]. The approaches developed over the years classically fall into two main categories: model-based and model-free. Model-based techniques exploit a model of the system dynamics to aid and guide the decision-making process, which is typi-cally formulated as a finite horizon Optimal Control Problem (OCP) [1]. The most successful model-based method for loco-motion, Model Predictive Control (MPC), has been shown to be capable of remarkable performance over the years [2]–[8], thanks to its online re-planning, its interpretability and explicit constraint handling. However, optimizing over contacts leads to a Mixed-Integer Nonlinear Programming problem, which is often too complex to solve online. Therefore, simplified dynamics models and/or heuristics are commonly used to 
+
+This work was supported by the European Union’s Horizon Europe Frame-work Programme under grant agreement No 101070596 All authors are with the Humanoids and Human-Centred Mechatronics (HHCM) lab, Istituto Italiano di Tecnologia (IIT), Via San Quirico 19d, 16163 Genova Andrea Patrizi is also with the Department of Informatics, Bioengineering, Robotics and Systems Engineering, University of Genova, Via All’Opera Pia 13, 16145 Genova. 
+
+Fig. 1. Our hierarchical RL-MPC architecture has been trained and eval-uated on several robotic platforms with different morphologies and weight distributions ( 50 kg to 120 kg ), successfully transferred zero-shot across different domains without any domain randomization, and applied to both hybrid and standard locomotion tasks. Supplementary videos are available at https://youtu.be/I08UywVVhN4. 
+
+make the problem tractable in real-time [1]. Model-free approaches offer a different perspective on the contact timing problem: they forgo explicit dynamics modeling and instead learn policies directly through interaction with the environment [9]–[11]. Most state-of-the-art model-free Reinforcement Learning (RL) formulations circumvent the combinatorial nature of contact scheduling by training joint-space, contact-implicit policies. However, these approaches often depend heavily on domain randomization and reward shaping [11]–[13], leading to sample inefficiency and in-creased task-specific tuning. We propose a hierarchical architecture that couples a high-level RL policy with a low-level MPC. Unlike prior ap-proaches relying on predefined gaits or demonstrations [5]– [7], [13]–[16], our method learns acyclic contact patterns directly through trial and error, while delegating motion ex-ecution to the MPC. This division of roles greatly simplifies reward design and enables the emergence of diverse, task-adaptive behaviors. The same MPC is used during training and deployment, ensuring robustness, sample efficiency and generalization across domains. Our system demonstrates ro-bust performance across platforms with different topologies and weight distributions ( 50 –120 kg ), successfully transferring from simulation to real hardware, without domain random-ization or fine-tuning. To support the proposed architecture, we develop a scalable software framework capable of running thousands of MPCs in parallel on CPU, while interfacing with GPU-based training. Policies are trained using Soft Actor Critic (SAC) [9], a design choice that further increases sample efficiency, without using demonstrations to aid the training. We validate the approach on flat-terrain tasks on legged and hybrid wheeled-legged locomotion, observing the emergence of non-
+
+> arXiv:2603.10878v1 [cs.RO] 11 Mar 2026 2
+
+periodic contact patterns and adaptive stepping behaviors. We further demonstrate the extensibility of the architecture to unstructured environments by training a hybrid locomotion agent on a terrain composed of pyramidal steps. II. R ELATED WORK 
+
+A. Model Predictive Control 
+
+For complex robots and environments with multiple possible contacts, proper contact scheduling is critical [1]. In MPC-based locomotion, contact scheduling is typically addressed using one of three approaches. 
+
+1) Predefined Contact Scheduling: The optimal control problem is transcribed into a nonlinear program using a prede-fined contact sequence, with contact forces treated as decision variables and constrained by friction and unilaterality [5]–[7]. 
+
+2) Hybrid Optimization: Hybrid formulations jointly opti-mize robot motion and discrete contact sequences, resulting in mixed-integer or bilevel optimization problems [1]. While expressive, these methods may require exploring a combina-torial number of contact sequences, often limiting real-time applicability. 
+
+3) Contact-Implicit Formulations: Contact-implicit meth-ods enforce relations between system states and contact forces without discrete variables, typically via relaxed complementar-ity constraints [17]. These approaches often rely on accurate initial guesses and are primarily suited for offline optimiza-tion [1]. 
+
+B. Reinforcement Learning 
+
+Unlike MPC, RL policies generally do not explicitly model system dynamics. Instead, they map input observations di-rectly to distributions over actions, learning contact-implicit policies that maximize future cumulative reward, implicitly handling nonsmooth contact dynamics. Compared with tra-ditional model-based approaches which would typically re-quire carefully engineered perception pipelines, end-to-end RL simplifies perception integration [10]. However, Deep-RL is typically sample inefficient and relies on massive parallel simulation for data collection [11]–[13]. Domain randomiza-tion is commonly used to improve sim-to-real transfer, further increasing data requirements. Model-based RL approaches can improve sample efficiency and enable real-world training via learned world models [18]. However, the resulting policies are often difficult to interpret and transfer across domains, limiting their applicability to complex locomotion tasks. 
+
+C. Hybrid Architectures 
+
+Hybrid approaches combining learning and optimal con-trol have been proposed to leverage the strengths of both paradigms. In [14], a simplified inverted pendulum model is used to generate reference motions that are imitated by a blind locomotion policy trained in simulation, with prede-fined contact schedules used at deployment. While effective for improving sample efficiency, such demonstration-based methods introduce biases tied to the simplified model. Most hybrid methods instead adopt a hierarchical structure. In [15], a full rigid-body planner is coupled with an RL policy that predicts foothold locations from perception, using predefined contact schedules. Similarly, [16] trains a tracking policy from planner rollouts for robust locomotion on sparse terrains, with the planner also active at deployment and enabling zero-shot transfer across planner instances. Alternative approaches address contact scheduling directly. In [19], a Monte-Carlo Tree Search module replaces mixed-integer optimization and is combined with a simplified MPC and whole-body controller, with the MPC cost-to-go approximated via imitation learning for real-world deployment. Most closely related to our work is [20], which learns a high-level gait policy using evolutionary strategies to parameterize contact phases for a convex MPC with simplified dynamics, showing that gait transitions can emerge from simple velocity tracking and energy-based re-wards. III. O VERVIEW 
+
+Our approach, illustrated in Fig. 2, combines a low-level MPC locomotion controller with a high-level policy responsi-ble for both contact scheduling and navigation. Unlike [20], we train the policy using RL (SAC [9]) and employ a full rigid-body dynamics model within the MPC. In contrast to approaches that leverage MPC-generated demonstrations [14], [16], the MPC and the scheduling policy operate concurrently and synchronously during both training and evaluation. The MPC is formulated assuming a predefined contact schedule over the current optimization horizon [1], enabling the use of efficient DDP-based solvers [8]. Our receding-horizon im-plementation allows flight phases to be injected on demand for each contact and their properties to be modified prior to each solver iteration (Sec. IV-D). We further adopt an instantaneous parametrization of step actions, eliminating the need for clock-based observations while still allowing the policy to generate fully acyclic gaits through its interaction with the MPC (Sec. V). To ensure practical training efficiency, we developed a scalable and modular software framework capable of running thousands of MPC instances in parallel on CPU, while synchronizing with GPU-based simulation environments (Sec. VI). IV. L OW -LEVEL MODEL -BASED CONTROL 
+
+A. Preliminaries 
+
+We define the state and input spaces as X ⊆ Rnq +nv and 
+
+U ⊆ Rnu , where nq and nv denote the dimensions of the configuration and velocity spaces of the system, and nu the dimension of the input space. At each sample time tk, given an optimization horizon of duration N · ∆t , the low-level MPC controller solves a parametric NLP of the form: 
+
+min     
+
+> x0: N,u0: N−1
+> N−1
+
+X
+
+> i=0
+
+ℓi(xi, ui) + ℓN (xN ) (1) s.t. xi+1 = fi(xi, ui),
+
+hi(xi, ui) = 0 ,
+
+gi(xi, ui) ≥ 0 ∀i = 0 , . . . , N − 1
+
+gN (xN ) ≥ 0, hN (xN ) = 0 
+
+where ℓi ∈ R and ℓN ∈ R denote the running and terminal costs. Dependency of (1) upon the NLP parameters ψ ∈ Rnp3
+
+Fig. 2. The proposed hierarchical architecture uses an RL policy to generate both contact schedules and navigation commands for the underlying MPC. 
+
+was omitted for brevity. The constraints include the discrete dynamics fi ∈ Rnq +nv , equality constraints hi ∈ Rm, and inequality constraints gi ∈ Rn. The solution to (1) yields a locally optimal state-input trajectory: 
+
+T (k) :=   x(k)0 , . . . , x(k)
+
+N , u(k)0 , . . . , u(k)
+
+N −1
+
+ ∈ XN +1 × U N
+
+We adopt an inverse-dynamics formulation of (1), which has been shown to offer numerical advantages over forward-dynamics approaches [8] and enforce full rigid-body dynamics via a floating-base constraint [τi]fb = 0 ∈ R6 for i =0, ..., N − 1, where τi ∈ Rnv are the generalized efforts. The decision variables are defined as xi = (qi, ˙qi) and 
+
+ui =   ¨qi, λ(i), where λ(i) ∈ R3·nc is the concatenation of the nc foot contact forces at node i, and qi ∈ Rnq , ˙qi ∈ Rnv
+
+and ¨qi ∈ Rnv denote the configuration, generalized velocity, and acceleration of the system. The floating base orientation is encoded with a unit quaternion, while twists, accelerations, and contact wrenches are expressed in a world-aligned local body frame, which ensures that the floating-base dynamics are independent of joint torques, resulting in a compact and computationally efficient NLP. 
+
+B. Solution Approach and Stepping Logic 
+
+Parametric NLPs such as (1) can be solved efficiently using algorithms derived from DDP [8]. We employ an equality-constrained multiple-shooting variant of the Iterative Linear Quadratic Regulator (ILQR), available in [21] and approx-imate inequality constraints via quadratic barriers. At time 
+
+tk, the solver is initialized with the shifted previous solution 
+
+T (k−1) as initial guess T (k)IG and x(k)IS as initial state. A new solution T (k) is then computed, following a real-time iteration scheme [22]. Due to the required computation time, the solution T (k) becomes available only at the next time step 
+
+tk+1 . To compensate for this delay, prior to the solver call, we set the references for the underlying joint impedance controller based on the control input at the second node u(k−1) 1 , instead of u(k−1) 0 . This adjustment anticipates the system’s evolution during solver computation. 
+
+C. Cost and Constraint Formulation 
+
+We focus on legged and hybrid wheeled-legged quadrupedal locomotion tasks. Our MPC framework employs an almost 
+
+TABLE I PROBLEM COSTS /CONSTRAINTS FORMULATION : Grey-shaded costs are specific to the Centauro platform, whereas red and blue-shaded terms are used to define contact and flight phases, respectively.                                                                                                                                                          
+
+> Name Descr. Nominal Expr. Dim. Span Support
+> hint integrator fi⊖xi+1 = 0 nq+nvN0: N−1
+> hdyn inv. dynamics [τi]fb = 0 6N0: N−1
+> hxinit init. state [x0−xIS ]a:b= 0 ninit 10
+> h(j)liftoff force vanishing λ(i)
+> j= 0 3variable variable
+> h(j)pc no-slip contact v(j)
+> c,i = 0 3variable variable
+> h(j)rc no-slip rolling contact v(j)
+> w,i +Ri·ω(j)
+> i×ˆr(j)
+> i=0 3variable variable
+> g(j)fr friction cone ∥λ(i)
+> j,t ∥ ≤ μ·λ(i)
+> j,n 1variable variable
+> g(j)uni unilaterality λ(i)
+> j,n ≥01variable variable
+> g˙q, lim joint vel. limits [ ˙ qlb ]6: ≤[ ˙ qi]6: ≤[ ˙ qub ]6: njnt N0: N−1
+> l˙q, reg vel. regularization ∥˙qi∥21N0: N−1
+> la, reg acc. regularization ∥¨qi∥21N0: N−1
+> l(j)
+> λ(ˆλj)force regularization ∥λ(i)
+> j−ˆλ(i)
+> j∥21variable variable
+> lξ, cap base capture ∥[ ˙ qi]0:6 ∥21N/ 65/6N:N−1
+> lq, cap ([ ˆ q]7: )posture capture ∥[qi]7: −[ ˆ q]7: ∥21N/ 65/6N:N−1
+> lξ, ref (ξMPC )base twist tracking ∥[ ˙ qi]0:6 −ξMPC ∥215/6N0:5 /6N−1
+> l(j)
+> vz(v(j)ref , z )foot tracking ∥[v(j)ee ,i ]2−v(j, i )ref , z ∥21variable variable
+> l(j)vert vertical touchdown ∥[v(j)ee ,i ]0:2 ∥211variable
+> l(j)ee ,ori foot orientation R(j)ee ,i ˆz−ˆz2
+> 1N0: N−1
+
+For l(j) 
+
+> λ
+
+(ˆλj ) we target equal load sharing: for each active contact, the normal force is regularized around m·g/n ac (nac number of active contacts; tangential target is 0). ˆq
+
+in lq, cap corresponds to the static equal-load posture when all contacts are active. 
+
+identical set of costs and constraints across all platforms, with only minor adaptations for hybrid locomotion. A detailed overview of the formulation is provided in Table I, with the main cost weights reported in parentheses. The prob-lem includes equality constraints for numerical integration, 
+
+hint ∈ Rnq +nv , and inverse dynamics, hdyn ∈ R6. The initial state x0 is treated as an optimization variable, providing additional flexibility in closing the MPC state loop. For hybrid locomotion, rolling contact constraints h(j)rc ∈ R3 are enforced on active contacts; otherwise, a no-slip point contact constraint h(j)pc ∈ R3 is used. The formulation further includes regularization costs on states and inputs, joint velocity limits 
+
+g ˙q, lim ∈ Rnjnt , contact force unilaterality g(j)uni ∈ R, and friction cone constraints g(j)fr ∈ R (no joint torque limits are imposed). Terminal costs lq, cap and lξ, cap promote desirable configurations at the end of the horizon. Motion is guided by a base twist tracking cost lξ, ref (ξMPC ) with ξMPC ∈ R6,together with vertical foot tracking costs l(j)
+
+vz (v(j)ref , z ) to encour-age the tracking of desired foot trajectories. Contact schedules and timings are modified by activating or deactivating non-static costs and constraints (see Sec. IV-D). 4
+
+D. Horizon Control and Acyclic Contact Scheduling 
+
+Formally, we group cost/constraint terms over the horizon into distinct phases P(j) (per foot j). As shown in Table I, some terms have non-static support (i.e., the subset of horizon nodes on which they are active) and node span (phase duration in nodes), which can be modified at runtime. We define two phase types: flight phases P(j)fl , where h(j)liftoff and l(j)ee ,v z are active, and contact phases P(j)c , where h(j)pc , h(j)rc , g(j)fr , g(j)uni ,and l(j) 
+
+> λ
+
+are active (see Table I). At each instant tk, for each foot independently, a scalar injection action χ(j)MPC ∈ R
+
+controls whether a new flight phase P(j)fl of length T (j)fl ∈ Z>0
+
+should be injected; in practice, an injection is triggered when 
+
+χ(j)MPC < 0. Injections are only allowed at a fixed injection node i∗, and only if there is no overlap with a pre-existing flight phase for the same foot. Since the MPC operates under a real-time iteration (RTI) regime [22], the choice of i∗
+
+reflects a trade-off between responsiveness and the feasibility of the NLP. Choosing a smaller i∗ reduces injection latency (≈ i∗∆t) but leaves fewer horizon nodes to accommodate the new flight phase and satisfy constraints under RTI, increasing the risk of infeasibility/poor convergence; larger i∗ improves feasibility at the cost of delayed reaction. To maintain a fully populated horizon when no injections occur, unit-length P(j)c
+
+are continuously appended at the end of the horizon. With this formulation, the current contact schedule for the 
+
+j-th foot is fully described by the ordered sequence of the 
+
+n(j) 
+
+> Pfl
+
+flight phases P(j, m )fl present over the horizon, with m =0, . . . , n (j) 
+
+> Pfl
+
+− 1. Each P(j, m )fl is characterized by its current position d(j, m )fl ∈ Z≥0, current node span s(j, m )fl ∈ Z>0, and vertical foot reference trajectory v(j, m )ref , z ∈ Rs(j, m )fl . Instead of specifying v(j, m )ref , z on each node, we compute it from a cubic polynomial trajectory parametrized by a desired clearance 
+
+H(j, m ) 
+
+> c
+
+∈ R and a landing height difference H(j,m ) 
+
+> l
+
+∈ R.
+
+E. Closing the State Loop on the MPC 
+
+The MPC closed-loop behavior is set by the initial-state constraint x0 = x(k)IS : open-loop (OL) uses x(k)IS = x(k−1) 1
+
+(previous solution), full closed-loop uses x(k)IS = xk 
+
+> meas
+
+(fully observed state), and partial closed-loop (CLP) constrains only measured components of x0. We use OL or CLP (IMU and joint encoders only); in OL we replace l(j) 
+
+> vz
+
+with a position-based foot tracking cost l(j) 
+
+> pz
+
+to avoid contact drift. V. H IGH -LEVEL CONTROL : NAVIGATION AND CONTACT SCHEDULING 
+
+Our MPC requires as input a contact schedule and base twist commands. To generate and adapt these inputs according to task demands, we leverage a high-level RL policy trained in simulation. 
+
+A. Task Formulation 
+
+In our main evaluation, we focus on an infinite-horizon base twist tracking task, using flat terrain as a baseline setting in which proper contact scheduling remains non-trivial, particu-larly during direction changes and transitions between wheeled and legged locomotion. This setting allows us to clearly demonstrate the proposed architecture’s ability to discover non-periodic contact patterns, while the approach naturally extends to more complex scenarios, as shown in Sec. VII-H. In our problem formulation, the task goal is specified as a target position in the plane pcmd ∈ R2, rather than a target base twist, as is more commonly done in other works [12]. Based on the error w.r.t. pcmd , at each instant, we compute a corresponding desired twist ξcmd ∈ R6 according to a linear ramp. ξcmd is both observed by the policy and used for reward computation. This indirect formulation retains the simplicity of twist tracking, while resulting in more informative and realistic experience, aligning better with the demands of real-world deployment. We found that this approach, especially for hybrid locomotion, encourages more effective stepping behaviors. 
+
+B. Markov Decision Process Formulation 
+
+The task described in Sec. V-A can be naturally formulated as a Markov Decision Process (MDP). We define the policy to be hierarchically coupled with the MPC controller. We define the MDP actions a ∈ A to be the MPC inputs 
+
+ξMPC and χ(j)MPC (see Secs. IV-C and IV-D) corresponding to navigation and contact schedule control. The MPC loop runs at a frequency fMPC =1 /∆t, while the RL policy runs at slower frequency fπ = fMPC /n rep , where nrep ∈ N + is the number of MPC steps per policy action. The resulting state s ∈ S = Stask ×S robot ×S MPC is composed of the goal state, robot state, and the full MPC state, respectively. Both 
+
+Stask and SMPC are, in principle, fully observable. However, using the full MPC state as an observation is impractical in real-world settings, and the robot state Srobot is typically not fully known, making the environment partially observable in practice. As a result, we define the observation o ∈ O ,with O=Otask ×O robot ×O MPC ×O IMP ×O act , integrating in-formation from the task, robot proprioception, MPC, joint impedance controller and action history. With this formulation we define the policy as a stochastic distribution π(a | s) and adopt an entropy-regularized RL objective [23] to encourage exploration and multimodal behavior. 
+
+1) Action Space: The policy controls the MPC twist ref-erence ξMPC ∈ [ξlb , ξ ub ]6 and the current contact schedule by injecting new flight phases, through the injection actions 
+
+χMPC ∈ Rnc (see Sec. IV-D), where nc is the number of feet. The resulting action space is then A ⊆ R6+ nc , with 
+
+a ≜ (ξMPC , χMPC ).
+
+2) Observation Space: The proprioceptive data Orobot in-cludes base-local observations of the normalized gravity vector 
+
+ˆgn ∈ R3, angular velocity ω ∈ R3, joint positions and velocities. The current twist command ξcmd ∈ R6 is also observed in a base-local frame. We assume no odometry or contact sensing is available on the robot and estimate linear velocity v ∈ R3 and contact forces λ ∈ R3·nc based on the last MPC solution T (k−1) . Instead of observing the full MPC state–which is impractical–we construct an observation subset, shown in Table II, that captures the minimal MPC information we deem sufficient for task completion. This includes the du-ration and position of the earliest flight phase for each contact, which vary as phases shift over time. Additionally, we include 5                                                     
+
+> TABLE II OBSERVATIONS FROM MPC: The agent observes linear velocity and contact forces estimates from the MPC, a minimal representation of its convergence status and the current contact schedule.
+> Name Descr. Type Range Dim. Obs. subspace Ref. frame
+> vlinear velocity (prediction) real [−∞ ,∞]3OMPC base loc.
+> λcontact forces (prediction) real [−∞ ,∞]3·ncOMPC base loc.
+> δMPC MPC health ∝(l+κ· ∥ h∥1)real [0 ,∞]1OMPC ·
+> d(: ,0) fl P(: ,0) fl current position integer [0 , i ∗]ncOMPC ·
+> s(: ,0) fl P(: ,0) fl current node span integer [0 , N ]ncOMPC ·
+
+a merit-function-inspired “health” index δMPC ∈ R, computed as a smoothed version of l(T (k−1) )+ κ · ∥ h(T (k−1) )∥1, where 
+
+l denotes the total cost, h ∈ Rm is the constraints residual, and κ is a scaling factor ( δMPC ≈ 0: well converged/feasible; 
+
+δMPC ≫ 0: solver divergence/constraint violation). The ob-servation also includes the reference joint position, velocity and feedforward torques for the joint impedance controller. In addition, a history of past actions Oact ⊆R(6+ nc)·nh of length nh is provided. Notably, due to the adopted action parametrization, no clock-based information is required as part of the observation. 
+
+3) Rewards: The reward r(tk) is defined as a weighted sum of three components. The tracking term encourages the policy to follow the high-level command ξcmd . Letting ¯ξ= (¯ v, ¯ω) and 
+
+ξcmd =  vcmd , ωcmd  denote, respectively, the average and commanded twist over the step, we define ∆v≜¯v−vcmd ,
+
+∆ω≜ ¯ω−ωcmd , and ∆ξ≜ (˜ vx, ˜vy , ˜vz , ∆ω), where the projected velocity error components are defined as 
+
+˜vz =∆ v·ˆgn, ˜vx=∆ v·ˆvcmd , and ˜vy = ∆v−˜vz ˆgn−˜vx ˆvcmd ,with ˆvcmd = vcmd  
+
+> ∥vcmd ∥
+
+. Following these definitions, we construct the tracking reward as 
+
+rξ = wξ · e−κξ    
+
+> ∥∆ξ◦w′
+> ξ∥∥w′
+> ξ∥
+
+, w′ 
+
+> ξ
+
+=
+
+
+
+1, √0.1, √0.1, 0, 0, 1.0
+
+
+
+.
+
+This formulation allows emphasizing tracking along specific axes, which we found particularly important for slow-reacting platforms. Unless stated otherwise, we use wξ = 1 .0 and κξ =5.0. The second reward term penalizes the rate of change of the agent’s actions: 
+
+ra = wa
+
+ 1 − κa
+
+ ∥˜aξ ∥2 + 0 .1∥˜aχ∥2 
+
+where ˜aξ and ˜aχ are the action components referring to the twist ξMPC and the contact flags χMPC , respectively. We use 
+
+wa=0 .1 and κa=2 .0. The third reward term 
+
+rCoT = wCoT ·
+
+
+
+1 − κCoT · max (0 , ⟨ ˙qjnt · τjnt ⟩)
+
+m g ∥ξcmd ∥ + ϵ
+
+
+
+is based on the average Cost of Transport (CoT) over each environment step and promotes energy-efficient behaviors. For this term, we use wCoT = 0 .1 and κCoT = 1 .0. The terms m,
+
+g and ϵ are the robot’s total mass, gravitational acceleration magnitude and a small constant, respectively. 
+
+4) Episodes Definition: To promote experience diversity and improve computational efficiency, training episodes are truncated at a maximum duration of 256 /n rep steps. At each truncation, the target planar position pcmd is uniformly resampled within a 5 m radius around the robot. ξcmd is continuously updated using a linear ramp based on the error w.r.t. pcmd , and its norm is clipped to a maximum value 
+
+vmax . Episodes terminate early if: (i) the robot capsizes, or (ii) the MPC “health” index δMPC exceeds a threshold, indicating divergence. Truncations do not reset the simulation state, aiding exploration and encouraging robustness to varying conditions, while terminations always trigger a full reset. Resets place the robot in a safe pose with a random base yaw and reinitialize the MPC to its default state. 
+
+C. Training Algorithm 
+
+In our setup, transition sampling from the underlying MDP is particularly expensive: the MPC operates at a low frequency compared to the physics simulation, resulting in a low number of environment steps-per-second. For this reason, we adopt an off-policy RL approach and employ the SAC algorithm [9], in combination with parallel experience collection. VI. S OFTWARE ARCHITECTURE 
+
+Recent advances in robot learning have highlighted the importance of massively parallel experience collection to train robust and effective policies [11]. To this end, we developed a modular and scalable software architecture that supports thou-sands of CPU-based MPC instances while integrating seam-lessly with GPU-accelerated simulation. Figure 3 provides a high-level overview of the architecture, which comprises three core components: the world simulation, the MPC cluster , and agent training . This modular design improves maintainability and debugging flexibility, while introducing limited overhead. While GPU-based vectorized simulators are now widely available, mature libraries for vectorized MPC remain lim-ited [24]. To address this gap, we implement a custom CPU-based MPC parallelization library built on the Horizon framework [21], where each MPC instance runs in a separate subprocess coordinated via shared memory. The world module provides a vectorized interface to the robot and the MPC cluster, supporting training in IsaacSim [25], evaluation in Mu-JoCo [26], and real-world deployment via the XBot2 middle-ware [27]. The training module manages the RL loop, includ-ing the SAC agent and environment definition. MPC solutions are computed in parallel with physics integration, enabling the modeling of real-world action delays (see Sec. IV-B).        
+
+> Fig. 3. High-level software architecture. The system is modular, with three main components: world interface, MPC cluster and training environment. Green modules operate on GPU-resident data; orange modules run on CPU.
+
+VII. R ESULTS 
+
+We validate the proposed architecture and software frame-work through a series of experiments on multiple robot plat-forms with varying morphologies and weight distributions, covering both legged and wheeled-legged locomotion tasks on flat terrain. All policies are trained in simulation without 6
+
+domain randomization, using the same reward formulation (Sec. V-B3) across experiments. We evaluate zero-shot sim-to-sim transfer on all platforms and demonstrate zero-shot sim-to-real transfer on Centauro. Experimental evaluations are conducted on a simplified 50 kg quadruped in both legged and wheeled configurations, a Unitree B2-W wheeled quadruped ( ≈ 80 kg ), and Centauro, our 120 kg wheeled-legged humanoid robot (see Fig. 1). We also demonstrate an extension of the architecture to hybrid locomotion on non-flat terrain. Videos of all experiments are available at https://youtu.be/I08UywVVhN4. 
+
+A. Controller Hyperparameters 
+
+Each robot runs a tailored instance of the MPC described in Sec. IV, with only minor platform-specific modifications. For Centauro, we deploy two MPC configurations: one for standard legged locomotion without wheel actuation, and one for hybrid wheeled-legged locomotion, both without upper-body control. In the hybrid configuration, control of the ankle omnidirectional steering joints is disabled to encourage the emergence of step reflexes. Unless stated otherwise, all MPCs operate in partial closed-loop mode (see Sec. IV-E) with a prediction horizon of N =30 . The MPC time step is set to ∆t = 0 .03 s and i∗ = 4 
+
+(see Sec. IV-D) for all platforms, except for Centauro, where a coarser ∆t = 0 .05 s is used. For flat-terrain experiments, we fix H(j, ·) 
+
+> c
+
+= 0 .1 m , H(j, ·) 
+
+> l
+
+= 0 m , and set T (j, ·)fl to 0.8 s for Centauro and to 0.6 s for all other platforms. 
+
+B. Training and Evaluation Hyperparameters 
+
+The action space has fixed dimension na = 10 across all study cases. The observation dimension scales with the number of joints, reaching up to nobs = 250 for Centauro. All trainings employ nenv = 800 parallel environments and rely on extensive experience reuse. Each policy update uses batches of 16384 transitions sampled from a replay buffer of size nbuffer = 15 ×256 /n rep ×nenv . Actor and critic networks consist of three hidden layers with constant width, set to 60% 
+
+of the input dimension. Finally, the maximum task velocity norm vmax (see Sec. V-B4) is set to 1 m /s for all platforms except Centauro, for which it is limited to 0.5 m /s.
+
+C. Framework Performance 
+
+Figure 4 summarizes the training performance across all tested platforms for both legged and hybrid locomotion tasks on flat terrain. Across scenarios, policies are obtained within 
+
+4–10 ×10 6 environment steps, corresponding to approximately 
+
+9–29 simulated days. By comparison, blind end-to-end RL policies typically require similar simulated time but consume an order of magnitude more samples [12], highlighting the improved sample efficiency of the proposed approach. During training, the framework achieves real-time factors of up to 
+
+50 , even on complex platforms such as Centauro ( nv = 43 ), comparable to other hybrid approaches [16]. Experiments were conducted on a workstation equipped with an AMD Ryzen Threadripper 7970 CPU, 128 GiB RAM, and an NVIDIA RTX 4090 GPU, where 12 simulated days of training correspond to approximately 5.8 hours of wall time. While this wall time efficiency does not match that of fully end-to-end RL methods, the proposed approach offers improved robustness and real-world transferability (Sec. VII-G). Once trained, policy inference incurs negligible overhead: for Centauro, RL evaluation requires only 0.334 ms on the onboard Intel Core i7-11800H CPU, while the MPC runs in real time.    
+
+> Fig. 4. Task tracking episode sub-reward (first row) and CoT metric (second row) during training for all the flat terrain case studies, averaged across 800 environments. Dark shaded areas indicate the first and third quartiles of the distribution across environments; lighter regions denote the 5-th and 95 -th percentiles. Action rate sub-rewards are omitted for brevity.
+
+D. Legged and Hybrid Wheeled-Legged Locomotion 
+
+To showcase the architecture’s ability to produce adaptive, acyclic gait patterns, we report a deterministic rollout of the trained legged locomotion policy on Centauro (Fig. 4, second column). The evaluation employs cyclic triangular position waypoints that induce frequent changes in direction. Importantly, although the terrain is flat, the task is inherently non-stationary due to time-varying references in both direction and magnitude (see Fig. 5(c)), for which strictly periodic gaits are not expected to be optimal. The policy is trained and evaluated at 4 Hz for the SAC agent ( nrep =5 ) and 20 Hz for the MPC. Figure 5 shows the re-sulting behavior over a 50 s window, where reference changes trigger distinctly acyclic contact sequences with alternating single and double flight phases. While a trotting pattern is typically employed during steady forward motion, the contact schedule adapts continuously: as the norm of the commanded twist ξcmd decreases near the target position pcmd , contact durations increase, corresponding to a smooth reduction in gait frequency. In addition to symmetric trotting, asymmetric trotting patterns also emerge. The architecture was also trained on hybrid wheeled-legged locomotion across three platforms. In all cases, the policies primarily rely on the wheels to track the commanded ve-locity ξcmd , while stepping behaviors emerge when needed to reorient the robot before resuming wheeled motion (see supplementary material). Despite being trained with a vmax 
+
+twice that of the legged policies (Sec. VII-B), the hybrid policies achieve smoother tracking and faster convergence, with lower variance (Fig. 4). 
+
+E. Policy Frequency Influence 
+
+One of the key hyperparameters of the proposed architecture is the policy frequency relative to the MPC, controlled by the parameter nrep (see Sec. V). We conduct an ablation study across multiple platforms to evaluate its impact on 70 10 20 30 40 50 elapsed time [s]            
+
+> 0.0
+> 0.2
+> 0.4 [m/s]
+> ref. velocity norm (base loc)
+> 010 20 30 40 50
+> 0
+> [rad]
+> ref. heading (base loc) meas. heading (base loc) meas. velocity norm (base loc) Tracking performance Injection request actions
+> 1
+> 0
+> 1
+> 1
+> 0
+> 1
+> 1
+> 0
+> 1
+> 1
+> 0
+> 1
+> RL RR FR FL elapsed time [s] elapsed time [s]
+> 010 20 30 40 50
+
+Fig. 5. Deterministic evaluation of a legged locomotion policy for Centauro, shown over a 50 s window. The injection requests actions χMPC chosen by the policy (b) generate the contact schedule and motion (a), revealing completely acyclic contact patterns and timing adaptations. The associated tracking performance is shown in (c). Flight phases are injected within the MPC horizon, for each foot j, only when χ(j)MPC < 0.
+
+training performance, with results shown in Fig. 6. For hybrid locomotion, the choice of nrep has limited influence and generally does not hinder convergence. In contrast, for legged locomotion, nrep plays a critical role: inappropriate values often lead to convergence to poor local minima, where the robot remains stationary and stepping behavior fails to emerge. 
+
+Fig. 6. Influence of the action repeat parameter nrep (see Sec. V-B) on the episode total reward (averaged across 800 environments) during training, shown across both legged and hybrid locomotion tasks. Shaded areas indicate the first and third quartiles of the distribution across environments. 
+
+F. Energy considerations 
+
+Although energy comparisons across different robots and tasks can be misleading, a meaningful comparison can be drawn between legged and hybrid locomotion on Centauro, as the training setups are identical. As shown in Fig. 4, the hybrid policy achieves substantially higher energy efficiency, with an average CoT at convergence of approximately 0.12 , compared to 0.35 for legged locomotion. These results highlight the efficiency benefits of hybrid locomotion under identical task conditions. 
+
+G. Domain Transfer Experiments 
+
+In this section, we investigate the performance of the proposed architecture in transferring across simulators and to reality. In our hierarchical structure, the MPC partially decou-ples the learned policy from the environment, substantially reducing the need for domain randomization. However, real-world deployment can still introduce unmodeled noise into both the policy and MPC. We show how, despite this, our architecture remains effective and robust. Before moving into the real world, we evaluate policies for all the discussed platforms on a different simulator, Mu-joco [26], demonstrating zero-shot cross-simulator generaliza-tion. We also successfully deploy the full architecture on the real Centauro robot for both legged and hybrid locomotion tasks. Video frames of the sim-to-sim and sim-to-real ex-periments are shown in Fig. 1 and Fig. 7, while full video sequences are available in the supplementary material. Cru-cially, for the real-world deployment, we use policies trained with an MPC running in open-loop mode (see Sec. IV-E). Additionally, due to the lack of reliable onboard odometry, we estimate the robot’s position directly from the MPC state, which proved to be sufficiently reliable. All computation, including policy inference and MPC evaluation, is executed in real time and onboard the robot. Across both sim-to-sim and sim-to-real experiments, the proposed architecture consistently exhibits non-periodic gait patterns, adaptive behaviors, and robust sustained operation in real-world legged and hybrid locomotion tasks. 
+
+Fig. 7. Zero-shot sim-to-real transfer of a hybrid locomotion policy on Centauro. 
+
+H. Non-flat Terrains 
+
+The proposed architecture can be extended to operate on non-flat terrains. As a demonstration, we construct a hybrid locomotion task with Centauro using a full-body MPC, in-cluding upper-body control. We define a terrain consisting of randomly generated stepped pyramids, where each step is higher than the wheel radius, requiring stepping to ascend. We 8
+
+augment the agent’s observation with raw heightmap data and extend the MDP formulation of Sec. V-B to grant the policy full control over the flight phase parameters H(j, ·) 
+
+> c
+
+, H(j, ·) 
+
+> l
+
+, and 
+
+T (j, ·)fl (see Sec. IV-D). Figure 8 shows the resulting policy successfully ascending a stepped pyramid while facing both forward and backward. Large steps emerge primarily during ascent, whereas during flat navigation the policy occasionally employs smaller steps to overcome non-holonomic constraints. 
+
+Fig. 8. Evaluation of a perception-augmented hybrid locomotion policy for Centauro ascending a stepped pyramid. The policy also controls the flight phase parameters. Top row: ascent while facing forward. Bottom row: ascent while facing backward. 
+
+VIII. C ONCLUSIONS AND FUTURE WORK 
+
+We presented a contact-explicit hierarchical locomotion architecture combining a high-level RL policy with a low-level MPC controller for legged and hybrid locomotion. Our method eliminates the need for predefined gaits or demonstrations by learning acyclic contact schedules directly through trial and er-ror. The system is easily adaptable to different robots, requires minimal tuning and reward engineering, and is capable of zero-shot sim-to-sim and sim-to-real transfer without domain randomization. These characteristics are enabled by a modular and scalable software framework that supports training with up to thousands of MPC instances in parallel. Our simulated and real-world experiments demonstrate the emergence of non-periodic gaits and timing adaptations for both legged and hybrid locomotion. Finally, we showed an example of how the proposed approach can be easily extended to handle unstructured environments by leveraging raw heightmap data and control over flight phase parameters. Several directions for future work naturally arise from these results. While policies in this study are trained for specific MPC instances and robots, a natural next step is to investigate whether more general policies can be learned that transfer across controllers and platforms. In addition, future work will explore extensions of the RL agent’s action and observation space—building on the non-flat terrain example—with the aim of broadening applicability to more complex terrains and to other tasks, such as manipulation. For instance, enabling explicit control over contact landing locations may allow locomotion on terrains requiring precise foothold placement. Finally, a systematic evaluation of robustness to strong and persistent external disturbances remains an important direction for future investigation. REFERENCES [1] P. M. Wensing, M. Posa, Y. Hu, A. Escande, N. Mansard, and A. Del Prete, “Optimization-based control for dynamic legged robots,” 
+
+IEEE T-RO , 2023. [2] Y. Tassa, T. Erez, and E. Todorov, “Synthesis and stabilization of complex behaviors through online trajectory optimization,” in 2012 IEEE/RSJ IROS . IEEE, 2012, pp. 4906–4913. [3] J. Di Carlo, P. M. Wensing, B. Katz, G. Bledt, and S. Kim, “Dynamic locomotion in the mit cheetah 3 through convex model-predictive control,” in 2018 IEEE/RSJ IROS . IEEE, 2018, pp. 1–9. [4] M. Neunert, M. St¨ auble, M. Giftthaler, C. D. Bellicoso, J. Carius, C. Gehring, M. Hutter, and J. Buchli, “Whole-body nonlinear model predictive control through contacts for quadrupeds,” IEEE RA-L , vol. 3, no. 3, pp. 1458–1465, 2018. [5] M. Bjelonic, P. K. Sankar, C. D. Bellicoso, H. Vallery, and M. Hutter, “Rolling in the deep–hybrid locomotion for wheeled-legged robots using online trajectory optimization,” IEEE RAL , vol. 5, no. 2, pp. 3626–3633, 2020. [6] M. Bjelonic, R. Grandia, O. Harley, C. Galliard, S. Zimmermann, and M. Hutter, “Whole-body mpc and online gait sequence generation for wheeled-legged robots,” in 2021 IEEE/RSJ IROS . IEEE, 2021, pp. 8388–8395. [7] R. Grandia, F. Jenelten, S. Yang, F. Farshidian, and M. Hutter, “Per-ceptive locomotion through nonlinear model-predictive control,” IEEE T-RO , vol. 39, no. 5, pp. 3402–3421, 2023. [8] C. Mastalli, S. P. Chhatoi, T. Corb´ eres, S. Tonneau, and S. Vijayakumar, “Inverse-dynamics mpc via nullspace resolution,” IEEE T-RO , vol. 39, no. 4, pp. 3222–3241, 2023. [9] T. Haarnoja, A. Zhou, K. Hartikainen, G. Tucker, S. Ha, J. Tan, V. Kumar, H. Zhu, A. Gupta, P. Abbeel, et al. , “Soft actor-critic algorithms and applications,” arXiv preprint arXiv:1812.05905 , 2018. [10] A. Agarwal, A. Kumar, J. Malik, and D. Pathak, “Legged locomotion in challenging terrains using egocentric vision,” in CoRL . PMLR, 2023, pp. 403–415. [11] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk in minutes using massively parallel deep reinforcement learning,” in CoRL .PMLR, 2022, pp. 91–100. [12] K. Zakka, B. Tabanpour, Q. Liao, M. Haiderbhai, S. Holt, J. Y. Luo, A. Allshire, E. Frey, K. Sreenath, L. A. Kahrs, et al. , “Mujoco playground,” arXiv preprint arXiv:2502.08844 , 2025. [13] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning quadrupedal locomotion over challenging terrain,” Science robotics ,vol. 5, no. 47, p. eabc5986, 2020. [14] D. Kang, J. Cheng, M. Zamora, F. Zargarbashi, and S. Coros, “Rl+ model-based control: Using on-demand optimal control to learn versatile legged locomotion,” IEEE RA-L , 2023. [15] S. Gangapurwala, M. Geisert, R. Orsolino, M. Fallon, and I. Havoutis, “Rloc: Terrain-aware legged locomotion using reinforcement learning and optimal control,” IEEE T-RO , vol. 38, no. 5, pp. 2908–2927, 2022. [16] F. Jenelten, J. He, F. Farshidian, and M. Hutter, “Dtc: Deep tracking control,” Science Robotics , vol. 9, no. 86, p. eadh5401, 2024. [17] G. Kim, D. Kang, J.-H. Kim, S. Hong, and H.-W. Park, “Contact-implicit model predictive control: Controlling diverse quadruped motions without pre-planned contact modes or trajectories,” The International Journal of Robotics Research , p. 02783649241273645, 2024. [18] P. Wu, A. Escontrela, D. Hafner, P. Abbeel, and K. Goldberg, “Day-dreamer: World models for physical robot learning,” in CoRL . PMLR, 2023, pp. 2226–2240. [19] I. Taouil, L. Amatucci, M. Khadiv, A. Dai, V. Barasuol, G. Turrisi, and C. Semini, “Non-gaited legged locomotion with monte-carlo tree search and supervised learning,” IEEE RA-L , 2024. [20] Y. Yang, T. Zhang, E. Coumans, J. Tan, and B. Boots, “Fast and efficient locomotion via learned gait transitions,” in CoRL . PMLR, 2022, pp. 773–783. [21] F. Ruscelli, A. Laurenzi, N. G. Tsagarakis, and E. Mingo Hoffman, “Horizon: A trajectory optimization framework for robotic systems,” 
+
+Front. Robot. AI , vol. 9, p. 899025, 2022. [22] M. Diehl, H. G. Bock, and J. P. Schl¨ oder, “A real-time iteration scheme for nonlinear optimization in optimal feedback control,” SICON , vol. 43, no. 5, pp. 1714–1736, 2005. [23] B. D. Ziebart, Modeling purposeful adaptive behavior with the principle of maximum causal entropy . Carnegie Mellon University, 2010. [24] S. H. Jeon, S. Hong, H. J. Lee, C. Khazoom, and S. Kim, “Cusadi: A gpu parallelization framework for symbolic expressions and optimal control,” IEEE RA-L , 2024. [25] NVIDIA Corporation, “Isaac sim,” https://developer.nvidia.com/ isaac-sim, 2024, accessed: 2025-05-05. [26] DeepMind, “Mujoco: Multi-joint dynamics with contact,” https://github. com/deepmind/mujoco, 2021, accessed: 2025-05-05. [27] A. Laurenzi, D. Antonucci, N. G. Tsagarakis, and L. Muratore, “The xbot2 real-time middleware for robotics,” RAS , vol. 163, p. 104379, 2023.

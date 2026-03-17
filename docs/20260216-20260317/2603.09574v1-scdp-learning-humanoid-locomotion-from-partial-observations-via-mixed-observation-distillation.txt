@@ -1,0 +1,341 @@
+Title: SCDP: Learning Humanoid Locomotion from Partial Observations via Mixed-Observation Distillation
+
+URL Source: https://arxiv.org/pdf/2603.09574v1
+
+Published Time: Wed, 11 Mar 2026 01:08:59 GMT
+
+Number of Pages: 7
+
+Markdown Content:
+# SCDP: Learning Humanoid Locomotion from Partial Observations via Mixed-Observation Distillation 
+
+Milo Carroll, Tianhu Peng, Lingfan Bao, Chengxu Zhou and Zhibin Li 
+
+Department of Computer Science, University College London 
+
+{milo.carroll.23, tianhu.peng.24, lingfan.bao.24, chengxu.zhou, alex.li }@ucl.ac.uk 
+
+Abstract — Distilling humanoid locomotion control from of-fline datasets into deployable policies remains a challenge, as existing methods rely on privileged full-body states that require complex and often unreliable state estimation. We present Sensor-Conditioned Diffusion Policies (SCDP) that enables humanoid locomotion using only onboard sensors, eliminating the need for explicit state estimation. SCDP decouples sensing from supervision through mixed-observation training: diffusion model conditions on sensor histories while being supervised to predict privileged future state–action trajectories, enforc-ing the model to infer the motion dynamics under partial observability. We further develop restricted denoising, context distribution alignment, and context-aware attention masking to encourage implicit state estimation within the model and to prevent train–deploy mismatch. We validate SCDP on velocity-commanded locomotion and motion reference tracking tasks. In simulation, SCDP achieves near-perfect success on velocity control (99–100%) and 93% tracking success in AMASS test set, performing comparable to privileged baselines while using only onboard sensors. Finally, we deploy the trained policy on a real G1 humanoid at 50 Hz, demonstrating robust real robot locomotion without external sensing or state estimation. 
+
+I. INTRODUCTION Humanoid robot control has advanced rapidly in recent years, progressing from task-specific reinforcement learning controllers [1]–[3] to motion reference tracking methods [4]– [7]. These approaches enable diverse whole-body behaviors and have supported applications such as real-time teleoper-ation and multi-skill locomotion in both graphics [8] and robotics [5], [6], [9]–[11]. The ability to reproduce large skillets within a single controller is essential for adaptive behaviors, as demonstrated by multi-expert learning that syn-thesizes adaptive locomotion by combining different motor skills to handle varying task conditions [12]. Recently, diffusion models have become promising for learning more expressive control by modeling full distri-butions of expert behavior rather than deterministic action mappings [13]–[15]. Their flexibility offers task adaptation via direct conditioning or classifier guidance [16], [17]. In robotics, diffusion-based policies have demonstrated strong performance in visuomotor manipulation [18], bipedal loco-motion [19], [20], and physics-based humanoid control [21]. Guided state-action diffusion approaches for humanoids [22], [23] further show the ability to perform look-ahead planning and multitask control within a unified framework. Despite these advances, current humanoid diffusion con-trollers rely fundamentally on privileged full-body state information at deployment. These methods assume access State-Action Diffusion Policy 
+
+Fig. 1: Deployment of Sensor-Conditioned Diffusion Policies (SCDP) on Unitree G1, performing robust locomotion at 50 Hz using only proprioceptive sensors, without external motion capture or state estimation. to global position, orientation, base velocity, and rigid-body position, requiring complex and often unreliable state esti-mation pipelines on real robots outside the lab setting. The removal of privileged inputs dramatically degrades perfor-mance, with catastrophic failures even in simple tasks such as joystick locomotion [23]. This dependence is not viable in most practical deployment scenarios, as only direct onboard proprioceptive sensing is reliably available. Learning solely from onboard sensing induces a partially observable Markov decision process (POMDP), in which policies must infer hidden global states from incomplete observations. Existing diffusion-based controllers are not designed to operate under partial observability. We address this limitation with our proposed framework, SCDP, a diffusion-based distillation framework for humanoid control using only onboard proprioceptive measurements. Our key idea is to decouple sensing from supervision via mixed-observation training. During training, the model conditions only on onboard sensor histories while being supervised to predict privileged full-body state trajectories. This asymmetry enforces internal representation learning that captures global body dynamics from partial sensing, eliminating explicit state estimation at deployment. Unlike prior teacher–student transfer methods developed for MLP-based locomotion policies [2], [5], [24], [25], which distill reactive mappings from observation to action, SCDP addresses a fundamentally different problem: distilling a generative trajectory planner from offline datasets. While recent work has explored distilling RL policies into inter-pretable models for locomotion [26], our goal here is to enable such distillation under partial observability without 
+
+> arXiv:2603.09574v1 [cs.RO] 10 Mar 2026
+
+privileged state information, where the student policy must jointly denoise temporally coherent state-action sequences 
+
+with incomplete information. Our proposed training formula-tion resolves this and enables deployment without privileged sensing. The key contributions of this work are as follows:  
+
+> •
+
+Mixed observation training, which conditions on sensor histories while predicting privileged state trajectories, en-ables implicit inference of global body dynamics.  
+
+> •
+
+Restricted denoising, which excludes base velocity from denoising inputs while retaining it in supervision, forces the model to infer velocity from context, enabling control without velocity feedback.  
+
+> •
+
+Context distribution alignment, which maintains consistent causal relationships between states and actions across training and inference.  
+
+> •
+
+Context-aware attention masking enables bidirectional at-tention within the context window to facilitate inference of latent dynamics from partial observations.  
+
+> •
+
+Experimental validation via deployment on physical Uni-tree G1 at 50 Hz (Fig. 1), and systematic ablations on data collection, context length, and architectural choices. II. M ETHOD 
+
+We present SCDP, a framework for distilling a diffusion-based controller from an expert RL policy to achieve whole-body humanoid control from onboard sensing. Our approach consists of four key components: (1) a Multi-Motion Track-ing Policy (MMP) serving as an expert demonstrator; (2) our diffusion distillation framework; (3) a data collection methodology for robust distillation; and (4) a real-time deployment configuration for the Unitree G1. We describe each component below, showing how they combine to enable sensor-based control. 
+
+A. Multi-Motion Tracking Policy 
+
+The foundation of our distillation framework is a Multi-Motion Policy (MMP), an RL-trained expert for multi-motion tracking that is built upon the reward function and PD controller from [23]. All quantities are expressed in the anchor-centric (set as the torso), heading-aligned frame via 
+
+Ryaw , the rotation aligning the global frame with the root heading. For each tracked body b ∈ B , we compute local positions, orientations, and velocities as: 
+
+˜pb = Ryaw (pb − panchor ), ˜Rb = Ryaw Rb,
+
+˜vb = Ryaw vb, ˜ωb = Ryaw ωb
+
+(1) 
+
+orobot = [hanchor , {˜pb, ˜Rb, ˜vb, ˜ωb}b∈B , a t−1] is the self-observation. The task observation provides both absolute and relative future states for each reference body bm ∈ B m over a look-ahead horizon of H steps: 
+
+otask = {ˆp(k) 
+
+> bm
+
+, ∆p(k) 
+
+> bm
+
+, ˆR(k) 
+
+> bm
+
+, ∆R(k) 
+
+> bm
+
+}Hk=1 
+
+, (2) where ˆp(k) 
+
+> bm
+
+= Ryaw (p(k) 
+
+> bm
+
+− panchor ) and ∆p(k) 
+
+> bm
+
+= Ryaw (p(k) 
+
+> bm
+
+−
+
+pb) capture absolute and relative positions respectively, with orientations defined analogously. 
+
+B. Mixed-Observation Distillation: Learning Global Dy-namics from Partial Sensing 
+
+The key idea of mixed-observation distillation is to decou-ple sensing from supervision during training. In particular, we condition the diffusion model on historical observations from onboard sensors ( ot), while supervising it to predict future trajectories that include privileged full-body states ( st). This asymmetry, shown in Fig. 2, enables the model to learn an implicit forward model of global body dynamics, allowing deployment without explicit state estimation. 
+
+1) Problem Formulation: We consider a humanoid robot with a full state st ∈ S and an action space at ∈ A . The full state comprises: st = ot, {˜pb}b∈B , {˜vb}b∈B 
+
+, where ot
+
+contains proprioceptive measurements and {˜pb}b∈B , {˜vb}b∈B 
+
+are the local positions and velocities of rigid bodies b ∈ B 
+
+in the heading-aligned frame. These geometric quantities are available in simulation but not on hardware. At inference, the robot accesses only onboard measure-ments: ot = vpelvis , ωpelvis , q − q0, ˙q, gpelvis , gtorso 
+
+,
+
+denoting pelvis linear velocity vpelvis , pelvis angular velocity 
+
+ωpelvis , joint positions relative to the default q − q0, joint velocities ˙q, and gravity vectors in the pelvis and torso frames 
+
+gpelvis , g torso . Note that vpelvis is excluded in our final model because velocity estimates are unreliable on hardware. Crit-ically, ot lacks geometric information about body positions and provides only local kinematic and inertial measurements. The diffusion policy π(τt | Ot, c t) generates state-action trajectories conditioned on observation history Ot
+
+and task commands ct (velocity or motion reference commands), where trajectories are defined as τt =[ at, s t+1 , a t+1 , . . . , s t+H ] and observation histories are defined as Ot = [ ot−N , at−N , . . . , ot−1, at−1, ot ].
+
+Crucially, while inference uses only Ot, training super-vises predictions of privileged states st+1: t+H . This mixed-observation formulation is the key to transferring full-body motion knowledge to sensor-only deployment. 
+
+a) Diffusion Model Formulation: We model the problem using a denoising diffusion probabilistic model (DDPM) [27] to iteratively denoise trajectory samples. At diffusion timestep k, a noised trajectory τ kt is refined by predicting the clean trajectory x0,θ (τ kt , O t, c t):
+
+LDDPM = Eτt,k 
+
+ ∥ x0,θ (τ kt , O t, c t) − τt ∥2  . (3) Sampling proceeds by iteratively applying: 
+
+τ k−1 
+
+> t
+
+= αk
+
+ τ kt − γk ϵθ (τ kt , O t, c t) + N (0 , σ 2
+
+> k
+
+I), (4) with standard DDPM coefficients (αk, γ k, σ k) and predicted noise ϵθ derived from x0,θ . We use independent noise sched-ules for state and action components of τt as in [22]. 
+
+2) Restricted Denoising: A remaining challenge is achieving velocity control without direct velocity feedback. While mixed-observation training provides geometric in-formation through prediction targets, the model can use partially-noised velocity terms as shortcuts during training. To force genuine velocity inference from context, we intro-duce restricted denoising which omits pelvis linear velocities Contextual History  Future Trajectory Prediction 
+
+> Transformer Decoder Layer
+> IsaacLab (50Hz)
+> State-Action Diffusion Policy
+> X6 Layers
+> Independent Diffusion Time-steps
+> Sinusoidal Positional Embedding
+> No loss calculation on long horizon action predictions
+
+Fig. 2: Sensor-Conditioned Diffusion Policies (SCDP) architecture and training framework. The state-action diffusion policy conditions on sensor observation history {ot}, past actions {at}, and commands ct, while predicting future trajectories containing privileged states {st} and actions. This mixed-observation formulation enables learning global dynamics from partial sensing. 
+
+vpelvis from the denoising inputs but retains them in the supervision target: sres  
+
+> t
+
+= st \ { vpelvis }. The corresponding restricted trajectory is τ res  
+
+> t
+
+= [ at, s res 
+
+> t+1
+
+, a t+1 , . . . , s res  
+
+> t+H
+
+].The denoising model takes restricted trajectories as input but predicts full trajectories including velocities: 
+
+LDDPM res = Eτt,k 
+
+h
+
+∥ x0,θ (τ res ,k t , O t, c t) − τt ∥2 i
+
+. (5) This enforces the model to infer pelvis velocities from the historical context, developing robust velocity estimation without direct feedback. 
+
+3) Context Distribution Alignment: Prior works [22], [23] train on (snoised , a ) pairs, where snoised results from executing noised actions anoised , creating a distribution mismatch at inference when the model observes clean, (s, a ) context. During training, we provide the context using (snoised , a noised )
+
+pairs. This aligns the training context and deployment con-ditions, reducing distribution shift and maintaining a causal relationship between (s, a, s ′) of the context in both settings. 
+
+4) Context-Aware Attention Masking: Attention masking approaches in prior works [22], [23] apply causal masks that prevent states from attending to actions, while allowing attention to future states. In contrast, we enable bidirectional attention within the context window while maintaining causal constraints only in the prediction horizon. This enables the model to aggregate historical information bidirectionally, facilitating the inference of latent dynamics from partial observations. 
+
+5) Representation Alignment: We experiment with acosine-similarity alignment loss to bridge the information gap between sensor observations and privileged states. Specifically, the loss encourages alignment between the sensor encoder output ϕo(ot) and the privileged state encoder output ϕs(st), averaged over the context window. However, we found this approach detrimental to performance in our experiments (see Sec. III-D) and excluded it from the final SCDP model. 
+
+6) Velocity Conditioning: We condition on desired pelvis velocities ct = [ vx
+
+> cmd
+
+, v y
+
+> cmd
+
+, ˙ψcmd ] ∈ R3 via MLP encoding 
+
+ϕc : R3 → Rd combined with timestep embeddings: et =
+
+etime  
+
+> t
+
++ ϕc(ct). To enforce tracking, we minimize Lcmd =
+
+∥ct − ¯ct∥22 where ¯ct is the mean predicted velocity over the horizon. 
+
+7) Motion Reference Conditioning: For motion tracking, we condition on ct = [ qref , ˙qref , Rrel ], where Rrel = q−1 
+
+> robot
+
+⊗
+
+qref represents the relative orientation between robot and reference frames. The complete training objective is: 
+
+L = LDDPM-res + λcmd Lcmd . (6) 
+
+C. Datasets 
+
+The MMP is trained on walking motions from PHC-filtered AMASS (AMASS-walk) [5], [28], retargeted via Mink [29]. For SCDP distillation, we select 65 diverse clips, mirror them (130 total), and use the expert to collect 40 rollouts per reference with stochastic actions [21], domain randomization [23], and push forces (every 1-3s). This yields 5200 trajectories ( ∼750k timesteps at 50 Hz). Motion track-ing uses the full AMASS-walk training set, with only a single rollout per trajectory. 
+
+D. Training and Deployment Configuration 
+
+The MMP is a six-layer MLP (hidden dims: [1024, 1024, 1024, 1024, 512, 128]) trained using PPO [30] for 100k iterations in IsaacLab [31] across 4096 parallel environments with a learning rate of 3×10 −4. Training takes approximately four days on an NVIDIA RTX 5090. The SCDP diffusion model uses a six-layer Transformer encoder with four attention heads, embedding dimension 512, and feed-forward dimension 1024. Four encoders pro-cess actions (1-layer MLP), onboard observations (2-layer MLP), privileged states (2-layer MLP), and commands (2-layer MLP). The model predicts 16-step trajectories with action losses weighted to zero beyond 8 steps for near-term accuracy; at inference, only the first action is executed before replanning. Training uses 1M gradient updates with batch size 128, AdamW optimizer, cosine learning rate schedule (2k-step warmup to 10 −4, decay to 10 −6), and weight decay TABLE I: Success/completion rates (%) across observation modes. Subscript – priv: privileged states; co: context obser-vations only; mo: mixed observations. Bold: best per task.                                                  
+
+> Method vpelvis feedback Perturb Navigation Joystick
+> BC co ✓70.1 43.8 70.0 BC co ×5.0 4.0 4.0 BeyondMimic priv ✓99.4 98.6 100.0
+> BeyondMimic co ✓20.7 22.2 3.0 BeyondMimic mo ✓99.4 94.4 94.0 BeyondMimic mo ×92.0 5.6 93.0 Ours priv ✓99.3 100.0 100.0
+> Ours co ✓59.8 58.8 11.0 Ours mo ✓99.1 99.4 100.0
+> Ours mo ×96.0 93.2 90.0 Ours: SCDP ×99.8 99.8 100.0
+
+10 −6. Training completes in approximately one day on an RTX 5090. We deploy SCDP on a Unitree G1 at 50 Hz with the model running on a remote workstation (RTX 5090), achieving 105 Hz throughput via ONNX Runtime (Figs. 4, and 5). III. S IMULATION RESULTS 
+
+We evaluate the framework in simulation by addressing four questions on sensor-based diffusion control: ( Q1 ) Can diffusion policies succeed with geometrically uninformative observations? ( Q2 ) Can they achieve velocity control without state estimation? ( Q3 ) What design choices are most critical? (Q4 ) Can SCDP transfer to motion tracking control? All policies are evaluated at 50 Hz in IsaacLab [31] with domain randomization. We assess four tasks: (1) Perturba-tion Recovery: The robot walks forward at 0.5 m/s for 15 seconds while experiencing random velocity perturbations of 
+
+±0.5 m/s every 1-3 seconds. Success requires maintaining balance throughout (1000 trials). Learning to recover from such perturbations is a fundamental motor skill that shall be acquired, as recent work has shown that such behaviors can be learned via RL [32]. (2) Joystick Control: The robot executes a sequence of discrete velocity commands (for-ward 0.5 m/s, backward −0.5 m/s, turn left +1 .0 rad/s, turn right −1.0 rad/s), each held for 3 seconds. Success requires completing all commands without falling (100 trials). (3) Waypoint Navigation: Five targets are randomly sampled within a radius of 2.5 m. The robot must reach all waypoints within 60 seconds (Fig. 3). We report the mean completion rate (100 trials). (4) Motion Reference Tracking: The robot reproduces specific reference motions. We evaluate using the Mean Per-Joint Position Error (MPJPE-L/G for local/global), velocity and acceleration distributions, and the success rate. 
+
+A. Comparison with Baseline Methods 
+
+We compare our approach against the classifier-guided baseline from [22] and behavior cloning (BC). We eval-uate four observation variants: priv (st for context and prediction), co (ot for context and prediction), mo (mixed-observation training: ot for context, st for prediction), and whether the context contains vpelvis feedback. TABLE II: Perturbation recovery success rates (%) under varying data collection strategies, Color intensity indicates performance (green=high, red=low).                                        
+
+> Noise 0.0 m/s 0.5 m/s 1.0 m/s Level Push No Push Push No Push Push No Push
+> 0.0 98.2 32.5 98.2 24.7 95.8 18.7 0.06 99.3 78.4 99.0 79.4 98.9 74.1 0.12 87.1 81.6 99.5 98.0 98.8 95.0 0.18 97.5 82.4 99.4 99.2 98.8 99.6 0.24 88.2 70.0 99.1 99.6 99.2 99.3
+
+TABLE III: Effect of context length on performance without velocity feedback. Bold indicates best per task.                       
+
+> Context Length vpelvis feedback Perturb Succ. (%) Nav. Compl. (%) Ours mo
+> 4×84.3 74.2 8×98.2 87.8 16 ×55.5 33.4
+> SCDP
+> 4×99.5 97.8
+> 8×96.8 86.6 16 ×96.0 75.4
+
+Our final model, SCDP, employs mixed observation train-ing, restricted denoising, context distribution alignment, and context-aware attention masking, operating without vpelvis 
+
+feedback. Table I reveals several key findings. First, contextual-only policies (co) show significant degradation compared to their privileged counterparts, confirming that geometric information is essential in standard diffusion distillation (Q1 ). Mixed-observation training (mo) resolves this depen-dency entirely, with near-perfect performance comparable to their privileged counterparts. This demonstrates that diffu-sion policies can successfully operate from geometrically uninformative observations when optimized under our pro-posed mixed-observation training ( Q1 ). Crucially, velocity feedback is essential for reliable control across prior meth-ods. The results show that our full method, SCDP, does not depend on velocity feedback; it achieves competitive scores across all tasks, matching or exceeding the privileged methods. These results confirm that our proposed framework enables robust velocity control without the need for state estimation ( Q2 ), enabling control under partial observability where previous methods fail. 
+
+B. Data Collection Strategy Ablation 
+
+We vary the application of action noise (0.0–0.24 std) and push force during data collection, evaluating perturbation recovery at 0.0, 0.5, and 1.0 m/s. Table II shows that moderate action noise is essential. Without noise or pushing, policies achieve < 33% success, improving to > 70% with minimal noise. Second, push perturbations provide benefits without added noise, increasing the success from < 33% to 
+
+> 90% . Applying both is optimal, exposing the policy to recovery behaviors that action noise alone cannot provide is beneficial, while excessive noise (0.24) degrades stationary performance ( Q3 ). Fig. 3: Waypoint navigation task. Sequential frames showing the SCDP controlling the robot to navigate succesfully to all five waypoints (green: current target, red: remaining targets). 
+
+Fig. 4: Fast forward walking behaviour. Sequential frames showing the policy executing forward locomotion. 
+
+(a) Time-lapsed frames showing walking right . (b) Time-lapsed frames showing walking left .Fig. 5: Comparison of walking right and walking left sequences. 0 500 1000 1500 2000 2500 3000 3500 4000   
+
+> Timestep
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> Velocity
+> Target Velocity Ours (Robot) BeyondMimic (Robot)
+
+(a) 0 500 1000 1500 2000 2500 3000 3500 4000    
+
+> Timestep
+> 4
+> 2
+> 0
+> 2
+> 4
+> Velocity
+> Target Velocity Ours (Robot) BeyondMimic (Robot)
+
+(b) 
+
+Fig. 6: Velocity tracking performance. Comparison of realized velocities against commanded targets (black) for (a) linear velocity vx and (b) yaw rate ˙ψ. SCDP (orange) exhibits smoother tracking with reduced oscillations compared to the BeyondMimic baseline (teal), with slight lag during direction changes. 
+
+C. Context Length Ablation 
+
+We investigate how context length affects policy ro-bustness without vpelvis feedback. Specifically, we evaluate context lengths of 4, 8, and 16, comparing SCDP with Ours mo . Table III shows that a four-step context sufficiently enables the SCDP model to capture dynamics, with longer histories degrading performance. In contrast, Ours mo shows inconsistent performance across context lengths, with a non-monotonic relationship between context length and success rate. Notably, both methods degrade with 16-step contexts, suggesting that longer histories amplify compounding errors at inference or distribution mismatch ( Q3 ). 
+
+D. Feature Design Ablation 
+
+We systematically evaluate the contribution of each design component when training without velocity feedback. We present results across four sets of configurations in Tab. V: all features enabled, no features, an exclusion ablation (all except one), and an inclusion ablation (only one feature). The exclusion ablation reveals that mixed-observation training is the foundation: removing it causes complete failure (1.4%). Conversely, removing representation alignment achieves the best performance (97.8%), showing that representation align-ment interferes with optimization. Context distribution align-ment proves critical: its removal drops performance to TABLE IV: Motion tracking performance on AMASS-walk dataset. MMP: expert upper bound.                                                                                                                                     
+
+> Train Test Method vpelvis feedback MPJPE-G ↓MPJPE-L ↓Vel-Dist ↓Accel-Dist ↓Success ↑MPJPE-G ↓MPJPE-L ↓Vel-Dist ↓Accel-Dist ↓Success ↑
+> MMP (upper bound) ✓69.84 ±25.96 47.73 ±23.82 3.03 ±1.07 1.00 ±0.47 98.94 69.22 ±26.12 46.58 ±22.99 3.07 ±1.04 1.03 ±0.46 99.03 BC ×370.36 ±278.93 53.65 ±23.15 12.87 ±7.59 14.78 ±13.91 30.19 371.66 ±276.42 50.71 ±19.66 6.39 ±3.01 1.31 ±0.55 31.24 Ours mo ×457.87 ±374.15 54.81 ±22.82 6.16 ±2.33 1.33 ±0.48 78.39 473.91 ±408.60 54.36 ±21.98 6.41 ±2.52 1.39 ±0.51 79.17 SCDP ×282.43 ±167.54 53.63 ±23.60 5.37 ±2.14 1.48 ±0.70 93.12 288.30 ±184.22 53.12 ±23.03 5.55 ±2.25 1.51 ±0.74 93.22
+
+TABLE V: Ablation study on key design components for diffusion policies without velocity feedback.                                                                       
+
+> Mixed Obs. Representation Context Dist. Full Prefix Restricted Navigation Training Alignment Alignment Attention Denoising (%)
+> All features
+> ✓✓✓✓✓89.2
+> No features
+> ×××××1.4
+> Section 1: Exclusion Ablation (all except one)
+> ××✓✓✓1.4
+> ✓×✓✓✓97.8
+> ✓✓×✓✓9.7
+> ✓✓✓×✓81.0
+> ✓✓✓✓×92.2
+> Section 2: Single Feature (only one)
+> ✓××××74.2
+> ✓✓×××61.2
+> ××✓××1.6
+> ×××✓×2.6
+> ××××✓1.2
+
+9.7%, showing its importance for achieving sensor-based control without velocity feedback. The single-feature results demonstrate that mixed-observation training alone achieves 74.2% success, while context distribution alignment, full prefix attention, and restricted denoising provide negligi-ble benefits in isolation. These results show that mixed-observation training is necessary for sensor-based control, while context distribution alignment, full prefix attention, and restricted denoising collectively enable the full method to match privileged-observation performance, providing ad-ditional reliability and robustness ( Q3 ). 
+
+E. Velocity Tracking Performance 
+
+We evaluated velocity tracking fidelity and responsiveness compared to BeyondMimic [23] and the classifier-guided baseline, while tracking commanded velocities varying be-tween ±1 m/s (linear) and ±2 rad/s (angular). Both poli-cies successfully track nominal velocities, but our method achieves tighter linear tracking with reduced oscillations (Fig. 6a), though with slightly increased lag ( ∼250–500 ms) during direction reversals. Angular velocity tracking is comparable (Fig. 6b). 
+
+F. Motion Reference Tracking Performance 
+
+We evaluate SCDP’s ability to reproduce reference mo-tions from its training distribution (AMASS). Table IV shows that each distillation method achieves comparable local pose accuracy (MPJPE-L) to the expert upper bound, measured while the episode has not terminated. Diffusion-based dis-tillation training with mixed observation training already significantly outperforms the BC baseline, with an evaluation set success rate of 79% compared to 31%. Furthermore, SCDP greatly outperforms both methods with a success rate of 93% and a reduction of the global position error (MPJPE-G) from 473 to 288, confirming its effectiveness at reference motion tracking ( Q4 ). SCDP has significant global position error as opposed to the expert. This is expected because the expert observes its global drift from the reference and is able to correct it, while this is not possible under partial observability. SCDP must track the global position from the kinematic reference command alone. IV. C ONCLUSION 
+
+We presented SCDP that achieves diffusion distillation of whole-body humanoid controllers under partial observability via three techniques: mixed-observation training, restricted denoising, and context alignment. Our study showed that previous diffusion and offline distillation methods fail with geometrically uninformative and partial observations, critically depending on the base velocity feedback, while SCDP excels in this scenario. Fur-thermore, we highlight SCDP’s versatility, demonstrating the effectiveness in both velocity control (99%) and motion reference tracking (93%). We presented systematic ablations that identify the optimal design choices and data collection procedures. Finally, SCDP was running in a closed-loop at 50 Hz for performance validation on a real physical G1 robot, showing robust sim-to-real transfer .Future work shall explore sim-to-real fine-tuning that do not require privileged states, drift-correction mechanisms for long-horizon motion tracking, and the extension to contact-rich manipulation and complex terrain scenarios. REFERENCES [1] G. B. Margolis et al. , “Walk these ways: Tuning robot control for generalization with multiplicity of behavior,” Conference on Robot Learning , 2022. [2] N. Rudin et al. , “Learning to walk in minutes using massively parallel deep reinforcement learning,” in Proceedings of the 5th Conference on Robot Learning , ser. Proceedings of Machine Learning Research, A. Faust et al. , Eds., vol. 164. PMLR, 08–11 Nov 2022. [3] T. Peng et al. , “Gait-conditioned reinforcement learning with multi-phase curriculum for humanoid locomotion,” in 2025 IEEE-RAS 24th International Conference on Humanoid Robots (Humanoids) , 2025. [4] X. B. Peng et al. , “Deepmimic: example-guided deep reinforcement learning of physics-based character skills,” ACM Trans. Graph. ,vol. 37, no. 4, Jul. 2018. [5] T. He et al. , “Omnih2o: Universal and dexterous human-to-humanoid whole-body teleoperation and learning,” 2024. [6] Z. Fu et al. , “Humanplus: Humanoid shadowing and imitation from humans,” in Conference on Robot Learning (CoRL) , 2024. [7] L. Bao et al. , “Deep reinforcement learning for robotic bipedal locomotion: a brief survey,” Artificial Intelligence Review , vol. 59, no. 1, Dec. 2025. [8] C. Tessler et al. , “Maskedmimic: Unified physics-based character control through masked motion inpainting,” ACM Transactions on Graphics (TOG) , 2024. [9] Y. Ze et al. , “Twist: Teleoperated whole-body imitation system,” arXiv preprint arXiv:2505.02833 , 2025. [10] K. Yin et al. , “Unitracker: Learning universal whole-body motion tracker for humanoid robots,” 2025. [11] Z. Chen et al. , “Gmt: General motion tracking for humanoid whole-body control,” arXiv:2506.14770 , 2025. [12] C. Yang et al. , “Multi-expert learning of adaptive legged locomotion,” 
+
+Science Robotics , vol. 5, no. 49, p. eabb2174, 2020. [13] G. Tevet et al. , “Human motion diffusion model,” in The Eleventh International Conference on Learning Representations , 2023. [14] G. Tevet et al. , “CLoSD: Closing the loop between simulation and diffusion for multi-task character control,” in The Thirteenth Interna-tional Conference on Learning Representations , 2025. [15] L. Bao et al. , “Hierarchical intention-aware expressive motion gener-ation for humanoid robots,” 2025. [16] J. Sohl-Dickstein et al. , “Deep unsupervised learning using nonequi-librium thermodynamics,” in Proceedings of the 32nd International Conference on Machine Learning , vol. 37. Lille, France: PMLR, 07–09 Jul 2015. [17] K. Karunratanakul et al. , “Guided motion diffusion for controllable human motion synthesis,” 2023. [18] C. Chi et al. , “Diffusion policy: Visuomotor policy learning via action diffusion,” The International Journal of Robotics Research , 2023. [19] X. Huang et al. , “Diffuseloco: Real-time legged locomotion control with diffusion from offline datasets,” in Proceedings of The 8th Conference on Robot Learning , ser. Proceedings of Machine Learning Research, P. Agrawal et al. , Eds., vol. 270. PMLR, 06–09 Nov 2025. [20] G. Mothish et al. , “Birodiff: Diffusion policies for bipedal robot locomotion on unseen terrains,” 2024. [21] T. E. Truong et al. , “Pdp: Physics-based character animation via diffusion policy,” in SIGGRAPH Asia 2024 Conference Papers . NY, USA: Association for Computing Machinery, 2024. [22] X. Huang et al. , “Diffuse-cloc: Guided diffusion for physics-based character look-ahead control,” ACM Transactions on Graphics (TOG) ,vol. 44, no. 4, 2025, sIGGRAPH 2025. [23] Q. Liao et al. , “Beyondmimic: From motion tracking to versatile humanoid control via guided diffusion,” 2025. [24] S. Ross et al. , “A reduction of imitation learning and structured prediction to no-regret online learning,” 2011. [25] M. Ji et al. , “Exbody2: Advanced expressive humanoid whole-body control,” arXiv preprint arXiv:2412.13196 , 2024. [26] F. Acero et al. , “Distilling reinforcement learning policies for inter-pretable robot locomotion: Gradient boosting machines and symbolic regression,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2024, pp. 6840–6847. [27] J. Ho et al. , “Denoising diffusion probabilistic models,” 2020. [28] N. Mahmood et al. , “AMASS: Archive of motion capture as surface shapes,” in International Conference on Computer Vision , Oct. 2019. [29] K. Zakka, “Mink: Python inverse kinematics based on MuJoCo,” May 2025. [30] J. Schulman et al. , “Proximal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 , 2017. [31] M. Mittal et al. , “Orbit: A unified simulation framework for interactive robot learning environments,” IEEE Robotics and Automation Letters ,vol. 8, no. 6, 2023. [32] C. Yang et al. , “Learning complex motor skills for legged robot fall recovery,” IEEE Robotics and Automation Letters , vol. 8, no. 7, pp. 4307–4314, 2023.

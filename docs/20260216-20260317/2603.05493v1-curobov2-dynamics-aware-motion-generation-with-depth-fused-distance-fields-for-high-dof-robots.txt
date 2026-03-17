@@ -1,0 +1,2367 @@
+Title: cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+URL Source: https://arxiv.org/pdf/2603.05493v1
+
+Published Time: Fri, 06 Mar 2026 02:29:17 GMT
+
+Number of Pages: 51
+
+Markdown Content:
+> 2026-3-6
+
+# cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots 
+
+Balakumar Sundaralingam Adithyavairavan Murali Stan Birchfield 
+
+## Abstract 
+
+Effective robot autonomy requires motion generation that is safe, feasible, and reactive. Current methods are frag-mented: fast planners output physically unexecutable trajectories, reactive controllers struggle with high-fidelity perception, and existing solvers fail on high-DoF systems. We present cuRoboV2 , a unified framework with three key innovations: (1) B-spline trajectory optimization that enforces smoothness and torque limits; (2) a GPU-native TSDF/ESDF perception pipeline that generates dense signed distance fields covering the full workspace, unlike exist-ing methods that only provide distances within sparsely allocated blocks, up to 10 × faster and in 8 × less memory than the state-of-the-art at manipulation scale, with up to 99% collision recall; and (3) scalable GPU-native whole-body computation, namely topology-aware kinematics, differentiable inverse dynamics, and map-reduce self-collision, that achieves up to 61 × speedup while also extending to high-DoF humanoids (where previous GPU implementations fail). On benchmarks, cuRoboV2 achieves 99.7% success under 3 kg payload (where baselines achieve only 72–77%), 99.6% collision-free IK on a 48-DoF humanoid (where prior methods fail entirely), and 89.5% retargeting constraint satisfac-tion ( vs. 61% for PyRoki ); these collision-free motions yield locomotion policies with 21% lower tracking error than 
+
+PyRoki and 12 × lower cross-seed variance than mink . A ground-up codebase redesign for discoverability enabled LLM coding assistants to author up to 73% of new modules, including hand-optimized CUDA kernels, demonstrating that well-structured robotics code can unlock productive human–LLM collaboration. Together, these advances pro-vide a unified, dynamics-aware motion generation stack that scales from single-arm manipulators to full humanoids. 
+
+> © 2026 NVIDIA. All rights reserved.
+> arXiv:2603.05493v1 [cs.RO] 5 Mar 2026 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+## Contents 
+
+1 Introduction 32 Related Work 43 Problem Formulation 64 B-Spline Basis as Optimization Space 7
+
+4.1 Gradients with Respect to Spline Control Points . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 84.2 Boundary Conditions . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 9
+
+5 ESDF for Scene Collision Avoidance 9
+
+5.1 Block-Sparse TSDF Storage . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 95.2 Depth and Primitive Integration . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10 5.3 Frustum-Aware Decay and Block Recycling . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 11 5.4 On-Demand ESDF with Sign Recovery . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 11 
+
+6 Scaling to High-DoF Robots 13 
+
+6.1 Kinematics Improvements . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14 6.2 Self-Collision via Map-Reduce . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 16 6.3 Torque Limits via Differentiable Inverse Dynamics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 16 
+
+7 Experimental Results 19 
+
+7.1 Dynamics-Aware Planning . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20 7.2 Runtime Breakdown . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21 7.3 Inverse Dynamics Comparison . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 23 7.4 High-DoF Inverse Kinematics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 23 7.5 Humanoid Retargeting . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 26 7.6 Fast and Safe ESDF at mm-Resolution . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 29 7.7 Real-World Manipulation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 32 
+
+8 LLM-assisted Development 33 
+
+8.1 Codebase Discoverability . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 33 8.2 Quantifying LLM Contributions . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 34 8.3 Case Studies: RNEA, Scene Collision Migration, and PBA ESDF . . . . . . . . . . . . . . . . . . . . . 35 
+
+9 Conclusion 37 References 39 A Framework Design 45 
+
+A.1 Improving Researcher Experience . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 45 A.2 Software Architecture . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 47 
+
+B LLM Prompts 48 
+
+> 2cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+## 1. Introduction 
+
+Effective robot autonomy requires motion generation to navigate and interact with an environment safely, efficiently, and responsively. Research on this problem has historically been split into two sub-domains: (1) Global Motion Planning, which computes global paths from a static start state to a goal [42, 66, 68], and (2) Reactive Motion Generation, which performs high-frequency tracking of a moving target [2, 11, 16, 59]. While these tasks differ in scope, they share the same fundamental requirements of satisfying robot hardware limits while avoiding collisions (both with the scene and with the robot itself). In both domains, however, current methods struggle to meet these requirements simultaneously, leaving critical gaps in functionality. What prevents existing methods from achieving unified, high-performance autonomy? We identify three fundamental barriers: 
+
+1) The Feasibility Gap 
+
+While collision-free motion planning can be done quickly [59, 66], such speed often comes at the cost of ig-noring dynamics, leading to physically unexecutable motions. Most planners output piecewise-linear joint paths that assume infinite torque, ignoring the robot’s mass and momentum. Consequently, “time-optimal” plans often violate torque limits, especially under heavy payloads, requiring aggressive post-processing that invalidates the original plan’s safety guarantees. Conversely, dynamic trajectory optimization meth-ods respect these limits but struggle to scale to the non-convex constraints of mesh or depth-based collision avoidance. 
+
+2) The Perception-Reactivity Trade-off 
+
+Current reactive methods force a choice between safety and high-fidelity perception. Analytic controllers (e.g., RMPs [9, 61], MPC [2, 70]) provide safety guarantees but are often too slow to process raw depth data, restricting them to simplified geometric primitives. Conversely, learning-based approaches [14, 16, 43] process visual observations rapidly, but they fail to provide the strict collision guarantees required for safe deployment. Furthermore, they lack the ability to generalize, thus requiring extensive retraining for new environments. 
+
+3) The Scalability Wall 
+
+Methods that succeed for single-arm platforms often fail to scale when applied to high-DoF systems like bimanual manipulators or humanoids. We find that state-of-the-art planners [66] converge slowly or not at all in these higher-dimensional spaces, particularly for collision-free inverse kinematics (IK) in cluttered scenes, an important requirement for real-world bimanual manipulation and humanoid motion retargeting. 
+
+Contributions 
+
+To overcome these barriers, we present cuRoboV2 , a unified motion generation framework with three core algorithmic contributions: 1. B-Spline Optimization Formulation addresses the feasibility gap . By optimizing B-spline control points, our approach automatically enforces smoothness, allowing the solver to satisfy torque limits for global planning and handle non-static boundary conditions for reactive control, thus providing a unified representation for motion generation. 2. GPU-native Perception Pipeline solves the perception-reactivity trade-off . Diverse inputs (depth, meshes, cuboids) are fused into a millimeter-resolution block-sparse TSDF using a voxel-centric pro-jection strategy that eliminates atomic contention. Unlike existing GPU libraries such as nvblox [50], which only compute distances within sparsely allocated blocks and leave the rest of the workspace without distance information, we generate a dense ESDF covering the full workspace on-demand via the Parallel Banding Algorithm (PBA+) with a gather-based seeding stage that enables full CUDA graph capture. This provides 𝑂 (1) distance queries at any point in the workspace, up to 10 × faster 
+
+> 3cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+and in 8 × less memory than nvblox at manipulation scale with up to 99% collision recall, enabling millisecond-rate updates for reactive control. 3. Scalable Kinematics, Dynamics & Self-Collision handles the scalability wall . We design GPU-native building blocks, namely topology-aware kinematics with sparse Jacobian computation, differ-entiable inverse dynamics, and map-reduce self-collision, that scale to humanoids where prior GPU implementations fail, with up to 40 × speedup. This throughput accelerates optimization iterations, enabling solvers to converge quickly for high-DoF bimanual and humanoid robots while enforcing torque limits. Together, these GPU-native innovations enable unified, dynamics-aware motion generation that scales from single-arm manipulators to full humanoids across planning, reactive control, and retargeting. The remainder of the paper is organized as follows. Sec. 2 surveys related work, and Sec. 3 formulates the motion optimization problem. We then present the three core modules: B-spline trajectory optimization (Sec. 4), TSDF/ESDF perception pipeline (Sec. 5), and scalable kinematics, dynamics, and self-collision for high-DoF robots (Sec. 6). Sec. 7 evaluates these contributions on benchmarks and real-world manipulation, and Sec. 8 reports on LLM-assisted development enabled by a ground-up codebase redesign. We conclude in Sec. 9. 
+
+## 2. Related Work 
+
+Global Planning 
+
+Motion planning algorithms fall into search, sampling, and optimization-based methods. Search-based plan-ners [21, 39, 42] discretize the state space but struggle with high-dimensional spaces. Sampling-based plan-ners [19, 32, 38, 44] are probabilistically complete but cannot easily accommodate cost terms and require post-processing that may violate dynamics constraints. Trajectory optimization [60, 65] jointly optimizes smoothness, collision avoidance, and custom costs but parameterizes trajectories as joint-position way-points, relying on acceleration regularization for smoothness. B-splines offer an alternative, used for tra-jectory smoothing [53] and path planning for mobile [10] and aerial [36] robots. Existing B-spline for-mulations for manipulators are restricted to convex constraints like polyhedral obstacles [30, 67] and do not address non-convex constraints from depth-image-based collision representations, triangle meshes, or torque limits. cuRoboV2 introduces a B-spline formulation for trajectory optimization for high-DoF manip-ulators that can accommodate additional constraints like torque limits without sacrificing convergence. 
+
+Reactive Motion Generation 
+
+Practical applications require reacting to dynamic environments from visual observations. Model-based ap-proaches like potential fields [34], Riemannian motion policies [9, 61], geometric fabrics [72], and MPC [2, 70] provide safety guarantees but get stuck in local optima and require simplified geometric primitives. 
+
+Learning-based methods [12, 16, 17, 24, 73] distill classical planners into neural policies or warm-start op-timizers [6, 27, 29, 75]; RL has also trained multi-arm reaching policies [37]. However, these methods lack out-of-distribution generalization, require per-embodiment retraining, and cannot guarantee collision-free execution. 
+
+Hardware Acceleration 
+
+FPGAs/ASICs [44, 46, 69] and SIMD [68] accelerate sampling-based planning. GPUs have been applied to MPC [2, 26] and optimization [28, 66]. cuRobo [66] introduced GPU-parallelized trajectory optimization and collision-aware IK, while PyRoki [35] provides cross-platform kinematic optimization. These methods target single-arm robots; scaling to high-DoF robots degrades convergence and increases compute time. 
+
+> 4cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+Table 1: Feature comparison of cuRoboV2 with other motion generation frameworks. 
+
+MoveIt cuRobo Pink /mink PyRoki cuRoboV2 
+
+Collision Checking 
+
+Primitive 3 3 7 3 3
+
+Mesh 3 3 7 7 3
+
+Depth 3 3 7 7 3
+
+Optimization 
+
+Trajectory Space Position Position — Position B-Spline Custom Costs 7 31 3 3 3
+
+Kinematic Jacobian 7 7 3 3 3
+
+Center of Mass 7 7 7 7 3
+
+Torque-Limits 7 7 7 7 3
+
+Numerical Solvers 
+
+NLLS (LM) 7 7 3 3 3
+
+Quasi-Newton (L-BFGS) 7 3 7 7 3
+
+Particle-based (MPPI) 7 3 7 7 3
+
+Collision-Aware Plan Modes 
+
+Graph/Roadmap Planner 3 3 7 7 3
+
+Trajectory Optimization Single-Arm Single-Arm 7 Single-Arm 3 Whole-Body Global Motion Plan 3 Single-Arm 7 7 Whole-Body MPC 7 Single-Arm 2 7 7 Whole-Body 
+
+IK Modes 
+
+Local-IK Single-Arm Single-Arm Whole-Body Whole-Body Whole-Body 
+
+w/ Collision Avoidance Single-Arm Single-Arm 7 Single-Arm 3 Whole-Body Global-IK Single-Arm Single-Arm 7 Whole-Body Whole-Body 
+
+w/ Collision Avoidance Single-Arm Single-Arm 7 Single-Arm 3 Whole-Body Humanoid Retargeting 7 7 7 Whole-Body Whole-Body 
+
+w/ Collision Avoidance 7 7 7 7 Whole-Body 
+
+Perception 
+
+Extrinsic Camera Calib. 3 7 7 7 3
+
+Voxel/ESDF Integrator Voxel 7 7 7 ESDF 
+
+Usability & Integration 
+
+Installation ros compile pip pip pip Startup Time < 5𝑠 < 5𝑠 < 5𝑠 > 30 𝑠 < 5𝑠 
+
+Easy & Accurate Robot Import 3 7 3 7 3
+
+Batched Scene Interface 7 3 7 7 3       
+
+> [1]Custom cost terms can be implemented in cuRobo as shown by [8], but it’s fairly complex and requires extensive working knowledge of the framework.
+> [2]cuRobo implements MPPI [2], providing reactivity but not high-quality motions that can be obtained with L-BFGS.
+> [3]PyRoki claims features for Collision-Free planning, but fails to converge even on Global-IK problems and is also extremely slow due to an inefficient collision checking implementation as we show in Sec. 7.
+
+Visual Representations 
+
+Geometry-based methods like KinectFusion [47] represent scenes as TSDFs but lack collision queries for planning. nvblox [50] provides GPU-accelerated ESDF for gradient-based planning but only computes ESDF in allocated blocks rather than a dense field, and incurs high memory overhead at millimeter resolu-tion. CPU-based methods [20, 52] lack real-time capability. Neural representations [13, 33, 43] enable fast collision checking, while learned encoders [12, 16, 17, 24, 58, 73] often fail on out-of-distribution scenes. 
+
+> 5cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+cuRoboV2 contributes a GPU-native perception pipeline with millimeter-resolution collision queries for manipulation. 
+
+Human-to-Humanoid Motion Retargeting 
+
+Transferring human motion to humanoids is critical for locomotion policy training. End-to-end learning approaches [18, 22, 23, 31] train RL policies directly from retargeted human motion data, filtering infea-sible motions during training but relying on the policy to implicitly handle self-collision and joint lim-its. Optimization-based retargeting frameworks such as GMR [1] solve per-frame IK using solvers like 
+
+mink [76] or PyRoki [35], but these solvers either lack self-collision avoidance entirely ( mink ) or fail to converge on high-DoF robots ( PyRoki ). Consequently, retargeted motions often contain self-penetrations and joint-limit violations that propagate into policy training, causing instability and high cross-seed vari-ance. cuRoboV2 addresses this gap by providing collision-free, joint-limit-satisfying IK for high-DoF robots, producing feasible reference motions that directly improve policy quality without changes to the learning pipeline. 
+
+## 3. Problem Formulation 
+
+We formalize motion generation as a trajectory optimization problem, where the goal is to find a sequence of actions that drives the robot from a start state to a goal pose (or, more specifically, to target poses for one or more links). The resulting trajectory should minimize an objective function (typically related to motion smoothness and energy) while satisfying a set of hard constraints such as avoiding self-collisions and collisions with the environment, as well as respecting the robot’s kinematic and dynamic limits. Let 𝜃 𝑡 ∈ R𝑑 be the joint angles at time 𝑡 , and let Θ𝑡 = [𝜃 𝑡 , §𝜃 𝑡 , •𝜃 𝑡 , ®𝜃 𝑡 ] be the robot’s state (angles, velocities, acceleration, and jerk), where 𝑑 is the number of joints. Given an initial state Θ0 and one or more link goal poses 𝑋 𝑚 𝑔 ∈ SE (3), 𝑚 = 1, . . . , 𝑀 , we seek a trajectory 𝑈 that solves the following optimization problem, 1
+
+arg min 
+
+> 𝑈 𝑇
+
+’
+
+> 𝑡 =0
+
+𝛾 𝑠 || •𝜃 𝑡 || 2
+
+︸︷︷︸ 
+
+> smooth
+
++𝛾 ℓ || §𝜃 𝑡 || 2
+
+︸︷︷︸ 
+
+> length
+
++ 𝛾 𝑒 ||( §𝜃 𝑡 𝜏 𝑡 )𝑑𝑡 || 2
+
+︸ ︷︷ ︸
+
+> energy
+
+(1) s.t. Θ𝑡 = BsplineEval (𝑈 , Θ0, 𝑡 ) (2) 
+
+Θ−  Θ𝑡  Θ+ (3) 
+
+Cscene (FwdKin (𝜃 𝑡 ))  0 (4) 
+
+Crobot (FwdKin (𝜃 𝑡 ))  0 (5) 
+
+|| 𝑋 𝑚 𝑔 − FwdKin (𝜃 𝑇 )|| < 𝜂 𝑚 (6) 
+
+𝜏 𝑡 = InvDyn (Θ𝑡 ) (7) 
+
+𝜏 −  𝜏 𝑡  𝜏 + (8) 
+
+§𝜃 𝑇 , •𝜃 𝑇 = 0 (9) where the loss in Eq. (1) encourages smooth and efficient motion; Eq. (2) evaluates the B-spline at a certain time; Eq. (3) enforces limits on joint angles, velocities, etc. ; Eqs. (4) and (5) ensure a collision-free path with both the scene and the robot itself (via forward kinematics); Eq. (6) ensures the final state is close to the target poses, where 𝜂 𝑚 is a threshold; Eq. (7) computes the torques 𝜏 𝑡 ∈ R𝑑 via inverse dynamics; Eq. (8) ensures torque limits 𝜏 − and 𝜏 + are respected; and Eq. (9) ensures that the robot comes to a complete stop. Constraints in Eqs. (2)–(8) are applied to all timesteps 𝑡 and links 𝑚 . 
+
+> 1Green highlights components where we introduce new formulations. Notation: is the Hadamard product.
+> 6cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+This formulation aligns with prior trajectory optimization methods [60, 66] and subsumes several core robotics problems. Variations of this optimization problem have been used primarily for obtaining collision-free trajectories, starting with local trajectory optimization [60, 64] which uses a rough initial trajectory as a seed and locally converges to a collision-free trajectory. Sundaralingam et al. [66] generalized this to global collision-free motion planning by running many seeds of trajectory optimization in parallel and also leveraging a collision-free graph-based planner as a seed. Special cases include inverse kinematics, where a single state is optimized without temporal constraints. Re-solving the optimization after a short execution horizon yields reactive control strategies such as model predictive control (MPC). 1. B-Spline Interpolation 
+
+2a. Forward Kinematics 2b. RNEA Forward 
+
+> 3b. Self Coll
+> 3a. Scene Coll (swept sphere)
+> 3c. C-Space (bounds, reg.)
+
+4. Cost Aggregation (reduce kernels) 
+
+5a. Kinematics ∇ 5b. RNEA Backward 
+
+5c. B-Spline ∇
+
+6. L-BFGS Step + Line Search 
+
+> updated control points
+
+Figure 1: Trajectory optimization loop. Each iteration evaluates B-spline waypoints, computes kinemat-ics and inverse dynamics in parallel, evaluates costs (scene collision, self-collision, configuration-space bounds) concurrently on separate CUDA streams, aggregates them, backpropagates gradients through all forward operations, and updates the B-spline control points via L-BFGS. 
+
+Figure 1 illustrates the trajectory optimization loop. Each iteration consists of six steps: (1) B-spline interpolation generates trajectory waypoints from control points; (2) forward kinematics computes link poses and Jacobians, with Recursive Newton-Euler Algorithm (RNEA) additionally computing joint torques; (3) cost evaluation runs in parallel for world collision, self-collision, and state costs; (4) cost aggregation reduces per-trajectory costs; (5) the backward pass computes gradients through all forward operations; and (6) the optimizer updates control points. 
+
+## 4. B-Spline Basis as Optimization Space 
+
+Each joint trajectory 𝑈 ∈ R𝑑 ×𝐾 is represented as a uniform cubic B-spline over control points 𝑢 𝑘 ∈ R, 𝑘 =
+
+0, . . . , 𝐾 − 1 for each of the 𝑑 joints; these control points serve as the optimization variables in Eq. (2). B-splines of degree three and higher yield 𝐶 2-continuous trajectories, and their local support ensures that changing a single knot only influences a few neighboring segments as shown in Fig. 2. As a result, this choice leads to a basis that is both smooth and compact. This implicit smoothness allows us to satisfy the acceleration and velocity regularizers in Eq. (1) with far fewer decision variables than a typical per-timestep position parameterization, while keeping the problem well-conditioned for gradient-based solvers. 
+
+> 7cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+4 segments affected by 𝑢 3
+
+𝑢 0 𝑢 1 𝑢 2 𝑢 3 𝑢 4 𝑢 5 𝑢 6
+
+seg 0 seg 1 seg 2 seg 3 seg 4 seg 5 
+
+4-knot stencil: [𝑢 1, 𝑢 2, 𝑢 3, 𝑢 4 ]
+
+Control 𝑢 𝑘 
+
+Traj. 𝜃 𝑡 
+
+Figure 2: Local support property of cubic B-splines. Perturbing knot 𝑢 3 only affects 4 neighboring curve segments (orange region). Interpolation points (dots) are uniformly spaced in time; during optimization, each point within this region contributes a gradient to 𝑢 3 (accumulated with GPU warp-level reductions). (For simplicity, 𝑁 interp = 2 is shown.) 
+
+Given the control points 𝑢 𝑘 , 𝑘 = 0, . . . , 𝐾 − 1 for a particular joint, the spline is evaluated within a segment (between consecutive knots) at a point specified by an interpolation parameter 𝛼 ∈ [ 0, 1]. We sample at uniform time intervals, with each segment containing the same number of points, ensuring velocity, acceleration, and jerk are computed at consistent timesteps. For the cubic case, the state vec-tor Θ𝑡 = [𝜃 𝑡 , §𝜃 𝑡 , •𝜃 𝑡 , ®𝜃 𝑡 ]> for a segment with control points 𝑈 𝑘 = [𝑢 𝑘 −1, 𝑢 𝑘 , 𝑢 𝑘 +1, 𝑢 𝑘 +2]> is given by 
+
+Θ𝑡 = TP (𝛼 )C
+
+︸ ︷︷ ︸ 
+
+> B(𝛼 )
+
+𝑈 𝑘 , (10) where T = diag (1, 𝑑𝑡 −1 
+
+> 𝑢
+
+, 𝑑𝑡 −2 
+
+> 𝑢
+
+, 𝑑𝑡 −3
+
+> 𝑢
+
+) encodes time scaling with 𝑑𝑡 𝑢 ∈ R being a fixed time interval, 
+
+P(𝛼 ) =
+
+
+
+𝛼 3 𝛼 2 𝛼 13𝛼 2 2𝛼 1 06𝛼 2 0 06 0 0 0
+
+
+
+(11) evaluates cubic monomials and their derivatives at 𝛼 (each row differentiates the preceding row), and where the cubic B-spline coefficients are given by 
+
+C = 16
+
+
+
+−1 3 −3 13 −6 3 0
+
+−3 0 3 01 4 1 0
+
+
+
+(12) 
+
+4.1. Gradients with Respect to Spline Control Points 
+
+Solving the optimization problem requires ∇𝑈 L, where L is the loss in Eq. (1). By the chain rule, the per-sample gradient contribution for a local control point vector 𝑈 𝑘 is given by 
+
+𝜕 L
+
+𝜕𝑈 𝑘 
+
+= B(𝛼 )>𝑔, (13) where 𝑔 = 𝜕 L 
+
+> 𝜕 Θ𝑡
+
+is the upstream gradient on the state. The backward pass is simply the transpose of the forward pass in Eq. (10), with time scaling handled implicitly by T inside B(𝛼 ). Since a control point 𝑢 𝑘 
+
+> 8cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+influences multiple segments (Fig. 2), its total gradient sums contributions from all relevant 𝑁 interp interpo-lation points, 
+
+∇𝑢 𝑘 L =
+
+> 𝑁 interp
+
+’
+
+> 𝑖 =1
+
+𝜕 L
+
+𝜕𝑢 𝑘,𝑖 
+
+, (14) where we set 𝑁 interp = 4 in our implementation. Since this summation dominates runtime, we implement it as a highly parallel reduction on the GPU. Our kernel assigns threads to knots in an interleaved pattern (Fig. 2): each thread accumulates a local sum, and a warp-level reduction produces the final gradient. This design fuses computation and reduction into a single pass, avoiding intermediate writes to global memory. 
+
+4.2. Boundary Conditions 
+
+A key advantage of the spline parameterization is that it satisfies boundary states implicitly, thus elimi-nating constraint coupling and the oscillatory corrections that typically follow. Static goals require only that we repeat the final knot four times, which automatically satisfies Eq. (9). When the initial state Θ0 is non-static, we introduce three fictitious knots with corresponding ghost/virtual control points 𝑢 −3, 𝑢 −2, 𝑢 −1,computed from Eq. (10) at 𝛼 = 0 with ®𝜃 0 = 0. By anchoring these knots to the initial state, we eliminate conflicting boundary constraints and let the optimizer concentrate on the remaining objectives, 
+
+𝑢 −3 = − 16 •𝜃 0𝑑𝑡 2 
+
+> 𝑢
+
++ 𝜃 0, (15) 
+
+𝑢 −2 = 13 •𝜃 0𝑑𝑡 2 
+
+> 𝑢
+
++ 𝜃 0 + §𝜃 0𝑑𝑡 𝑢 , (16) 
+
+𝑢 −1 = 11 6 •𝜃 0𝑑𝑡 2 
+
+> 𝑢
+
++ 𝜃 0 + 2 §𝜃 0𝑑𝑡 𝑢 . (17) 
+
+## 5. ESDF for Scene Collision Avoidance 
+
+Collision query is a key computational bottleneck in motion generation. Recent methods reduce this cost by approximating the robot as spheres [59, 66, 68], converting signed distance to point queries. However, these approaches face two challenges: (1) fusing depth observations and known geometric primitives into a persistent world model, and (2) generating task-specific distance fields efficiently. We address these dif-ficulties with a two-stage representation as shown in Fig. 3: (1) a block-sparse TSDF that fuses depth and primitives into a persistent world model via lock-free integration kernels (Sec. 5.1); and (2) a dense ESDF generated on-demand at task-appropriate resolution with interior-sign recovery for watertight geometry (Sec. 5.4). 
+
+5.1. Block-Sparse TSDF Storage 
+
+For many common tasks, the TSDF needs to represent millimeter-resolution geometry over meter-scale environments. We use a block-sparse representation (Fig. 4), partitioning the volume into 83-voxel blocks and allocating only those near observed surfaces. A hash table maps block coordinates to pool indices [49], with Compare-And-Swap (CAS) handling concurrent insertions. Blocks whose voxel weights decay below a threshold are returned to a free list for reuse, bounding peak memory regardless of scene duration. Each voxel maintains two independent signed-distance channels stored in float16: a running weighted average ( d e p t h _s u m , d e p t h _w t ) for depth observations (4 bytes per voxel) and a geom_sdf for analytic primitives (2 bytes per voxel). At query time, the effective signed distance is min (depth , geom ), so depth-fused surfaces and known geometry contribute jointly to collision avoidance. For a typical indoor scene with 100K active blocks, total GPU memory is ∼350 MB, roughly 11 × less than the equivalent dense grid.     
+
+> 9cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots Depth Image
+> Geometry
+> Voxel-Project
+> Stamp
+> Block-Sparse TSDF
+> Decay + Tombstone/Recycle
+> Block-Sparse TSDF
+> Site Seeding PBA+ Sign Recovery
+> Dense ESDF
+> Dense ESDF Generation
+> Stage 1 Stage 2 Stage 3
+> Bounds + Resolution
+
+Figure 3: TSDF-ESDF pipeline. Depth images are fused into a block-sparse TSDF via voxel-centric projec-tion (Sec. 5.2), and known geometry is stamped analytically. After each update, TSDF weights are decayed (time + frustum factors), and blocks below a weight threshold are tombstoned and recycled. On demand, a dense ESDF is generated in three stages: (1) seeding surface sites from zero-crossings, (2) propagating distances via PBA+, and (3) recovering signs for geometry-layer voxels beyond the truncation band. 0 1 2 3 4                  
+
+> 0
+> 1
+> 2
+> 3
+> 4
+> Surface
+> Sparse Volume
+> Hash Table
+> (1,2) → pool 0
+> (2,2) → pool 1
+> (2,3) → pool 2
+> (3,4) → pool 3
+> …
+> CAS
+> Block Pool
+> 83voxels
+> 83voxels
+> 83voxels
+> 83voxels
+> …
+> Per-Block Data
+> RGB (4×fp32)
+> Per-Voxel Data
+> depth_sum (fp16)
+> depth_wt (fp16)
+> geom_sdf (fp16)
+> Depth channel
+> Static channel
+> Free List (stack) recycle
+
+Figure 4: Block-sparse TSDF storage. Only blocks near observed surfaces are allocated. A hash table maps block coordinates to pool indices via CAS. Each voxel stores two independent float16 channels (depth and geometry) whose minimum is returned at query time. Recycled blocks are managed through a free-list stack. (a) Block Discovery  
+
+> Depth Blocks
+> per-pixel rays
+
+𝑁 =px ×samp threads 
+
+(b) Dedup & Allocate 
+
+𝑁 keys 
+
+> dedup
+
+𝐾 unique  
+
+> CAS 7
+> 12
+> 3
+> pool idx
+
+𝐾 threads 
+
+(c) Voxel-Centric Integration   
+
+> Depth Block
+> read
+
+𝑧 
+
+> write TSDF per-voxel projection
+
+𝐾 ×512 threads 
+
+Figure 5: Voxel-Project depth integration. (a) Per-pixel rays discover blocks touched by the current depth frame. (b) Duplicate keys are filtered and surviving blocks are allocated via CAS, yielding 𝐾 pool indices. (c) Phase 4 reverses the mapping: each voxel projects itself into the image, reads the depth at the projected pixel, and writes the signed distance directly, eliminating all atomic contention. 
+
+5.2. Depth and Primitive Integration 
+
+Depth integration uses a Voxel-Project strategy (Fig. 5). The core idea is to organize GPU work around 
+
+voxels : each voxel is assigned its own thread, projects itself into the depth image, and writes its signed 
+
+> 10 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+distance in a single, contention-free store. The pipeline proceeds in four phases: 1. Block discovery. For each pixel, ray samples within the truncation band identify which voxel blocks are touched by the current depth frame, launching 𝑁 =pixels ×samples threads. 2. Deduplication. Keys from pixels with no valid depth (e.g., out-of-range or missing readings) are dis-carded and the remainder are deduplicated, yielding only the 𝐾 unique block keys visible in this frame. 3. Block allocation. Each unique key is inserted into the hash table via compare and swap (CAS), reusing recycled blocks from the free list when available. The output is a compact array of pool indices for the visible blocks. 4. Voxel-centric integration. One thread is launched per voxel across all visible blocks ( 𝐾 × 512 threads). Each thread computes its voxel center in world coordinates, projects it onto the image plane using the camera intrinsics, reads the depth at the projected pixel, and writes the signed distance and weight directly. Because each voxel is owned by exactly one thread, no atomic operations are required. Organizing work around voxels yields coalesced memory writes (adjacent threads write adjacent voxels) and avoids hash-table lookups in the integration kernel, since pool indices are already resolved in Phase 3. The trade-off is that Phase 4 has a data-dependent launch dimension ( 𝐾 ×512 ), requiring a device-to-host synchronization to read 𝐾 . Because multiple image pixels may map to the same nearby voxel, we scale the integration weight by the projected voxel area in pixels, 𝑐 = (𝑓 𝑥 𝑣 /𝑧 )( 𝑓 𝑦 𝑣 /𝑧 ), where 𝑓 𝑥 , 𝑓 𝑦 are the focal lengths, 𝑣 is the voxel size, and 𝑧 is the camera-frame depth. The per-observation weight is 𝑤 = max (𝑐, 1),ensuring at least unit weight. Cuboids and meshes are stamped directly into the geometry channel. For each primitive, we compute its axis-aligned bounding box in voxel coordinates and select candidate blocks whose analytical SDF falls within the truncation band. After deduplication and hash-table allocation, we update each voxel with the minimum signed distance to the primitive. 
+
+5.3. Frustum-Aware Decay and Block Recycling 
+
+To track dynamic scenes, we apply a two-tier multiplicative weight decay after each integration step. A time decay factor 𝛼 𝑡 (e.g., 0.99 ) is applied to every allocated block, gradually fading old observations. A frustum decay factor 𝛼 𝑓 (e.g., 0.5) is applied additionally to blocks within the current camera frustum, enabling rapid adaptation to objects that move or disappear in view. The combined per-frame weight update is 
+
+𝑤 ←
+
+{
+
+𝑤 · 𝛼 𝑡 · 𝛼 𝑓 , block in frustum ,𝑤 · 𝛼 𝑡 , otherwise . (18) Frustum membership is determined at block granularity using a conservative bounding-sphere test (one thread per block), achieving ±half-block precision. The decay itself is a single fused multiplication over the block data tensor, requiring zero atomic operations. After decay, the per-block weight sum is computed via a PyTorch reduction; blocks whose total weight falls below a threshold are recycled by tombstoning their hash slot and pushing the block index onto a free list for reuse. 
+
+5.4. On-Demand ESDF with Sign Recovery 
+
+For a robot to interact and navigate in the world without collision, it needs to be able to query signed distance to the nearest surface from any point in space. This requirement motivates the need for a dense ESDF over the workspace which, due to memory limitations, leads to storing the ESDF at a coarse reso-lution. Furthermore, since the robot is approximated by collision spheres, refining the ESDF well beyond the smallest sphere radius yields diminishing returns: the trilinear interpolation error is already a small fraction of the sphere radius, so collision checks remain reliable. This motivates generating the ESDF at a task-specific resolution coarser than that of the TSDF. For manipulation with fine spheres (1–5 cm), a 5 mm ESDF suffices; for mobile-base planning with coarser spheres (e.g., 50 cm) over larger workspaces, an 
+
+> 11 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+even coarser ESDF is appropriate. This decoupling also benefits performance: a finer TSDF avoids atomic contention during integration, while a coarser ESDF reduces memory and computation. Given workspace bounds and resolution, we generate a dense ESDF in three stages, enabling 𝑂 (1) trilinear distance queries. 
+
+Stage 1: Site Seeding 
+
+We identify surface sites , i.e., voxels near zero-crossings in the sparse TSDF, that seed the distance transform (Fig. 6a). This sparse-to-dense transfer is the computational bottleneck of ESDF generation, as the sparse TSDF must be read and the dense ESDF written for every surface voxel. Two strategies exist for this transfer: scatter and gather (Fig. 6a). Scatter iterates over allocated TSDF blocks ( 𝑂 (𝐵 · 83) work, where 𝐵 is the number of allocated blocks), projects each surface voxel (with |sdf | <
+
+0.9 𝑣 tsdf ) into ESDF coordinates, and writes the site. When the ESDF is coarser than the TSDF, multiple TSDF voxels map to the same ESDF cell, requiring atomic writes to resolve write conflicts. Moreover, the work dimension depends on 𝐵 , which varies per frame, preventing CUDA graph capture. 
+
+Gather reverses the mapping: each ESDF cell probes the sparse TSDF via 𝑂 (1) hash lookups to deter-mine whether it contains a surface. We sample seven positions per cell (the center and six axis-aligned face centers, each offset by 12 𝑣 esdf ) and mark the cell as a site if any sample satisfies |sdf | < 0.9 𝑣 tsdf . Since each cell is written by exactly one thread, no atomic operations are needed and memory writes are fully coalesced. The work dimension is fixed at |G esdf | = 𝐷 ×𝐻 ×𝑊 , independent of scene content, making the kernel compatible with CUDA graph capture and enabling the entire ESDF pipeline (seed → PBA+ → sign recovery) to run as a single captured graph. The trade-off is coverage: when 𝑣 esdf  𝑣 tsdf , thin surfaces falling between the seven sample points may be missed; in practice, the 7-point stencil covers the cell volume adequately for typical resolution ratios ( 2–4×). 
+
+Stage 2: Distance Propagation 
+
+We compute exact nearest-site assignments using the Parallel Banding Algorithm (PBA+) [3], which ex-ploits the separability of squared Euclidean distance to decompose the 3D Voronoi diagram into three independent axis-aligned passes (Fig. 6b). Phase 1 solves the 1D nearest-site problem along each Z-column via a bidirectional flood: a forward sweep propagates the most recently seen site, and a backward sweep keeps whichever of the forward or backward candidate is closer. The resulting partial Voronoi diagram is then extended to 2D and 3D by Phases 2 and 3, which sweep along the Y and X axes respectively. Each phase applies Maurer’s parabola intersection test [41]: given candidate sites 𝐴, 𝐵, 𝐶 ordered along the sweep axis, site 𝐵 is dominated and discarded whenever the intersection of the distance paraboloids 
+
+𝑑 2 (𝐴, ·) and 𝑑 2 (𝐶, ·) lies before 𝐵 ’s position. Building this compressed stack in a single linear pass per column and then walking it to assign the nearest site to every voxel yields an 𝑂 (𝑁 )-work, 𝑂 (1)-error distance transform per axis. Phase 3 reuses the identical sweep and coloring logic on axis-transposed data, so only three unique kernels are needed. The entire propagation produces the exact Euclidean Voronoi diagram, unlike approxi-mate iterative methods such as JFA [62], which require dlog 2 𝑁 e + 3 passes and can miss sites in adversarial configurations. Because the number of kernel launches is fixed (five) and independent of scene content, the pipeline is fully compatible with CUDA graph capture. After propagation, the Euclidean distance at each voxel is computed from the stored site coordinates. 
+
+Stage 3: Sign Recovery 
+
+PBA+ yields unsigned distances; the challenge is recovering sign for voxels beyond the TSDF truncation band (Fig. 6c). For depth-based TSDF, we assume positive sign (exterior) outside the truncation band, since depth observations only see the front surface. For watertight geometry (analytic primitives), surface sites lie at zero-crossings where the TSDF is ambiguous; we resolve this by sampling an adjacent voxel, offset from the site toward the query along the site-to-query direction. Because this adjacent point lies on the same 
+
+> 12 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots Sparse TSDF
+> Scatter
+> Dense ESDF
+> atomic write
+> Gather
+> Dense ESDF
+> 7-pt stencil
+> CUDA graph safe
+
+(a) Site seeding: scatter (top) vs. gather (bottom). Seed Phase 1 
+
+> rows
+> sweep each row
+> Phase 2
+> cols
+> sweep each column surface sites
+
+(b) PBA+ propagation (2D): Phase 1 sweeps rows, Phase 2 sweeps columns to produce the exact Voronoi diagram. Surface 
+
+> truncation band
+
+Interior ( −)
+
+Exterior ( +)            
+
+> site
+> query
+> adj
+> TSDF(adj) >0
+> ⇒𝑑 >0
+> site
+> query
+> adj
+> TSDF(adj) <0
+> ⇒𝑑 <0
+> PBA+ site (zero-crossing) Adjacent sample Query voxel
+
+(c) Sign recovery via adjacent TSDF sampling. 
+
+Figure 6: ESDF generation pipeline. (a) Site seeding: scatter launches one thread per TSDF voxel and writes to the ESDF (requires atomics); gather launches one thread per ESDF voxel and probes the TSDF via a 7-point stencil (no atomics, CUDA graph safe). (b) PBA+ propagates site ownership via separable sweeps: Phase 1 sweeps rows via bidirectional flooding, Phase 2 builds Maurer stacks along columns to produce the exact Voronoi diagram; in 3D a third phase reuses the same kernels on transposed data to resolve the remaining axis. (c) For voxels beyond the truncation band, an adjacent TSDF sample resolves interior vs. exterior sign. 
+
+side of the surface as the query, its TSDF sign is unambiguous: negative indicates interior and positive indicates exterior. Crucially, the adjacent lookup samples only the static (geometry) SDF channel, since only watertight primitives have reliable sign when stepping away from the surface; depth-fused surfaces are open and their sign beyond the truncation band is undefined. If the adjacent lookup misses (e.g., outside allocated blocks), we fall back to the combined SDF at the query voxel itself; voxels with no observation default to positive (exterior). Once we have the ESDF, we calculate the collision constraint as an approximate swept-volume checks between timesteps, stepping along the trajectory by signed distance. The cost uses the CHOMP speed metric [60], scaling gradients by velocity to accelerate escape from collision. 
+
+## 6. Scaling to High-DoF Robots 
+
+Scaling motion optimization to high-DoF robots such as humanoids introduces challenges absent in sim-pler manipulators. In particular, branching kinematic trees create multiple end-effectors whose Jacobians must be computed in parallel (Fig. 7); and self-collision pairs grow quadratically with the number of links, making naive pairwise queries memory-bound. Furthermore, enforcing actuator torque limits requires dif-ferentiable inverse dynamics within the optimization loop; and mimic joints mechanically couple multiple 
+
+> 13 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+links through a single actuator. We address these challenges with five key innovations: (1) an adaptive kernel dispatch for forward kine-matics that scales from fused single-kernel execution to a dual-kernel split for complex robots (Sec. 6.1.1); (2) a precomputed topology cache that enables parallel gradient backpropagation by exploiting kinematic sparsity (Sec. 6.1.2); (3) a two-stage filtering scheme that computes sparse Jacobians for branching trees and mimic joints (Sec. 6.1.3); (4) a fused map-reduce kernel for self-collision that converts memory-bound pairwise queries into compute-bound reductions (Sec. 6.2); and (5) a differentiable inverse dynamics engine that enforces torque limits directly within optimization (Sec. 6.3). 𝑥                    
+
+> 𝑦
+> 𝑇 0
+> 𝜃 1
+> 𝜃 2
+> 𝜃 3𝑇 grasp
+> 𝑇 1=𝑇 0·𝐾 (𝜃 1)
+> 𝑇 2=𝑇 1·𝐾 (𝜃 2)
+> 𝑇 3=𝑇 2·𝐾 (𝜃 3)
+
+(a) Serial chain root                       
+
+> leaf
+> 𝜃 1
+> 𝜃 2=𝛼 2𝜃 1+𝛽 2
+> 𝜃 3=𝛼 3𝜃 1+𝛽 3
+> root
+> leaf
+> 𝜃 1
+> 𝜃 2=𝛼 2𝜃 1+𝛽 2𝜃 3=𝛼 3𝜃 1+𝛽 3
+> 𝜃 4=𝛼 4𝜃 1+𝛽 4
+
+(b) Mimic Joints 𝑥  
+
+> 𝑦
+> 𝑇 0
+> 𝜃 13
+> 𝑇 head
+> 𝜃 1
+> 𝜃 2
+> 𝜃 3
+> 𝑇 grasp,L
+> 𝜃 4
+> 𝜃 5
+> 𝜃 6
+> 𝑇 grasp,R
+> 𝜃 7
+> 𝜃 8
+> 𝜃 9
+> 𝑇 foot,L
+> 𝜃 10
+> 𝜃 11
+> 𝜃 12
+> 𝑇 foot,R
+> Kinematic Traversal Left Arm Right Arm Left Leg Right Leg Head
+
+(c) Branching tree of a humanoid 
+
+Figure 7: Kinematic structures that challenge parallelized computation. (a) A single-arm serial chain, the traditional case. (b) Mimic joints, where actuating 𝜃 1 mechanically constrains 𝜃 2 and 𝜃 3. (c) A humanoid with branching kinematic chains. We introduce precomputed topology caches for 𝑂 (1) ancestor lookups and two-stage Jacobian filtering to efficiently parallelize gradient and Jacobian computation. 
+
+6.1. Kinematics Improvements 
+
+6.1.1. Forward Kinematics 
+
+A single forward kinematics call must produce frame transforms, tool poses, collision-sphere positions, centers of mass, and Jacobians. cuRobo [66] introduced a fused single-kernel approach that computes frame transforms and sphere positions in one launch, but it parallelizes across only four threads and lacks support for center of mass and Jacobian computation. We extend this with an adaptive kernel dispatch based on robot complexity (Fig. 8). For simple robots with few collision spheres ( ≤ 100 ), the fused kernel now computes all five outputs within the same four-thread design. For complex robots with many spheres ( >
+
+100 ), such as bimanual and humanoids, the computation splits into two kernels (Fig. 8): the first computes frame transforms from joint angles and writes them to global memory; the second reads these transforms and computes sphere positions, tool poses, centers of mass, and Jacobians in parallel across many threads. In contrast to the fused kernel, where all stages are serialized across four threads, this split allows the second kernel to scale thread count with the number of spheres and links, greatly reducing the compute time. 
+
+> 14 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots Joint Angles (q)
+
+Kernel 1 
+
+Compute Frame Transforms 
+
+> Frame Transforms
+
+Kernel 2 
+
+Transform Spheres 
+
+Compute Tool Poses 
+
+Compute CoM 
+
+Compute Jacobian 
+
+> Tool Poses, Spheres, Jacobian, CoM
+> Dual-Kernel (Spheres >100)
+> Joint Angles (q)
+
+Fused Kernel 
+
+Initialize Base Link 
+
+Compute Frame Transforms 
+
+Transform Spheres 
+
+Compute Tool Poses 
+
+Compute CoM 
+
+Compute Jacobian  
+
+> Frame Transforms, Tool Poses, Spheres, Jacobian, CoM
+> Single-Kernel (Spheres ≤100)
+
+Figure 8: Adaptive forward kinematics execution. For simple robots, a single fused kernel computes frame transforms, sphere positions, and Jacobians. For complex robots, this is split into two kernels: the first computes frame transforms, and the second computes sphere positions and Jacobians. 
+
+6.1.2. Parallel Gradient Backpropagation 
+
+The adaptive kernel dispatch described above accelerates forward kinematics, but backpropagating gradi-ents to joints remains a bottleneck: each link’s gradient must be pushed back through all ancestor joints. We parallelize this at the link level by partitioning links across threads within a GPU warp (Algorithm 1). A gradient on a humanoid’s right hand, for instance, only affects the right arm and torso joints. To exploit this kinematic sparsity, we use a precomputed topology cache that provides the ordered list of ancestor links for any link in 𝑂 (1) time, allowing each thread to traverse only the relevant kinematic chain. This data-driven design also implicitly handles mimic joints by mapping each link’s gradient to the correct actuated joint. 
+
+6.1.3. Sparse Jacobian Computation 
+
+For solvers like Levenberg-Marquardt, we compute the full kinematic Jacobian by parallelizing each column (Algorithm 2). Each thread, responsible for a single joint 𝑗 , uses a two-stage filtering process. First, a precomputed affects [ 𝑗, 𝑒 ] cache provides an 𝑂 (1) coarse check to prune entire subtrees that cannot affect the target link 𝑒 . For the remaining joints, including mimic joints that control multiple links, a second fine-grained filter checks if each mechanically coupled link is a direct ancestor of 𝑒 . This ensures each Jacobian column accumulates contributions only from relevant links in the kinematic chain. Our sparse Jacobian (Alg. 2) enables a Levenberg-Marquardt (LM) solver for inverse kinematics (IK), a natural fit since IK is inherently a nonlinear least-squares problem, minimizing the squared pose error 
+
+‖r‖2 with residual r = T𝑔𝑜𝑎𝑙 FwdKin (q). LM approximates the Hessian as J>J and uses trust-region damping for global robustness (Alg. 3), converging faster than first-order methods such as L-BFGS on this 
+
+> 15 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+Algorithm 1: Backprop with Topology Cache 
+
+Input: Link gradients ∇pℓ L, ∇qℓ L; Frame transforms Tℓ
+
+Output: Joint gradients ∇q L  
+
+> 1local_grad
+
+← 0 ; ⊲ init thread-local gradient for all joints  
+
+> 2
+
+for each link ℓ (parallel threads in warp) do  
+
+> 3
+
+if link gradient is non-zero then  
+
+> 4
+
+for each ancestor 𝑗 link ∈ linkChain [ℓ] in reverse do ⊲ loop only through topology cache  
+
+> 5
+
+𝑗 ← jointMap [ 𝑗 link ] ; ⊲ handle mimic joints  
+
+> 6
+
+𝑔 ← 𝐵 (∇pℓ L, Tℓ ) ; ⊲ projecting link ℓ gradient using frame transform and joint model  
+
+> 7local_grad
+
+[ 𝑗 ] + = 𝑔 ; ⊲ adding to account for mimic joints  
+
+> 8
+
+∇q ← WarpReduceSum (local_grad );
+
+Algorithm 2: Jacobian for Trees and Mimic Joints 
+
+Input: Joint angles q, target link index 𝑒 , frame transforms Tℓ
+
+Output: Jacobian matrix J𝑒  
+
+> 1
+
+for each joint 𝑗 ∈ { 1, . . . , 𝑛 joints } in parallel do ⊲ compute column per joint  
+
+> 2
+
+jac _col ← 0; 
+
+> 3
+
+if affects [ 𝑗, 𝑒 ] then ⊲ Coarse filter: does joint 𝑗 affect target link 𝑒 ? 
+
+> 4
+
+for each link ℓ ∈ connectedLinks [ 𝑗 ] do ⊲ A joint can control multiple links (e.g., mimic)  
+
+> 5
+
+if ℓ ∈ linkChain [𝑒 ] then ⊲ Fine filter: is this specific link in chain to 𝑒 ? 
+
+> 6
+
+jac _col += Compute Jacobian contribution for ℓ; 
+
+> 7
+
+J𝑒 [:, 𝑗 ] ← jac _col ; ⊲ write to global memory 
+
+least-squares structure. We adapt Newton ’s [48] Warp -based [40] LM implementation to use our Jacobian, supporting high-DoF robots with multiple tool frames. For collision-free IK, we use a two-stage strategy: LM first converges to the target pose without col-lision constraints, then L-BFGS refines the solution under self-collision and environment constraints. LM provides a good seed near the goal, so L-BFGS only needs small adjustments to resolve collisions rather than searching from scratch. 
+
+6.2. Self-Collision via Map-Reduce 
+
+cuRobo [66] computes self-collision cost within a single thread block by loading spheres into shared mem-ory. For high-DoF robots, however, the number of pairs grows quadratically, from 818 pairs on a 7-DoF Franka to 162k pairs on a 48-DoF humanoid, forcing each thread to loop over many pairs and serializing the computation. We address this with a two-stage map-reduce: (1) partition pairs across blocks, each loading its spheres into shared memory and reducing to find its most-penetrating pair; (2) a final kernel reduces across block maxima to identify the global maximum as shown in Fig. 9. 
+
+6.3. Torque Limits via Differentiable Inverse Dynamics 
+
+Trajectories that violate actuator limits cannot be executed. While most planners treat torque constraints as a post-hoc check, we enforce them directly via a differentiable inverse dynamics engine based on the Recursive Newton-Euler Algorithm (RNEA) [15]. RNEA computes the joint torques 𝜏 required to produce a given motion (𝑞, §𝑞, •𝑞 ) in three passes over the kinematic tree: (1) a forward pass from base to tips that propagates link velocities and accelerations, (2) a force pass that computes the net wrench on each link from its inertia and motion, and (3) a backward pass from tips to base that accumulates these forces into joint torques. The 𝑂 (𝑛 ) complexity makes RNEA the standard choice for inverse dynamics, but its sequential 
+
+> 16 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+Algorithm 3: Levenberg-Marquardt with Trust-Region 
+
+Input: Initial state 𝑆 𝑘 = (q𝑘 , 𝜆 𝑘 , J𝑘 , g𝑘 , 𝐸 𝑘 ), goals T𝑔𝑜𝑎𝑙 
+
+Output: Updated state 𝑆 𝑘 +1 
+
+> 1
+
+H ← J> 
+
+> 𝑘
+
+J𝑘 ; ⊲ Approximate the Hessian  
+
+> 2
+
+A ← H + 𝜆 𝑘 I ; ⊲ Apply damping to the Hessian  
+
+> 3
+
+Solve A𝜹 = −g𝑘 for 𝜹 ; ⊲ Compute the update step  
+
+> 4
+
+q+ ← q𝑘 + 𝜹 ; ⊲ Apply update to joint configuration  
+
+> 5
+
+Evaluate at q+ to get: r+, 𝐸 +, J+, g+; ⊲ Evaluate error at new configuration  
+
+> 6
+
+𝜌 pred ← 12 𝜹 > (𝜆 𝑘 𝜹 − g𝑘 ); ⊲ Predict the error reduction  
+
+> 7
+
+𝜌 trust ← ( 𝐸 𝑘 − 𝐸 +)/( 𝜌 pred + 𝜖 ); ⊲ Compute trust region ratio  
+
+> 8
+
+if 𝜌 trust ≥ 𝜌 min then  
+
+> 9
+
+𝜆 𝑘 +1 ← clamp (𝜆 𝑘 /𝛾, 𝜆 min , 𝜆 max 
+
+); ⊲ Accept step, decrease damping  
+
+> 10
+
+(q𝑘 +1, 𝐸 𝑘 +1, . . . ) ← ( q+, 𝐸 +, . . . ) 
+
+> 11
+
+else  
+
+> 12
+
+𝜆 𝑘 +1 ← clamp (𝜆 𝑘 𝛾, 𝜆 min , 𝜆 max 
+
+); ⊲ Reject step, increase damping  
+
+> 13
+
+(q𝑘 +1, 𝐸 𝑘 +1, . . . ) ← ( q𝑘 , 𝐸 𝑘 , . . . ) 
+
+> 14
+
+Check for convergence against position and orientation tolerances; ⊲ Verify if goal is reached  
+
+> 15
+
+return 𝑆 𝑘 +1All Collision Pairs 
+
+Kernel 1 
+
+Load Spheres shared memory 
+
+Pairwise Distance store max per thread 
+
+Block-Wide max penetration 
+
+Store Max Distance & Sphere-Pair Index 
+
+Kernel 1 Kernel 1 
+
+Block 1 Block N 
+
+…
+
+Kernel 2 
+
+Find max distance 
+
+Compute cost & gradient 
+
+Global Max collision & gradient 
+
+Two-Kernel (Pairs > 1000) 
+
+All Collision Pairs 
+
+Single Kernel (1 Block) 
+
+Load Spheres shared memory 
+
+Pairwise Distance store max per thread 
+
+Block-Wide max penetration 
+
+Compute cost & gradient 
+
+Global Max collision & gradient 
+
+Single-Kernel (Pairs ≤ 1000 ) 
+
+Figure 9: Two-stage self-collision checking. For complex robots, collision pairs are partitioned across GPU blocks (map). A first kernel finds local maxima, and a second kernel reduces these to find the global maximum. 
+
+> 17 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+tree traversals pose a challenge for GPU parallelization. 
+
+Table 2: Comparison of GPU-accelerated RNEA implementations.                                        
+
+> Aspect Newton GRiD Ours
+> Robot binding Runtime CodeGen Runtime Spatial transform 6×66×6𝑅 +𝑝 (12 fl.) Spatial inertia 6×66×6Compact (12 fl.) Backward pass Recompute Jacobian 𝑂 (𝑛 2)cache+VJP 𝑂 (𝑛 )
+> Parallelism None Vector comp. Tree-level Sync primitive None Block Warp Runtime payload 373
+> Mimic joints 373
+> High-DoF robots 373
+> PyTorch interop 373
+
+Limitations of Existing GPU Implementations 
+
+Two GPU-accelerated RNEA implementations exist: Newton [48] and GRiD [57]. Newton supports runtime inertial parameter changes (e.g., payloads) but launches six kernels per call due to its modular architecture, recomputes forward quantities during backpropagation, and becomes a bottleneck at our trajectory opti-mization batch sizes. GRiD generates robot-specific CUDA code with fully unrolled loops and hardcoded indices, achieving high throughput at small batch sizes. However, it requires recompilation for each robot, does not support runtime inertial changes, and its heavy shared memory usage (36 floats per link for 6 ×6spatial transforms and inertias) exceeds SM limits on high-DoF robots like humanoids. We summarize these shortcomings in Table 2. 
+
+Our RNEA Implementation 
+
+We implement RNEA as robot-generic GPU kernels that are parameterized by the number of links 𝑛 , degrees of freedom 𝑑 , and batch size 𝐵 . The kinematic tree topology, spatial inertias 𝐼 𝑘 , and joint types are supplied at runtime, so a single compiled binary supports any robot described by a URDF. Three design choices drive performance: compact spatial representations that reduce shared memory pressure, a VJP-based backward pass that avoids 𝑂 (𝑛 2) Jacobian materialization, and tree-level parallelism with warp-level synchronization. 
+
+Compact spatial representations. Rather than materializing full 6 ×6 spatial transforms and inertias (72 floats/link), we store transforms in factored Featherstone form, specifically a 3 ×3 rotation 𝑅 plus translation 
+
+𝑝 (12 floats), and recompute spatial products on-the-fly via the identity 𝑋 · [ 𝜔 ; 𝑣 ] = [𝑅 >𝜔 ; 𝑅 > (𝑣 + 𝜔 × 𝑝 )] .Spatial inertias use a compact 12-float representation (mass, CoM, rotational inertia tensor), with products computed analytically rather than via 6 ×6 matrix multiplication. 
+
+VJP-based backward pass. GRiD computes the full 𝑛 × 𝑛 Jacobians 𝜕𝜏 /𝜕𝑞 and 𝜕𝜏 /𝜕 §𝑞 per Carpentier [4], incurring 𝑂 (𝑛 2) cost. For gradient-based optimization, we instead compute the vector-Jacobian product (VJP) directly: given 𝜕 L/ 𝜕𝜏 , we obtain 𝜕 L/ 𝜕𝑞 , 𝜕 L/ 𝜕 §𝑞 , 𝜕 L/ 𝜕 •𝑞 in 𝑂 (𝑛 ) time via an adjoint RNEA pass. When external forces 𝑓 ext are provided, the backward pass also computes 𝜕 L/ 𝜕𝑓 ext = − ¯𝑓 , enabling gradient flow through contact or interaction forces. 
+
+Memory layout. The forward kernel caches velocities and accelerations packed without padding (12 floats) plus forces with padding for alignment (8 floats), totaling 20 floats/link. Transforms are recomputed from 𝑞 rather than cached, trading ∼48 arithmetic instructions per link for 12 floats of global memory bandwidth. The backward kernel loads robot inertia parameters (mass, CoM, rotational inertia) into block-shared memory once per thread block, eliminating redundant global loads across batches. 
+
+Tree-level parallelism. Multiple threads within a warp cooperate on links at the same tree depth, syn-
+
+> 18 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+Algorithm 4: RNEA Forward 
+
+Input: 𝑞, §𝑞, •𝑞 , 𝑓 ext , robot params 
+
+Output: 𝜏 , cache {𝑣, 𝑎, 𝑓 }
+
+⊲ Pass 1: Forward (base → tips) propagate velocities and accelerations  
+
+> 1
+
+for level ℓ = 0 to 𝐿 − 1 do  
+
+> 2
+
+for link 𝑘 at level ℓ do in parallel 
+
+⊲ recompute transforms to save memory  
+
+> 3
+
+𝑅 𝑘 , 𝑝 𝑘 ← localRp (𝑇 fixed  
+
+> 𝑘
+
+, 𝑞 ); 
+
+> 4
+
+if 𝑘 is root then  
+
+> 5
+
+𝑣 𝑘 ← 𝑆 𝑘 §𝑞 𝑘 ; 
+
+> 6
+
+𝑎 𝑘 ← 𝑋 𝑘 𝑔 + 𝑆 𝑘 •𝑞 𝑘 ; 
+
+> 7
+
+else  
+
+> 8
+
+𝑣 𝑘 ← 𝑋 𝑘 𝑣 pa + 𝑆 𝑘 §𝑞 𝑘 ; 
+
+> 9
+
+𝑎 𝑘 ← 𝑋 𝑘 𝑎 pa + 𝑆 𝑘 •𝑞 𝑘 + 𝑣 𝑘 ×𝑚 𝑆 𝑘 §𝑞 𝑘 ; 
+
+> 10 syncwarp()
+
+;
+
+⊲ Pass 2: Forces (parallel)  
+
+> 11
+
+for link 𝑘 = 0 to 𝑛 − 1 do in parallel  
+
+> 12
+
+𝑓 𝑘 ← 𝐼 𝑘 𝑎 𝑘 + 𝑣 𝑘 ×∗ (𝐼 𝑘 𝑣 𝑘 ) − 𝑓 ext ,𝑘 ;
+
+⊲ Pass 3: Backward (tips → base) accumulate forces into joint torques  
+
+> 13
+
+for level ℓ = 𝐿 − 1 to 0 do  
+
+> 14
+
+for link 𝑘 at level ℓ do in parallel 
+
+⊲ + = handles mimic joints  
+
+> 15
+
+𝜏 𝑗 𝑘 += 𝑚 𝑘 𝑆 > 
+
+> 𝑘
+
+𝑓 𝑘 ; 
+
+> 16
+
+if 𝑘 ≠ root then  
+
+> 17
+
+𝑓 pa += 𝑋 > 
+
+> 𝑘
+
+𝑓 𝑘  
+
+> 18 syncwarp()
+
+;
+
+Algorithm 5: RNEA Backward (VJP) 
+
+Input: ¯𝜏 , 𝑞, §𝑞 , cached {𝑣, 𝑎, 𝑓 }
+
+Output: ¯𝑞, ¯§𝑞, ¯•𝑞, ¯𝑓 ext 
+
+⊲ Pass 1: Adjoint of backward (base → tips)  
+
+> 1
+
+for level ℓ = 0 to 𝐿 − 1 do  
+
+> 2
+
+for link 𝑘 at level ℓ do in parallel  
+
+> 3
+
+¯𝑓 𝑘 ← 𝑆 𝑘 (𝑚 𝑘 ¯𝜏 𝑗 𝑘 ); 
+
+> 4
+
+if 𝑘 ≠ root then  
+
+> 5
+
+¯𝑓 𝑘 += 𝑋 𝑘 ¯𝑓 pa ; 
+
+> 6
+
+¯𝑞 𝑗 𝑘 += 𝑚 𝑘 (𝑋 𝑘 ¯𝑓 pa )>crf (𝑆 𝑘 )𝑓 𝑘 ; 
+
+> 7syncwarp()
+
+;
+
+⊲ Pass 2: Adjoint of external force  
+
+> 8
+
+for link 𝑘 = 0 to 𝑛 − 1 do in parallel  
+
+> 9
+
+¯𝑓 ext ,𝑘 ← − ¯𝑓 𝑘 ;
+
+⊲ Pass 3: Adjoint of forward (tips → base)  
+
+> 10
+
+Init ¯𝑎 𝑘 , ¯𝑣 𝑘 ← 0 ∀𝑘 ; 
+
+> 11
+
+for level ℓ = 𝐿 − 1 to 0 do  
+
+> 12
+
+for link 𝑘 at level ℓ do in parallel  
+
+> 13
+
+¯𝑎 𝑘 += 𝐼 𝑘 ¯𝑓 𝑘 ; 
+
+> 14
+
+¯𝑣 𝑘 −= crf ( ¯𝑓 𝑘 )𝐼 𝑘 𝑣 𝑘 + 𝐼 𝑘 crm (𝑣 𝑘 ) ¯𝑓 𝑘 ; 
+
+> 15
+
+¯•𝑞 𝑗 𝑘 += 𝑚 𝑘 𝑆 > 
+
+> 𝑘
+
+¯𝑎 𝑘 ; 
+
+> 16
+
+¯§𝑞 𝑗 𝑘 += 𝑚 𝑘 𝑆 > 
+
+> 𝑘
+
+¯𝑣 𝑘 − 𝑚 𝑘 (crf (𝑣 𝑘 ) ¯𝑎 𝑘 )𝑠 𝑘 ; 
+
+> 17
+
+if 𝑘 ≠ root then  
+
+> 18
+
+¯𝑎 pa += 𝑋 > 
+
+> 𝑘
+
+¯𝑎 𝑘 ; ¯𝑣 pa += 𝑋 > 
+
+> 𝑘
+
+¯𝑣 𝑘 ; 
+
+> 19
+
+¯𝑞 𝑗 𝑘 −= 𝑚 𝑘 ¯𝑎 > 
+
+> 𝑘
+
+crm (𝑆 𝑘 )𝑋 𝑘 𝑎 pa ; 
+
+> 20
+
+¯𝑞 𝑗 𝑘 −= 𝑚 𝑘 ¯𝑣 > 
+
+> 𝑘
+
+crm (𝑆 𝑘 )𝑋 𝑘 𝑣 pa ; 
+
+> 21 syncwarp()
+
+;
+
+Figure 10: RNEA forward and VJP backward kernels. We use Featherstone’s spatial algebra [15]: 𝑋 𝑘 is the spatial transform from parent to child frame, 𝐼 𝑘 the spatial inertia, and 𝑆 𝑘 the joint motion subspace (a unit 6-vector for 1-DoF joints). The operators crm (·) and crf (·) denote the 6 × 6 motion and force cross-product matrices, with shorthand 𝑣 ×𝑚 𝑢 = crm (𝑣 ) · 𝑢 and 𝑣 ×∗ 𝑓 = crf (𝑣 ) · 𝑓 . Bar notation ( ¯𝑣 , ¯𝑓 ) indicates adjoint variables, i.e., gradients with respect to that quantity. The scalar 𝑚 𝑘 is the mimic joint multiplier, and 𝑗 𝑘 
+
+maps link 𝑘 to its actuated joint index. 
+
+chronized via __syncwarp() rather than block-level __syncthreads() , reducing synchronization overhead. Global memory loads are issued as float4 vectors to ensure coalesced access. Algorithms 4–5 detail the forward and VJP kernels. Our design achieves 14 × speedup over Newton 
+
+and is within 1.5–2 × of GRiD at trajectory optimization batch sizes, while supporting runtime payload changes, PyTorch interoperability, and humanoid-scale robots. Importantly, RNEA constitutes only 24% of trajectory optimization time and 29% of total motion planning time (Sec. 7.2), so the end-to-end overhead of dynamics-aware planning remains modest. 
+
+## 7. Experimental Results 
+
+We evaluate cuRoboV2 on dynamics-aware motion planning benchmarks and profile the planning pipeline (Secs. 7.1–7.2), benchmark the key computational components, namely inverse dynamics (Sec. 7.3), high-DoF inverse kinematics (Sec. 7.4), and ESDF generation (Sec. 7.6), and demonstrate two applications: hu-
+
+> 19 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+manoid motion retargeting and locomotion policy training (Sec. 7.5), and real-world manipulation with live depth fusion (Sec. 7.7). Unless stated otherwise, all experiments were run on an NVIDIA RTX 4090 GPU. 
+
+7.1. Dynamics-Aware Planning Success - No Payload (%)     
+
+> 0
+> 25
+> 50
+> 75
+> 100
+> 95.5
+> 95.8
+> 98.0
+> 97.1
+> 99.7
+> Success - Full Payload (%)
+> 0
+> 25
+> 50
+> 75
+> 100
+> 71.5
+> 75.4
+> 77.1
+> 97.1
+> 99.7
+> Planning Time (s)
+> 0.0
+> 0.2
+> 0.4
+> 0.004
+> 0.57
+> 0.036
+> 0.34
+> 0.048
+> Motion Time (s)
+> 0
+> 2
+> 4
+> 6
+> 5.79
+> 4.94
+> 1.37
+> 1.57
+> 1.55
+> Energy (J)
+> 0
+> 50
+> 100
+> 150
+> 160
+> 131
+> 116
+> 119
+> 106
+> Path Length (rad)
+> 0
+> 2
+> 4
+> 6
+> 6.67
+> 4.83
+> 3.78
+> 4.06
+> 3.84
+> VAMP-RRTC VAMP-AORRTC cuRobo cuRobo+NewtonDyn cuRoboV2
+
+Figure 11: Motion Planning Results (75th percentile). Top: Kinematic success (solid) vs. dynamics success with 3 kg payload (hatched). Methods without dynamics constraints fail when torque limits are checked, even at zero payload. Middle/Bottom: Our cuRoboV2 achieves the highest payload success (99.7%) and lowest energy (106 J), without sacrificing other trajectory quality metrics. 
+
+We evaluate our B-spline trajectory optimization (Sec. 4) on the MotionBenchMaker [7] and M 𝜋 Nets [16] datasets, comprising 2600 problems in cluttered environments for the Franka Panda. We compare against VAMP [68], a state-of-the-art sampling-based planner with post-hoc time-optimal parameterization (RRT-Connect (RRTC) and asymptotically-optimal AORRTC [71] variants), and cuRobo [66], a GPU-accelerated trajectory optimizer. We also evaluate cuRobo extended with inverse dynamics constraints. We report three success metrics: kinematic success (collision-free with position, velocity, and accel-eration limits), zero-payload dynamics success (additionally checking torque limits without payload), and payload dynamics success (torque limits with 3 kg end-effector payload). Fig. 11 summarizes the results. While all optimization-based methods achieve >99% kinematic success, the gap emerges when dynamics are checked: even without payload, cuRobo drops from 99.8% to 97.9% and sampling-based methods fall from 98.9% to 95.5–95.8%, while cuRoboV2 maintains 99.7%. Under full payload, the difference is stark: 
+
+cuRoboV2 maintains 99.7% success while cuRobo drops to 77.1% and sampling-based methods fall to 72– 75%. This validates our core claim: trajectories planned without dynamics constraints become infeasible even without payload, and the problem is exacerbated under realistic loads. The B-spline formulation also yields superior trajectory quality. At 75th percentile (Fig. 11), cuRoboV2 
+
+achieves the lowest energy consumption (106 J vs. 116 J for cuRobo and 131–160 J for VAMP), since the B-spline formulation produces inherently smooth trajectories and the optimizer explicitly minimizes an energy cost. cuRoboV2 requires only 48 ms planning time (vs. 36 ms for cuRobo ), a modest overhead for guaranteed executable trajectories that eliminate costly re-planning at execution time. cuRoboV2 solves 66 more payload problems than cuRobo +NewtonDyn (2591 vs. 2525 of 2600), showing that B-splines’ implicit smoothness yields a better-conditioned optimization landscape than per-timestep parameterizations. 
+
+> 20 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+Figure 12: Trajectory profiles for the same motion planning problem (each color denotes one joint). Left: cuRobo’s per-timestep optimization produces discontinuous acceleration and jerk. Right: cuRoboV2’s B-spline optimization yields smooth, continuous derivatives suitable for real robot execution. 
+
+Fig. 12 compares trajectories from cuRoboV2 (B-spline optimization) and cuRobo (per-timestep joint position optimization). Both solvers start from the same seed and run for an equal number of iterations. Optimizing directly in joint position space produces non-smooth acceleration and jerk profiles, whereas B-spline optimization yields clean, continuous derivatives by construction. Trajectories planned without dynamics constraints become infeasible under payload. cuRoboV2 ’s B-spline formulation maintains >99% success while naturally producing smooth, continuous derivatives suitable for real robot execution at full payload (3 kg). 
+
+7.2. Runtime Breakdown 
+
+We profile cuRoboV2 ’s motion planning pipeline on an NVIDIA RTX 4090 GPU with torch.compile en-abled, comparing execution with and without dynamics constraints. Table 3 shows the kernel execution time breakdown across the three planning phases, along with end-to-end wall-clock times that include Python and CUDA graph launch overhead. Enabling dynamics adds 9.38 ms (+44%) to kernel execution time, distributed across IK solving (+3.70 ms) and trajectory optimization (+5.69 ms). The seed IK phase remains unaffected as it only computes an initial configuration without dynamics evaluation. The RNEA kernels add 5.12 ms (23.8%) to TrajOpt when dynamics is enabled. Including all overhead, the end-to-end planning wall-clock time is 35 ms without dynamics and 42 ms with dynamics. Notably, the end-to-end increase is only +7 ms despite +9.38 ms in kernel time: CUDA streams run independent kernels in parallel (e.g., cost, kinematics, and dynamics kernels), so the added dynamics kernels partially overlap with existing computation rather than executing sequentially. CUDA graphs further batch these launches into a single 
+
+> 21 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+invocation with fixed overhead, and because dynamics adds more GPU work, a larger fraction of this fixed launch overhead is hidden behind kernel execution. 
+
+Table 3: Planning time per phase with and without dynamics constraints. %Kernel shows fraction of total kernel execution time; %Total shows fraction of end-to-end wall-clock time. The gap between Kernel Total and End-to-end is CUDA graph launch and Python overhead. 
+
+No Dynamics With Dynamics Phase Time %Kernel %Total Time %Kernel %Total 𝚫 
+
+Seed IK (LM) 0.74 ms 3.5 2.1 0.74 ms 2.4 1.8 —IK Solver (L-BFGS) 4.87 ms 22.7 13.9 8.57 ms 27.8 20.4 +3.70 ms TrajOpt (MPPI+L-BFGS) 15.82 ms 73.8 45.2 21.51 ms 69.8 51.2 +5.69 ms 
+
+Kernel Total 21.44 ms 100 61.3 30.83 ms 100 73.4 +9.38 ms End-to-end (wall-clock) 35 ms 100 42 ms 100 +7 ms 
+
+Table 4: Full planning time breakdown with dynamics enabled. Per-Iter is within TrajOpt (132.8 𝜇 s/iter, 162 iterations). %Kernel is relative to the kernel total (30.83 ms); %Total is relative to end-to-end wall-clock time (42 ms). 
+
+Kernel TrajOpt/Iter TrajOpt IK+TrajOpt %Kernel %Total 
+
+RNEA (fwd + bwd) 31.6 𝜇 s 5.12 ms 8.82 ms 28.6 21.0 Swept-sphere collision 21.0 𝜇 s 3.41 ms 3.41 ms 11.1 8.1 L-BFGS + line search 15.2 𝜇 s 2.46 ms 3.31 ms 10.7 7.9 Kinematics (fwd + bwd) 14.4 𝜇 s 2.33 ms 4.03 ms 13.1 9.6 Cspace + pose + speed costs 9.5 𝜇 s 1.54 ms 2.07 ms 6.7 4.9 Self-collision 5.1 𝜇 s 0.83 ms 0.83 ms 2.7 2.0 B-spline 3.6 𝜇 s 0.58 ms 0.58 ms 1.9 1.4 Elementwise + reduce 23.3 𝜇 s 3.77 ms 5.07 ms 16.4 12.1 Other 9.1 𝜇 s 1.47 ms 1.97 ms 6.4 4.7 IK + TrajOpt 132.8 𝜇 s 21.51 ms 30.09 ms 97.6 71.6 Seed IK (LM) — — 0.74 ms 2.4 1.8 
+
+Kernel Total 21.51 ms 30.83 ms 100 73.4 End-to-end (wall-clock) 42 ms 100 
+
+Kernel Time Breakdown 
+
+Table 4 shows the dominant GPU kernels with dynamics enabled, broken down by TrajOpt (162 itera-tions) and the full IK + TrajOpt pipeline. RNEA dominates the compute budget at 29% of the full pipeline when dynamics is enabled, growing from 5.12 ms in TrajOpt alone to 8.82 ms when IK is included. Despite this overhead, the total planning time of 30.83 ms enables real-time motion generation at >30 Hz, making dynamics-aware planning practical for reactive manipulation. At the per-iteration level, RNEA adds 31.6 𝜇 s, increasing the per-iteration cost from 97.7 𝜇 s to 132.8 𝜇 s (+36%). Enabling dynamics constraints adds only +7 ms to end-to-end planning time (35 ms → 42 ms), a modest overhead that prevents the 22–27% payload success drop seen in methods that plan without dynamics constraints. 
+
+> 22 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+7.3. Inverse Dynamics Comparison 
+
+We benchmark our inverse dynamics implementation against GRiD [57], which generates robot-specific 
+
+CUDA kernels via code synthesis, and Newton [48], a general-purpose GPU simulation library. We evaluate on three robot configurations: a 7-DoF single arm, a 12-DoF bimanual system, and a 48-DoF humanoid, measuring forward and backward pass times across batch sizes from 1 to 8192 (Fig. 13). On the 7-DoF arm at batch size 256, GRiD achieves 18.8 𝜇 s while cuRoboV2 requires 29.3 𝜇 s, a 1.5 ×
+
+overhead compared to GRiD ’s code-generated kernels. However, cuRoboV2 outperforms Newton (400.0 𝜇 s) by 14 ×. The gap widens on the 12-DoF bimanual robot, where cuRoboV2 (45.0 𝜇 s) is 2 × slower than GRiD 
+
+(21.5 𝜇 s) but 15 × faster than Newton (661.2 𝜇 s). The critical advantage of cuRoboV2 emerges on the 48-DoF humanoid: GRiD fails entirely due to shared memory limits in its code-generated kernels, while cuRoboV2 
+
+scales gracefully at 96.2 𝜇 s (batch size 256). Newton completes in 1712.9 𝜇 s, making cuRoboV2 18 × faster. This scalability to high-DoF systems is essential for planning on complex robots. 
+
+cuRoboV2 scales gracefully from single-arm manipulators to full humanoids, running 14–18 × faster than Newton , a general-purpose physics engine. Code-generated kernels ( GRiD ) are 1.5–2 × faster on simple arms but hit shared memory limits and fail entirely on the 48-DoF humanoid, making cuRoboV2 
+
+the only viable option for high-DoF systems. 1 64 256 1K 4K 8K              
+
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> Time (  s)
+> 18.8
+> 400.0
+> 29.3
+> TrajOpt Batch
+> Single Arm (7)
+> 164 256 1K 4K 8K
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> 21.5
+> 661.2
+> 45.0
+> Bimanual (12)
+> 164 256 1K 4K 8K
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> 1712.9
+> 96.2
+> Humanoid (48)
+> GRiD Newton
+> 0
+> 5
+> 10
+> 15
+> 20
+> Time Ratio
+> (batch=256)
+> 0.6x
+> 13.7x
+> cuRoboV2
+> GRiD Newton
+> 0
+> 5
+> 10
+> 15
+> 20
+> 0.5x
+> 14.7x
+> cuRoboV2
+> GRiD Newton
+> 0
+> 5
+> 10
+> 15
+> 20
+> Failed
+> 17.8x
+> cuRoboV2
+> GRiD Newton cuRoboV2
+
+Figure 13: Inverse dynamics performance (forward + backward pass) across batch sizes. cuRoboV2 is 1.5– 2× slower than GRiD’s code-generated kernels on simple robots but 14–18 × faster than Newton. Critically, GRiD fails on the 48-DoF humanoid due to shared memory limits, while cuRoboV2 scales gracefully. 
+
+7.4. High-DoF Inverse Kinematics 
+
+We evaluate the scalability of our kinematics and self-collision (Sec. 6) across three robots of increasing complexity: a 7-DoF Franka Panda, a 12-DoF dual-UR10e system, and a 48-DoF Unitree G1 humanoid. We compare against cuRobo [66], Newton [48], and PyRoki [35]. 
+
+> 23
+
+cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots 
+
+Fast Kinematics and Self-Collision 
+
+Fig. 14 benchmarks the forward and backward pass at batch size 1000. Without self-collision (a), our data-driven architecture delivers consistent speedups: 3–5 × over cuRobo , 16–19 × over Newton , and 62–86 ×
+
+over PyRoki . The advantage grows with robot complexity, as our parallel branching kinematics avoids serial tree traversal. Adding self-collision (b) amplifies the gap: the G1 humanoid has 162k collision pairs (vs. 818 for Franka), and our map-reduce approach achieves 61 × speedup over cuRobo and 42 × over PyRoki .This throughput enables the applications below. Single Arm (7-dof) Bimanual (12-dof) Humanoid (48-dof)            
+
+> 10 3
+> 10 2
+> 10 1
+> 10 0
+> 10 1
+> Time (ms)
+> 1.06 1.43 3.80 0.27 0.36 0.85 0.05 0.10 0.21 0.02 0.02 0.04
+> Single Arm (7-dof) Bimanual (12-dof) Humanoid (48-dof)
+> 0
+> 25
+> 50
+> 75
+> 100
+> Relative Time (BOLT=1.0)
+> 62.8 64.2 86.2 16.1 16.1 19.2 3.2 4.7 4.8 1.0 1.0 1.0
+> Pyroki Newton cuRobo cuRoboV2 Single Arm (7-dof) Bimanual (12-dof) Humanoid (48-dof)
+> 10 3
+> 10 2
+> 10 1
+> 10 0
+> 10 1
+> 10 2
+> Time (ms)
+> 2.27 3.35 12.45 0.06 0.12 18.25 0.03 0.03 0.30
+> Single Arm (7-dof) Bimanual (12-dof) Humanoid (48-dof)
+> 0
+> 100
+> 200
+> Relative Time (BOLT=1.0)
+> 83.0 113.2 41.8 2.3 3.9 61.2 1.0 1.0 1.0
+> Pyroki cuRobo cuRoboV2
+
+(a) Kinematics Fwd + Bwd (b) Kinematics + Self-Collision Fwd + Bwd 
+
+Figure 14: Kinematics and self-collision performance (batch size 1000). (a) Forward and backward pass without self-collision. (b) With self-collision, cuRoboV2 achieves 61 × speedup over cuRobo on the hu-manoid via map-reduce. These fast building blocks enable scalable IK and retargeting. 0                
+
+> 50
+> 100
+> Success %
+> 100.0
+> 98.2
+> 49.8
+> 100.0
+> 99.4
+> 98.4
+> 100.0
+> 100.0
+> 0.0
+> 100.0
+> 100.0
+> 100.0
+> 10 1
+> 10 2
+> 10 3
+> Time (ms)
+> 5.1 7.7
+> 1123.5
+> 1.8 2.3
+> 317.0
+> 6.3 8.7
+> 2.7 6.1
+> 33.9
+> Single Arm
+> (7-dof)
+> Bimanual
+> (12-dof)
+> Humanoid
+> (48-dof)
+> 10 1
+> 10 0
+> 10 1
+> Error (  m)
+> 0.4
+> 59.1
+> 18.3
+> 0.2
+> 0.9
+> 10.0
+> 3.9 4.0
+> 0.1 0.2
+> 1.0
+> Pyroki Newton cuRobo cuRoboV2 0
+> 50
+> 100
+> Success %
+> 100.0
+> 77.2
+> 0.0
+> 100.0
+> 99.0
+> 0.0
+> 100.0
+> 99.2
+> 99.6
+> 10 1
+> 10 2
+> Time (ms)
+> 77.4
+> 177.1
+> 12.7 13.7
+> 2.7
+> 13.1
+> 532.5
+> Single Arm
+> (7-dof)
+> Bimanual
+> (12-dof)
+> Humanoid
+> (48-dof)
+> 10 0
+> 10 2
+> Error (  m)  388.4 629.1
+> 3.7 10.2
+> 0.1 0.2
+> 2.4
+> Pyroki cuRobo cuRoboV2
+
+(a) IK (b) Self-Collision-Free IK 
+
+Figure 15: IK results (batch size 100). (a) Standard IK: all methods achieve near-perfect success on single-arm robots; on the 48-DoF humanoid, cuRoboV2 reaches 100% success while PyRoki drops to 49.8%. (b) Self-collision-free IK: cuRoboV2 achieves 99.6% success on the humanoid via LM seeding followed by L-BFGS refinement; cuRobo and PyRoki both fail completely (0%). 
+
+24 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots 
+
+Global Inverse Kinematics 
+
+For standard IK without collision avoidance, all methods achieve near-perfect success on single-arm robots (Fig. 15), though cuRoboV2 reaches lower position error (0.13 𝜇 m vs. 0.43 𝜇 m for PyRoki and 3.9 𝜇 m for 
+
+cuRobo ) thanks to our efficient Jacobian computation enabling Levenberg-Marquardt optimization. The scalability advantage appears on the 48-DoF humanoid: cuRoboV2 achieves 100% success with 0.96 𝜇 mposition error in 34 ms, while Newton reaches 98.4% with 10 𝜇 m error in 317 ms (9 × slower) and PyRoki 
+
+only 49.8% with 18 𝜇 m error in 1123 ms (33 × slower). Note: results from PyRoki ’s paper do not verify joint limit satisfaction. 
+
+Collision-Free IK 
+
+When self-collision avoidance is enabled (Fig. 15), the gap widens further: cuRoboV2 achieves 99.6% success on the humanoid with 2.4 𝜇 m position error in 533 ms, while both cuRobo and PyRoki fail completely (0%). This success stems from our two-stage approach: Levenberg-Marquardt first solves the pose objective (nonlinear least squares), providing a good initialization at the target; L-BFGS then refines under collision constraints, leveraging its strength on non-convex objectives. Our scalable kinematics and self-collision implementation make this seeding strategy computationally tractable for high-DoF systems. For highly articulated systems like humanoids, a two-stage optimization strategy (LM seeding followed by L-BFGS refinement) is crucial for finding collision-free IK solutions. Our parallel branching kinemat-ics and map-reduce collision checking make this strategy computationally tractable, achieving 99.6% success where prior methods fail completely. mink PyRoki cuRoboV2 
+
+Figure 16: Retargeting visual comparison across mink (top), PyRoki (middle), and cuRoboV2 (bottom) during a crawling sequence. The sequence requires hands to cross: mink produces self-collisions (no self-collision handling, see red circle), PyRoki avoids collision but fails near contact boundaries, preventing the hands from crossing. cuRoboV2 resolves self-collisions gracefully, achieving accurate non-colliding retargeting. 
+
+> 25 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+7.5. Humanoid Retargeting 
+
+7.5.1. Motion Retargeting Quality 
+
+We use the GMR library [1] to map over 70k frames of human motion from the LeFan dataset to the Uni-tree G1 humanoid, swapping out the default IK solver ( mink ) with different methods. Fig. 16 illustrates a crawling sequence where hands must cross: mink produces self-collisions, PyRoki avoids them but fails near contact boundaries, and cuRoboV2 resolves the crossing gracefully. Trajectories are interpolated from 30 fps to 120 fps and validated for joint limits, self-collision, and ground contact (Fig. 17). cuRoboV2 -MPC achieves 96.6% constraint satisfaction, followed by cuRoboV2 -IK at 89.5%, PyRoki at 61.2%, and mink at 40.6%. Even among per-frame solvers, cuRoboV2 -IK outperforms baselines due to its LM+L-BFGS seeding strategy for finding collision-free solutions. The further gain from MPC stems from checking collisions be-tween frames via its trajectory representation, whereas IK methods only enforce constraints at each discrete frame; interpolation-induced collisions cause IK failures. Mink Pyroki-IK cuRoboV2-IK cuRoboV2-MPC 
+
+> 0
+> 50
+> 100
+> 150
+> Position Error (mm)
+
+24 
+
+101 
+
+31 
+
+164    
+
+> Mink Pyroki-IK cuRoboV2-IK cuRoboV2-MPC
+> 0
+> 5
+> 10
+> Rotation Error (deg)
+
+1.36 1.86 1.79 
+
+9.92     
+
+> All Constraints Within Joint
+> Limits
+> Self Collision
+> Free
+> World Collision
+> Free
+> 0
+> 50
+> 100
+> Valid %
+> 40.6
+> 88.9
+> 53.8
+> 80.3
+> 61.2
+> 68.0
+> 76.8
+> 99.6
+> 89.5
+> 100.0
+> 89.7
+> 99.8
+> 96.6
+> 100.0
+> 96.6
+> 100.0
+> Mink Pyroki-IK cuRoboV2-IK cuRoboV2-MPC
+
+Figure 17: Humanoid motion retargeting on the G1 (70k frames). cuRoboV2-IK achieves 89.5% constraint satisfaction vs. PyRoki 61.2% and mink 40.6%, thanks to LM+L-BFGS seeding for collision-free solutions. MPC reaches 96.6% by checking collisions between frames but at the cost of tracking accuracy. 
+
+However, cuRoboV2 -MPC’s pose tracking accuracy is worse than cuRoboV2 -IK’s, as MPC solves a harder optimization problem that enforces smoothness and collision constraints across waypoints with-
+
+> 26 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+out the benefit of the LM optimizer. We therefore recommend cuRoboV2 -IK for retargeting, which already substantially outperforms existing methods by providing joint configurations that are not only accurate but also self-collision-free and scene-collision-free. As shown in Sec. 7.5.2, cuRoboV2 -IK already produces sig-nificantly better downstream policies than all baselines, making it our recommended retargeting method. Exploring MPC’s inter-frame collision checking for policy learning is left to future work. 
+
+7.5.2. Locomotion Policy Training 0              
+
+> 20
+> 40
+> 60
+> Episode Length (%)
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> Return (%)
+> 30
+> 40
+> 50
+> 60
+> 70
+> Per-Step Return (%)
+> 0500 1000 1500 2000
+> Samples (M)
+> 0
+> 20
+> 40
+> 60
+> 80
+> Episode Length (%)
+> 0500 1000 1500 2000
+> Samples (M)
+> 0
+> 20
+> 40
+> 60
+> Return (%)
+> 0500 1000 1500 2000
+> Samples (M)
+> 30
+> 40
+> 50
+> 60
+> 70
+> Per-Step Return (%)
+> mink (n=5) PyRoKi (n=5) cuRoboV2 (n=5)
+
+Figure 18: Policy training curves (normalized to %). On running (top), PyRoki plateaus at 26% episode length due to repeated falls. On crawling (bottom), cuRoboV2 and mink appear similar, but evaluation (Fig. 19) reveals mink’s reward comes from imitating self-colliding poses. 
+
+To validate that retargeting quality translates to downstream policy performance, we train locomotion policies for the Unitree G1 using MimicKit [55], which implements DeepMimic [56] on Newton’s MujocoW-arp simulator. We retarget two motion segments (20 s running, 30 s crawling) using cuRoboV2 -IK, mink ,and PyRoki , then train each configuration for 2 billion samples across 5 seeds. We evaluate root velocity error, mean per-joint position error (MPJPE), alive rate, and episode resets (Figs. 18, 19). The training curves and evaluation metrics reveal two qualitatively different failure modes depending on the motion and the retargeting method. On running (Fig. 20a), cuRoboV2 and mink achieve comparable tracking performance (MPJPE 139.6 vs. 138.9 mm) with identical alive rates (99.7%) and zero resets, since running involves minimal self-collision risk and both solvers produce valid reference motions. mink slightly outperforms cuRoboV2 on all train-ing metrics (PSR 73% vs. 70%, return 51% vs. 46%, episode length 70% vs. 65%), confirming that when self-collision is not a factor, mink ’s lack of collision handling carries no penalty. In contrast, PyRoki ’s constraint-violating reference motions (61.2% constraint satisfaction, Sec. 7.5) cause the policy to fall re-peatedly, resulting in an average episode length of only 26% compared to 65% for cuRoboV2 and 70% for 
+
+mink . These short episodes starve the policy of learning signal: the PSR plateaus at 58% while the other methods reach 70% and 73%. The consequence is a vicious cycle in which the policy never learns to sustain the high velocities required for running, accumulating 13.2 resets and 32% higher MPJPE (183.1 mm). On crawling (Fig. 20b), where limbs must cross and self-collision handling is critical, the training curves          
+
+> 27 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots 0
+> 1
+> 2
+> 3
+> 4
+> Velocity Error (m/s)
+> Velocity Error (m/s)
+> 100
+> 150
+> 200
+> 250
+> MPJPE (mm)
+> MPJPE (mm)
+> IK Ref
+> Policy
+> 010 20
+> 90
+> 92
+> 94
+> 96
+> 98
+> 100
+> Uptime (%)
+> Uptime Rate
+> mink
+> PyRoKi
+> cuRoboV2
+> mink PyRoKi cuRoboV2
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> Velocity Error (m/s)
+> mink PyRoKi cuRoboV2
+> 100
+> 125
+> 150
+> 175
+> 200
+> 225
+> MPJPE (mm)
+> 010 20 30
+> Time (s)
+> 90
+> 92
+> 94
+> 96
+> 98
+> 100
+> Uptime (%)
+
+Figure 19: Evaluation box plots across 5 seeds. Top: running; bottom: crawling. cuRoboV2 achieves the lowest MPJPE with tight variance, while mink exhibits 12 × higher MPJPE variance on crawling (174.1 ±50.7 vs. 151.4 ±4.5 mm). 
+
+tell a subtler and more informative story. The return and episode length for cuRoboV2 and mink appear nearly identical throughout training (return 59% vs. 59%; episode length 77% vs. 79% at 2B samples), and even the PSR gap is modest (76% vs. 74%). A naïve reading of the training curves would suggest comparable performance. However, the evaluation metrics (Fig. 19) reveal a stark difference: cuRoboV2 achieves an MPJPE of 151.4 ±4.5 mm, while mink reaches 174.1 ±50.7 mm, exhibiting 12 × higher variance across seeds. Because mink does not handle self-collision, its reference motions contain poses where limbs interpenetrate. The reinforcement learning loss drives the policy to imitate these infeasible configurations, pushing it toward self-colliding and ground-penetrating states that trigger resets. Whether a given seed converges to a reasonable policy depends on whether the optimizer finds a path that avoids the worst constraint violations, explaining the large seed-to-seed variability. PyRoki accumulates twice the resets of cuRoboV2 
+
+(4.6 vs. 2.2). Across both motions, cuRoboV2 yields the best overall policy: lowest MPJPE (145.5 mm), highest alive rate (99.6%), and fewest resets (1.1). This analysis highlights an important methodological point: standard training metrics (return, episode length, and PSR) are necessary but insufficient for evaluating retargeting quality. All three can appear healthy while the policy tracks physically infeasible reference poses. Down-stream pose accuracy and cross-seed consistency are the metrics that reveal the true impact of reference motion quality. The same RL framework (MimicKit) and the same policy architecture are used across all experiments; the only variable is the IK solver used for retargeting. The results therefore isolate the effect of retargeting quality on policy performance: collision-free, joint-limit-satisfying reference motions from 
+
+cuRoboV2 -IK produce policies that are not only more accurate but also more reliably trainable. 
+
+> 28 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+PyRoki 
+
+cuRoboV2 
+
+mink 
+
+(a) Running PyRoki 
+
+cuRoboV2 
+
+mink 
+
+(b) Crawling 
+
+Figure 20: Learned locomotion policies on the Unitree G1. (a) Running: PyRoki’s policy falls at high velocity. (b) Crawling: mink’s policy resets from self-collision and ground penetration. cuRoboV2 succeeds on both. cuRoboV2 -IK’s collision-free retargeting (89.5% constraint satisfaction vs. 61% PyRoki , 41% mink ) di-rectly improves policy training: 21% lower MPJPE and 8 × fewer resets than PyRoki on running, and 12 × lower cross-seed MPJPE variance than mink on crawling. 
+
+7.6. Fast and Safe ESDF at mm-Resolution 
+
+We evaluate our ESDF generation pipeline against nvblox [50], a GPU-accelerated TSDF/ESDF library. Both methods process the same depth images from the Redwood bedroom scene [54]. cuRoboV2 uses a fixed 20 mm ESDF voxel size across all TSDF resolutions; when the TSDF voxel size exceeds 20 mm, the ESDF resolution matches the TSDF. nvblox requires matching TSDF and ESDF resolutions. We measure depth image to ESDF generation time, GPU memory, and collision recall (Fig. 21). To ensure a fair comparison, recall is computed only over the region where nvblox produces valid distance values, so both methods are evaluated on the same set of query points. Fig. 21 compares cuRoboV2 against nvblox across TSDF resolutions (10–25 mm) at two workspace cov-erage levels. At 10 mm TSDF resolution with full workspace coverage, cuRoboV2 generates the complete ESDF in 1.69 ms vs. 12.68 ms for nvblox , a 7 × speedup, while using 7 × less memory (1.63 GB vs. 11.87 GB)                                                          
+
+> 29 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots 5.0 10 15 20 25
+> 0
+> 5
+> 10 Time (ms)
+> 12.7 5.0 3.0 2.2 2.4 1.7 1.6 1.5 1.2
+> OOM
+> Workspace 8m x 8m x 8m, ESDF 4m x 4m x 4m
+> 5.0 10 15 20 25
+> 0
+> 5
+> 10 GPU Memory (GB)  11.9 4.7 2.6 1.7 4.8 1.6 1.0 0.8 0.7
+> OOM
+> 5.0 10 15 20 25
+> 0
+> 25
+> 50
+> 75
+> 100 Collision Recall (%)
+> 92 90 85 83 79 93 97 97 95 OOM
+> 5.0 10 15 20 25
+> TSDF Voxel Size (mm)
+> 0
+> 5
+> 10 Time (ms)
+> 7.4 3.1 2.0 1.4 0.8 0.7 0.7 0.7 0.6
+> OOM
+> Workspace 4m x 4m x 4m, ESDF 2m x 2m x 2m
+> 5.0 10 15 20 25
+> TSDF Voxel Size (mm)
+> 0
+> 5
+> 10 GPU Memory (GB)
+> 6.3 2.3 1.4 1.0 1.6 0.8 0.6 0.5 0.5
+> OOM
+> 5.0 10 15 20 25
+> TSDF Voxel Size (mm)
+> 0
+> 25
+> 50
+> 75
+> 100 Collision Recall (%)
+> 77 74 72 67 70 78 80 80 80
+> OOM
+> nvblox cuRoboV2
+
+Figure 21: ESDF benchmark across TSDF resolutions (10–25 mm) at 50% and 100% workspace cover-age. cuRoboV2 achieves 2–10 × lower total time and 2–8 × less memory than nvblox across all configu-rations, while maintaining higher collision recall. TSDF integration time is comparable across methods; the speedup stems from PBA+ distance propagation. Recall is computed only over the region where nvblox produces valid distances. 
+
+and matching recall (92.5% vs. 92.0%). At 20 mm, the advantage persists: cuRoboV2 achieves 1.52 ms vs. 2.97 ms with 97.0% recall (vs. 85.4% for nvblox ) in 3 × less memory (0.82 GB vs. 2.55 GB). Since the benchmark plots report only total time, we detail the TSDF/ESDF breakdown here. TSDF integration time is comparable across methods, 0.50–0.55 ms for cuRoboV2 vs. 0.30–0.76 ms for nvblox ,confirming that integration is not the bottleneck. The speedup comes entirely from ESDF generation: at 10 mm (100% coverage), our PBA+ propagation completes in 1.15 ms vs. 11.93 ms for nvblox ’s iterative block-based ESDF updates [50], a 10 × improvement. ESDF accounts for 94% of nvblox ’s total time but only 68% of ours. Although our dense PBA+ recomputes the full distance field each frame, this is faster than incremental approaches because the computation is fully separable, requires a fixed number of kernel launches, and is CUDA -graph compatible. The recall gap is partly attributable to TSDF weight thresholding: nvblox ’s distance-based weighting couples noise rejection and surface fidelity into a single parameter that is difficult to tune, whereas our pixel-count-based voting decouples the two, making it easier to set a threshold that retains valid surfaces without amplifying noise. Fig. 22 compares our two seeding strategies. With scatter seeding, the ESDF stage takes 0.45 ms at 10 mm (50% coverage) vs. 0.30 ms with gather, a 1.5 × reduction from eliminating atomic contention. At full workspace coverage, gather’s ESDF time increases to 1.54 ms (vs. 1.15 ms for scatter) because the gather kernel iterates over all ESDF voxels regardless of occupancy, while scatter only visits allocated TSDF blocks. Despite this, gather’s total time remains competitive (2.08 ms vs. 1.69 ms) and it enables CUDA graph cap-ture of the entire ESDF pipeline, which is critical for achieving deterministic latency in real-time control loops. 
+
+> 30
+
+cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots 5.0 10 15 20 25 
+
+TSDF Voxel Size (mm) 
+
+0
+
+1
+
+2
+
+3Time (ms)            
+
+> 1.2 0.9 0.9 0.9 0.8 0.8 0.7 0.7 0.7 0.6
+> Half Workspace (4m × 4m × 4m)
+> 5.0 10 15 20 25
+
+TSDF Voxel Size (mm) 
+
+0
+
+1
+
+2
+
+3Time (ms)         
+
+> 2.7 1.7 1.6 1.5 1.2 2.4 2.1 2.0 2.0 1.3
+> Full Workspace (8m × 8m × 8m)
+> 5.0 10 15 20 25
+
+TSDF Voxel Size (mm) 
+
+0
+
+20 
+
+40 
+
+60 
+
+80 
+
+100 Collision Recall (%)         
+
+> 82 93 97 97 95 79 93 99 99 99
+> Full Workspace Recall
+> cuRoboV2 (scatter) cuRoboV2 (gather)
+
+Figure 22: Scatter vs. gather seeding strategies. Gather achieves lower total time (e.g., 0.73 ms vs. 0.87 ms at 10 mm, 50% coverage) and enables CUDA graph capture due to its fixed launch dimension, with comparable or slightly higher recall. 
+
+The recall difference between the two strategies is governed by the TSDF-to-ESDF resolution ratio 
+
+𝑟 = 𝑣 esdf /𝑣 tsdf . Scatter seeds exactly those ESDF cells containing a TSDF surface voxel center, producing a surface band exactly one ESDF voxel thick. Gather’s 7-point stencil (center plus six face centers at ± 12 𝑣 esdf )probes positions at cell boundaries, reading TSDF voxels that belong to neighboring ESDF cells. This effec-tively dilates the seed band to ∼1.5 voxels, giving PBA+ more surface sites near boundaries and reducing distance errors at surface-adjacent voxels. When the TSDF is much finer than the ESDF ( 𝑟 ≥ 4), scatter checks ∼𝑟 3 TSDF voxels per ESDF cell, far exceeding gather’s 7 probes, and achieves slightly higher recall (e.g., +2.5% at 𝑟 =4). When the TSDF and ESDF resolutions are comparable ( 𝑟 ≈ 1), scatter checks only 1–2 TSDF voxels per cell, and gather’s denser sampling dominates (e.g., +2–4% recall at 𝑟 =1). The crossover occurs near 𝑟 ≈ 2, where both strategies sample at similar density. 1.5 1.0 0.5 0.0 0.5 1.0 1.5 X (m)             
+
+> 1.5
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> Y (m)
+> ICP ESDF
+> 1.5 1.0 0.5 0.0 0.5 1.0 1.5 X (m)
+> 1.5
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> Y (m)
+> NVBlox ESDF (gray = unobserved)
+> 1.5 1.0 0.5 0.0 0.5 1.0 1.5 X (m)
+> 1.5
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> Y (m)
+> cuRoboV2 ESDF
+> 1.00
+> 0.75
+> 0.50
+> 0.25
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> Distance (m)
+
+Figure 23: Signed distance field cross-section (4 m × 4 m slice) at 100% workspace coverage. nvblox (mid-dle) produces distances only within allocated blocks, leaving gaps in unobserved regions. cuRoboV2 (right) covers the full workspace, closely matching the ground-truth SDF (left). 
+
+Unlike nvblox , which requires matching TSDF and ESDF resolutions, our method supports heteroge-neous resolutions: we maintain a fine TSDF (e.g., 5 mm) for reconstruction fidelity while generating the ESDF at a task-appropriate resolution (e.g., 10–20 mm). Since the robot is approximated by collision spheres (1–5 cm diameter), 10 mm ESDF resolution is sufficient, and finer grids yield diminishing returns. nvblox 
+
+cannot adopt this strategy, as a 5 mm TSDF forces a 5 mm ESDF, inflating both memory and compute. Fig. 23 shows a qualitative cross-section of the distance field from the Redwood dataset. nvblox produces 
+
+31 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots 
+
+signed distances only within allocated blocks, leaving gaps in unobserved regions. cuRoboV2 generates a dense ESDF covering the full workspace via PBA+ propagation, providing 𝑂 (1) distance queries every-where. Minor surface discrepancies (missed or spurious surfaces) remain, as the TSDF weight threshold requires tuning to balance noise rejection and surface retention. When known geometry (e.g., tables, shelves) is stamped into the TSDF, collision queries become 𝑂 (1)
+
+trilinear lookups in the ESDF rather than per-cuboid analytical SDF evaluations. On the motion planning benchmark, this reduces mean planning time by 19% (47 ms to 38 ms) with negligible impact on success rate ( Δ = −0.12% ). By decoupling TSDF and ESDF resolutions, cuRoboV2 builds manipulation-scale distance fields up to 10 × faster with 8 × less memory than nvblox . These fast 𝑂 (1) distance queries directly translate to a 19% reduction in motion planning time. 
+
+7.7. Real-World Manipulation RGB 
+
+> Depth
+> Robot State
+> Camera Pose
+> Integrate TSDF
+> Robot Segmentation
+> ESDF
+> MPC
+> Target Pose
+
+Figure 24: Real-world deployment pipeline. Depth from a ZED Mini stereo camera is segmented to remove the robot, fused into a TSDF, and converted to an ESDF for real-time collision avoidance in the MPC trajectory optimizer. 
+
+We deploy cuRoboV2 on an I2RT YAM robot with a calibrated ZED Mini stereo camera (Figs. 24, 25). Depth images are generated using ZED’s Neural Plus model at 1080p, 15 Hz; higher frame rates incur prohibitive latency from the neural depth estimator. The robot is removed from each depth image by projecting the kinematic sphere model into image space, and the segmented depth feeds a 2.5 mm TSDF from which we build a 2 cm ESDF. This ESDF drives real-time collision avoidance in the MPC trajectory optimizer, which tracks pose commands while avoiding dynamically-observed obstacles. The full pipeline, comprising depth integration, ESDF generation, and trajectory optimization, runs within a single control loop, demonstrating the benefit of our GPU-native architecture. 
+
+> 32 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+Figure 25: Real-world collision avoidance on the I2RT YAM robot. The robot plans a motion from left to right while cuRoboV2’s MPC dynamically avoids an obstacle using live ESDF updates from a ZED Mini stereo camera. 
+
+## 8. LLM-assisted Development 
+
+We hypothesize that a well-structured codebase is a prerequisite for productive LLM-assisted development, and that the investment pays for itself. By restructuring cuRoboV2 for discoverability, we enabled an LLM coding assistant (Cursor IDE with Claude models) to author many parts of the final codebase, from high-level API wrappers to hand-optimized CUDA kernels. 
+
+8.1. Codebase Discoverability 
+
+Early attempts to use LLM-based coding assistants with the v1 codebase revealed systematic failure modes. Each failure pointed to a specific property that, once addressed, enabled reliable LLM-generated code: 1. Config hidden in YAML → Config visible in code. The LLM could not discover v1’s API surface because configuration lived in YAML files loaded via dict mutation at runtime. Replacing these with typed dataclasses with documented defaults ( IKSolverCfg.create(num_seeds=32) ) made every parameter inspectable in source code. 2. Opaque naming → Names predict location. Deep paths like curobo.wrap.reacher.ik_solver.IKSolve r and opaque class names ( CudaRobotModel ) caused the LLM to hallucinate imports. Short, stable imports (from curobo import IKSolver ), domain nouns ( Robot , Kinematics ), consistent conventions ( *Cfg /*Result /.create() ), and __all__ on every public module eliminated this. 3. Large files → Files fit in one context window. v1 averaged 460 lines/file (max 4,427) with sparse docstrings, forcing the LLM to work with incomplete context. Reducing files to 254 lines on average (max 1,643) with docstrings and inline usage examples ensures the LLM can read an entire module at once. 4. Opaque tests → Tests as executable documentation. v1’s 264 tests in a flat directory with no doc-strings gave the LLM no usage examples to learn from. 3,978 tests in a source-mirrored layout with 813 documented test classes provide concrete input/output examples for every public API. 5. Ambiguous signatures → Self-documenting interfaces. v1 signatures like start_state: JointS tate provided no shape or batch semantics, causing the LLM to generate incorrectly shaped tensors. Documenting shape, dtype, and indexing on every public method lets the LLM generate correct code from the docstring alone:           
+
+> start_state: Shape (-1, dof). Indexed as start_state[start_state_idx[batch_idx]]. start_state_idx: Shape (batch_size,). dtype: torch.int32.
+
+These changes benefit human researchers equally, but they are necessary for LLMs, which cannot compen-
+
+> 33 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+sate with intuition or IDE tooling. 
+
+Cost of the investment Python CUDA C/C++ Warp GPU Code Inline-docs Tests Code Inline-docs Tests 
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+70 
+
+cuRoboV2 cuRoboV1 
+
+> 66k
+> 27.5k
+> 59.0k
+> 6.6k
+> 10.3k
+> 39.2k
+> 11.8k
+> 8.9k
+> 38.3k
+> 5.0k
+> 9.7k
+> 24.5k
+> Lines (thousands, excl. blanks)
+
+0
+
+100 
+
+200 
+
+300 
+
+400 
+
+cuRoboV2 cuRoboV1 
+
+> 390
+> 121
+> 40
+> 53
+> 297
+> 716
+> 98
+> Number of Files (excl. tests)
+
+Figure 26: Codebase size comparison (excluding blank lines). Left: Non-blank lines split into Code, Inline-docs, and Tests, stacked by language. Right: File counts by language. 
+
+Fig. 26 quantifies the resulting codebase growth. Framework code grows 1.5× while inline documen-tation grows 2.7×, reflecting the investment in discoverability. CUDA C++ code stays nearly flat as scene collision migrated to Warp , whose share of GPU code increases from 34% to 57%. Files grow from 121 to 390, reflecting decomposition into single-responsibility modules, and the test suite grows from 264 to 3,978 tests ( 15 ×, 6.6k to 66k lines). 
+
+8.2. Quantifying LLM Contributions Phase 1 Phase 2 Phase 3 Phase 4 Phase 5 Phase 6 
+
+0
+
+20 
+
+40 
+
+60 
+
+80 
+
+100       
+
+> Code Percentage (%)
+> Restructure Restructure Restructure New Features New Features New Features
+> LLM Human
+
+Figure 27: Percentage of LLM-authored versus human-authored code additions per development phase. Early phases (R1–R3) focused on refactoring, with the human writing most code. Later phases (N1–N3) developed new modules using LLM-assisted workflows, with LLM contributions rising to 73%. 
+
+Fig. 27 shows LLM-authored code as a percentage of total additions over six development phases. Dur-ing the initial refactoring (R1–R3), we used Claude Sonnet as the primary model; the codebase was not yet 
+
+> 34 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+structured enough for the LLM to contribute substantially, so researchers wrote the majority of code while restructuring for discoverability, and LLM contributions accounted for 6–18% of additions. Starting from N1, we switched to Claude Opus, and LLM contributions rose sharply, reaching 50% in N1 and 73% in N2, driven by two factors: the discoverability refactoring made the codebase legible enough for the LLM to take on increasingly complex tasks, and the more capable model could better leverage the improved structure. Overall, LLM and researcher contributions split nearly 50/50 across the entire development period. 
+
+8.3. Case Studies: RNEA, Scene Collision Migration, and PBA ESDF 
+
+We detail three modules developed with substantial LLM assistance, illustrating the human–LLM collabo-ration patterns that emerged. 
+
+Inverse Dynamics (RNEA) CUDA Implementation & Optimization Human    
+
+> LLM
+> NumPy Fwd RNEA
+> ∼400 code lines
+> Suggest Optimizations
+> TPB, shared inertia, fwd cache
+> Derive Backward
+> VJP of RNEA
+> Verify
+> Pinocchio
+> CUDA Kernels
+> ∼1,100 lines
+> CUDA Python
+> JIT wiring
+> Autograd
+> ∼330 lines
+> Profile
+> ptx, cubin
+> data
+> iterate
+
+Figure 28: Human–LLM workflow for RNEA development. The human (top) provides the NumPy for-ward reference and suggests kernel optimizations; the LLM (bottom) handles each subsequent stage from derivation through profiling. 
+
+Adding differentiable inverse dynamics required implementing Featherstone’s Recursive Newton–Euler Algorithm as a CUDA kernel with an analytical backward pass, a task involving rigid-body physics, reverse-mode differentiation, and low-level GPU optimization. Rather than writing the kernel from scratch, we used a staged workflow in which a human-written NumPy reference served as the specification and the LLM carried out each subsequent translation and optimization step (Fig. 28). The human wrote a NumPy forward pass ( ∼400 code lines) and tested it on a simple two-DoF robot. From this forward reference, the LLM derived the analytical backward pass, i.e., the reverse-mode adjoint (vector-Jacobian product) of the two-pass RNEA algorithm, produced a NumPy implementation, and wrote tests verifying both passes against Pinocchio [5]. Next, the LLM read the docstrings on cuRobo’s kinematics dataclasses to understand how robot parameters are stored, then translated both passes into CUDA kernels (∼800 lines across forward and backward kernels, plus ∼300 lines of spatial algebra helpers) and wired the module into the CUDA Python backend with a PyTorch autograd wrapper ( ∼330 lines). Kernel optimization followed an iterative cycle (Fig. 28): the LLM profiled the compiled cubin and reported metrics (register usage, memory transactions, and compute operations per phase), then we sug-gested optimizations (tree-level parallelism for branched robots, block-shared inertia parameters, a forward cache to avoid recomputation in the backward pass), and the LLM implemented each one and re-profiled to confirm improvements. Two episodes highlight the limits of this loop. The LLM tried to optimize sincos calls in the forward kinematics; inspecting the PTX, at our direction, revealed the compiler was already lowering them to poly-nomial approximations. Later, the LLM fixated on reducing register pressure based on high virtual register counts in the PTX, when the cubin profile showed physical register usage was already low. In both cases, the LLM misread intermediate compiler representations: it could not distinguish virtual artifacts from real hardware behavior, a judgment call that required human intervention.          
+
+> 35 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots WorldCollision
+> WorldPrimitiveCollision
+> WorldMeshCollision
+> WorldVoxelCollision
+> ∼2,400 code lines
+> CUDA Kernel
+> Cuboid |Voxel
+> Warp Kernel
+> Mesh
+> ∼2,600 code lines
+> cuRoboV1
+> Overloaded Warp Kernel
+> Cuboid Mesh Voxel Custom…
+> SDF Modules (overloaded)
+> SDF Interface: compute_sdf_with_grad
+> Autograd Integration
+> ∼2,600 code lines total
+> cuRoboV2
+
+Figure 29: Unified scene collision architecture. Left: cuRoboV1 splits collision across two kernel backends and a deep inheritance chain. Right: cuRoboV2 unifies all obstacle types under a single type-generic Warp kernel, reducing total code by ∼50% .
+
+Scene Collision Checking Migration to Warp .
+
+cuRoboV1 split collision checking across two backends: a monolithic CUDA kernel ( ∼2,600 code lines) for cuboids and voxels, with per-type code paths, template specializations, and manual quaternion arithmetic, and a separate Warp kernel for triangle meshes. Four Python wrapper classes ( ∼2,400 code lines) bridged this split through a deep inheritance hierarchy, so adding a new obstacle type required changes across every layer and both kernel backends. Through an LLM-assisted migration, this was replaced by a unified 
+
+Warp system at roughly half the original ∼5,000 lines (Fig. 29). The migration proceeded in four phases (Fig. 30), starting from a single cuboid type and progressively generalizing to a type-generic kernel supporting cuboids, meshes, voxels, and ESDF grids. Three episodes illustrate the human–LLM division of labor. In Phase 2, the LLM generalized the cuboid kernel to support meshes using Warp ’s function overloading, but the resulting code combined overloaded functions and 
+
+overloaded kernels, triggering a silent Warp caching bug. The LLM could not diagnose the failure; we traced the root cause to a Warp limitation (either overloaded kernels or overloaded functions, but not both) and directed the LLM to rewrite using kernel-only overloads. In Phase 3, we proposed replacing per-type collision buffers with a single zero-filled buffer and atomic accumulation. The LLM evaluated the cost trade-off, implemented the change, and removed the old buffer management logic, a case where the human supplied the design insight and the LLM handled the mechanical refactoring. In Phase 4, the overload-based architecture paid off: we asked the LLM to add ESDF voxel grid support, and it implemented the new obstacle type by following the existing overload pattern. We then asked it to simplify TSDF stamping by reusing the new structure; the LLM rewrote the stamping logic to use the same data overloads, gaining multi-type support for free. 
+
+PBA ESDF Implementation from a JFA Baseline. 
+
+For ESDF propagation, we initially implemented Jump Flooding (JFA) because Parallel Banding Algorithm (PBA) required nontrivial indexing and direct CUDA integration with the mapper. After stabilizing inter-faces with the JFA baseline, we asked the LLM to implement PBA end-to-end. The LLM generated banded indexing and kernel wiring, integrated PBA into the mapper, and adapted it to our existing site pack/unpack representation. Unlike common PBA implementations that assume uniform, power-of-2 grids, this version supports non-uniform grid sizes and arbitrary dimensions. The resulting PBA implementation is about 2×
+
+faster than our JFA baseline while producing exact signed distances. This episode complements the RNEA  
+
+> 36 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots Human
+> LLM
+> Provide cuboid CUDA source
+> Warp SDF Collision kernel
+> Verify vs. CUDA
+> Swept collision kernel
+> Verify swept vs. CUDA
+
+(a) Phase 1: Cuboid, port CUDA collision to Warp with verification. Human 
+
+> LLM
+> Add mesh, template kernels
+> Diagnose bug
+> fn+kernel overload
+> Rewrite with kernel-only overloads
+> Overloaded fn + kernels
+> single file
+> Unified obstacle structure
+> Cuboid + mesh as instances
+> bug
+
+(b) Phase 2: Generalize, add mesh support via kernel overloads. Human 
+
+> LLM
+> Propose: zero-fill + atomic adds
+> vs. per-type buf + sparsity
+> Estimate cost
+> zero-fill vs. sparse write
+> Implement single buffer + atomics
+> Remove per-type buf + sparsity logic
+> viable
+
+(c) Phase 3: Simplify, replace per-type buffers with zero-fill and atomics. Human 
+
+> LLM
+> Add ESDF voxel grid
+> Simplify TSDF stamping
+> reuse new structure
+> ESDF collision
+> new obstacle type
+> Verify ESDF vs. voxel grid
+> Rewrite TSDF stamping
+> reuse data overloads
+> Multi-type stamp
+> for free
+
+(d) Phase 4: Extend, add ESDF voxel grid and simplify TSDF stamping. 
+
+Figure 30: Human–LLM workflow for migrating scene collision checking to Warp. Orange boxes ( ■)denote human contributions; blue boxes ( ■) denote LLM contributions. 
+
+and collision-migration case studies: the human selected the staged strategy (JFA first, then PBA), while the LLM carried out low-level implementation and system integration. 
+
+## 9. Conclusion 
+
+The central lesson of cuRoboV2 is that GPU-native computation makes it practical to enforce constraints that prior methods skip, and these constraints compound across the full stack. Fast inverse dynamics en-ables torque-aware B-spline optimization, keeping trajectories executable under payload where baselines fail. A dense ESDF, made tractable by decoupling TSDF and ESDF resolutions, provides 𝑂 (1) collision queries that accelerate planning and enable reactive MPC with live depth fusion on a real robot. Scalable kinematics and map-reduce self-collision enable collision-free motion optimization on a 48-DoF humanoid, producing physically valid reference motions whose quality propagates directly into downstream locomo-tion policies. Each capability builds on the ones below it: B-splines provide a smooth trajectory space where torque constraints are well-conditioned, fast RNEA makes evaluating those constraints tractable, a dense ESDF enables real-time depth-driven collision avoidance, and scalable whole-body computation 
+
+> 37 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+makes collision-free motion optimization practical from 7-DoF arms to 48-DoF humanoids. Several of the modules above, including the RNEA CUDA kernels, the unified scene collision system, and the PBA ESDF pipeline, were developed with substantial LLM assistance. This was only possible be-cause the codebase was structured for discoverability: typed interfaces, predictable naming, small single-responsibility modules, and tests as executable documentation. These are standard software engineering practices, but they are necessary for LLMs in a way they are not for humans; we believe any robotics codebase that adopts them can unlock similar LLM-assisted productivity for GPU-accelerated systems. 
+
+Limitations & Future Work 
+
+Because planning and MPC share the same B-spline trajectory space, warm-starting MPC from a global plan is a natural next step toward reactive whole-body control. MPC could also serve as a safety layer that enforces collision-free, dynamically-feasible execution of learned policies. On the perception side, our geometric robot segmentation is sensitive to depth estimation errors; learned RGB-based segmentation could improve robustness. A single camera provides only partial scene coverage; multi-camera fusion could improve reconstruction completeness. Finally, our LLM case studies reveal that while LLMs can generate and profile GPU code, interpreting intermediate compiler representations (e.g., distinguishing virtual from physical register pressure) still requires human judgment; closing this gap is an open challenge for LLM-assisted systems development. 
+
+Acknowledgements 
+
+We thank Neel Jawale for analysis of energy consumption in existing motion planners, Ankur Handa for discussions on the challenges of human-to-robot retargeting, Erwin Coumans for discussions on real-robot perception-driven motion generation challenges, and Dylan Turpin for building the tile-based LM solver in Warp [40] (as part of Newton) that we adapt for inverse kinematics. Finally, we gratefully acknowledge the software tools and libraries that made this work possible, including PyTorch , Warp , Newton , CUDA 
+
+Python, Viser , MimicKit, Morphit, the Cursor IDE, and Anthropic’s Claude models. 
+
+> 38 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+## References 
+
+[1] Joao Pedro Araujo, Yanjie Ze, Pei Xu, Jiajun Wu, and C. Karen Liu. Retargeting matters: General motion retargeting for humanoid motion tracking. arXiv preprint arXiv:2510.02252 , 2025. 6, 26 [2] Mohak Bhardwaj, Balakumar Sundaralingam, Arsalan Mousavian, Nathan D. Ratliff, Dieter Fox, Fabio Ramos, and Byron Boots. STORM: An Integrated Framework for Fast Joint-Space Model-Predictive Control for Reactive Manipulation. In Proceedings of the 5th Conference on Robot Learning , volume 164 of Proceedings of Machine Learning Research , pages 750–759. PMLR, 2022. URL https://proceedings. mlr.press/v164/bhardwaj22a.html . 3, 4, 5 [3] Thanh-Tung Cao, Ke Tang, Anis Mohamed, and Tiow-Seng Tan. Parallel banding algorithm to com-pute exact distance transform with the gpu. In Proceedings of the 2010 ACM SIGGRAPH symposium on Interactive 3D Graphics and Games , pages 83–90, 2010. 12 [4] Justin Carpentier and Nicolas Mansard. Analytical derivatives of rigid body dynamics algorithms. In 
+
+Robotics: Science and systems (RSS 2018) , 2018. 18 [5] Justin Carpentier, Guilhem Saurel, Gabriele Buondonno, Joseph Mirabel, Florent Lamiraux, Olivier Stasse, and Nicolas Mansard. The pinocchio c++ library – a fast and flexible implementation of rigid body dynamics algorithms and their analytical derivatives. In IEEE International Symposium on System Integrations (SII) , 2019. 35 [6] Constantinos Chamzas, Zachary K. Kingston, Carlos Quintero-Peña, Anshumali Shrivastava, and Ly-dia E. Kavraki. Learning sampling distributions using local 3d workspace decompositions for motion planning in high dimensions. 2021 IEEE International Conference on Robotics and Automation (ICRA) ,pages 1283–1289, 2021. 4 [7] Constantinos Chamzas, Carlos Quintero-Pena, Zachary Kingston, Andreas Orthey, Daniel Rakita, Michael Gleicher, Marc Toussaint, and Lydia E Kavraki. Motionbenchmaker: A tool to generate and benchmark motion planning datasets. IEEE Robotics and Automation Letters , 7(2):882–889, 2022. 20 [8] Jiayi Chen, Yubin Ke, and He Wang. Bodex: Scalable and efficient robotic dexterous grasp synthesis using bilevel optimization. In 2025 IEEE International Conference on Robotics and Automation (ICRA) ,pages 01–08. IEEE, 2025. 5 [9] Ching-An Cheng, Mustafa Mukadam, Jan Issac, Stan Birchfield, Dieter Fox, Byron Boots, and Nathan Ratliff. Rmp flow: A computational graph for automatic motion policy generation. In International Workshop on the Algorithmic Foundations of Robotics , pages 441–457. Springer, 2018. 3, 4 [10] Davide Chiaravalli, Federico Califano, Luigi Biagiotti, Daniele De Gregorio, and Claudio Melchiorri. Physical-consistent behavior embodied in B-spline curves for robot path planning. IFAC-PapersOnLine ,51(22):306–311, 2018. 4 [11] Murtaza Dalal, Jiahui Yang, Russell Mendonca, Youssef Khaky, Ruslan Salakhutdinov, and Deepak Pathak. Neural mp: A generalist neural motion planner. arXiv preprint arXiv:2409.05864 , 2024. 3 [12] Murtaza Dalal, Jiahui Yang, Russell Mendonca, Youssef Khaky, Ruslan Salakhutdinov, and Deepak Pathak. Neural mp: A generalist neural motion planner. arXiv preprint arXiv:2409.05864 , 2024. 4, 5 [13] Michael Danielczuk, Arsalan Mousavian, Clemens Eppner, and Dieter Fox. Object rearrangement us-ing learned implicit collision functions. 2021 IEEE International Conference on Robotics and Automation (ICRA) , pages 6010–6017, 2021. 5 
+
+> 39 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+[14] Michael Danielczuk, Arsalan Mousavian, Clemens Eppner, and Dieter Fox. Object rearrangement using learned implicit collision functions. In 2021 IEEE International Conference on Robotics and Au-tomation (ICRA) , pages 6010–6017. IEEE, 2021. 3 [15] Roy Featherstone and David Orin. Robot dynamics: equations and algorithms. In Proceedings 2000 ICRA. Millennium conference. IEEE international conference on robotics and automation. Symposia pro-ceedings (Cat. No. 00CH37065) , volume 1, pages 826–834. IEEE, 2000. 16, 19 [16] Adam Fishman, Adithyavairavan Murali, Clemens Eppner, Bryan Peele, Byron Boots, and Dieter Fox. Motion policy networks. In Proceedings of the 6th Conference on Robot Learning (CoRL) , 2022. 3, 4, 5, 20 [17] Adam Fishman, Aaron Walsman, Mohak Bhardwaj, Wentao Yuan, Balakumar Sundaralingam, By-ron Boots, and Dieter Fox. Avoid everything: Model-free collision avoidance with expert-guided fine-tuning. In Proceedings of The 8th Conference on Robot Learning , volume 270 of Proceedings of Ma-chine Learning Research , pages 1925–1948. PMLR, 2025. URL https://proceedings.mlr.press/v270/ fishman25a.html . 4, 5 [18] Zipeng Fu, Qingqing Zhao, Qi Wu, Gordon Wetzstein, and Chelsea Finn. Humanplus: Humanoid shadowing and imitation from humans. In Proceedings of The 8th Conference on Robot Learning , volume 270 of Proceedings of Machine Learning Research , pages 2828–2844. PMLR, 2025. 6 [19] Jonathan D. Gammell, Siddhartha S. Srinivasa, and Tim D. Barfoot. Batch informed trees (bit*): Sampling-based optimal planning via the heuristically guided search of implicit random geometric graphs. 2015 IEEE International Conference on Robotics and Automation (ICRA) , pages 3067–3074, 2015. 4[20] Luxin Han, Fei Gao, Boyu Zhou, and Shaojie Shen. FIESTA: Fast incremental euclidean distance fields for online motion planning of aerial robots. In 2019 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pages 4423–4430. IEEE, 2019. doi: 10.1109/IROS40897.2019.8968200. 5 [21] Peter E. Hart, Nils J. Nilsson, and Bertram Raphael. A formal basis for the heuristic determination of minimum cost paths. IEEE Trans. Syst. Sci. Cybern. , 4:100–107, 1968. 4 [22] Tairan He, Zhengyi Luo, Wenli Xiao, Chong Zhang, Kris Kitani, Changliu Liu, and Guanya Shi. Learn-ing human-to-humanoid real-time whole-body teleoperation. In 2024 IEEE/RSJ International Confer-ence on Intelligent Robots and Systems (IROS) , pages 8944–8951. IEEE, 2024. 6 [23] Tairan He, Zhengyi Luo, Xialin He, Wenli Xiao, Chong Zhang, Weinan Zhang, Kris M Kitani, Changliu Liu, and Guanya Shi. Omnih2o: Universal and dexterous human-to-humanoid whole-body teleoper-ation and learning. In Conference on Robot Learning , pages 1516–1540. PMLR, 2025. 6 [24] Huang Huang, Balakumar Sundaralingam, Arsalan Mousavian, Adithyavairavan Murali, Ken Gold-berg, and Dieter Fox. Diffusionseeder: Seeding motion optimization with diffusion for rapid motion planning. In 8th Annual Conference on Robot Learning (CoRL) , 2024. URL https://diffusion-seeder. github.io/ . 4, 5 [25] Martin Huber, Huanyu Tian, Christopher E Mower, Lucas-Raphael Müller, Sébastien Ourselin, Chris-tos Bergeles, and Tom Vercauteren. Hydra: Marker-free rgb-d hand-eye calibration. arXiv preprint arXiv:2504.20584 , 2025. 47 [26] Philip Hyatt, C. Spencer Williams, and Marc D. Killpack. Parameterized and GPU-parallelized real-time model predictive control for high degree-of-freedom robots, 2020. 4 
+
+> 40 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+[27] Jeffrey Ichnowski, Yahav Avigal, Vishal Satish, and Ken Goldberg. Deep learning can accelerate grasp-optimized motion planning. Science Robotics , 5(48):eabd7710, 2020. doi: 10.1126/scirobotics.abd7710. 4[28] Brian Ichter, Edward Schmerling, and Marco Pavone. Group marching tree: Sampling-based approx-imately optimal motion planning on GPUs. In IEEE International Conference on Robotic Computing (IRC) , pages 219–226. IEEE, 2017. 4 [29] Brian Ichter, James Harrison, and Marco Pavone. Learning sampling distributions for robot motion planning. 2018 IEEE International Conference on Robotics and Automation (ICRA) , pages 7087–7094, 2018. 4 [30] Chen Ji, Zhongqiang Zhang, Guanggui Cheng, Minxiu Kong, and Ruifeng Li. A convex optimization method to time-optimal trajectory planning with jerk constraint for industrial robotic manipulators. 
+
+IEEE Transactions on Automation science and engineering , 21(4):7629–7646, 2023. 4 [31] Mazeyu Ji, Xuanbin Guo, Xiaoyu He, Xue Bin Peng, and Xiaolong Wang. Exbody2: Advanced expres-sive humanoid whole-body control. arXiv preprint arXiv:2412.13196 , 2024. 6 [32] Sertaç Karaman and Emilio Frazzoli. Sampling-based algorithms for optimal motion planning. The International Journal of Robotics Research , 30:846 – 894, 2011. 4 [33] J Chase Kew, Brian Ichter, Maryam Bandari, Tsang-Wei Edward Lee, and Aleksandra Faust. Neural collision clearance estimator for batched motion planning. arXiv preprint arXiv:1910.05917 , 2019. 5 [34] Oussama Khatib. Real-time obstacle avoidance for manipulators and mobile robots. In Autonomous robot vehicles , pages 396–404. Springer, 1986. 4 [35] Chung Min Kim, Brent Yi, Hongsuk Choi, Yi Ma, Ken Goldberg, and Angjoo Kanazawa. PyRoki: A modular toolkit for robot kinematic optimization. In IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2025. URL https://arxiv.org/abs/2505.03728 . 4, 6, 23 [36] Emre Koyuncu and Gokhan Inalhan. A probabilistic B-spline motion planning algorithm for un-manned helicopters flying in dense 3D environments. In 2008 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pages 815–820. IEEE, 2008. 4 [37] Matthew Lai, Keegan Go, Zhibin Li, Torsten Kröger, Stefan Schaal, Kelsey Allen, and Jonathan Scholz. Roboballet: Planning for multi-robot reaching with graph neural networks and reinforcement learn-ing. Science Robotics , 10(106):eads1204, 2025. doi: 10.1126/scirobotics.ads1204. 4 [38] Steven M. LaValle. Rapidly-exploring random trees : a new tool for path planning. The annual research report , 1998. 4 [39] Maxim Likhachev, Geoffrey J. Gordon, and Sebastian Thrun. Ara*: Anytime a* with provable bounds on sub-optimality. In NIPS , 2003. 4 [40] Miles Macklin. Warp: A high-performance python framework for gpu simulation and graphics. https: //github.com/nvidia/warp , March 2022. NVIDIA GPU Technology Conference (GTC). 16, 38, 48 [41] Calvin R Maurer, Rensheng Qi, and Vijay Raghavan. A linear time algorithm for computing exact euclidean distance transforms of binary images in arbitrary dimensions. IEEE Transactions on Pattern Analysis and Machine Intelligence , 25(2):265–270, 2003. 12 [42] Itamar Mishani, Yorai Shaoul, Ramkumar Natarajan, Jiaoyang Li, and Maxim Likhachev. Srmp: Search-based robot motion planning library. arXiv preprint arXiv:2509.25352 , 2025. 3, 4 
+
+> 41 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+[43] Adithyavairavan Murali, Arsalan Mousavian, Clemens Eppner, Adam Fishman, and Dieter Fox. Cabi-net: Scaling neural collision detection for object rearrangement with procedural scene generation. In 
+
+International Conference on Robotics and Automation (ICRA) , 2023. 3, 5 [44] Sean Murray, Will Floyd-Jones, Ying Qi, Daniel Sorin, and George Konidaris. Robot Motion Planning on a Chip. In Robotics Science and Systems , 2016. 4 [45] Nataliya Nechyporenko, Yutong Zhang, Sean Campbell, and Alessandro Roncone. Morphit: Flexible spherical approximation of robot morphology for representation-driven adaptation, 2025. URL https: //arxiv.org/abs/2507.14061 . 46 [46] Sabrina M. Neuman, Brian Plancher, Thomas Bourgeat, Thierry Tambe, Srinivas Devadas, and Vi-jay Janapa Reddi. Robomorphic computing: A design methodology for domain-specific accelerators parameterized by robot morphology. In ACM International Conference on Architectural Support for Programming Languages and Operating Systems (ASPLOS) , pages 674–686. ACM, 2021. 4 [47] Richard Newcombe, Shahram Izadi, Otmar Hilliges, David Molyneaux, David Kim, Andrew J. Davison, Pushmeet Kohli, Jamie Shotton, Steve Hodges, and Andrew Fitzgibbon. Kinectfusion: Real-time dense surface mapping and tracking. 2011 10th IEEE International Symposium on Mixed and Augmented Reality (ISMAR) , 2011. 5 [48] Newton Contributors. Newton: GPU-accelerated physics simulation for robotics, and simulation research, 2025. URL https://github.com/newton-physics/newton . 16, 18, 23 [49] Matthias Nießner, Michael Zollhöfer, Shahram Izadi, and Marc Stamminger. Real-time 3d reconstruc-tion at scale using voxel hashing. ACM Transactions on Graphics (ToG) , 32(6):1–11, 2013. 9 [50] NVIDIA. GitHub - nvidia-isaac/nvblox: A GPU-accelerated TSDF and ESDF library for robots equipped with RGB-D cameras. https://github.com/nvidia-isaac/nvblox , 2022. Accessed: 2022-09-14. 3, 5, 29, 30 [51] NVIDIA. Cuda python, 2025. URL https://nvidia.github.io/cuda-python/latest/index.html . 45 [52] Helen Oleynikova, Zachary Taylor, Marius Fehr, Roland Siegwart, and Juan Nieto. Voxblox: Incremen-tal 3d euclidean signed distance fields for on-board mav planning. In IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2017. 5 [53] Jia Pan, Liangjun Zhang, and Dinesh Manocha. Collision-free and curvature-continuous path smooth-ing in cluttered environments. In Robotics: Science and Systems (RSS) , 2011. URL https://www. roboticsproceedings.org/rss07/p32.pdf . 4 [54] Jaesik Park, Qian-Yi Zhou, and Vladlen Koltun. Colored point cloud registration revisited. In ICCV ,2017. 29 [55] Xue Bin Peng. Mimickit: A reinforcement learning framework for motion imitation and control. 2025. URL https://arxiv.org/abs/2510.13794 . 27 [56] Xue Bin Peng, Pieter Abbeel, Sergey Levine, and Michiel van de Panne. Deepmimic: Example-guided deep reinforcement learning of physics-based character skills. ACM Trans. Graph. , 37(4):143:1– 143:14, July 2018. ISSN 0730-0301. doi: 10.1145/3197517.3201311. URL http://doi.acm.org/10.1145/ 3197517.3201311 . 27 [57] Brian Plancher, Sabrina M Neuman, Radhika Ghosal, Scott Kuindersma, and Vijay Janapa Reddi. GRiD: GPU-accelerated rigid body dynamics with analytical gradients. In 2022 International Conference on Robotics and Automation (ICRA) , pages 6253–6260. IEEE, 2022. 18, 23 
+
+> 42 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+[58] C. Qi, L. Yi, Hao Su, and Leonidas J. Guibas. Pointnet++: Deep hierarchical feature learning on point sets in a metric space. In NIPS , 2017. 5 [59] Clayton W. Ramsey, Zachary Kingston, Wil Thomason, and Lydia E. Kavraki. Collision-affording point trees: SIMD-amenable nearest neighbors for fast collision checking. In Robotics: Science and Systems ,2024. doi: 10.15607/RSS.2024.XX.038. URL http://arxiv.org/abs/2406.02807 . 3, 9 [60] Nathan Ratliff, Matt Zucker, J Andrew Bagnell, and Siddhartha Srinivasa. Chomp: Gradient optimiza-tion techniques for efficient motion planning. In 2009 IEEE International Conference on Robotics and Automation , pages 489–494. IEEE, 2009. 4, 7, 13 [61] Nathan D. Ratliff, Jan Issac, Daniel Kappler, Stan Birchfield, and Dieter Fox. Riemannian motion policies. ArXiv , abs/1801.02854, 2018. 3, 4 [62] Guodong Rong and Tiow-Seng Tan. Jump flooding in gpu with applications to voronoi diagram and distance transform. In Proceedings of the 2006 ACM SIGGRAPH symposium on Interactive 3D Graphics and Games , pages 109–116, 2006. 12 [63] Tanner Schmidt, Richard Newcombe, and Dieter Fox. DART: Dense Articulated Real-time Tracking with consumer depth cameras. Autonomous Robots , 39(3):239–258, 2015. ISSN 0929-5593. doi: 10.1007/ s10514-015-9462-z. URL http://dx.doi.org/10.1007/s10514-015-9462-z . 47 [64] John Schulman, Yan Duan, Jonathan Ho, Alex Lee, Ibrahim Awwal, Henry Bradlow, Jia Pan, Sachin Patil, Ken Goldberg, and Pieter Abbeel. Motion planning with sequential convex optimization and convex collision checking. The International Journal of Robotics Research , 33(9):1251–1270, 2014. 7 [65] John Schulman, Yan Duan, Jonathan Ho, Alex X. Lee, Ibrahim Awwal, Henry Bradlow, Jia Pan, Sachin Patil, Ken Goldberg, and P. Abbeel. Motion planning with sequential convex optimization and convex collision checking. The International Journal of Robotics Research , 33:1251 – 1270, 2014. 4 [66] Balakumar Sundaralingam, Siva Kumar Sastry Hari, Adam Fishman, Caelan Garrett, Karl Van Wyk, Valts Blukis, Alexander Millane, Helen Oleynikova, Ankur Handa, Fabio Ramos, Nathan Ratliff, and Dieter Fox. Curobo: Parallelized collision-free robot motion generation. In 2023 IEEE International Conference on Robotics and Automation (ICRA) , pages 8112–8119, 2023. doi: 10.1109/ICRA48891.2023. 10160765. 3, 4, 7, 9, 14, 16, 20, 23 [67] Russ Tedrake and the Drake Development Team. Drake: Model-based design and verification for robotics, 2019. URL https://drake.mit.edu . 4 [68] Wil Thomason*, Zachary Kingston*, and Lydia E. Kavraki. Motions in microseconds via vectorized sampling-based planning. In arxiv , 2023. 3, 4, 9, 20 [69] Zishen Wan, Bo Yu, Tsung Yi Li, Juntao Tang, Yanjun Zhu, Yu Wang, Arijit Raychowdhury, and Shaoshan Liu. A survey of FPGA-based robotic computing. IEEE Circuits and Systems Magazine , 21 (2):48–74, 2021. 4 [70] Grady Williams, Andrew Aldrich, and Evangelos A. Theodorou. Model predictive path integral control: From theory to parallel computation. Journal of Guidance, Control, and Dynamics , 40(2):344–357, 2017. doi: 10.2514/1.G001921. 3, 4 [71] Tyler S. Wilson, Wil Thomason, Zachary Kingston, and Jonathan D. Gammell. AORRTC: Almost-surely asymptotically optimal planning with RRT-Connect. IEEE Robotics and Automation Letters ,2025. URL https://arxiv.org/abs/2505.10542 . Under Review. 20 
+
+> 43 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+[72] Karl Van Wyk, Mandy Xie, Anqi Li, Muhammad Asif Rana, Buck Babich, Bryan N. Peele, Qian Wan, Iretiayo Akinola, Balakumar Sundaralingam, Dieter Fox, Byron Boots, and Nathan D. Ratliff. Geomet-ric fabrics: Generalizing classical mechanics to capture the physics of behavior. IEEE Robotics and Automation Letters , 7:3202–3209, 2022. 4 [73] Jiahui Yang, Jason Jingzhou Liu, Yulong Li, Youssef Khaky, Kenneth Shaw, and Deepak Pathak. Deep reactive policy: Learning reactive manipulator motion planning for dynamic environments. In Pro-ceedings of the 9th Conference on Robot Learning (CoRL) , 2025. 4, 5 [74] Brent Yi, Chung Min Kim, Justin Kerr, Gina Wu, Rebecca Feng, Anthony Zhang, Jonas Kulhanek, Hongsuk Choi, Yi Ma, Matthew Tancik, and Angjoo Kanazawa. Viser: Imperative, web-based 3d visualization in python, 2025. URL https://arxiv.org/abs/2507.22885 . 47 [75] Minsung Yoon, Mincheul Kang, Daehyung Park, and Sung-Eui Yoon. Learning-based initialization of trajectory optimization for path-following problems of redundant manipulators. In 2023 IEEE Interna-tional Conference on Robotics and Automation (ICRA) , pages 7670–7676. IEEE, 2023. 4 [76] Kevin Zakka. Mink: Python inverse kinematics based on MuJoCo, May 2025. URL https://github. com/kevinzakka/mink . 6 
+
+> 44 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+## A. Framework Design 
+
+Beyond the algorithmic contributions presented in previous sections, cuRoboV2 introduces substantial ar-chitectural changes to the framework itself. The original cuRobo release (hereafter v1 ) was designed as a closed pipeline: users could configure which robot to plan for, but the core optimization, collision check-ing, and cost functions were monolithic and not intended for modification. User feedback revealed that researchers wanted to add custom cost functions, integrate new obstacle representations, and modify op-timization strategies. At the same time, onboarding a new robot required manually authoring configu-ration files, a process that demanded expert knowledge of collision sphere placement and self-collision matrices. cuRoboV2 addresses these concerns through a ground-up redesign that prioritizes simplicity and 
+
+extensibility , even accepting modest performance overhead where it improves researcher experience. This section details two areas of change: improving the researcher experience (Sec. A.1) and software architec-ture (Sec. A.2). These redesign choices also underpin the LLM-assisted development workflow described in Sec. 8. 
+
+A.1. Improving Researcher Experience 
+
+A key learning from v1 was that trying a new motion-planning tool should be as easy and quick as possible. In practice, v1 fell short in four ways: (1) installation required matching CUDA and PyTorch versions and took roughly 20 minutes of compilation; (2) loading a new robot meant hand-authoring a configuration file, an error-prone process that could take another 30 minutes even for an expert; (3) connecting the planner to real perception demanded additional libraries that did not yet exist in easy-to-use form; and (4) visualizing plans and debugging configurations required external tooling. cuRoboV2 eliminates all four barriers. 
+
+A.1.1. Simplified Installation 
+
+cuRoboV1 compiled all GPU kernels at install time through pybind11 C++ extensions. This imposed three constraints on every user: (1) the Python environment’s CUDA toolkit version had to exactly match the 
+
+CUDA version that PyTorch was built against; (2) the build imported PyTorch ’s C++ headers, resulting in compilation times of approximately 20 minutes; and (3) the resulting shared-object files ( .so ) were tied to a specific GPU architecture, preventing portable distribution. Taken together, these constraints made installation the single most common source of support requests. Source Code Match CUDA to PyTorch   
+
+> pybind11 Build (20 min, torch headers)
+> Platform-Specific
+> .so Files
+> cuRoboV1 Installation (20 minutes)
+> uv pip install
+> code
+> First Use: CUDA Python Compiles
+> Content-Hash Kernel Cache
+> Ready (any CUDA version)
+> cuRoboV2 Installation (< 5 minutes)
+
+Figure 31: Installation workflow comparison. Top: v1’s pybind11 build required exact CUDA–PyTorch version matching and ∼20 min of compilation. Bottom: cuRoboV2 installs via pip ; kernels are compiled and cached on first use with no version constraints. cuRoboV2 replaces pybind11 with NVIDIA’s CUDA Python library [51], which compiles kernels at first use, automatically targets the host GPU, and caches results by source-content hash (Fig. 31). Because 
+
+CUDA Python is fully decoupled from PyTorch , the host CUDA toolkit no longer needs to match the version 
+
+PyTorch was compiled against, and cuRoboV2 ships as a standard Python package ( pip install ), reducing installation from ∼20 minutes to seconds. 
+
+> 45 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+A.1.2. Robot Configuration Builder Input URDF 
+
+Retract Joint Position (default: midpoint) 
+
+Parse Kinematics & Link Meshes 
+
+Decompose Meshes into Spheres (Warp + MorphIt) 
+
+Generate Self-Collision Model 
+
+Robot Configuration (YAML/XRDF) 
+
+Ignore Adjacent Links 
+
+Prune Collisions at Retract Joint Position 
+
+Prune via Random Sam-pling within Joint Limits 
+
+Figure 32: The RobotBuilder pipeline converts a URDF into a complete, optimized robot configuration through four automated stages. cuRoboV1 required users to manually author YAML configuration files specifying collision sphere place-ments, self-collision ignore matrices, and joint-space parameters. This was error-prone: there was no au-tomated way to determine which link pairs could safely be ignored, leading to configurations that were either overly conservative (wasting computation) or dangerously permissive (producing unsafe trajecto-ries). cuRoboV2 introduces RobotBuilder , a pipeline that takes a standard URDF and produces a complete, optimized configuration ready for planning (Fig. 32). 
+
+Collision Sphere Fitting. 
+
+After parsing the URDF and identifying links with collision geometry, the builder computes a sphere count per link from bounding-box volume scaled by a density parameter ( spheres_per_cm ) and fits spheres using MorphIt [45]. Density can be overridden per link (e.g., higher for grippers with fine features). 
+
+Self-Collision Matrix. 
+
+The builder constructs the self-collision ignore matrix in three passes: 1. Neighbor pairs: adjacent links in the kinematic chain are unconditionally ignored. 2. Default configuration: pairs that collide at the retract pose are ignored, as they represent perma-nent geometric overlaps that planning cannot resolve. 3. Sampling-based pruning: Halton quasi-random joint configurations are evaluated on the GPU in large batches; pairs that never collide are added to the ignore matrix. 
+
+Export and Debugging. 
+
+The final configuration can be saved as cuRobo YAML or XRDF and inspected in a web-based 3D viewer. A load–modify–save workflow ( RobotBuilder.from_config() ) and a companion RobotDebugger class support iterative refinement without regenerating the entire configuration. 
+
+> 46 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+A.1.3. Eye-to-Hand Utilities 
+
+Deploying a motion planner with camera-based perception requires two capabilities that cuRoboV1 did not provide: calibrating the camera to the robot and filtering the robot out of depth images before TSDF integration. 
+
+Eye-to-Hand Calibration 
+
+Standard checkerboard-based calibration via OpenCV can achieve millimeter-level accuracy but adds setup overhead. To help users get started quickly, we provide a calibration tool inspired by point-cloud registra-tion methods [25, 63]. A global ICP stage mean-centers both point clouds, evaluates a batch of candidate orientations on the GPU with point-to-plane matching between points sampled on the robot mesh and a user-specified bounding box in the scene, and selects the best alignment. A local refinement step then min-imizes signed-distance residuals similar to DART [63]. The entire workflow is integrated into a web-based visualizer: the user supplies the current joint state, adjusts a bounding box, and saves the calibrated pose to disk. This approach proves sufficient in practice for collision-free motion planning and pick-and-place tasks. Align bounding box  Global ICP Calibration RGB Image 
+
+Figure 33: Camera-to-robot calibration via ICP. The user specifies a bounding box in the scene (left), which is used to run global ICP, aligning the robot mesh to the observed point cloud (right). 
+
+Robot Segmentation 
+
+To remove the robot from depth images, we use our forward kinematics to position the collision spheres at the current joint state, project depth pixels to 3D using the calibrated extrinsics and camera intrinsics, and mask any point whose ℓ2 distance to the nearest sphere falls within its radius. This is approximate compared to mesh-based segmentation but significantly faster, providing a practical default for TSDF-based scene reconstruction. 
+
+A.1.4. Web Visualization via Viser 
+
+cuRoboV1 had no built-in visualization, requiring external tooling to inspect plans or debug configurations. 
+
+cuRoboV2 integrates Viser [74], a lightweight web-based 3D visualizer that renders the robot URDF, pro-vides interactive transform controls for IK/MPC targets, overlays collision spheres and scene obstacles, and visualizes TSDF/ESDF reconstructions, all accessible from any browser. 
+
+A.2. Software Architecture 
+
+We describe two new extension points in cuRoboV2 that let users add custom obstacle types (Sec. A.2.1) and cost functions (Sec. A.2.2) without modifying core code. Cross-cutting design changes for codebase discoverability and the quantitative impact of the restructuring are discussed in Sec. 8. 
+
+> 47 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+A.2.1. Unified Scene Collision Checking 
+
+As described in Sec. 8, cuRoboV1 ’s collision checking was split across two kernel backends and a deep inheritance hierarchy (Fig. 29, left). cuRoboV2 consolidates all scene collision checking into a single type-generic Warp [40] kernel (Fig. 29, right). Each obstacle type (cuboid, mesh, voxel) registers three function overloads into a shared module: is_obs_enabled (whether the obstacle is active), load_obstacle_transf orm (world-frame pose), and compute_local_sdf_with_grad (signed distance and analytic gradient in the obstacle’s local frame). The unified kernel parallelizes over (sphere × obstacle) pairs, calls the appropriate overloads based on obstacle type, and accumulates results through atomic adds into a single CollisionB uffer . Adding a new obstacle representation (a point cloud, a neural SDF, or any user-defined geometry) requires only implementing the three interface functions. No existing kernel code needs to be modified. 
+
+A.2.2. Cost Manager & Warp -First Kernels 
+
+cuRoboV1 computed all cost terms inside a monolithic rollout class, making it difficult to add or modify individual costs. cuRoboV2 introduces a CostManager (Fig. 34) where each cost is a standalone BaseCost 
+
+subclass registered by name. Each subclass implements forward(state, config) and returns a cost tensor; gradients flow automatically via PyTorch backpropagation, and the manager evaluates all registered costs in parallel on separate CUDA streams. Adding a new cost term (e.g., workspace constraints, learned cost functions) requires only writing a new BaseCost subclass; no changes to the optimization pipeline or existing costs. SelfCollisionCost SceneCollisionCost PoseCost UserCustomCost       
+
+> CostManager: register_cost(name, cost)
+> register register
+> CUDA Stream 1 CUDA Stream 2 CUDA Stream 3 CUDA Stream 4
+> BaseCost Subclasses
+> Parallel Evaluation
+
+Figure 34: Composable cost manager. Each BaseCost subclass is registered by name and evaluated on its own CUDA stream. Bold box indicates a user-defined custom cost. 
+
+The split between CUDA C++ and Warp is driven by stability versus modifiability . Forward kinemat-ics, L-BFGS optimization, B-spline evaluation, and self-collision are mature algorithms that change infre-quently; these remain as hand-tuned CUDA C++ kernels compiled via the CUDA Python backend. Scene collision, pose distance, and swept-sphere collision are cost functions users may want to modify; these are implemented as Warp kernels. In particular, PoseCost , the most commonly requested customization, was moved from cuRoboV1 ’s CUDA C++ to Warp so that users can read and edit it directly. Warp ’s Python-like syntax and built-in automatic differentiation mean that custom or modified costs require no C++ expertise and no recompilation. 
+
+## B. LLM Prompts 
+
+Sec. 8.1 described the codebase properties that enable productive LLM-assisted development. To enforce these properties consistently, we authored a set of rule files , i.e., persistent system prompts loaded into every LLM session, that encode our design principles, formatting conventions, file naming rules, and documen-tation standards. Each rule file is shown below in its entirety. Together, they ensure that LLM-generated 
+
+> 48 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+code adheres to the same structure, naming, and documentation standards as human-written code, reducing review friction and preventing stylistic drift over time. 
+
+Design Principles ( design_principles.mdc )
+
+You are an expert programmer that follow the below principles very strictly: 
+
+Software Development Principles 
+
+1. Don’t Repeat Yourself (DRY) : Avoid code duplica-tion; use reusable components. 2. Keep It Simple, Stupid (KISS) : Keep designs simple and avoid complexity. 3. You Aren’t Gonna Need It (YAGNI) : Implement only necessary features. 4. Separation of Concerns : Divide code into distinct sections. 5. Law of Demeter : Interact only with immediate de-pendencies. 6. Composition Over Inheritance : Prefer composi-tion for code reuse. 7. Encapsulation : Hide internal state and expose only necessary interfaces. 8. Cohesion : Ensure related elements work together. 9. Low Coupling : Minimize dependencies between modules. 10. Design by Contract : Define clear interface specifica-tions. 11. Test-Driven Development (TDD) : Write tests be-fore code. 12. Continuous Integration (CI) : Integrate code changes frequently with automated tests. 13. Continuous Deployment (CD) : Automate deploy-ment for quick releases. 14. Agile Principles : Use iterative development and col-laboration. 15. Clean Code : Write readable and maintainable code. 16. Refactoring : Continuously improve code design. 
+
+SOLID Principles 
+
+17. Single Responsibility Principle (SRP) : One class, one responsibility. 18. Open/Closed Principle (OCP) : Open for extension, closed for modification. 19. Liskov Substitution Principle (LSP) : Subtypes must be substitutable for their base types. 20. Interface Segregation Principle (ISP) : Specific in-terfaces for different clients. 21. Dependency Inversion Principle (DIP) : Depend on abstractions, not concretions. 
+
+Domain-Driven Design (DDD) Principles 
+
+22. Domain : Model the business context. 23. Entities : Objects with distinct identities. 24. Value Objects : Objects with attributes but no iden-tity. 25. Aggregates : Cluster of objects treated as a unit. 26. Repositories : Encapsulate storage and retrieval. 27. Services : Perform domain logic operations. 28. Bounded Contexts : Define explicit boundaries for models. 29. Ubiquitous Language : Use a common language for clear communication. 
+
+Additional Principles 
+
+30. Optimize for Performance : Use profiling tools to identify bottlenecks. 31. Use Virtual Environments : Isolate project depen-dencies. 32. Document Your Code : Write clear docstrings and comments. 33. Leverage Libraries and Frameworks : Use existing tools to speed up development. 34. Keep Learning : Stay updated with the latest ad-vancements. 35. Contribute to the Community : Engage with and contribute to the community. 
+
+Formatting: 
+
+36. Follow @package_format_rules.mdc when writing code. 37. Follow @documenter.mdc when writing docstrings. 38. Follow @file_naming.mdc when creating new files. 
+
+> 49 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+Package Format Rules ( package_format_rules.mdc )
+
+Docstrings 
+
+1. follow flake8 rules from @setup.cfg 2. Always docstring in the same line as ''' 
+
+3. Use :func:, :class:, :attr: for references 4. Write shape of inputs and outputs when possible 5. For dataclass, always document attributes as they are declared. Do not document in the class docstring. 
+
+Python 
+
+1. Follow flake8 rules from @setup.cfg 2. Use descriptive names for functions, classess and other members 3. Use type hints for all function signatures 4. Use logging functions from @logging.py for print and raising warnigs, errors 5. Avoid using deprecated functions 6. Follow PEP 563 (Postponed Evaluation of Annotations) 
+
+Writing Tests 
+
+1. tests should be src/curobo/tests folder. 2. Do not write unit tests for wp.kernel decorators. 3. When writing gradient checking using gradcheck, use float32 and not float64. 
+
+File Naming Convention ( file_naming.mdc )
+
+Category-First File Naming Convention 
+
+When organizing code in this project, strictly follow these category-first file naming conventions: 
+
+File Naming Rules 
+
+1. Always use the format category_specific.py where: • category identifies the broader component type or subsystem • specific describes the particular implementation or variant 2. Examples of correct file names :• connector_linear.py (NOT linear_connector.py )• sampler_node.py (NOT node_sampler.py )3. Multiple adjectives should appear in order from general to specific: • connector_cubic_spline.py (NOT connector_spline_cubic.py )4. Module directory structure should follow the same categorical organization: • /connectors/connector_linear.py 
+
+5. Import statements should reflect this structure: • from curobo.connectors.connector_linear import LinearConnector 
+
+Class Naming 
+
+Class names should remain in standard CamelCase format with specific-type first: • File connector_linear.py contains class LinearConnector 
+
+When refactoring existing code or creating new files, always audit and ensure compliance with this category-first naming convention. Consistency across the codebase is essential. 
+
+> 50 cuRoboV2: Dynamics-Aware Motion Generation with Depth-Fused Distance Fields for High-DoF Robots
+
+Documentation Principles ( documenter.mdc )
+
+You write concise and clear documentation that strictly follows the below principles: 
+
+Understand the Audience: 
+
+Tailor the documentation and tutorials to the knowledge level of new users. Provide clear explanations of domain concepts, APIs, and implementations. 
+
+Use Clear and Concise Language: 
+
+Write in a clear, concise, and straightforward manner. Avoid jargon and complex language unless necessary, and provide definitions for any technical terms used. 
+
+Organize Content Logically: 
+
+Structure the documentation with a logical flow. Start with an introduction to domain concepts, followed by API overviews, and then detailed implementation guides. 
+
+Follow reST and Sphinx Conventions: 
+
+Adhere to reStructuredText syntax and Sphinx conven-tions for formatting. Use appropriate directives and roles for code blocks, references, and other elements. 
+
+Provide Comprehensive Tutorials: 
+
+Create step-by-step tutorials that guide users through com-mon tasks and use cases. Include code examples and ex-planations to help users understand how to use the frame-work. 
+
+Document Domain Concepts: 
+
+Explain key domain concepts in detail. Use diagrams (us-ing graphviz), examples, and analogies to make complex ideas more accessible. 
+
+Include API References: 
+
+Provide comprehensive API documentation. Include de-scriptions of classes, methods, functions, parameters, re-turn values, and exceptions. Use autodoc to generate API references from docstrings. 
+
+Explain Implementations: 
+
+Offer insights into the implementation details of the frame-work. Explain the design decisions, algorithms, and data structures used. 
+
+Use Examples and Code Snippets: 
+
+Include examples and code snippets to illustrate how to use the framework. Ensure that examples are relevant, well-documented, and easy to understand. 
+
+Highlight Best Practices: 
+
+Provide guidance on best practices for using the frame-work. Include tips on performance optimization, error han-dling, and common pitfalls to avoid. 
+
+Ensure Consistency: 
+
+Maintain consistency in terminology, formatting, and style throughout the documentation. Use a style guide to ensure uniformity. 
+
+Use Cross-References: 
+
+Use cross-references to link related sections, tutorials, and API documentation. This helps users navigate the docu-mentation easily. 
+
+Include Installation and Setup Instructions: 
+
+Provide clear instructions for installing and setting up the framework. Include information on dependencies, virtual environments, and any required configurations. 
+
+Provide Troubleshooting Guides: 
+
+Include troubleshooting guides to help users resolve com-mon issues. Offer solutions to common errors and prob-lems they may encounter. 
+
+Keep Documentation Up-to-Date: 
+
+Regularly update the documentation to reflect changes in the framework. Ensure that tutorials, examples, and API references are current and accurate. 
+
+Encourage User Feedback: 
+
+Encourage users to provide feedback on the documenta-tion. Use this feedback to improve and refine the content. 
+
+Formatting: 
+
+Stick to 99 as the line width For graphviz, use style from @graphviz_example.rst

@@ -1,0 +1,406 @@
+Title: Perceptive Variable-Timing Footstep Planning for Humanoid Locomotion on Disconnected Footholds
+
+URL Source: https://arxiv.org/pdf/2603.07400v1
+
+Published Time: Tue, 10 Mar 2026 01:04:36 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Perceptive Variable-Timing Footstep Planning for Humanoid Locomotion on Disconnected Footholds 
+
+Zhaoyang Xiang, Upama Pant, and Ayonga Hereid 
+
+Abstract — Many real-world walking scenarios contain ob-stacles and unsafe ground patches (e.g., slippery or cluttered areas), leaving a disconnected set of admissible footholds that can be modeled as stepping-stone-like regions. We propose an onboard, perceptive mixed-integer model predictive con-trol framework that jointly plans foot placement and step duration using step-to-step Divergent Component of Motion (DCM) dynamics. Ego-centric depth images are fused into a probabilistic local heightmap, from which we extract a union of convex steppable regions. Region membership is enforced with binary variables in a mixed-integer quadratic program (MIQP). To keep the optimization tractable while certifying safety, we embed capturability bounds in the DCM space: a lateral one-step condition (preventing leg crossing) and a sagittal infinite-step bound that limits unstable growth. We further re-plan within the step by back-propagating the measured instanta-neous DCM to update the initial DCM, improving robustness to model mismatch and external disturbances. We evaluate the approach in simulation on Digit on randomized stepping-stone fields, including external pushes. The planner generates terrain-aware, dynamically consistent footstep sequences with adaptive timing and millisecond-level solve times. 
+
+I. I NTRODUCTION 
+
+Bipedal locomotion on terrain with many unsteppable areas—due to obstacles, clutter, fragile structures, or low-friction patches—often reduces to walking on a discon-nected set of safe footholds (stepping-stone-like regions). Controllers must then reason jointly about underactuated dynamics, adaptive timing, and discrete, nonconvex foothold feasibility. Reduced–order templates models [1]–[3] have underpinned model predictive formulations that plan Center of Mass (CoM) motion and footsteps in real time [4]. Ex-tending these schemes to restricted footholds introduces two coupled challenges: (i) admissible footholds form a union 
+
+of disconnected regions, requiring discrete selection, and (ii) step duration directly scales unstable-mode amplification, so timing must be optimized alongside foot placement. More-over, in untethered operation these regions are not known a priori and must be extracted online from onboard perception. Early work on footstep planning explored graph search and sampling-based methods to plan discrete footholds across rough terrain [5], [6]. These methods are effective for long-horizon terrain reasoning but are often decoupled from the underlying robot dynamics, making it difficult to guarantee feasibility at the control level. On the other hand, optimization-based methods, and in particular mixed-integer formulations, have emerged as a principled tool for              
+
+> Mechanical and Aerospace Engineering, The Ohio State University, Columbus, OH 43210, USA. (xiang.295, pant.46, hereid.1)@osu.edu.
+> Fig. 1. (Left) Snapshots of the simulation terrain for all ablation tests. The blue rectangles show the planned step position for the previewed steps, and the red bar shows the goal position in the sagittal direction. (Top Right) 2.5D local heightmap colored by heights; (Bottom Right) Local heightmap mask with gray masks showing all the steppable regions and green polygons marking the selected regions.
+
+terrain–aware footsteps. Convex segmentation and mixed in-teger footstep planning over uneven ground were introduced in [7], [8], with follow–ups applying mixed integer convex optimization to aggressive or rough–terrain motions [9] and phase-based end effector parameterizations [10]. Further-more, reduced-order dynamics can be directly integrated with perceptive terrain constraints [11] or with kinodynamic constraints to enforce foothold selection in a mathematically rigorous way [12]–[14]. In parallel, timing adaptation has been shown to improve robustness and feasibility, from classic preview control ideas to switching time optimization in whole body MPC [15], [16] and DCM–based step timing adaptation on restricted footholds [17]. Yet, a formulation that simultaneously optimizes discrete foothold selection on disconnected regions and variable step duration within a reduced-order, capturability-aware template remains under-explored. Regarding perceptive walking, elevation map (or heightmap) has been widely utilized for modeling the complex and uneven terrains [18], [19]. By integrating elevation map-based plane segmentation and whole-body MPC, a quadruped can achieve dynamic walking through slopes, gaps, stairs [20], [21]. When combined with mixed-integer footstep control, Acosta and Posa [11] couple vision-derived terrain with mixed-integer optimization for underactuated bipeds on rough terrain. Our formulation is complementary but differs in three ways. First, timing is an explicit decision variable: we optimize step duration and couple it with foothold selection in the same optimization.  
+
+> arXiv:2603.07400v1 [cs.RO] 8 Mar 2026 Fig. 2. Overall control architecture for locomotion on restricted footholds. The perception module processes raw depth images into linear region constraints representing feasible stepping areas. These constraints, together with a goal position, are passed to the MIQP planner that optimizes step position and duration using step-to-step DCM dynamics. The task-space controller tracks the planned step parameters and generates joint torques, which are executed on the Digit robot.
+
+Second, we embed capturability and viability-based constraints derived from the DCM that shape the feasible set and provide interpretable safety margins. Third, we re-plan within the step by backward-propagating the measured instantaneous DCM to update the initial DCM, improving robustness to model mismatch and external disturbances. Together with a heightmap-to-convex-region interface that produces half-space constraints online, these choices yield a terrain-aware planner that reasons jointly about where and 
+
+when to step. A parallel line of research learns foothold selec-tion or locomotion policies from data. Recent exam-ples include learning dynamic walking across stepping stones [22], GAN or actor-critic footstep planners [23], [24], model–based RL with constrained footprints [25], and hybrid model–based/model–free approaches for challenging terrains [26]–[30]. These methods have shown impressive empirical capabilities; however, certifying viability and cap-turability while enforcing strict membership in disconnected regions at replanning rates is still challenging. Our approach adopts a complementary strategy: we retain a reduced-order dynamical backbone and encode terrain and timing as optimization variables with explicit safety and capturability constraints. We present a perceptive mixed integer model predictive control framework for foot placement on restricted footholds (stepping-stone-like safe regions) that integrates: (i) step-to-step DCM dynamics with variable step duration , (ii) explicit 
+
+capturability/viability constraints, (iii) an onboard terrain perception interface that converts ego-centric depth images into a union of convex regions , and (iv) slack variable reg-ularization of stride differences for smooth locomotion. We further run the planner within the step by backpropagating the measured instantaneous DCM to update the initial DCM, im-proving robustness to model mismatch and disturbances. To the best of our knowledge, this is the first perceptive MIQP for restricted-foothold bipedal walking that jointly optimizes discrete region membership and step duration under explicit DCM capturability/viability bounds while supporting within-step replanning. We validate the framework in simulation on Digit over a field with randomly shaped and placed steppable regions. The planner produces terrain-aware, dynamically plausible step sequences with timing adaptation and real-time solve times. An overview of the architecture is shown in Fig. 2. The remainder of the paper is organized as follows: Section II describes the depth-based perception to obtain convex steppable region constraints. Section III formulates the MIQP, introduces the QP specialization with fixed re-gions, and explains the capturability/viability constraints to-gether with the timing variable. Section IV reports simulation results on Digit, and Section V concludes with a discussion of limitations and future work. II. P ROBABILISTIC EGO -CENTRIC TERRAIN PERCEPTION 
+
+The discontinuous terrain can be interpreted as a union of steppable region constraints for our MIQP planner. Us-ing ego-centric optical sensors, such as depth cameras and LiDAR, this terrain information can be extracted using modern computer vision algorithms. However, a simple and deterministic process is insufficient to handle significant sensor noise and occlusion, which forces many walking control designs to use external positioning assistance such as Mocap. Nonetheless, this framework proposes a self-Algorithm 1 Probabilistic Heightmap Update (per frame) 
+
+Input: Point clouds PC s, stance foot world pose (ps, Rzs )
+
+Output: Updated heightmap H
+
+if previous pose exists then 
+
+FRAME MOTION COMPENSATION (H) ▷ Alg. 2 
+
+end if if sufficient map prior then 
+
+PC s ← ICP (PC s, H)
+
+end if 
+
+Clear stale cells Bayesian cell update using PC s ▷ Eqs. (3)–(6) Temporal variance decay ▷ Eq. (7) contained terrain perception pipeline by utilizing multiple ego-centric depth sensors to obtain reliable and robust terrain constraints, consisting of the following three stages. 
+
+A. Depth Image Processing 
+
+At each perception cycle, Nc body-mounted depth cam-eras, covering both forward and backward directions, pro-duce depth images that are back-projected into 3D point clouds in their respective camera frames. Then, using the estimated kinematic chain by the whole-body controller, these point clouds are transformed to the stance foot frame as PC s.
+
+B. Probabilistic Local Heightmap 
+
+A 2.5D elevation grid H of given size and resolution ∆r is maintained in the stance foot frame, where each cell H(r, s )
+
+stores a Gaussian height belief hrs ∼ N (μrs , σ 2
+
+> rs
+
+), an observation count nrs , and a transform count ηrs that tracks how many frame-motion resampling operations the cell has undergone. The per-frame update procedure is summarized in Alg. 1. 
+
+Frame Motion Compensation. Since the heightmap is expressed in the stance foot frame, any inter-cycle change in stance foot pose requires transforming the existing grid as detailed in Alg. 2. Denoting the stance foot position and yaw rotation about the vertical axis in world frame by (ps, Rzs ),the mapping from the previous stance frame to the current one is 
+
+pnew =  Rzs, new 
+
+⊤   Rzs, old 
+
+pold + ps,old − ps,new 
+
+. (1) When several old cells collapse into the same new cell, the one with the greatest height is retained. To prevent artifacts from high-frequency updates, three safeguards are applied: 1) Motion threshold. Resampling is skipped when the inter-frame translation and rotation fall below pre-scribed thresholds, avoiding unnecessary interpolation. 2) Resampling penalties. After every transformation, the cell variance is inflated by ασ > 1, and the observation count is decayed by αn < 1, reducing confidence in repeatedly propagated data. 3) Staleness clearing. Cells whose transform count or age exceeds their respective limits are cleared entirely. 
+
+Algorithm 2 FRAME MOTION COMPENSATION 
+
+Input: Heightmap H, old and new stance foot world poses 
+
+Output: Compensated heightmap H
+
+if inter-frame motion above threshold then for each observed cell (r, s ) in H do 
+
+(r′, s ′) ← (r, s ) ▷ Eq. (1) Apply resampling penalties Clear stale cells 
+
+end for end if ICP Registration. Odometry drift causes systematic mis-alignment between successive point clouds. To mitigate this, an Iterative Closest Point (ICP) step refines the alignment of new observations against the existing heightmap before fusion. Height-aware correspondence filtering and outlier rejection are applied to improve robustness, and the resulting rigid correction is accepted only if its magnitude stays below a safety cap. 
+
+Observation Variance Model. For a point ppc in the camera frame at distance d = ∥ppc ∥, the observation variance is 
+
+σ2obs = σ20
+
+d2
+
+max  cos θ, ϵ  , (2) where σ0 is the baseline noise at unit distance and perpen-dicular viewing, cos θ = |pzpc |/d under a locally horizontal surface assumption, and ϵ prevents singularities at grazing incidence. 
+
+Bayesian Cell Update. When Q > 1 depth points land in the same cell within a single frame, their heights are first aggregated via precision-weighted averaging: 
+
+μagg =
+
+PQq=1 wq zq
+
+PQq=1 wq
+
+, σ2agg = 1
+
+PQq=1 wq
+
+, (3) with wq = 1 /σ 2 
+
+> q
+
+. The aggregated observation is then fused with the cell prior through a Kalman-style update: 
+
+K = σ2
+
+> rs
+
+  σ2 
+
+> rs
+
++ σ2agg 
+
+, (4) 
+
+μrs ← μrs + K μagg − μrs 
+
+, (5) 
+
+σ2 
+
+> rs
+
+← (1 − K) σ2
+
+> rs
+
+, (6) with a variance floor to prevent overconfidence. Upon re-ceiving a fresh observation, the transform count is reset to 
+
+ηrs = 0 so that new measurements take precedence over propagated estimates. 
+
+Temporal Uncertainty Decay. Cells not observed in the current frame undergo variance growth at a motion-adaptive rate: 
+
+σ2 
+
+> rs
+
+← γeff σ2
+
+> rs
+
+, γeff = 1 + ( γ0 − 1) 
+
+
+
+1 + ∥∆t∥
+
+dref 
+
+
+
+, (7) where γ0 > 1 is the base decay factor applied when the robot is stationary, ∥∆t∥ is the planar displacement of the stance foot between consecutive perception frames, and dref is a Fig. 3. Convex regions extraction from the local heightmap as in Alg. 3. 
+
+reference displacement to normalize the motion magnitude. When the robot is stationary ( ∥∆t∥ = 0), the effective rate reduces to γeff = γ0; as the inter-frame motion grows, unobserved cells lose confidence more rapidly, reflecting the increased likelihood that the underlying terrain has shifted out of view. 
+
+C. Convex Region Constraints 
+
+Given the local heightmap, the convex region constraints are extracted using OpenCV primitives [31] as in Alg. 3 (see Fig. 3). 
+
+Approximate Convex Region Extraction. First, steppable regions are identified by thresholding the heightmap, and then extracted as contours that delineate arbitrarily shaped candidate foothold regions. After filtering the small contours, each remaining one is approximated by a polygon using the Ramer–Douglas–Peucker algorithm (RDP), with a tolerance tied to the grid resolution to suppress sensor noise and a bounded number of edges. To obtain a representation amenable to mixed-integer linear constraints, we convert polygons to convex hulls {R j }Mj=1 using Sklansky’s algo-rithm [32], and then compute an equivalent half-space de-scription for each Rj = {p | Aj p ≤ bj } (outward normals, one row per edge). Using the step position notation adopted throughout, the foothold constraint is simply pk ∈ SMj=1 Rj ,which we encode with binaries and a big-M relaxation in Section III. This conversion yields linear region membership tests with a small and controllable loss of geometric fidelity, and it interfaces cleanly with online perception outputs. 
+
+Velocity-Adaptive Region Selection. When the number of detected regions exceeds the planner capacity Mmax , a rectangular beam mask aligned with the intended walking direction selects a relevant subset. The beam position along the walking direction is shifted by two offsets: one propor-tional to the commanded goal that biases the beam forward 
+
+Algorithm 3 Convex Region Extraction and Selection 
+
+Input: Heightmap H, planner capacity Mmax 
+
+Output: Region constraints {R j }Mj=1 
+
+Extract steppable contours by threshold 
+
+for each contour do 
+
+RDP → Sklansky’s → half-space Rj
+
+end for if M > M max then 
+
+Select Mmax regions via velocity-adaptive beam mask 
+
+end if 
+
+or backward, and one that extends the beam backward when the robot’s forward speed is low to cover possible step-back locations. The stance region is always included. Among the remaining regions, those with sufficient overlap with the beam (computed via Sutherland–Hodgman polygon clipping) are retained and sorted by proximity, yielding at most Mmax 
+
+region constraints. III. V ARIABLE TIME FOOT PLACEMENT VIA MIQP On stepping-stone terrain, dynamic feasibility depends on both where the next foothold lies and when it is taken. To handle this coupling in a single, principled planner, we formulate an MIQP that selects stepping regions from Section II and optimizes foot placements and step durations over a short horizon under the step-to-step DCM recursion, augmented with conservative capturability/viability bounds. Finally, we show how to replan within a step and how the low-level controller tracks updated landing locations and durations without transients. 
+
+DCM and step-to-step dynamics. The Divergent Com-ponent of Motion (DCM) is a reduced-order state that captures the unstable (diverging) component of the CoM dynamics and is widely used for bipedal balance and footstep planning [2]. We use the ALIP/DCM step-to-step recursion derived in our previous work [17]: 
+
+ξ0,k +1 = eλT k ξ0,k + (1 − eλT k ) pk. (8) Here ξ0,k ∈ R2 is the DCM at the start of step k, pk ∈ R2
+
+is the stance foot/CoP location during step k, Tk is the step duration, and λ := pg/z c is the template natural frequency for constant CoM height zc. The step-to-step DCM evolution in (8) can be written as (ξ0,k +1 − pk) = eλT k (ξ0,k −
+
+pk), making the key control lever explicit: the DCM offset 
+
+from the stance foot grows by the scalar gain eλT k >1, so shortening Tk directly reduces unstable-mode growth (larger capturable set), while lengthening Tk may be needed to span sparse stones. This compact recursion is what allows us to plan where and when to step jointly in a low-dimensional optimization. 
+
+Capturability/viability bounds used in MPC. Because the DCM is the unstable mode, feasibility requires keeping ξ0,k 
+
+within bounds that admit a sequence of admissible footholds and timings (capturability/viability). Computing exact multi-step capturable sets on a union of convex stepping-stone regions is difficult, so we enforce conservative directional bounds that are linear and easy to embed: (i) Lateral (y) 
+
+— 1-step capturability without leg crossing. The DCM must remain on the inner side of the stance foot so that it can be captured in one step without crossing legs. (ii) Sagittal (x) — infinite-step capturability bound. Assuming all future 
+
+steps take the longest admissible step length Lmax with the 
+
+shortest admissible duration Tmin , one obtains the relaxed upper bound 
+
+ξx 
+
+> 0,k
+
+− pxk ≤ Lmax 
+
+eλT min − 1 , (9) which prevents the unstable state from growing faster than what the step constraints can absorb [33]. These bounds serve as computationally light surrogates and are tightened by robustness margins in the MIQP constraints below. 
+
+Decision Variables and Horizon. For notational and compu-tational convenience, in this section we introduce zk := ξ0,k 
+
+and σk := eλT k , which recasts (8) as zk+1 = σkzk + (1 −
+
+σk) pk, making it a linear/bilinear form amenable to MIQP. Over an N -step preview, we optimize 
+
+X :=  {pk}Nk=1 , {zk}N +1  
+
+> k=1
+
+, {σk}Nk=1 ,
+
+where 
+
+pk=
+
+pxk
+
+pyk
+
+
+
+, zk ∈ R2, σ k ∈ R.
+
+We also introduce componentwise slack variables ( sxk , s yk) for stride length and width, defined as 
+
+sxk := pxk+1 −pxk , (10) 
+
+syk := ( −1) k+ℓ pyk+1 −pyk
+
+, k=1 , . . . , N −1, (11) where ℓ ∈ { 0, 1} denotes the stance sign of the current step ( ℓ=1 right-stance, ℓ=0 left-stance). This yields a unified lateral bound on syk independent of the current stance. The triplet (pk, z k, σ k) exposes the key levers in legged walking: where to step, which unstable state to target, and 
+
+how long the step lasts. Slack variables (sxk , s yk) act on inter-step differences , which (i) regularizes the plan to avoid chat-tering, (ii) encodes nominal gait (length/width) independent of absolute location, and (iii) maps naturally to simple box bounds that represent reach and swing-foot clearance. 
+
+DCM Dynamics with Variable Step Duration. We enforce the step-to-step dynamics 
+
+zk+1 = σk zk + (1 −σk) pk, k = 1 , . . . , N, (12) which is identical to (8) but labeled here for convenience. In the DCM template, the unstable mode scales by σk =
+
+eλT k . Shorter steps (smaller Tk) curb divergence and enlarge capturable sets; longer steps may be necessary to span stones. Therefore, we consider variable step durations in our planner, bounded by 
+
+σmin = eλT min ≤ σk ≤ eλT max = σmax . (13) Bounding σk by eλT min and eλT max ties the reduced model to actuator and swing-kinematic limits. 
+
+Objective. Let zgoal ∈ R2 be a tracking goal (e.g., a velocity-aligned waypoint or subgoal) and let σnom ∈
+
+[σmin , σ max ] be the nominal step duration and (px
+
+> nom
+
+, p y
+
+> nom
+
+)
+
+denote nominal stride length and width, respectively. We minimize a quadratic stage-summed cost 
+
+J(·) =  
+
+> N+1
+
+X
+
+> k=2
+
+wz,k zk − zgoal  
+
+> 2
+
++
+
+> N
+
+X
+
+> k=1
+
+wσ,k (σk − σnom )2
+
++ 
+
+> N−1
+
+X
+
+> k=1
+
+
+
+wx (sxk − px
+
+> nom
+
+)2 + wy (syk − py
+
+> nom
+
+)2
+
+. (14) The DCM tracking term encodes balance/heading intent. Penalizing timing variation discourages excessive Tk mod-ulation (energy/clearance costs and solver stability) while allowing deliberate adaptation on restricted terrain. Penal-izing stride slacks (rather than absolute footsteps) produces smooth, human-like changes and decouples regularization from discrete foothold selection. 
+
+Safety and Capturability Constraints. Following the cap-turability/viability discussion above, we impose the follow-ing linear constraints to ensure safety and capturability: (1) Inner-side lateral corridor (1-step capturabil-ity/viability): 
+
+(−1) k+ℓ  zyk − pyk
+
+ ≥ ∆y , k = 1 , . . . , N, (15) which encodes the lateral one-step capturability condition described above, written so that the inequality always points toward the midline between the feet. Here ℓ ∈ {0, 1}
+
+indicates whether the first stance (at k=1 ) is left ( ℓ=0 ) or right ( ℓ=1 ). The factor (−1) k+ℓ flips sign each step, so the ”inner side” is consistently treated as positive. Example (sign flip). If the first stance is right ( ℓ=1 ), then for odd k we have (−1) k+1 =+1 and (15) reads zyk ≥ pyk+∆ y , while for even k we have (−1) k+1 =−1 and the inequality becomes 
+
+zyk ≤ pyk−∆y . This enforces that the DCM stays on the inner side with a fixed margin ∆y >0, preventing leg crossing and guaranteeing a feasible lateral capture step in one move. (2) Longitudinal capturability (infinite-step upper bound): 
+
+zxk − pxk ≤ Lmax 
+
+σmin − 1 − ∆x, k = 1 , . . . , N, (16) which is the infinite-step capturability bound (9) (assuming future steps can use Lmax at Tmin ) tightened by a fixed robustness margin ∆x>0. Here Lmax is the maximum ad-missible step length (cf. (19)) and σmin =eλT min .(3) Step-to-step growth: 
+
+zxk+1 − zxk ≤ Lmax , k = 1 , . . . , N −1. (17) This limits unrealistic forward amplification of the unstable state between successive steps even when region selection would permit large jumps, and together with (16) shapes a viability tube in the sagittal direction. 
+
+Stepping-Stone (Disconnected) Region Constraints. Let the union of M convex stepping-stone regions be given by 
+
+R = SMj=1 {p | Aj p ≤ bj }. Introduce assignment binaries δkj ∈ { 0, 1}, PMj=1 δkj = 1 , and enforce membership via a big-M relaxation: 
+
+Aj pk ≤ bj + Mbig (1 − δkj ), ∀j, k = 1 , . . . , N. (18) The binaries δkj select one convex region per step. Amoderate big-M keeps the relaxation tight and numerically stable; we set Mbig from the local workspace bounds. 
+
+Bounds and Slack Constraints. We use simple box bounds on stride lengths and widths for k = 1 , . . . , N −1:
+
+Lmin ≤ sxk ≤ Lmax , Wmin ≤ syk ≤ Wmax . (19) These reflect kinematic reach, self-collision limits, and terrain-specific safety buffers. In practice [Lmin , L max ] and 
+
+[Wmin , W max ] are derived from morphology and clearance tests and can be tightened online (e.g., narrowed in clutter). 
+
+Variable Step Duration MIQP. To obtain a convex QP in the continuous variables, we treat only the first-step timing as a decision variable and fix subsequent timings to the nominal value: 
+
+σk = σnom , k = 2 , . . . , N. (20) Since the current stance foot location (i.e., p1) is known, the DCM dynamics become affine: during step k=1 , only σ1
+
+affects the state; for k ≥ 2, only the foot placements pk act as control inputs. Collecting terms, the MIQP reads 
+
+min       
+
+> X,{sxk,s yk},{δkj }
+
+J(·) in (14) (21) 
+
+s.t. (10) − (13) and (15) − (19) Each constraint maps to a physical or viability rationale: lateral no-crossing, sagittal capturability, bounded inter-step growth, and explicit foothold membership. The objective aligns balance targets with smooth, timing-aware locomotion. Together, these choices yield plans that are both terrain-aware and dynamically plausible. When region selections are fixed (e.g., predetermined stepping stones), the continuous subproblem is a QP; when selections are free, the full problem is an MIQP. 
+
+Within-step replanning (backward DCM initialization). 
+
+Although the planner is derived from discrete step-to-step dynamics, we run it continuously during a step to mitigate disturbances and model mismatch. Within a step, the DCM admits the closed-form evolution 
+
+ξk(t) = pk + ( ξ0,k − pk)eλt , t ∈ [0 , T k]. (22) Working in the current stance-foot frame (so that p1 ≡
+
+[0 , 0] T ), at each replanning instant with relative elapsed time 
+
+˜t ∈ [0 , T 1] we compute the initial DCM of the current step by backward propagating (22) from the measured instantaneous DCM: 
+
+z1 = ξ0,1 = ξ(˜ t) 
+
+> mea
+
+e−λ˜t. (23) If a nonzero stance origin were used, the more general expression is z1 = e−λ˜tξ(˜ t) 
+
+> mea
+
++ (1 − e−λ˜t) p1. This measurement-anchored initialization continuously corrects the “discrete” state fed to the MIQP and therefore improves robustness. 
+
+Adaptation of Variable Step Duration in the Low-Level Controller. Given the desired step stride and duration from the MIQP planner in (21), we use a task-space, whole body controller to track the robot’s base height (constant), torso orientation (constant), and swing foot position and orienta-tion (fixed as zero) in the stance frame, while keeping the balance of the robot [34]. The swing-foot position reference is generated online as a minimum-jerk trajectory. Whenever the target landing pose or duration changes mid-swing, the remaining segment is updated to reach the desired landing position at the end of the step. The reference trajectory is parameterized by a dimensionless phase variable that increases monotonically from 0 to 1 within each step. Its per-tick increment is set by the current target step duration, and its derivative is used internally to produce consistent velocity commands. This use of a monotonically incrementing phase variable makes the controller agnostic to whether timing is fixed or variable, thereby enabling stable updates throughout the step without transients. IV. S IMULATION RESULTS 
+
+The perceptive foot placement planning framework was tested on the humanoid robot model Digit in MuJoCo, running on a personal laptop with an Intel i7 processor. The timestep of the simulation was fixed at 1 ms, the same as the low-level controller, and the MIQP planner cycle ran every 30 ms. The depth-based perception was updated at the beginning of each walking step and then every 180 ms in the step, using simulated depth renderers to obtain raw depth images. The mixed-integer quadratic program was formulated and solved online using Gurobi (Python interface) for fast prototyping [35]. The parameters of the planner are summarized in Table I, chosen based on the robot model and the terrain settings. For instance, the bounds of the stride were set according to the kinematic limits of the robot model, and the margins of the initial DCM were determined by the size of the feet. The weights in the cost function were tuned empirically to balance different objectives. The simulation terrain is illustrated in Fig. 1. To stress-test discrete selection and timing, steppable regions were randomized in location, shape, and size, producing irreg-ular gaps and occasional sparsity near the map boundary. This simulated terrain imposes severe discrete constraints on foothold selection and requires replanning during swing. Fig. 5 shows the footprints with trajectories of the CoM and                        
+
+> TABLE I PLANNER PARAMETERS USED IN PLANNING AND EXPERIMENTS .
+> Name Symbol Value [Units]
+> Preview horizon N4Nominal step duration Tnom 0.5 [s] Min / Max step duration Tmin , T max 0.3, 0.7 [s] Stride length bounds [Lmin , L max ][-0.6, 0.6] [m] Stride width bounds [Wmin , W max ][0.05, 0.5] [m] Safety margins ∆x,∆y[0.04, 0.04] [m] Fig. 4. Initial DCM comparison of: (A) The proposed framework; (B) Planning with fixed step duration; (C) Planning with reduced number of previewed steps as N= 2 ; (D) Planning without viability constraints on DCM evolution. (V) CoM velocity of the proposed framework. The x-velocity was roughly maintained around 1.0 m /sprimarily due to the goal position tracking under the nominal stride length and step duration. The y-velocity was also roughly regulated to periodic oscillations. (T) Step duration of the proposed framework. It was being actively adjusted to produce viable DCM evolution through random footholds.
+> Fig. 5. Top-down view of stance footprints and CoM and DCM trajectories of the proposed framework. With the goal position in the forward direction, the robot was able to find a viable path through all random footholds.
+
+DCM in a top-down view, demonstrating a smooth evolution of the DCM. Detailed visualization of the simulation can be found in the supplemental video. The instantaneous CoM velocity of our proposed frame-work during the test is shown in Fig. 4 (Top Right), where the robot maintained a rough x-velocity around 1.0 m /s,except when the robot needed to slow down while deter-mining footsteps from highly-constrained footholds. This effect was achieved by tracking a fixed goal position set ahead of the robot with pre-defined nominal stride length and step duration. This is rather a high walking speed even for bipedal dynamic walking, making the task of passing through constrained terrain even more challenging. It evidently shows that tracking a goal position under constraints on step posi-tion and duration can achieve performance comparable to velocity-tracking methods, implying further possibilities for task-space target tracking with our planner. Fig. 4 (Bottom Right) shows the in-step planned versus the actual step du-ration of the current step, which was being actively adjusted within a swing phase to preserve capturability when stones were scarce or irregular. We also tested our framework (denoted as A) against: (B) a fixed step duration; (C) a reduced number of previewed steps; (D) no viability constraints. All ablation approaches (B) to (D) failed to walk through the terrain field due to insufficient capabilities to plan a viable DCM evolution in time given such severe and sparse foothold constraints (see Fig. 4). With a fixed step duration in (B), the DCM was over-constrained and could barely change to allow agile foot placement. With the number of the previewed steps reduced to N = 2 in (C), the planned DCM evolution was inadequate for determining a feasible sequence of footsteps through random regions, especially under such high-speed dynamic walking. Particularly, when there are no viability constraints as in (D), the evolution of DCM could be pushed too near the boundary and then easily degrade to the infeasible region given noise and uncertainties in the system. In the proposed planning approach (A), the planned initial DCM converges to the measured one at the end of a swing phase stably, even at the presence of some abrupt in-step changes indicating emerging tight region constraints. These tests again demonstrate the significance of the choices of the proposed planning algorithm. Moreover, the average per-iteration solve time in Python (formulation + update + solve) is around 13 ms (with SD = 3 ms and the range as [8, 19] ms). As is typical for mixed-integer programs solved by branch-and-bound, runtimes vary with search-tree size; a compiled implementation is expected to reduce these numbers further. V. C ONCLUSION 
+
+This paper presents a perceptive mixed-integer predic-tive control formulation that incorporates depth-sensing-based probabilistic heightmap, variable step duration, and capturability-based dynamics to plan viable foot placements on discontinuous terrains. The proposed foot placement plan-ner is implemented with a task-space controller in simulation on a terrain field of random footholds, demonstrating feasible and stable gaits. With a discrete inter-step formulation, the resulting MIQP indicates the possibility of real-time solving on hardware, which we target next. Future work will also focus on uncertainty-aware footstep planning on more complicated terrain types, and experimental realization on the humanoid robot Digit. REFERENCES [1] S. Kajita, F. Kanehiro, K. Kaneko, K. Fujiwara, K. Harada, K. Yokoi, and H. Hirukawa, “Biped walking pattern generation by using preview control of zero-moment point,” in 2003 IEEE International Conference on Robotics and Automation (Cat. No.03CH37422) , vol. 2, Sept. 2003, pp. 1620–1626 vol.2. [2] J. Englsberger, C. Ott, and A. Albu-Schaffer, “Three-Dimensional Bipedal Walking Control Based on Divergent Component of Motion,” 
+
+IEEE Transactions on Robotics , vol. 31, no. 2, pp. 355–368, Apr. 2015. [3] Y. Gong and J. W. Grizzle, “Zero Dynamics, Pendulum Models, and Angular Momentum in Feedback Control of Bipedal Locomotion,” 
+
+Journal of Dynamic Systems, Measurement, and Control , vol. 144, no. 121006, Oct. 2022. [4] P.-b. Wieber, “Trajectory Free Linear Model Predictive Control for Stable Walking in the Presence of Strong Perturbations,” in 2006 6th IEEE-RAS International Conference on Humanoid Robots , Dec. 2006, pp. 137–142. [5] D. Kanoulas, A. Stumpf, V. S. Raghavan, C. Zhou, A. Toumpa, O. Von Stryk, D. G. Caldwell, and N. G. Tsagarakis, “Footstep Planning in Rough Terrain for Bipedal Robots Using Curved Contact Patches,” in 2018 IEEE International Conference on Robotics and Automation (ICRA) , May 2018, pp. 4662–4669. [6] R. J. Griffin, G. Wiedebach, S. McCrory, S. Bertrand, I. Lee, and J. Pratt, “Footstep Planning for Autonomous Walking Over Rough Terrain,” in 2019 IEEE-RAS 19th International Conference on Hu-manoid Robots (Humanoids) , Oct. 2019, pp. 9–16. [7] R. Deits and R. Tedrake, “Footstep planning on uneven terrain with mixed-integer convex optimization,” in 2014 IEEE-RAS International Conference on Humanoid Robots , Nov. 2014, pp. 279–286. [8] Robin L. H. Deit, “Convex Segmentation and Mixed-Integer Footstep Planning for a Walking Robot,” Thesis, Massachusetts Institute of Technology, 2014. [9] A. K. Valenzuela, “Mixed-integer convex optimization for planning aggressive motions of legged robots over rough terrain,” Thesis, Massachusetts Institute of Technology, 2016. [10] A. W. Winkler, C. D. Bellicoso, M. Hutter, and J. Buchli, “Gait and Trajectory Optimization for Legged Systems Through Phase-Based End-Effector Parameterization,” IEEE Robotics and Automation Letters , vol. 3, no. 3, pp. 1560–1567, July 2018. [11] B. Acosta and M. Posa, “Perceptive Mixed-Integer Footstep Control for Underactuated Bipedal Walking on Rough Terrain,” May 2025. [12] B. Aceituno-Cabezas, C. Mastalli, H. Dai, M. Focchi, A. Radulescu, D. G. Caldwell, J. Cappelletto, J. C. Grieco, G. Fern´ andez-L´ opez, and C. Semini, “Simultaneous Contact, Gait, and Motion Planning for Robust Multilegged Locomotion via Mixed-Integer Convex Opti-mization,” IEEE Robotics and Automation Letters , vol. 3, no. 3, pp. 2531–2538, July 2018. [13] Y. Ding, C. Li, and H.-W. Park, “Kinodynamic Motion Planning for Multi-Legged Robot Jumping via Mixed-Integer Convex Program,” in 
+
+2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , Oct. 2020, pp. 3998–4005. [14] N. Fey, R. J. Frei, and P. M. Wensing, “3D Hopping in Discontinuous Terrain Using Impulse Planning With Mixed-Integer Strategies,” IEEE Robotics and Automation Letters , vol. 9, no. 7, pp. 6194–6201, July 2024. [15] T. Takenaka, T. Matsumoto, and T. Yoshiike, “Real time motion generation and control for biped robot -1 st report: Walking gait pattern generation-,” in 2009 IEEE/RSJ International Conference on Intelligent Robots and Systems . IEEE, Oct. 2009, pp. 1084–1091. [16] S. Katayama and T. Ohtsuka, “Whole-body model predictive control with rigid contacts via online switching time optimization,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , Oct. 2022, pp. 8858–8865. [17] Z. Xiang, V. Paredes, G. A. Castillo, and A. Hereid, “Adaptive Step Duration for Precise Foot Placement: Achieving Robust Bipedal Locomotion on Terrains with Restricted Footholds,” Oct. 2024. [18] P. Fankhauser, M. Bloesch, and M. Hutter, “Probabilistic Terrain Mapping for Mobile Robots With Uncertain Localization,” IEEE Robotics and Automation Letters , vol. 3, no. 4, pp. 3019–3026, Oct. 2018. [19] T. Miki, L. Wellhausen, R. Grandia, F. Jenelten, T. Homberger, and M. Hutter, “Elevation Mapping for Locomotion and Navigation using GPU,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , Oct. 2022, pp. 2273–2280. [20] R. Grandia, F. Jenelten, S. Yang, F. Farshidian, and M. Hutter, “Percep-tive Locomotion Through Nonlinear Model-Predictive Control,” IEEE Transactions on Robotics , vol. 39, no. 5, pp. 3402–3421, Oct. 2023. [21] T. Corb` eres, C. Mastalli, W. Merkt, J. Shim, I. Havoutis, M. Fallon, N. Mansard, T. Flayols, S. Vijayakumar, and S. Tonneau, “Perceptive Locomotion Through Whole-Body MPC and Optimal Region Selec-tion,” IEEE Access , vol. 13, pp. 69 062–69 080, 2025. [22] H. Duan, A. Malik, M. S. Gadde, J. Dao, A. Fern, and J. Hurst, “Learning Dynamic Bipedal Walking Across Stepping Stones,” in 
+
+2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , Oct. 2022, pp. 6746–6752. [23] P. Mishra, U. Jain, S. Choudhury, S. Singh, A. Pandey, A. Sharma, R. Singh, V. K. Pathak, K. K. Saxena, and A. Gehlot, “Footstep planning of humanoid robot in ROS environment using Generative Ad-versarial Networks (GANs) deep learning,” Robotics and Autonomous Systems , vol. 158, p. 104269, Dec. 2022. [24] C. Gaspard, G. Passault, M. Daniel, and O. Ly, “FootstepNet: An Efficient Actor-Critic Method for Fast On-line Bipedal Footstep Plan-ning and Forecasting,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , Oct. 2024, pp. 13 749–13 756. [25] T. Jin, T. Kobayashi, and T. Matsubara, “Constrained footstep planning using model-based reinforcement learning in virtual constraint-based walking,” Advanced Robotics , vol. 38, no. 8, pp. 541–561, Apr. 2024. [26] S. Omar, L. Amatucci, V. Barasuol, G. Turrisi, and C. Semini, “SafeSteps: Learning Safer Footstep Planning Policies for Legged Robots via Model-Based Priors,” in 2023 IEEE-RAS 22nd Interna-tional Conference on Humanoid Robots (Humanoids) , Dec. 2023, pp. 1–8. [27] H. J. Lee, S. Hong, and S. Kim, “Integrating Model-Based Foot-step Planning with Model-Free Reinforcement Learning for Dynamic Legged Locomotion,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , Oct. 2024, pp. 11 248–11 255. [28] I. Radosavovic, S. Kamat, T. Darrell, and J. Malik, “Learning Hu-manoid Locomotion over Challenging Terrain,” Oct. 2024. [29] H. Duan, B. Pandit, M. S. Gadde, B. Van Marum, J. Dao, C. Kim, and A. Fern, “Learning Vision-Based Bipedal Locomotion for Challenging Terrain,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) , May 2024, pp. 56–62. [30] H. Wang, Z. Wang, J. Ren, Q. Ben, T. Huang, W. Zhang, and J. Pang, “BeamDojo: Learning Agile Humanoid Locomotion on Sparse Footholds,” Apr. 2025. [31] G. Bradski, “The OpenCV library,” Dr. Dobb’s Journal of Software Tools , 2000. [32] J. Sklansky, “Finding the convex hull of a simple polygon,” Pattern Recognition Letters , vol. 1, no. 2, pp. 79–83, Dec. 1982. [33] T. Koolen, T. De Boer, J. Rebula, A. Goswami, and J. Pratt, “Capturability-based analysis and control of legged locomotion, Part 1: Theory and application to three simple gait models,” The International Journal of Robotics Research , vol. 31, no. 9, pp. 1094–1113, Aug. 2012. [34] G. A. Castillo, B. Weng, S. Yang, W. Zhang, and A. Hereid, “Template Model Inspired Task Space Learning for Robust Bipedal Locomotion,” in 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, Oct. 2023, pp. 8582–8589. [35] L. Gurobi Optimization, “Gurobi Optimizer Reference Manual,” 2024.

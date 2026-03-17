@@ -1,0 +1,798 @@
+Title: Panoramic Multimodal Semantic Occupancy Prediction for Quadruped Robots
+
+URL Source: https://arxiv.org/pdf/2603.13108v1
+
+Published Time: Mon, 16 Mar 2026 01:23:36 GMT
+
+Number of Pages: 34
+
+Markdown Content:
+# Panoramic Multimodal Semantic Occupancy Prediction for Quadruped Robots 
+
+Guoqiang Zhao 1,∗, Zhe Yang 1,∗, Sheng Wu 1,∗, Fei Teng 1, Mengfei Duan 1,Yuanfan Zheng 1, Kai Luo 1, and Kailun Yang 1,†
+
+> 1
+
+School of Artificial Intelligence and Robotics, Hunan University 
+
+Abstract. Panoramic imagery provides holistic 360 ° visual coverage for perception in quadruped robots. However, existing occupancy predic-tion methods are mainly designed for wheeled autonomous driving and rely heavily on RGB cues, limiting their robustness in complex environ-ments. To bridge this gap, (1) we present PanoMMOcc, the first real-world panoramic multimodal occupancy dataset for quadruped robots, featuring four sensing modalities across diverse scenes. (2) We propose a panoramic multimodal occupancy perception framework, VoxelHound, tailored for legged mobility and spherical imaging. Specifically, we de-sign (i) a Vertical Jitter Compensation (VJC) module to mitigate severe viewpoint perturbations caused by body pitch and roll during mobility, enabling more consistent spatial reasoning, and (ii) an effective Multi-modal Information Prompt Fusion (MIPF) module that jointly leverages panoramic visual cues and auxiliary modalities to enhance volumetric occupancy prediction. (3) We establish a benchmark based on PanoM-MOcc and provide detailed data analysis to enable systematic evaluation of perception methods under challenging embodied scenarios. Extensive experiments demonstrate that VoxelHound achieves state-of-the-art per-formance on PanoMMOcc ( +4.16% in mIoU). The dataset and code will be publicly released to facilitate future research on panoramic mul-timodal 3D perception for embodied robotic systems at PanoMMOcc, along with the calibration tools released at CameraLiDAR-Calib. 
+
+Keywords: Panoramic perception · Multimodal fusion · Semantic oc-cupancy prediction 
+
+## 1 Introduction 
+
+Panoramic perception is emerging as a critical capability for embodied intelli-gence [1, 25], enabling holistic and continuous understanding of surrounding en-vironments. Compared with conventional narrow Field-of-View (FoV) cameras, panoramic imaging provides full 360 ° observation without blind spots, which is particularly advantageous for mobile agents operating in dynamic and unstruc-tured scenes [10, 18, 51, 58, 60, 69]. As embodied platforms increasingly interact  
+
+> ∗
+
+Equal contribution  
+
+> †
+
+Correspondence: kailun.yang@hnu.edu.cn. 
+
+> arXiv:2603.13108v1 [cs.RO] 13 Mar 2026
+
+2 G. Zhao, Z. Yang, S. Wu et al. LiDAR / Radar Multi -view P inhole RGB Images  
+
+> Stable Viewpoint Structured Traffic Scenes
+
+(a) Vehicle-mounted platform. Single Panoramic Image               
+
+> Low Vi ewpoint and Severe Jitter
+> Illumination variation
+> Surface -aware
+> LiDAR Panoramic
+> Polarization Thermal
+> Multimodal Input
+> LiDAR Panoramic
+> Polarization Thermal
+> Multimodal Input
+> Diverse Scenes
+> Rich complementary
+> modalities
+> Single Panoramic Image
+> Low Vi ewpoint and Severe Jitter
+> Illumination variation
+> Surface -aware
+> LiDAR Panoramic
+> Polarization Thermal
+> Multimodal Input
+> Diverse Scenes
+> Rich complementary
+> modalities
+
+(b) Quadruped-based platform (ours). 
+
+Fig. 1: Comparison between Vehicle-based and Quadruped-based Occupancy Percep-tion. (a) Vehicle setting vs. (b) Quadruped setting. 
+
+with complex real-world scenes, panoramic visual inputs are becoming an essen-tial sensory modality for perception-driven decision making [6,8,27,59]. However, panoramic images remain 2D projections of a 3D world and lack explicit spatial structure. For embodied agents that require reliable navigation and interaction, 3D scene reasoning is essential. Occupancy representation has recently gained attention as an effective intermediate representation, modeling free, occupied, and unknown space in a unified form [16, 21, 22, 34, 49, 50, 55, 63, 65]. By bridging perception and motion planning, occupancy prediction enables spatial reasoning under partial observability and supports safe and efficient robot behavior. Deploying panoramic occupancy perception on real robotic platforms intro-duces significant challenges, particularly for quadruped robots. Compared with wheeled platforms (Fig. 1a), quadruped platforms (Fig. 1b) have low sensor view-points, frequent self-occlusions, and strong ego-motion induced by gait dynam-ics [27,54]. Although panoramic cameras mitigate view limitations, relying solely on RGB modality remains fragile under illumination variations, low-texture re-gions, and long-range perception scenarios. Robust panoramic occupancy percep-tion thus calls for multimodal sensory integration. Different sensing modalities provide complementary cues for panoramic scene understanding [30,32,36]. RGB images offer rich semantic information [36], thermal sensing enhances robustness under low-light conditions [13], polarization imaging reveals material-dependent and weak-target cues [56], and LiDAR supplies accurate geometric and depth measurements [30]. Integrating these complementary modalities within a unified panoramic occupancy framework enables more reliable and comprehensive 3D environment modeling for embodied intelligence systems. Despite this demand, existing datasets do not adequately support this re-search direction. Current panoramic datasets primarily focus on 2D vision tasks such as detection and segmentation, without 3D occupancy annotations [27, 28, 59, 61]. In contrast, existing occupancy benchmarks are largely designed for autonomous driving, relying on multi-view cameras and vehicle-mounted Li-DAR [47,50,52], and rarely consider panoramic imaging or quadruped platforms. Panoramic Multimodal Semantic Occupancy Prediction 3Rural Areas        
+
+> Urban Street Scenes
+> Residential Areas
+> Campus Environments
+> Forested Regions
+> Recreational Green Spaces
+> Structured Semi -structured Un structured
+
+Fig. 2: Overview of the proposed dataset across six representative scenes. We visualize a cropped region of the panoramic ERP image for clarity. The dataset covers diverse scenes and challenging conditions for multimodal occupancy perception. 
+
+To bridge this gap, we present a panoramic multimodal occupancy bench-mark collected on a real quadruped robot. The dataset provides synchronized panoramic, thermal, polarization, and LiDAR data, along with dense occu-pancy annotations across diverse environments and realistic robot motions. Fur-thermore, we introduce a baseline panoramic multimodal occupancy prediction framework to establish reference performance and highlight the unique chal-lenges posed by this benchmark. Together, our benchmark and baseline provide a systematic foundation for future research on panoramic multimodal occupancy perception in embodied intelligence. At a glance, we deliver the following contributions: 
+
+– Method . We propose VoxelHound, the first panoramic multimodal seman-tic occupancy framework, featuring a Vertical Jitter Compensation (VJC) module to mitigate ego-motion distortions and a Multimodal Information Prompt Fusion (MIPF) module for efficient multimodal feature fusion. 
+
+– Dataset . We introduce PanoMMOcc, the first panoramic multimodal oc-cupancy dataset for quadruped robots, featuring 360 ° panoramic, thermal, 4 G. Zhao, Z. Yang, S. Wu et al. 
+
+polarization, and LiDAR data, along with dense occupancy annotations col-lected under realistic robot motions and diverse scenes. 
+
+– Evaluation . Extensive experiments demonstrate that VoxelHound achieves superior performance, reaching 23.34% in mIoU on the proposed PanoM-MOcc dataset, verifying its effectiveness. 
+
+## 2 Related Work 
+
+2.1 Panoramic Scene Understanding 
+
+Panoramic images provide full 360 ° environmental coverage and have attracted growing attention in autonomous driving and robotics. Existing research can be broadly grouped into semantic perception and geometric reasoning tasks [1, 25]. For semantic understanding, early methods unfold panoramic images with equirectangular projection (ERP) and divide them into several segments for independent encoding and subsequent fusion [59, 60]. To mitigate the domain gap between perspective and panoramic imagery, a large body of work ex-plores unsupervised domain adaptation strategies, including explicit adversarial learning [28, 74, 76], implicit prototypical adaptation [67, 68, 73, 75], and pseudo-label generation as supervision signals [70, 71, 77]. In addition, several special-ized designs are introduced, e.g. , distortion convolutions [14, 35] , spherical de-formable patch embedding [23,57], transformer-based perception modules [5,12, 19], and spherical projection transformation [45] to learn the distorted features in panoramic data. Beyond pixel-wise semantics, panoramic perception also ex-tends to Bird’s-Eye-View (BEV) mapping and geometric structure estimation. BEV-oriented approaches transform fisheye or panoramic inputs into top-down representations for scene understanding [10, 20, 26, 38, 46, 51, 64]. Panoramic lay-out estimation methods instead focus on recovering indoor 3D structures through projection-aware reasoning and geometric disentanglement [11, 40, 41, 44, 62]. Despite these advances, existing work primarily targets 2D semantic or spe-cific geometric tasks. Occupancy modeling from panoramic inputs remains largely unexplored, especially for real quadruped robots with multimodal sensing. 
+
+2.2 3D Semantic Occupancy Prediction 
+
+Semantic occupancy prediction aims to assign category labels to 3D voxels, en-abling fine-grained, voxel-level scene understanding. 
+
+Camera-centric methods. Due to the low cost and rich semantics of RGB images, camera-based occupancy prediction receives significant attention. Early work, such as MonoScene [4], explores semantic scene completion from a single image, while subsequent approaches extend to multi-camera surround-view set-tings with transformer-based and view transformation mechanisms [16,17,24,52, 65]. To improve efficiency or reduce annotation dependency, recent studies inves-tigate self-supervised learning, compact voxel querying, coarse-to-fine reasoning, and instance-level modeling [15, 22, 29, 34]. Panoramic Multimodal Semantic Occupancy Prediction 5
+
+Table 1: Typical datasets for Semantic Occupancy Prediction. Abbreviations: 
+
+(Autonomous Car), (Quadruped Robot), (Wheels), (Gait), (Day), 
+
+(Night), (Inapplicable), Plat. (Platform), Move. (Movement), n.a. (Not applicable), C (Camera), L (LiDAR), R (Radar), T (Thermal), and P (Polarization).                                                                          
+
+> Dataset Data Domain Annotation Year Camera Modality Plat. Move. Lighting Classes Voxel Size Frames SemanticKITTI [2] 2019 Pinhole C+L 28 256 ×256 ×32 43k SemanticPOSS [37] 2020 n.a. L14 256 ×256 ×32 3k SurroundOcc [52] 2023 Pinhole C16 200 ×200 ×16 34k Occ3D-nuScenes [47] 2023 Pinhole C16 200 ×200 ×16 40k OpenOccupancy [50] 2023 Pinhole C+L 16 512 ×512 ×40 34k RadarOcc [7] 2024 n.a. R2128 ×128 ×14 15k WildOcc [66] 2024 Pinhole C+L 7100 ×100 ×40 10k OmniHD-Scenes [72] 2024 Pinhole C+L+R 11 -60k ORAD-3D [31] 2025 Pinhole C+L 10 -57k Co3SOP [53] 2025 Pinhole C+L 24 1000 ×1000 ×70 -QuadOcc [42] 2025 Panoramic C664 ×64 ×824k PanoMMOcc (Ours) 2025 Panoramic C+L+T+P 12 64 ×64 ×16 21.6k
+
+Multimodal methods. To overcome the limitations of single-modality per-ception, multimodal occupancy frameworks integrate camera and LiDAR inputs for more robust 3D understanding [9, 21, 33, 36, 48, 50, 63]. Some works further explore cross-modal knowledge distillation rather than direct fusion [30]. Despite rapid progress, existing occupancy benchmarks and methods are pre-dominantly developed for autonomous driving scenarios with multi-view perspec-tive cameras and vehicle-mounted sensors. Panoramic imaging and quadruped robotic platforms remain largely unexplored. 
+
+2.3 Multimodal Occupancy Prediction Datasets 
+
+Comprehensive scene perception relies on high-quality data. In recent years, with the continuous advancement of sensor performance and data acquisition technologies, an increasing number of multimodal datasets have been intro-duced. Tab. 1 summarizes the publicly available multimodal semantic occu-pancy prediction datasets. Early benchmarks such as SemanticKITTI [2] pro-vide LiDAR-based annotations with limited camera coverage. Subsequent works extend large-scale driving datasets to support occupancy learning, including SurroundOcc [52], Occ3D-nuScenes [47], and OpenOccupancy [50], which offer 6 G. Zhao, Z. Yang, S. Wu et al. 
+
+annotations for camera-centric and camera–LiDAR multimodal methods. Be-yond conventional camera-LiDAR setups, RadarOcc [7] incorporates radar sens-ing, whereas WildOcc [66] targets off-road environments with monocular cam-era–LiDAR pairs. OmniHD-Scenes [72] further integrates multi-camera, LiDAR, and radar sensors for omnidirectional perception in driving scenarios. Despite these efforts, existing occupancy datasets are predominantly designed for autonomous vehicles with multi-view perspective cameras. Panoramic imag-ing is rarely considered, and multimodal datasets combining panoramic, thermal, polarization, and LiDAR sensing on real quadruped robots are still absent. LiDAR          
+
+> Panoramic
+> Polarization
+> Thermal
+> (a) Acquisition platform. 3.63 2.21 0.18 3.94
+> 12.20
+> 4.13 7.80
+> 45.78
+> 10.28 5.98 2.36 1.51
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+> 35
+> 40
+> 45
+> 50
+> Percentage (b) Category distribution.
+
+Fig. 3: Features of the proposed PanoMMOcc dataset. (a) Quadruped-based multi-modal data acquisition platform. (b) Semantic class distribution of the annotated oc-cupancy labels. 
+
+## 3 PanoMMOcc Dataset 
+
+To advance panoramic perception in complex real-world environments, we in-troduce PanoMMOcc , the first panoramic multimodal semantic occupancy prediction dataset collected by a quadruped robot. The dataset covers diverse scenes, including campus, urban streets, residential areas, green spaces, rural areas, and forest, as illustrated in Fig. 2. With 360 ° panoramic coverage and complementary sensing modalities, PanoMMOcc enables robust scene percep-tion under diverse illumination, material, and structural conditions, bridging robotic perception and comprehensive environmental understanding. In the fol-lowing, we describe the sensor suite, annotation pipeline, and dataset statistics. 
+
+Sensor suits. We develop a panoramic multimodal data acquisition platform mounted on a quadruped robot, as shown in Fig. 3a. (1) Quadruped platform. 
+
+We employ a Unitree Go2 robot, whose agile locomotion enables data collection in complex outdoor environments. (2) Panoramic camera. A Panoramic Annular Lens (PAL) camera provides a 360 ◦×70 ◦ FoV with up to 40 FPS at 2048 ×2048 
+
+resolution. (3) LiDAR. A MID360 LiDAR mounted on the robot’s back captures accurate 3D point clouds. (4) Thermal camera. We adopt the Guide Infrared N-Driver P302B, supporting 25 FPS at 640 ×512 resolution. (5) Polarization Panoramic Multimodal Semantic Occupancy Prediction 7
+
+camera. A LUCID TRI050S-QC polarization camera captures polarization im-ages at up to 1224 ×1024 resolution. 
+
+Annotations. To obtain high-quality voxel-level labels, we perform multiple rounds of annotation and refinement. First, professional annotators manually provide semantic, object-level, and instance-level labels to ensure semantic con-sistency and fine-grained accuracy. Next, frame-wise calibration is applied to compensate for LiDAR signal loss or invalid returns. Finally, annotated ob-jects are organized according to their attributes and grouped into 12 semantic categories, supporting perception across scenes with different structural com-plexities. The final occupancy labels are generated following the protocols of SurroundOcc [52], ensuring compatibility with existing benchmarks. 
+
+Statistical analysis. PanoMMOcc contains 54 sequences captured at 10 Hz, each lasting 40 seconds, yielding a total of 21 ,600 frames. Among them, 42 se-quences are selected for semantic annotation to construct the occupancy bench-mark. Fig. 3b presents the class distribution of annotated categories. The dataset includes both daytime and nighttime scenes, capturing variations in illumination and environmental dynamics. Each sequence contains synchronized multimodal data streams, including panoramic RGB, thermal, polarization, and LiDAR, pro-viding comprehensive sensory observations for panoramic occupancy perception. More details are provided in the supplementary material. 
+
+## 4 Method 
+
+4.1 Problem Formulation 
+
+We aim to generate a dense 3D semantic occupancy voxel grid by leveraging multimodal information from a panoramic RGB image Ipal , a thermal image 
+
+Ith , a polarization image Ipol , and a LiDAR point cloud P. The task can be formulated as: 
+
+O = Φ  Ipal , Ith , Ipol , P , (1) where Φ denotes the multimodal fusion network, and O ∈ RX×Y ×Z represents the final predicted result. 
+
+4.2 Overview 
+
+Our goal is to fully exploit complementary cues from multimodal data to achieve more comprehensive and robust 3D scene understanding for quadrupedal robotic perception. Existing occupancy prediction methods often rely on a dominant modality or adopt simple fusion strategies, limiting robustness under challenging conditions such as illumination, material variation, and platform motion. The overall architecture of VoxelHound is shown in Fig. 4. Given a panoramic RGB image, a thermal image, a polarization image, and a LiDAR point cloud, modality-specific features are first extracted using dedicated encoders. Image fea-tures are lifted from 2D image space to BEV space, while LiDAR points are vox-elized and projected into the same space, enabling a unified spatial representation 8 G. Zhao, Z. Yang, S. Wu et al. LiDAR   
+
+> Panoramic
+> Polarization
+> Thermal
+> 3D Encoder LiDAR
+> Voxel
+> Feature
+> LiDAR
+> BEV
+> Feature
+> 2D Encoder
+> MIPF
+> 2D to BEV
+> VJC
+> Occ Head
+> View Transform
+> BEV Encoder
+> Camera
+> BEV
+> Feature
+> LiDAR Branch
+> Camera Branch Fusion Branch
+
+Fig. 4: Overview of the proposed VoxelHound. The camera branch receives panoramic RGB, thermal, and polarization images, while the LiDAR branch processes raw point clouds. Each modality is encoded by an independent encoder, and the extracted features are projected into the BEV space for multimodal fusion. 
+
+for cross-modal interaction. The aligned BEV features are then fused and refined by a BEV encoder for contextual modeling. Finally, an occupancy head restores the height dimension to produce dense 3D semantic occupancy predictions. These components constitute the basic architecture of VoxelHound, which is described in Sec. 4.3. In addition, we introduce two specialized modules: a Vertical Jitter Compensation (VJC, Sec. 4.4) module to mitigate locomotion-induced distor-tions, and a Multimodal Information Prompt Fusion (MIPF, Sec. 4.5) module to enhance cross-modal interactions. 
+
+4.3 Multimodal Fusion Network 
+
+Most existing multimodal occupancy prediction methods focus on conventional sensor setups, typically combining multi-view pinhole RGB cameras with LiDAR and occasionally radar sensors [9, 21, 30, 33, 36, 43, 48, 50, 63]. In this work, we extend this setting by incorporating thermal and polarization sensing together with panoramic RGB and LiDAR data, and build a unified multimodal fusion network for cross-modal feature alignment and integration. 
+
+Camera Branch. The camera branch processes three image modalities, includ-ing panoramic RGB Ipal , thermal Ith , and polarization Ipol . Each modality is independently encoded by a 2D backbone to extract multi-scale features: 
+
+Fmc_backbone =
+
+n
+
+Fm
+
+> 1/8
+
+, Fm
+
+> 1/16
+
+, Fm
+
+> 1/32
+
+o
+
+, m ∈ { pal, th, pol }, (2) where F1/i denotes features at i× downsampling. A Feature Pyramid Network (FPN) aggregates multi-scale features to produce Fmc_neck ∈ RCneck × H′    
+
+> 8×W′
+> 8
+
+.Panoramic Multimodal Semantic Occupancy Prediction 9
+
+Subsequently, we apply 2D to BEV view transform to project 2D features into the BEV space. As a result, each image modality produces a BEV feature: 
+
+Fmc ∈ Cm×H×W , m ∈ { pal, th, pol }, which serves as the multimodal camera BEV features for multimodal fusion. 
+
+LiDAR Branch. Given the LiDAR point cloud P, we voxelize the 3D space within a predefined range. Each voxel retains up to 10 points, whose mean fea-ture forms a voxel-level representation. The voxel features are then fed into a sparse 3D convolutional encoder with an overall stride of 8 to extract hierarchical geometric features. Next, the sparse 3D features are splatted to BEV features: 
+
+Fl ∈ Cl×H×W , which serves as the LiDAR BEV feature for multimodal fusion. 
+
+Fusion Branch. Given the multimodal camera BEV features Fmc ∈ Cm×H×W ,
+
+m ∈ { pal, th, pol } and the LiDAR BEV feature Fl ∈ Cl×H×W , we first aggregate them through a fusion module. The fusion process can be formulated as: 
+
+Ff = Ffusion 
+
+ Fl, Fpal  
+
+> c
+
+, Fth c , Fpol 
+
+> c
+
+ , (3) where Ffusion denotes the fusion operator and Ff ∈ Cf ×H×W is the fused BEV feature. The fused features are further refined by a BEV encoder for contextual modeling. Following [43], we adopt a SECOND-FPN architecture to enhance multi-scale spatial representation. Finally, an occupancy head predicts the 3D semantic occupancy by reshaping the BEV feature channels into vertical bins, producing O ∈ RX×Y ×Z . Each voxel is assigned a semantic label from 0 to 12 .
+
+4.4 Vertical Jitter Compensation 
+
+Unlike wheeled autonomous driving platforms, our dataset is collected using a quadruped robot. Due to legged locomotion, body oscillation along the vertical axis introduces vertical jitter in the captured images. This gait-induced per-turbation causes misalignment in spatial feature representation and degrades the stability of the BEV transformation. To mitigate this issue, we propose a lightweight Vertical Jitter Compensation (VJC) module, which is inserted be-tween the image encoder and the 2D to BEV view transform stage. The goal is to estimate and compensate for vertical feature displacement before lifting image features into BEV space. Given an image feature map extracted by the 2D backbone F ∈ RC×H×W , we first collapse the width dimension to summarize vertical structural information: 
+
+Fv (c, h ) = 1
+
+W
+
+> W
+
+X
+
+> w=1
+
+F(c, h, w ), (4) resulint in Fv ∈ RC×H . This representation captures the vertical layout of scene features while suppressing horizontal redundancy. A lightweight 1D convolu-tional encoder is then applied along the height dimension: 
+
+ˆFv = Ev (Fv ) , (5) 10 G. Zhao, Z. Yang, S. Wu et al. Conv3 -64     
+
+> RELU
+> Conv3 -64
+> RELU
+> Predict Vertical Offset
+> GAP
+> Flatten
+> Linear
+> Identity Sampling Grid
+> Biliner  Grid  Sampling
+> Fcomp F
+> Width Collapse
+> Extract Vertical Layout
+> GAP
+
+Fc
+
+m
+
+Fc
+
+m
+
+Fc
+
+m
+
+> Channel
+> Embeding
+
+Q
+
+KV
+
+FlFl
+
+> Channel
+> Embeding
+> Reshape
+> MLP Layer
+> Conv Sigmoid
+
+FfFf
+
+> Linear
+> Sotfmax
+> GAP
+
+Fc
+
+m
+
+> Channel
+> Embeding
+
+Q
+
+KV
+
+Fl
+
+> Channel
+> Embeding
+> Reshape
+> MLP Layer
+> Conv Sigmoid
+
+Ff    
+
+> Linear
+> Sotfmax
+> a) VJC: Vertical Jitter Compensation Module
+> b) MIPF: Multimodal Information Prompt Fusion Module
+
+Fig. 5: Overview of the proposed modules. a) Vertical Jitter Compensation (VJC) module mitigates image distortions caused by quadruped locomotion. b) Multimodal Information Prompt Fusion (MIPF) module for effective multimodal feature fusion. 
+
+where Ev consists of two Conv1D layers with ReLU activations. Next, we estimate a global vertical offset by aggregating the encoded vertical feature: 
+
+∆h raw = R
+
+ ˆFv
+
+
+
+, (6) where R includes adaptive average pooling followed by a linear layer. The pre-dicted displacement is converted to normalized grid coordinates: 
+
+∆h = 2
+
+H ∆h raw . (7) Last, an identity sampling grid is constructed in normalized coordinates, and a vertical shift is applied: 
+
+G(h, w ) = G0(h, w ) + (0 , ∆h ). (8) The compensated feature map is obtained via bilinear grid sampling: 
+
+Fcomp = GridSample( F, G), (9) where Fcomp ∈ RC×H×W . The compensated features are then fed into the sub-sequent view transform module. Panoramic Multimodal Semantic Occupancy Prediction 11 
+
+4.5 Multimodal Information Prompt Fusion 
+
+Multimodal BEV fusion is commonly implemented using feature concatenation or element-wise addition. Although simple and efficient, such symmetric fusion strategies treat all modalities equally and lack explicit role differentiation. In practice, heterogeneous sensors contribute fundamentally different information: LiDAR directly measures 3D geometry, while RGB, infrared, and polarization modalities provide complementary semantic and appearance cues. Blindly blend-ing these features may dilute geometric consistency and introduce modality in-terference. In our quadruped robotic platform, LiDAR offers a stable spatial structure in BEV space, which is crucial for occupancy prediction. Image modal-ities, on the other hand, mainly enhance semantic perception under challenging illumination or material conditions. Therefore, we adopt an asymmetric fusion principle: geometry dominance with semantic supplementation. To this end, we propose a Multimodal Information Prompt Fusion (MIPF) module. Instead of performing dense spatial cross-attention, we use LiDAR BEV features as queries and compress image modalities into compact semantic prompts serving as keys and values. This geometry-guided prompt interaction preserves structural priors while enabling adaptive semantic enhancement. Given BEV features from LiDAR and image modalities: Fl ∈ Cl×H×W ,
+
+Fmc ∈ Cm×H×W , m ∈ { pal, th, pol }, we first project each modality into a shared embedding space using 1×1 convolutions: 
+
+˜Fl = ϕl (Fl) , ˜Fmc = ϕm (Fmc ) , (10) Instead of using dense spatial tokens for cross-attention, we generate a modality-specific semantic prompt by applying a lightweight MLP to the global average pooled feature of each image modality, formulated as: 
+
+pm = Mm
+
+
+
+GAP 
+
+ ˜Fmc
+
+ 
+
+. (11) Stacking all prompts yields: P = [ prgb , pth , ppolar ]. These prompts serve as compact semantic carriers guiding BEV feature refinement. We perform geometry-guided prompt attention by LiDAR BEV features as query tokens and attending only to modality prompts, yielding a prompt-conditioned BEV feature map: 
+
+Fattn = Softmax ˜Fl (WK P)⊤
+
+pD/h 
+
+!
+
+WV P, (12) where D denotes the embedding dimension and h is the number of attention heads. To preserve geometric dominance while enabling adaptive semantic en-hancement, we employ residual modulation: 
+
+M = σ (γ (Fattn )) ,
+
+Ff = ˜Fl + M ⊙ ˜Fl, (13) where γ(·) is a 1 × 1 convolution and σ(·) is the sigmoid function. This formu-lation allows prompts to adaptively reweight LiDAR BEV features instead of directly overriding them, ensuring that geometric structure remains the primary representation basis. 12 G. Zhao, Z. Yang, S. Wu et al. 
+
+Table 2: Comparison of semantic occupancy prediction methods on the established PanoMMOcc dataset. The bold font highlights the best result in each column. Methods Modality mIoU ↑                                                                                                                                              
+
+> ■car
+> ■motorcycle
+> ■bicycle
+> ■pedestrian
+> ■driveable surface
+> ■sidewalk
+> ■terrain
+> ■vegetation
+> ■building
+> ■barrier
+> ■mannade
+> ■pillar
+> MonoScene [4] C8.94 10.56 16.02 0.00 26.81 20.45 2.67 10.06 10.67 4.26 2.92 0.85 1.98 EFFOcc-C [43] C4.47 1.68 7.11 0.00 19.90 15.53 0.82 5.30 2.80 0.04 0.47 0.00 0.01 EFFOcc-L [43] L18.77 20.25 12.50 1.28 44.02 29.47 8.52 19.25 28.31 31.79 16.69 4.55 8.59 EFFOcc-T [43] C+L 19.18 19.81 12.13 0.68 44.16 30.20 7.14 21.49 30.10 33.87 15.18 5.41 10.00 C-CONet [50] C3.79 0.47 5.13 0.00 22.26 16.32 1.86 7.97 4.93 0.20 0.65 0.53 0.30 L-CONet [50] L3.75 0.04 6.42 0.00 21.16 16.31 1.91 6.58 5.34 0.78 1.41 0.00 0.00 M-CONet [50] C+L 4.68 4.95 10.16 0.00 20.91 19.09 2.25 9.65 5.52 0.96 1.39 0.06 0.01 VoxelHound(ours) C5.79 2.88 5.06 0.00 21.97 16.09 1.45 10.31 8.77 1.16 1.05 0.15 0.57 VoxelHound(ours) C+T+P 6.14 1.51 8.25 0.03 20.83 18.17 4.47 7.78 8.96 0.08 3.26 0.08 0.21 VoxelHound(ours) C+L 22.87 26.86 22.11 0.00 48.99 34.56 6.46 23.38 34.16 37.70 16.49 7.14 16.54 VoxelHound(ours) C+L+T+P 23.34 26.69 21.77 0.00 49.53 34.97 8.59 24.61 34.41 37.35 18.67 4.71 18.76
+
+## 5 Experiments 
+
+5.1 Experiment Setup Datasets. We evaluate on panoramic multimodal semantic occupancy bench-marks for quadruped platforms: PanoMMOcc. We select 42 sequences for an-notation and experiments, among which 30 sequences are used for training and 
+
+12 sequences for testing, comprising 16 .8k consecutive frames in total. Follow-ing the [47, 50], we sample keyframes with a temporal stride of 5 for training and evaluation. The occupancy annotations are defined over a 3D volume of size 64 × 64 × 16 . The spatial range covers [−12 .8, 12 .8] meters in the x–y plane and [−2.4, 4.0] meters along the vertical (z) axis. Each voxel has a resolution of 
+
+0.4m × 0.4m × 0.4m and is assigned one of 12 semantic categories. 
+
+Table 3: Results on different lighting conditions on PanoMMOcc. # Modality Day Night mIoU ↑
+
+> VoxelHound
+
+C 6.93 3.52 C+T+P 6.85 4.07 C+L 22.56 19.17 C+L+T+P 23.34 18.68 
+
+Table 4: Ablation on different compo-nents in VoxelHound. # VJC MIPF mIoU ↑
+
+1 22.74 2 ! 22.92 3 ! 23.14 Ours ! ! 23.34 Panoramic Multimodal Semantic Occupancy Prediction 13 
+
+Evaluation Metric. Following previous methods, we use the mean Intersection over Union (mIoU) as our evaluation metric: 
+
+mIoU = 1
+
+Ccls 
+
+> Ccls
+
+X
+
+> c=1
+
+T P i
+
+T P i + F P i + F N i
+
+, (14) where T P i, T P i, F P i denote the number of true positive, false positive and false negative predictions for class i, and Ccls is the total number of semantic classes. 
+
+Table 5: Ablation study of different hid-den channel dimensions for the VJC mod-ule. 
+
+Chd Params. (M) Mem. (MB) mIoU 1 43.46 386.83 23.12 4 43.46 386.84 23.01 8 43.47 386.84 22.90 16 43.47 386.86 23.11 32 43.48 386.89 22.88 64 43.50 386.97 23.34 
+
+Table 6: Ablation study of prompt chan-nel dimensions and attention heads in the MIPF module. 
+
+Cpd Cnh Params. (M) Mem. (MB) mIoU 8 4 43.50 386.97 23.13 8 23.34 16 4 43.51 387.02 22.82 8 22.94 32 4 43.54 387.11 22.67 8 22.48 
+
+Loss. During training, we use existing losses from prior works [50]. They are crossentropy loss Lce , lovasz-softmax loss Lls [3], affinity loss Lgeo  
+
+> scal
+
+and Lsem  
+
+> scal
+
+[4]. Therefore, the overall loss function Locc can be derived as: 
+
+Locc = Lce + Lls + Lgeo  
+
+> scal
+
++ Lsem  
+
+> scal
+
+. (15) 
+
+Implementation Details. Unless noted, we follow the official configuration with minimal dataset-specific modifications. All experiments are conducted on 
+
+4 NVIDIA RTX 3090 GPUs. We adopt the AdamW optimizer with an initial learning rate of 4×10 −4 and a weight decay of 0.01 . More implementation details and hyperparameters are provided in the supplementary material. 
+
+5.2 Results and Analysis 
+
+To evaluate the effectiveness of the proposed VoxelHound, we conduct com-prehensive experiments under different modality settings on PanoMMocc. As shown in Tab. 2, we compare with several representative monocular and multi-modal occupancy prediction methods. Our full multimodal model VoxelHound (C+L+T+P) achieves the best overall performance, reaching 23 .34% mIoU, out-performing all competing methods. Compared with MonoScene ( 8.94% mIoU), our method achieves a substantial improvement of +14 .40% mIoU, demon-strating the strong advantage of multimodal fusion over pure camera-based 14 G. Zhao, Z. Yang, S. Wu et al. GT Ours EFFOcc MonoScene  
+
+> Panoramic
+> Image
+> Fig. 6: Overview of the proposed module.
+
+approaches. Compared with EFFOcc-T ( 19 .18% mIoU) under camera+LiDAR setting, our method achieves a dramatic gain of +4 .16% mIoU, showing the ef-fectiveness of our fusion strategy. These results clearly demonstrate that the pro-posed architecture better exploits cross-modal complementary information. We further conduct experiments under daytime and nighttime conditions to evaluate the robustness of different modality configurations under varying illumination, as shown in Tab. 3. Furthermore, we present the qualitative experimental results of VoxelHound on the PanoMMOcc test set in Fig. 6. The visualizations show that our method produces more complete and accurate occupancy predictions, especially in complex scenes and object boundaries. 
+
+5.3 Ablation Study 
+
+We ablate VJC and MIPF (Tab. 4). Without either module, the model achieves 22.74 mIoU. Adding VJC or MIPF improves the performance to 22.92 and 23.14, while combining both reaches 23.34 mIoU. Tab. 5 and Tab. 6 further present the ablation results on the internal parameters of the VJC and MIPF modules. 
+
+## 6 Conclusion 
+
+In this work, we introduce PanomMOCC, a comprehensive panoramic multi-modal occupancy prediction dataset designed to support robust and fine-grained 3D scene understanding across diverse scenes. To effectively exploit multimodal information, we further propose VoxelHound, a multimodal occupancy predic-tion framework tailored for efficient feature alignment and fusion. VoxelHound Panoramic Multimodal Semantic Occupancy Prediction 15 
+
+leverages complementary cues from different modalities while maintaining strong geometric and semantic consistency. 
+
+Future Work. We plan to extend this framework to additional downstream tasks and explore more scalable multimodal fusion strategies. 
+
+## Acknowledgment 
+
+This work was supported in part by the Hunan Provincial Research and De-velopment Project (Grant No. 2025QK3019), in part by the National Natural Science Foundation of China (Grant No. 62473139), and in part by the State Key Laboratory of Autonomous Intelligent Unmanned Systems (the opening project number ZZKF2025-2-10). 
+
+## References 
+
+1. Ai, H., Cao, Z., Wang, L.: A survey of representation learning, optimization strate-gies, and applications for omnidirectional vision. International Journal of Computer Vision (2025) 1, 4 2. Behley, J., Garbade, M., Milioto, A., Quenzel, J., Behnke, S., Stachniss, C., Gall, J.: SemanticKITTI: A dataset for semantic scene understanding of LiDAR sequences. In: ICCV (2019) 5 3. Berman, M., Triki, A.R., Blaschko, M.B.: The lovász-softmax loss: A tractable surrogate for the optimization of the intersection-over-union measure in neural networks. In: CVPR (2018) 13 4. Cao, A.Q., de Charette, R.: MonoScene: Monocular 3D semantic scene completion. In: CVPR (2022) 4, 12, 13, 23 5. Cao Dinh, D., Kim, S.J., Cho, K.: Geometric exploitation for indoor panoramic semantic segmentation. In: NeurIPS (2024) 4 6. Chen, H., Hou, Y., Qu, C., Testini, I., Hong, X., Jiao, J.: 360+x: A panoptic multi-modal scene understanding dataset. In: CVPR (2024) 2 7. Ding, F., Wen, X., Zhu, Y., Li, Y., Lu, C.X.: RadarOcc: Robust 3D occupancy prediction with 4D imaging radar. In: NeurIPS (2024) 5, 6 8. Dong, Y., Fang, C., Bo, L., Dong, Z., Tan, P.: PanoContext-Former: Panoramic total scene understanding with a transformer. In: CVPR (2024) 2 9. Duan, Z., Dang, C., Hu, X., An, P., Ding, J., Zhan, J., Xu, Y., Ma, J.: SDGOCC: Semantic and depth-guided bird’s-eye view transformation for 3D multimodal oc-cupancy prediction. In: CVPR (2025) 5, 8 10. E, W., Yuan, C., Li, L., Sun, Y., Gaus, Y.F.A., Atapour-Abarghouei, A., Breckon, T.P.: Dur360BEV: A real-world 360-degree single camera dataset and benchmark for bird-eye view mapping in autonomous driving. In: ICRA (2025) 1, 4 11. Fernandez-Labrador, C., Pérez-Yus, A., López-Nicolás, G., Guerrero, J.J.: Layouts from panoramic images with geometry and deep learning. IEEE Robotics and Automation Letters (2018) 4 12. Guttikonda, S., Rambach, J.: Single frame semantic segmentation using multi-modal spherical images. In: WACV (2024) 4 13. Ha, Q., Watanabe, K., Karasawa, T., Ushiku, Y., Harada, T.: MFNet: To-wards real-time semantic segmentation for autonomous vehicles with multi-spectral scenes. In: IROS (2017) 2 16 G. Zhao, Z. Yang, S. Wu et al. 
+
+14. Hu, X., An, Y., Shao, C., Hu, H.: Distortion convolution module for semantic segmentation of panoramic images based on the image-forming principle. IEEE Transactions on Instrumentation and Measurement (2022) 4 15. Huang, Y., Zheng, W., Zhang, B., Zhou, J., Lu, J.: SelfOcc: Self-supervised vision-based 3D occupancy prediction. In: CVPR (2024) 4 16. Huang, Y., Zheng, W., Zhang, Y., Zhou, J., Lu, J.: Tri-perspective view for vision-based 3D semantic occupancy prediction. In: CVPR (2023) 2, 4 17. Huang, Y., Zheng, W., Zhang, Y., Zhou, J., Lu, J.: GaussianFormer: Scene as gaussians for vision-based 3D semantic occupancy prediction. In: ECCV (2024) 4 18. Kim, G., Kim, D., Jang, J., Hwang, H.: PAIR360: A paired dataset of high-resolution 360 ° panoramic images and LiDAR scans. IEEE Robotics and Automa-tion Letters (2024) 1 19. Lan, B., Yang, L., Xu, M., Jiang, L., Wang, Y.: Deformable spherical geometry transformer for panoramic semantic segmentation. In: ICIP (2025) 4 20. Li, H., Sheng, D., Dong, Q., Wang, Z., Xu, Z., Li, T.: FishBEV: Distortion-resilient bird’s eye view segmentation with surround-view fisheye cameras. arXiv preprint arXiv:2509.13681 (2025) 4 21. Li, H., Hou, Y., Xing, X., Ma, Y., Sun, X., Zhang, Y.: OccMamba: Semantic occupancy prediction with state space models. In: CVPR (2025) 2, 5, 8 22. Li, W., Yu, Z., Alahi, A.: VoxDet: Rethinking 3D semantic occupancy prediction as dense object detection. In: NeurIPS (2025) 2, 4 23. Li, X., Wu, T., Qi, Z., Wang, G., Shan, Y., Li, X.: SGAT4PASS: Spherical geometry-aware transformer for panoramic semantic segmentation. In: IJCAI (2023) 4 24. Li, Y., Yu, Z., Choy, C.B., Xiao, C., Álvarez, J.M., Fidler, S., Feng, C., Anandku-mar, A.: VoxFormer: Sparse voxel transformer for camera-based 3D semantic scene completion. In: CVPR (2023) 4 25. Lin, X., Ge, X., Zhang, D., Wan, Z., Wang, X., Li, X., Jiang, W., Du, B., Tao, D., Yang, M.H., Qi, L.: One flight over the gap: A survey from perspective to panoramic vision. arXiv preprint arXiv:2509.04444 (2025) 1, 4 26. Liu, W., Wang, W.: ArticuBEVSeg: Road semantic understanding and its applica-tion in bird’s eye view from panoramic vision system of long combination vehicles. IEEE Robotics and Automation Letters (2025) 4 27. Luo, K., Shi, H., Wu, S., Teng, F., Duan, M., Huang, C., Wang, Y., Wang, K., Yang, K.: Omnidirectional multi-object tracking. In: CVPR (2025) 2 28. Ma, C., Zhang, J., Yang, K., Roitberg, A., Stiefelhagen, R.: DensePASS: Dense panoramic semantic segmentation via unsupervised domain adaptation with attention-augmented context exchange. In: ITSC (2021) 2, 4 29. Ma, Q., Tan, X., Qu, Y., Ma, L., Zhang, Z., Xie, Y.: COTR: Compact occupancy transformer for vision-based 3D occupancy prediction. In: CVPR (2024) 4 30. Ma, Y., Mei, J., Yang, X., Wen, L., Xu, W., Zhang, J., Zuo, X., Shi, B., Liu, Y.: LiCROcc: Teach radar for accurate semantic occupancy prediction using LiDAR and camera. IEEE Robotics and Automation Letters (2025) 2, 5, 8 31. Min, C., Mei, J., Zhai, H., Wang, S., Sun, T., Kong, F., Li, H., Mao, F., Liu, F., Wang, S., Nie, Y., Zhu, Q., Xiao, L., Zhao, D., Hu, Y.: Advancing off-road au-tonomous driving: The large-scale ORAD-3D dataset and comprehensive bench-marks. arXiv preprint arXiv:2510.16500 (2025) 5 32. Ming, Z., Berrio, J.S., Shan, M., Worrall, S.: Occfusion: Multi-sensor fusion frame-work for 3d semantic occupancy prediction. IEEE Transactions on Intelligent Ve-hicles (2024) 2 Panoramic Multimodal Semantic Occupancy Prediction 17 33. Ming, Z., Berrio, J.S., Shan, M., Worrall, S.: OccFusion: Multi-sensor fusion frame-work for 3D semantic occupancy prediction. IEEE Transactions on Intelligent Ve-hicles (2025) 5, 8 34. Oh, G., Kim, S., Ko, H., Chi, H.g., Kim, J., Lee, D., Ji, D., Choi, S., Jang, S., Kim, S.: 3D occupancy prediction with low-resolution queries via prototype-aware view transformation. In: CVPR (2025) 2, 4 35. Orhan, S., Bastanlar, Y.: Semantic segmentation of outdoor panoramic images. Signal, Image and Video Processing (2022) 4 36. Pan, J., Wang, Z., Wang, L.: Co-Occ: Coupling explicit feature fusion with volume rendering regularization for multi-modal 3D semantic occupancy prediction. IEEE Robotics and Automation Letters (2024) 2, 5, 8 37. Pan, Y., Gao, B., Mei, J., Geng, S., Li, C., Zhao, H.: SemanticPOSS: A point cloud dataset with large quantity of dynamic instances. In: IV (2020) 5 38. Samani, E.U., Tao, F., Reddy, D.H., Ding, S., Banerjee, A.G.: F2BEV: Bird’s eye view generation from surround-view fisheye camera images for automated driving. In: IROS (2023) 4 39. Scaramuzza, D., Martinelli, A., Siegwart, R.: A toolbox for easily calibrating om-nidirectional cameras. In: IROS (2006) 27 40. Shen, Z., Lin, C., Zhang, J., Nie, L., Liao, K., Zhao, Y.: 360 layout estimation via orthogonal planes disentanglement and multi-view geometric consistency per-ception. IEEE Transactions on Pattern Analysis and Machine Intelligence (2024) 441. Shen, Z., Zheng, Z., Lin, C., Nie, L., Liao, K., Zheng, S., Zhao, Y.: Disentangling orthogonal planes for indoor panoramic room layout estimation with cross-scale distortion awareness. In: CVPR (2023) 4 42. Shi, H., Wang, Z., Guo, S., Duan, M., Wang, S., Chen, T., Yang, K., Wang, L., Wang, K.: OneOcc: Semantic occupancy prediction for legged robots with a single panoramic camera. In: CVPR (2026) 5 43. Shi, Y., Jiang, K., Wang, K., Qian, K., Wang, Y., Li, J., Wen, T., Yang, M., Xu, Y., Yang, D.: EFFOcc: Learning efficient occupancy networks from minimal labels for autonomous driving. arXiv preprint arXiv:2406.07042 (2024) 8, 9, 12, 21, 23 44. Su, J.W., Peng, C.H., Wonka, P., Chu, H.K.: GPR-Net: Multi-view layout esti-mation via a geometry-aware panorama registration network. In: CVPRW (2023) 445. Tan, T., Chen, B., Cao, H., Yan, C., Ma, Y., Dai, F.: DASC-SPT: Towards self-supervised panoramic semantic segmentation. In: WACV (2025) 4 46. Teng, Z., Zhang, J., Yang, K., Peng, K., Shi, H., Reiß, S., Cao, K., Stiefelhagen, R.: 360BEV: Panoramic semantic mapping for indoor bird’s-eye view. In: WACV (2024) 4 47. Tian, X., Jiang, T., Yun, L., Mao, Y., Yang, H., Wang, Y., Wang, Y., Zhao, H.: Occ3D: A large-scale 3D occupancy prediction benchmark for autonomous driving. In: NeurIPS (2023) 2, 5, 12 48. Wang, G., Wang, Z., Tang, P., Zheng, J., Ren, X., Feng, B., Ma, C.: OccGen: Gen-erative multi-modal 3D occupancy prediction for autonomous driving. In: ECCV (2024) 5, 8 49. Wang, H., Wei, X., Zhang, X., Li, J., Bai, C., Li, Y., Lu, M., Zheng, W., Zhang, S.: EmbodiedOcc++: Boosting embodied 3D occupancy prediction with plane regu-larization and uncertainty sampler. In: MM (2025) 2 50. Wang, X., Zhu, Z., Xu, W., Zhang, Y., Wei, Y., Chi, X., Ye, Y., Du, D., Lu, J., Wang, X.: OpenOccupancy: A large scale benchmark for surrounding semantic occupancy perception. In: ICCV (2023) 2, 5, 8, 12, 13 18 G. Zhao, Z. Yang, S. Wu et al. 
+
+51. Wei, J., Zheng, J., Liu, R., Hu, J., Zhang, J., Stiefelhagen, R.: OneBEV: Using one panoramic image for bird’s-eye-view semantic mapping. In: ACCV (2024) 1, 4 52. Wei, Y., Zhao, L., Zheng, W., Zhu, Z., Zhou, J., Lu, J.: SurroundOcc: Multi-camera 3D occupancy prediction for autonomous driving. In: ICCV (2023) 2, 4, 5, 7 53. Wu, H., Lin, P., Javanmardi, E., Bao, N., Qian, B., Si, H., Tsukada, M.: A syn-thetic benchmark for collaborative 3D semantic occupancy prediction in V2X au-tonomous driving. arXiv preprint arXiv:2506.17004 (2025) 5 54. Wu, S., Teng, F., Shi, H., Jiang, Q., Luo, K., Wang, K., Yang, K.: QuaDreamer: Controllable panoramic video generation for quadruped robots. In: CoRL (2025) 2 55. Wu, Y., Zheng, W., Zuo, S., Huang, Y., Zhou, J., Lu, J.: EmbodiedOcc: Embodied 3D occupancy prediction for vision-based online scene understanding. In: ICCV (2025) 2 56. Xiang, K., Yang, K., Wang, K.: Polarization-driven semantic segmentation via efficient attention-bridged fusion. Optics Express (2021) 2 57. Xu, J., Xu, C., Zhao, J., Han, C., Li, H.: Mamba4PASS: Vision mamba for panoramic semantic segmentation. Displays (2025) 4 58. Yang, K., Hu, X., Bergasa, L.M., Romera, E., Huang, X., Sun, D., Wang, K.: Can we PASS beyond the field of view? Panoramic annular semantic segmentation for real-world surrounding perception. In: IV (2019) 1 59. Yang, K., Hu, X., Bergasa, L.M., Romera, E., Wang, K.: PASS: Panoramic annular semantic segmentation. IEEE Transactions on Intelligent Transportation Systems (2020) 2, 4 60. Yang, K., Hu, X., Chen, H., Xiang, K., Wang, K., Stiefelhagen, R.: DS-PASS: Detail-sensitive panoramic annular semantic segmentation through SwaftNet for surrounding sensing. In: IV (2020) 1, 4 61. Yang, K., Zhang, J., Reiß, S., Hu, X., Stiefelhagen, R.: Capturing omni-range context for omnidirectional segmentation. In: CVPR (2021) 2 62. Yang, S.T., Wang, F.E., Peng, C.H., Wonka, P., Sun, M., Chu, H.K.: DuLa-Net: A dual-projection network for estimating room layouts from a single RGB panorama. In: CVPR (2019) 4 63. Yang, Z., Dong, Y., Wang, J., Wang, H., Ma, L., Cui, Z., Liu, Q., Pei, H., Zhang, K., Zhang, C.: DAOcc: 3D object detection assisted multi-sensor fusion for 3D occupancy prediction. IEEE Transactions on Circuits and Systems for Video Tech-nology (2025) 2, 5, 8 64. Yogamani, S., Unger, D., Narayanan, V., Kumar, V.R.: FisheyeBEVSeg: Surround view fisheye cameras based bird’s-eye view segmentation for autonomous driving. In: CVPRW (2024) 4 65. Yu, Z., Shu, C., Deng, J., Lu, K., Liu, Z., Yu, J., Yang, D., Li, H., Chen, Y.: FlashOcc: Fast and memory-efficient occupancy prediction via channel-to-height plugin. arXiv preprint arXiv:2311.12058 (2023) 2, 4 66. Zhai, H., Mei, J., Min, C., Chen, L., Zhao, F., Hu, Y.: WildOcc: A benchmark for off-road 3D semantic occupancy prediction. arXiv preprint arXiv:2410.15792 (2024) 5, 6 67. Zhang, J., Yang, K., Ma, C., Reiß, S., Peng, K., Stiefelhagen, R.: Bending reality: Distortion-aware transformers for adapting to panoramic semantic segmentation. In: CVPR (2022) 4 68. Zhang, J., Yang, K., Shi, H., Reiß, S., Peng, K., Ma, C., Fu, H., Torr, P.H.S., Wang, K., Stiefelhagen, R.: Behind every domain there is a shift: Adapting distortion-aware vision transformers for panoramic semantic segmentation. IEEE Transac-tions on Pattern Analysis and Machine Intelligence (2024) 4 Panoramic Multimodal Semantic Occupancy Prediction 19 69. Zhang, Q., Zhang, Z., Cui, W., Sun, J., Cao, J., Guo, Y., Han, G., Zhao, W., Wang, J., Sun, C., Zhang, L., Cheng, H., Chen, Y., Wang, L., Tang, J., Xu, R.: HumanoidPano: Hybrid spherical panoramic-LiDAR cross-modal perception for humanoid robots. arXiv preprint arXiv:2503.09010 (2025) 1 70. Zhang, W., Liu, Y., Zheng, X., Wang, L.: GoodSAM: Bridging domain and ca-pacity gaps via segment anything model for distortion-aware panoramic semantic segmentation. In: CVPR (2024) 4 71. Zhang, W., Liu, Y., Zheng, X., Wang, L.: GoodSAM++: Bridging domain and capacity gaps via segment anything model for panoramic semantic segmentation. arXiv preprint arXiv:2408.09115 (2024) 4 72. Zheng, L., Yang, L., Lin, Q., Ai, W., Liu, M., Lu, S., Liu, J., Ren, H., Mo, J., Bai, X., Bai, J., Ma, Z., Zhu, X.: OmniHD-Scenes: A next-generation multimodal dataset for autonomous driving. arXiv preprint arXiv:2412.10734 (2024) 5, 6 73. Zheng, X., Pan, T., Luo, Y., Wang, L.: Look at the neighbor: Distortion-aware unsupervised domain adaptation for panoramic semantic segmentation. In: ICCV (2023) 4 74. Zheng, X., Zhou, P.Y., Vasilakos, A.V., Wang, L.: 360SFUDA++: Towards source-free UDA for panoramic segmentation by learning reliable category prototypes. IEEE Transactions on Pattern Analysis and Machine Intelligence (2024) 4 75. Zheng, X., Zhou, P., Vasilakos, A.V., Wang, L.: Semantics distortion and style matter: Towards source-free UDA for panoramic segmentation. In: CVPR (2024) 476. Zheng, X., Zhu, J., Liu, Y., Cao, Z., Fu, C., Wang, L.: Both style and distor-tion matter: Dual-path unsupervised domain adaptation for panoramic semantic segmentation. In: CVPR (2023) 4 77. Zhong, D., Zheng, X., Liao, C., Lyu, Y., Chen, J., Wu, S., Zhang, L., Hu, X.: Om-niSAM: Omnidirectional segment anything model for UDA in panoramic semantic segmentation. In: ICCV (2025) 4 20 G. Zhao, Z. Yang, S. Wu et al. 
+
+# Supplementary Contents 
+
+# A Experimental Setup . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21 A.1 Datasets . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21 A.2 Implementation Details . . . . . . . . . . . . . . . . . . . . . . . 21 B More Results . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21 B.1 Performance Analysis under Different Scenes . . 21 B.2 More Visualizations . . . . . . . . . . . . . . . . . . . . . . . . . . 22 C Dataset Construction . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 23 C.1 Sensor Systems . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 23 C.2 Time Synchronization . . . . . . . . . . . . . . . . . . . . . . . . 24 C.3 Calibration . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 25 C.4 Data Collection . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 30 C.5 Data Splits . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 31 C.6 Privacy Protection . . . . . . . . . . . . . . . . . . . . . . . . . . . 32 D Gait-Induced Jitter Analysis . . . . . . . . . . . . . . . . . . . . . . 32 E Discussions . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 33 E.1 Limitations . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 33 E.2 Failure Case Analysis . . . . . . . . . . . . . . . . . . . . . . . . . 34 Panoramic Multimodal Semantic Occupancy Prediction 21 
+
+## A Experimental Setup 
+
+A.1 Datasets 
+
+PanoMMOcc is a panoramic multimodal occupancy perception dataset collected using a quadruped robot equipped with a panoramic camera, LiDAR, a ther-mal camera, and a polarization camera. The dataset covers diverse real-world scenes, including urban streets, residential areas, campus environments, recre-ational green spaces, rural areas, and forested regions, and contains both daytime and nighttime sequences. In total, 42 sequences are selected and annotated for occupancy prediction. Among them, 30 sequences are used for training and 12 
+
+sequences for testing. These sequences span the six scene categories mentioned above and include 31 daytime and 11 nighttime sequences. To ensure balanced evaluation across scenes, the test set contains two sequences for each scene cat-egory. 
+
+A.2 Implementation Details 
+
+Unless otherwise specified, we follow the official configuration [43] with minimal dataset-specific modifications. All experiments are implemented using the Py-Torch framework and conducted on 4 NVIDIA RTX 3090 GPUs. We adopt the AdamW optimizer with an initial learning rate of 4 × 10 −4 and a weight decay of 0.01 . The model is trained for 48 epochs. For the image encoders, ResNet-18 backbones are used for all modalities. 
+
+## B More Results 
+
+B.1 Performance Analysis under Different Scenes 
+
+To further analyze the robustness of the proposed method across diverse environ-ments, we evaluate the performance under different scene categories in PanoM-MOcc. The results are summarized in Tab. 7, where we compare the camera-only setting (C) with the full multimodal configuration (C+L+T+P). Overall, the multimodal configuration significantly outperforms the camera-only baseline across all scene categories. Relying solely on panoramic visual observations leads to very limited performance, especially in challenging environments where visual cues are insufficient to infer reliable geometric structures. In contrast, by incor-porating complementary sensing modalities such as LiDAR geometry, thermal information, and polarization cues, the proposed framework is able to recover more complete occupancy structures and achieve substantially higher accuracy. From the perspective of scene difficulty, the model achieves stronger per-formance in relatively structured environments such as residential and campus scenes, where objects follow more regular spatial layouts and exhibit clearer semantic boundaries. In contrast, the performance decreases in weakly struc-tured natural environments such as green spaces, forest, and rural areas. These 22 G. Zhao, Z. Yang, S. Wu et al. 
+
+Table 7: Performance of the proposed VoxelHound model across different scene cate-gories on the established PanoMMOcc dataset. Scenes Modality mIoU                                                                   
+
+> ■ car
+> ■ motorcycle
+> ■ bicycle
+> ■ pedestrian
+> ■ driveable surface
+> ■ sidewalk
+> ■ terrain
+> ■ vegetation
+> ■ building
+> ■ barrier
+> ■ mannade
+> ■ pillar Urban C5.04 0.00 17.74 0.00 20.75 14.35 0.84 4.16 2.55 0.00 0.05 0.02 0.00 C+L+T+P 16.96 18.76 27.66 0.00 41.71 26.05 7.99 11.27 29.89 0.00 21.67 7.94 10.56 Residential C4.70 5.57 0.77 0.00 23.12 22.21 0.00 0.00 1.76 1.70 0.89 0.40 0.00 C+L+T+P 20.30 31.47 10.40 0.00 49.93 37.67 3.45 11.63 35.17 42.61 5.25 2.53 13.49 Campus C5.30 0.23 0.40 0.00 24.89 22.38 1.34 6.98 1.03 2.00 2.24 0.38 1.76 C+L+T+P 26.50 29.13 22.35 0.00 55.08 43.35 7.43 20.13 33.47 49.11 27.31 0.36 30.23 Green Spaces C3.82 0.00 0.00 0.00 22.17 0.00 0.58 14.89 6.99 0.40 0.03 0.82 0.00 C+L+T+P 15.35 0.00 0.00 0.00 51.48 0.00 15.78 36.58 36.87 15.27 7.73 11.85 8.60 Forest C4.08 0.00 0.03 0.00 22.92 0.00 3.77 7.04 15.25 0.00 0.00 0.00 0.00 C+L+T+P 13.10 0.00 3.16 0.00 54.11 0.00 10.68 11.13 37.32 31.64 0.00 0.34 8.84 Rural C3.21 0.00 0.00 0.00 18.22 13.66 0.04 2.84 2.14 0.38 1.09 0.02 0.08 C+L+T+P 15.48 1.39 0.00 0.00 47.57 35.20 2.04 15.06 26.67 24.61 12.42 6.48 14.30
+
+scenes typically contain irregular terrain, dense vegetation, and ambiguous ob-ject boundaries, which introduce significant challenges for accurate occupancy prediction. The variation of performance across different scene categories also highlights the necessity of including diverse environments in the dataset. Different real-world scenarios present distinct perception challenges, ranging from structured urban layouts to highly unstructured natural terrains. By covering a wide spec-trum of scene types, PanoMMOcc provides a more comprehensive benchmark for evaluating multimodal occupancy perception systems in realistic quadruped robotic applications. Despite the increased difficulty in natural environments, the model still maintains reasonable performance across all scene categories, demonstrating the robustness of the multimodal perception framework. This result further indicates that integrating complementary sensing modalities, in-cluding panoramic visual observations, LiDAR geometry, thermal information, and polarization cues, can improve perception reliability in complex outdoor scenarios. 
+
+B.2 More Visualizations 
+
+To further demonstrate the effectiveness of the proposed VoxelHound, we pro-vide additional qualitative results under diverse environmental conditions. As Panoramic Multimodal Semantic Occupancy Prediction 23 GT Ours Panoramic EFFOcc MonoScene  
+
+> Thermal Polarization
+
+Fig. 7: Qualitative comparison on PanoMMOcc under different environmental condi-tions. From left to right: panoramic image, thermal image, polarization image, GT occupancy, VoxelHound (ours), EFFOcc [43], and MonoScene [4]. From top to bottom: overexposed daytime, nighttime, and rural scenes. VoxelHound yields more coherent occupancy structures and more consistent semantic predictions under challenging con-ditions. 
+
+shown in Fig. 7, we compare VoxelHound with representative occupancy predic-tion methods on challenging scenes, including overexposed daytime, nighttime, and rural environments. These scenes introduce significant perception difficulties due to strong illumination variations, low-light conditions, and irregular scene structures. Compared with other methods, VoxelHound produces more coher-ent occupancy structures and more consistent semantic predictions, particularly in regions affected by illumination degradation or sparse scene geometry. This improvement also benefits from the complementary multimodal sensing, where thermal and polarization cues provide additional information beyond RGB visual inputs, leading to more robust scene understanding. 
+
+## C Dataset Construction 
+
+C.1 Sensor Systems 
+
+We establish a panoramic multimodal data acquisition platform mounted on a quadruped robot to collect synchronized complementary data in diverse real-24 G. Zhao, Z. Yang, S. Wu et al. 
+
+world environments. (1) Quadruped Platform. We employ a Unitree Go2 robot, which measures 70 cm × 31 cm × 40 cm and supports a payload capac-ity of 7 kg. The robot can climb vertical obstacles up to 15 cm and traverse slopes up to 30 ◦. Benefiting from its strong bionic locomotion capability, the platform enables stable data collection in complex terrains. (2) Panoramic Camera. A Panoramic Annular Lens (PAL) camera with a 360 ◦ × 70 ◦ Field of View (FoV) is adopted to capture omnidirectional visual observations. The camera supports up to 40 FPS at a resolution of 2048 × 2048 . (3) LiDAR. AMiD-360 LiDAR sensor is mounted on the robot’s back to capture accurate 3D point clouds. The LiDAR operates at a scanning frequency of 10 Hz, providing reliable geometric information for spatial perception. (4) Thermal Camera. 
+
+We adopt the automotive-grade N-Driver P302B thermal camera from Guide Infrared, which supports up to 25 FPS at a resolution of 640 × 512 . (5) Po-larization Camera. A LUCID TRI050S-QC polarization camera is employed, capable of capturing polarization images at a resolution of 1224 ×1024 . To obtain polarization information of the scene, four polarization images are captured at different polarization angles, i.e. , 0◦, 45 ◦, 90 ◦, and 135 ◦. The polarization state of light can be described by the Stokes vector: 
+
+S = [ S0, S 1, S 2, S 3]T , (16) where S0 represents the total intensity of light, S1 denotes the intensity dif-ference between horizontal and vertical polarization components, S2 represents the intensity difference between 45 ◦ and 135 ◦ polarization components, and S3
+
+corresponds to the circular polarization component. Since circular polarization is not considered in this work, only the first three parameters are used. Given the captured polarization images, the Stokes parameters can be computed as: 
+
+S0 = I0 + I90 ,S1 = I0 − I90 ,S2 = I45 − I135 ,
+
+(17) where I0, I45 , I90 , and I135 denote the intensity images captured at polarization angles of 0◦, 45 ◦, 90 ◦, and 135 ◦, respectively. Based on the Stokes parameters, the Degree of Linear Polarization (DoLP) and the Angle of Linear Polarization (AoLP) are computed as: 
+
+DoLP =
+
+pS21 + S22
+
+S0
+
+,
+
+AoLP = 12 arctan 
+
+ S2
+
+S1
+
+
+
+.
+
+(18) Here, DoLP measures the proportion of linearly polarized light in the observed scene, while AoLP represents the orientation of the polarization direction. 
+
+C.2 Time Synchronization 
+
+To ensure consistent timestamping of multimodal sensor data within a unified time domain, we design a centralized time synchronization scheme based on a Panoramic Multimodal Semantic Occupancy Prediction 25 
+
+single host PC and a Gigabit Ethernet switch. The host PC acts as the central data acquisition and control unit and provides a global system time reference for all sensors. Ethernet-based sensors, including the LiDAR and polarization camera, are connected to the PC through a Gigabit Ethernet switch to support high-throughput data transmission during simultaneous data streaming. The panoramic camera and thermal camera are directly connected to the PC via dedicated interfaces. All sensors are accessed and controlled through their corresponding device SDKs. Before each data collection session, the internal clocks of all devices are synchronized with the host PC’s time reference. The LiDAR transmits point cloud packets with internal timestamps, which are recorded and aligned using the host system clock at the time of reception. This process ensures consis-tent temporal referencing of LiDAR measurements. For all cameras, frame-level timestamps are obtained directly from the device drivers and referenced to the synchronized host system time. As a result, all captured frames are associated with timestamps within the same time domain. During post-processing, multimodal data streams are temporally aligned ac-cording to these timestamps to construct synchronized multimodal observations. This host-based synchronization strategy provides reliable temporal consistency across all sensors for downstream multimodal perception tasks. 
+
+C.3 Calibration 
+
+To ensure accurate geometric alignment across heterogeneous sensing modalities, we carefully design a unified calibration pipeline for the proposed PanoMMOcc dataset of the quadruped robot. The dataset includes panoramic, thermal, and polarization cameras, as well as a 3D LiDAR. This section first describes the intrinsic calibration of each camera using a checkerboard pattern. It then details the extrinsic calibration between the LiDAR and cameras. All sensors are finally expressed in a common LiDAR-centric coordinate system, which serves as the dataset’s global reference. 
+
+Intrinsic Calibration of Cameras. Each camera type is first calibrated in-dependently to estimate its intrinsic parameters, including focal lengths (the distance between the lens and the sensor), the principal point (the center of the image), and lens distortion coefficients (which correct image warping). We use a standard checkerboard-based calibration procedure for its reliability and consistency. An example of the calibration process is shown in Fig. 8. For each camera, a planar checkerboard with known square size is observed under diverse viewpoints, distances, and orientations, as illustrated in Figure 8. This approach sufficiently excites all degrees of freedom of the camera model. Corner points are automatically detected in the image plane and associated with their corresponding coordinates in the checkerboard coordinate system. Given these correspondences, we estimate the camera intrinsic matrix K and distortion parameters. This is done by minimizing reprojection error via nonlinear least-squares optimization. 26 G. Zhao, Z. Yang, S. Wu et al. 
+
+Fig. 8: Checkerboard corner detection results for the intrinsic calibration of the polar-ization camera. The detected corners are connected with colored lines. 
+
+The pinhole (thermal and polarization) cameras are calibrated using the standard pinhole camera model. Given a 3D point 
+
+Ppin = ( X, Y, Z )⊤, (19) in the camera coordinate system, its normalized image coordinates are computed as 
+
+x = XZ , y = YZ . (20) Radial and tangential distortions are modeled by 
+
+xd = x  1 + k1r2 + k2r4 + k3r6 + 2 p1xy + p2
+
+ r2 + 2 x2,yd = y  1 + k1r2 + k2r4 + k3r6 + p1
+
+ r2 + 2 y2 + 2 p2xy,  (21) where r2 = x2 +y2, and { ki} and { pi} denote radial and tangential distortion co-efficients, respectively. The distorted normalized coordinates are finally mapped to pixel coordinates through the intrinsic matrix 
+
+K =
+
+
+
+fx 0 cx
+
+0 fy cy
+
+0 0 1
+
+ , (22) such that 
+
+(u, v, 1) ⊤ = K(xd, y d, 1) ⊤. (23) Panoramic Multimodal Semantic Occupancy Prediction 27  
+
+> Fig. 9: Projection of LiDAR point clouds onto the thermal image using the calibrated extrinsic parameters.
+
+For Panoramic Annular Lens (PAL) cameras, we adopt the generic Taylor (OCam) model [39] to explicitly model strong nonlinear distortions. The Taylor series-based projection function provides a flexible mapping between 3D rays and image pixels, enabling accurate intrinsic calibration for wide field-of-view panoramic imaging systems. Let a 3D point in the camera coordinate system be 
+
+Ppal = ( X, Y, Z )⊤. (24) The point is first mapped to the normalized image plane, and we compute its radial distance as 
+
+ρ =
+
+√X2 + Y 2
+
+Z . (25) Unlike the pinhole model, the omnidirectional projection does not rely on radial– tangential distortion corrections defined on the normalized image plane. Instead, the image radius r is modeled as an N -th order polynomial of ρ:
+
+r = f (ρ) = a0 + a1ρ + a2ρ2 + · · · + aN ρN , (26) where { ai} are the intrinsic parameters characterizing the lens geometry. The normalized direction components are defined as 
+
+ν = X
+
+√X2 + Y 2 , η = Y
+
+√X2 + Y 2 . (27) 28 G. Zhao, Z. Yang, S. Wu et al.  
+
+> Fig. 10: Projection of LiDAR point clouds onto the polarization image using the cali-brated extrinsic parameters.
+
+The final pixel coordinates ( u,v) are obtained via an affine transformation: 
+
+u = cx + r(ν + αη ),v = cy + rη,  (28) where ( cx,cy ) denotes the principal point and α models the non-orthogonality between image axes. Consequently, the intrinsic parameters of a PAL camera are expressed as 
+
+θPAL = {a0, . . . , a N , c x, c y , α }. (29) All intrinsic parameters are fixed after calibration and shared across the entire dataset. 
+
+LiDAR–Camera Extrinsic Calibration. After intrinsic calibration, we esti-mate the extrinsic transformations between the LiDAR and each camera. Let 
+
+FL denote the LiDAR coordinate system and FC denote a camera coordi-nate system. The goal of extrinsic calibration is to estimate a transformation 
+
+TCL ∈ SE (3) , consisting of a rotation RCL and a translation tCL , such that a 3D point expressed pL in the LiDAR frame can be transformed into the camera frame by 
+
+pC = RCL pL + tCL . (30) Panoramic Multimodal Semantic Occupancy Prediction 29  
+
+> Fig. 11: Projection of LiDAR point clouds onto the PAL image using the calibrated extrinsic parameters.
+
+To estimate TCL , we adopt a corner-based extrinsic calibration strategy using a planar whiteboard. The whiteboard contains four well-defined corners and a sufficiently large planar surface, making it reliably observable by both LiDAR and cameras. During data collection, the whiteboard is placed at multiple posi-tions and orientations within the overlapping field of view of the sensors. For camera observations, the four 2D corner points of the whiteboard are manually annotated in each image to avoid detection ambiguity under challeng-ing imaging conditions ( e.g. , thermal or polarization modalities). Let 
+
+{uij } , j ∈ { 1, 2, 3, 4}, (31) denote the annotated image coordinates of the four corners in the i-th frame. In the LiDAR domain, the four corresponding 3D corner points are also manually selected from the point cloud. The 3D corner points are denoted as 
+
+{PLj } , j ∈ { 1, 2, 3, 4}, (32) where PLj is expressed in the LiDAR coordinate system. Given an initial LiDAR-camera extrinsic transformation 
+
+TCL =  RCL , tCL
+
+ ∈ SE (3) , (33) a LiDAR corner point is transformed into the camera coordinate system by 
+
+PCj = RCL PLj + tCL . (34) 30 G. Zhao, Z. Yang, S. Wu et al.  
+
+> Fig. 12: Projection of LiDAR point clouds onto the equirectangularly unwrapped PAL image.
+
+The transformed 3D point is then projected onto the image plane using the calibrated camera projection function π(·). For thermal and polarization cam-eras, π(·) corresponds to the standard pinhole projection with distortion, while for panoramic cameras it represents the unified omnidirectional (Taylor/OCam) projection model. The predicted image location is 
+
+ˆuij = π (PCj ) . (35) The extrinsic calibration is formulated as a nonlinear least-squares optimiza-tion problem that minimizes the reprojection error over all frames and all corners: 
+
+min  
+
+> RCL,tCL
+
+X
+
+> i
+> 4
+
+X
+
+> j=1
+
+uij − π  RCL PLj + tCL
+
+ 2 . (36) The extrinsic parameters are jointly refined across multiple frames to improve robustness and reduce the influence of annotation noise in both image and Li-DAR domains. The above procedure is independently applied to each camera modality, yielding a set of LiDAR-to-camera extrinsic transformations 
+
+n
+
+TCi
+
+> L
+
+o
+
+.
+
+All sensors are therefore consistently aligned to the LiDAR coordinate system, enabling accurate multimodal data fusion. 
+
+Visualization of Extrinsic Calibration. To qualitatively evaluate the accu-racy of the estimated LiDAR–camera extrinsic parameters, we project LiDAR point clouds onto images from different camera modalities using the calibrated transformations. Specifically, Fig. 9 and Fig. 10 show the projection results on thermal and polarization images, respectively. Fig. 11 illustrates the projection of LiDAR points onto the PAL image, while Fig. 12 presents the corresponding result on the equirectangularly unwrapped PAL representation. 
+
+C.4 Data Collection 
+
+PanoMMOcc is collected using a quadruped robot across a wide range of real-world environments, covering a continuous spectrum from highly structured built scenes to weakly structured natural terrains. The data are collected under diverse illumination conditions, including both daytime and nighttime scenarios. Specifically, the dataset includes urban street scenes , residential ar-eas , recreational green spaces , campus environments , rural areas , and 
+
+forested regions . These scenes exhibit substantial diversity in geometric struc-ture, semantic composition, terrain complexity, and dynamic elements. Panoramic Multimodal Semantic Occupancy Prediction 31 Campus   
+
+> 10
+> Urban
+> 6
+> Residential
+> 5
+> Green Spaces
+> 10
+> Rural
+> 7
+> Forested
+> 4
+> Day
+> 31
+> Night
+> 11 Scene
+> &
+> Time
+> Forest
+> Fig. 13: Distribution of annotated sequences across different scene categories and illu-mination conditions in PanoMMOcc.
+
+Urban street scenes and residential areas represent highly structured envi-ronments, characterized by regular layouts, dense man-made structures, and frequent dynamic agents. Campus environments and recreational green spaces serve as semi-structured transitional scenes, where artificial structures coexist with natural elements and terrain variations begin to influence traversability. Rural areas and forested regions correspond to weakly structured natural en-vironments, featuring irregular geometry, unstructured obstacles, and uneven terrain, posing significant challenges for robust multimodal perception. Benefiting from the mobility and terrain adaptability of the quadruped robot, PanoMMOcc enables data collection in complex environments that are difficult to access using wheeled platforms. This capability allows the dataset to cap-ture realistic multimodal observations across diverse outdoor scenarios, provid-ing valuable data for studying multimodal perception and embodied intelligence. 
+
+C.5 Data Splits 
+
+To construct the benchmark, we carefully select 42 sequences from the collected data for manual annotation. These sequences cover diverse scene categories to ensure balanced representation of different real-world environments. Specifically, the annotated sequences include 6 urban street scenes, 5 residen-tial areas, 10 recreational green spaces, 10 campus environments, 7 rural areas, and 4 forested regions. This distribution provides a continuous coverage from highly structured urban environments to weakly structured natural terrains. In addition to scene diversity, the dataset also considers variations in illumination conditions. Among the annotated sequences, 31 sequences are collected during daytime, while 11 sequences are captured at night, enabling the dataset to in-32 G. Zhao, Z. Yang, S. Wu et al. (a)   
+
+> (b) (c)
+> Fig. 14: Example of gait-induced jitter in the PanoMMOcc. (a) Example panoramic image exhibiting motion blur caused by gait-induced jitter during data acquisition. (b) Vertical acceleration measured by the IMU integrated in the LiDAR during locomotion. (c) Downsampled vertical acceleration revealing the jitter pattern.
+
+clude both normal and low-light perception scenarios. The overall distribution of scene categories and illumination conditions is illustrated in Fig. 13. 
+
+C.6 Privacy Protection 
+
+To protect personal privacy and ensure responsible data release, all identifiable personal information in the collected images is anonymized prior to publication. In particular, human faces and vehicle license plates are automatically detected and obscured using mosaic blurring. This anonymization process prevents the disclosure of sensitive information while maintaining the integrity of the visual data for research purposes. 
+
+## D Gait-Induced Jitter Analysis 
+
+During data acquisition, the quadruped robot platform adopts a biomimetic locomotion gait to traverse outdoor environments. Unlike wheeled platforms that provide relatively smooth motion, quadruped locomotion involves periodic ground contacts of the robot’s legs. These repeated impacts introduce noticeable body vibrations, which manifest as vertical jitter of the robot platform during movement. To analyze this phenomenon, we examine the inertial measurements collected from the IMU integrated in the LiDAR. In particular, we focus on the vertical acceleration signal. Since the raw acceleration contains both motion-induced acceleration and the gravity component, we first remove the mean value to obtain the detrended vertical acceleration: 
+
+a′ 
+
+> z
+
+= az − az , (37) where az denotes the measured vertical acceleration and az is the mean value over the sequence. The resulting signal a′ 
+
+> z
+
+mainly reflects the vibration induced by the robot’s locomotion. Panoramic Multimodal Semantic Occupancy Prediction 33 Thermal Polarization     
+
+> GT Ours EFFOcc MonoScene
+> Panoramic
+> Fig. 15: Failure case in an extremely dark nighttime scene. Due to the sparsity of long-range LiDAR observations, the predictions near the boundaries become sparse.
+
+Fig.14(a) shows an example panoramic image captured during robot mo-tion, where noticeable motion blur can be observed due to body vibrations. Fig.14(b) plots the detrended vertical acceleration together with a smoothed curve obtained using a moving-average filter. The smoothed signal suppresses high-frequency components and highlights the low-frequency motion trend of the robot body, while the detrended acceleration reveals high-frequency oscillations caused by locomotion-induced impacts. Fig.14(c) further presents a downsam-pled version of the detrended acceleration to provide a clearer visualization of the vibration pattern. From these observations, we can see that the detrended acceleration exhibits significant high-frequency oscillations, indicating pronounced vertical jitter dur-ing locomotion. Such oscillations originate from the periodic impacts between the robot’s legs and the ground during the quadruped gait cycle. The result-ing body vibration introduces noticeable motion blur in the captured images, which may degrade the quality of visual observations and pose challenges for downstream perception tasks. 
+
+## E Discussions 
+
+E.1 Limitations 
+
+Despite the advantages of the proposed dataset and perception framework, sev-eral limitations remain. Although PanoMMOcc covers a diverse set of environ-ments, the overall dataset scale is still relatively limited compared with large-scale vehicle-based perception datasets. Expanding the dataset with more se-34 G. Zhao, Z. Yang, S. Wu et al. 
+
+quences, environments, and weather conditions would further improve its repre-sentativeness for real-world robotic applications. In addition, indoor scenes are not extensively covered, which may limit the applicability of the dataset for cer-tain robotic perception tasks. Another limitation lies in the voxel resolution used in this work, which is set to 0.4m. While this resolution is sufficient for most perception tasks such as navigation and scene understanding, it may be insuf-ficient for fine-grained manipulation tasks ( e.g. , robotic grasping) that require more precise geometric representations. Future work will focus on expanding the dataset scale, introducing more diverse environments, and exploring higher-resolution occupancy representations for quadruped robotic platforms. 
+
+E.2 Failure Case Analysis 
+
+Fig.15 presents a representative failure case in an extremely dark nighttime environment. In this scene, the predicted occupancy near the boundaries becomes relatively sparse, particularly for distant regions. This phenomenon is mainly caused by the reduced LiDAR point density at long ranges, as the Livox MID360 LiDAR produces increasingly sparse observations with distance. Despite this limitation, our multimodal framework is still able to preserve the overall geometric structure of the scene. The predicted results of our method only exhibit sparsity in the far regions near the two sides. In contrast, EFFOcc (C+L) not only suffers from sparse predictions but also produces incorrect se-mantic categories in several regions due to the lack of complementary sensing cues. Meanwhile, MonoScene, which relies solely on visual inputs, fails to recover meaningful geometric structures under extremely low-light conditions. Overall, this failure case highlights the challenges of occupancy perception in extremely dark environments and distant regions. At the same time, it also demonstrates the advantage of incorporating complementary sensing modalities, such as thermal and polarization information, which provide additional cues when RGB visual observations become unreliable.
