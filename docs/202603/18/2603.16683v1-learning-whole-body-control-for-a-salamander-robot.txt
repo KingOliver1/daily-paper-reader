@@ -1,0 +1,303 @@
+Title: Learning Whole-Body Control for a Salamander Robot
+
+URL Source: https://arxiv.org/pdf/2603.16683v1
+
+Published Time: Wed, 18 Mar 2026 01:29:07 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Learning Whole-Body Control for a Salamander Robot 
+
+Mengze Tian 1,†, Qiyuan Fu 1,†,∗, Chuanfang Ning 1, Javier Jia Jie Pey 1, Auke Ijspeert 1
+
+Abstract — Amphibious legged robots inspired by salaman-ders are promising in applications in complex amphibious environments. However, despite the significant success of train-ing controllers that achieve diverse locomotion behaviors in conventional quadrupedal robots, most salamander robots relied on central-pattern-generator (CPG)-based and model-based coordination strategies for locomotion control. Learning unified joint-level whole-body control that reliably transfers from simulation to highly articulated physical salamander robots remains relatively underexplored. In addition, few legged robots have tried learning-based controllers in amphibious environments. In this work, we employ Reinforcement Learning to map proprioceptive observations and commanded velocities to joint-level actions, allowing coordinated locomotor behaviors to emerge. To deploy these policies on hardware, we adopt a system-level real-to-sim matching and sim-to-real transfer strategy. The learned controller achieves stable and coordinated walking on both flat and uneven terrains in the real world. Be-yond terrestrial locomotion, the framework enables transitions between walking and swimming in simulation, highlighting a phenomenon of interest for understanding locomotion across distinct physical modes. A supplementary video is available at: 
+
+https://youtu.be/mMVRsBvLbYA .
+
+I. I NTRODUCTION 
+
+Salamander robots are a promising amphibious platform for studying whole-body locomotion across both land and water [1]–[3]. Their elongated body with an articulated spine and four limbs enables a single mechanical system to realize both limb-driven walking and body-driven swimming under distinct coordination patterns. This morphological versatility makes salamander-like robots a valuable testbed for investi-gating unified locomotion control within the same physical embodiment [4]–[6]. To coordinate the large number of degrees of freedom in locomotion, salamander robots are commonly controlled using biologically-inspired central pattern generator (CPG) controllers [4]–[9]. These approaches coordinate axial body undulation and limb stepping through a network of neurons that exhibit oscillatory signals, enabling rhythmic walking and swimming behaviors. However, enabling adaptive and omnidirectional locomotion on a highly articulated salaman-der robot remains an open challenge. In these systems, locomotion emerges from coupled whole-body dynamics involving axial bending, limb stepping, and environmental contact on both the feet and the body [10], [11]. Explic-itly designing model-based controllers becomes increasingly  
+
+> 1All authors are with the Biorobotics Laboratory (BIOROB), ´Ecole polytechnique f´ ed´ erale de Lausanne (EPFL), Lausanne 1015, Switzerland.
+> †These authors contributed equally to this work.
+> ∗Corresponding author: qiyuan.fu@epfl.ch. This work has been submitted to the IEEE for possible publication. Copyright may be transferred without notice, after which this version may no longer be accessible.
+
+challenging as contact interactions and oscillator network complexity grow rapidly with the body’s number of degrees of freedom. This scalability issue limits their ability to achieve adaptive and omnidirectional locomotion [4]–[6], [12]–[14], motivating learning-based approaches that can acquire whole-body control without model-based design. Reinforcement Learning (RL) provides a natural frame-work for realizing this idea in practice [15]–[17], but its potential for amphibious locomotion on salamander robots has not been fully explored. Such locomotion is of significant biological interest [4]–[6] and poses control challenges [18]– [20], as transitions between land and water induce shifts in propulsion mechanisms and contact conditions, leading to qualitatively different system dynamics. From a systems perspective, such transitions give rise to distinct dynamical modes, effectively forming a hybrid dynamical system [19]. For robots with similar highly articulated morphologies, pre-vious works rely on controllers such as trajectory generators or CPG for joint-level control [21], [22], where the policy adjusts oscillator or phase parameters only to coordinate the predefined locomotion patterns instead of directly command-ing all joints. While this reduces control complexity, the policy modulates only a small set of parameters, limiting the range of achievable locomotion behaviors. Learning a simple low-level joint-space policy that directly generates whole-body control and transferring it to a physical salamander robot remain less explored. Realizing such learned whole-body control on a physical salamander robot further raises system-level considerations. Discrepancies may arise across sensing, actuation, and kine-matic layers. At the sensing level, proprioceptive measure-ments are subject to noise, which affects the system’s state estimation [23]. At the actuation level, servo motors exhibit strongly nonlinear torque–angle characteristics, whose effec-tive parameters are not directly known in simulation and therefore require identification from real hardware data [24]. At the kinematic level, mechanical backlash and compliance introduce kinematic deviations that alter the body dynamics. Due to the serial-body morphology, such discrepancies accu-mulate along the kinematic chain and degrade whole-body coordination in sim-to-real transfer. As a result, small dis-crepancies in sensing, actuation, and kinematics can degrade overall performance. In this work, we study learning-based whole-body control for a salamander robot as a physical embodiment. This work makes the following contributions:  
+
+> •
+
+An RL framework that learns joint-level whole-body control for terrestrial locomotion on a highly articulated salamander robot, where the policy directly outputs         
+
+> arXiv:2603.16683v1 [cs.RO] 17 Mar 2026 Fig. 1. Overview of the learned salamander locomotion across diverse terrains. Top row: traversal from cobblestones to grass. Second row: traversal from stepped terrain, descending a height drop to flat ground. Third row: transition from land to water in simulation. Bottom row: locomotion on slippery sand (left) and rough terrain in the lab (right).
+
+commands for all actuated joints rather than adjusting oscillator or phase parameters to generate motion.  
+
+> •
+
+Development of a system-level real-to-sim match-ing and sim-to-real transfer pipeline, enabling learned whole-body locomotion policies to be deployed on hardware and achieve natural walking across both flat and uneven terrains in the real world.  
+
+> •
+
+Beyond terrestrial locomotion, we formulate a transition across terrestrial and aquatic environments as a hybrid dynamical system and integrate it into the RL frame-work. We further validate in simulation that a unified policy can transition from land to water. II. B ACKGROUND AND SETTING 
+
+A. Locomotion in Salamander-like Robots 
+
+Previous salamander robots were primarily controlled by CPGs, which coordinate rhythmic body movements for both terrestrial and aquatic locomotion [4]–[6]. CPGs regulate the oscillatory patterns that enable walking and swimming by coordinating axial and limb motions. This neural mechanism modulates movement through a few simple control param-eters, providing a biological model for locomotion. While CPGs offer a biologically inspired approach, RL has become a powerful tool for learning complex behaviors through environmental interaction [15]–[17], [22]. 
+
+B. Hybrid Dynamical System 
+
+Hybrid dynamical systems describe processes that com-bine continuous dynamics with discrete mode transitions, where each mode is governed by a different set of dy-namics [25]. Amphibious locomotion naturally exhibits such hybrid characteristics. On land, motion is dominated by contact-driven rigid-body dynamics that provide support and propulsion, whereas in water, contact forces vanish and mo-tion is governed primarily by buoyancy and hydrodynamic drag. These two interaction regimes therefore correspond to distinct continuous dynamical modes within a unified physical system. For terrestrial locomotion, we rely on MuJoCo’s standard rigid-body contact dynamics [26]. To model aquatic locomo-tion, we adopt a simplified hydrodynamic approximation that captures the dominant fluid forces while remaining computa-tionally efficient and fully compatible with MuJoCo’s rigid-body pipeline. Specifically, buoyancy and drag forces are computed directly from each body segment’s instantaneous kinematics. Buoyancy: For segments below the water surface, an upward buoyancy force is applied: 
+
+Fb = kb mg ez − kd ˙z ez , (1) where ez denotes immersed depth, m is the segment mass, g
+
+is gravitational acceleration, ˙z is the vertical velocity, kb, k d
+
+denote buoyancy and damping coefficients. 
+
+Hydrodynamic Drag: The hydrodynamic drag does not assume a strictly laminar or turbulent regime. Instead, it adopts a combined formulation that captures both linear and quadratic forces. Drag forces and torques are computed for each submerged body segment from its velocity relative to the surrounding fluid. In the local body frame, translational and rotational drag are approximated as linear and quadratic functions of the corresponding velocities, 
+
+Fd = −Clin  
+
+> v
+
+v − Cquad 
+
+> v
+
+ ∥v∥ ⊙ v, (2) 
+
+τd = −Clin  
+
+> ω
+
+ω − Cquad 
+
+> ω
+
+ ∥ω∥ ⊙ ω, (3) where v, ω ∈ R3 are the linear and angular velocities of the segment in its local frame, Clin  
+
+> v
+
+, Cquad  
+
+> v
+
+, Clin  
+
+> ω
+
+, Cquad  
+
+> ω
+
+are diagonal gain matrices that absorb the effects of geometry, viscosity, and fluid density, and ⊙ denotes element-wise mul-tiplication. The drag gain matrices Clin  
+
+> v
+
+, Cquad  
+
+> v
+
+, Clin  
+
+> ω
+
+, Cquad  
+
+> ω
+
+are computed analytically from each body segment’s geometry and physical properties [26]. The resulting forces and torques are then transformed back to the world frame and applied as external loads. Together with contact-driven rigid-body dynamics on land, this model defines the two continuous dynamical modes that constitute the hybrid locomotion system studied in this work. 
+
+C. Physical Platform 
+
+In this work, we use a salamander-inspired amphibious robot as the physical embodiment for studying whole-body locomotion across terrestrial environments. The robot fea-tures a highly articulated serial body with multiple axial and limb degrees of freedom, actuated by position-controlled Dynamixel XM430 servo motors. It is equipped with an onboard 9-DoF inertial measurement unit (IMU) based on the LSM6DSOX and LIS3MDL sensors, and a Raspberry Pi Zero 2W for onboard control and data processing. To enable real-time execution of the learned policies on this embedded platform, we deploy the trained models using the ONNX runtime library [27]. The policies are exported to ONNX format and executed on the ARM architecture of the Raspberry Pi Zero 2W. A ROS2-based control framework integrates state estimation, policy inference, and low-level motor command publishing onboard without external com-putation. The operator’s laptop only sends gamepad input for goal velocities over Wi-Fi. The robot is powered by a DC power supply at 14 V during walking tests or a 3-cell Lithium-Polymer battery during outdoor tests. III. M ETHOD 
+
+A. Action Space 
+
+We formulate whole-body locomotion as a learning-based joint-space control problem. At each control step t, the policy outputs an incremental joint command 
+
+at = ∆ qdes ∈ Rnq , (4) where ∆qdes denotes the desired joint angle offset, and nq
+
+is the number of actuated joints of the salamander robot. Instead of directly predicting absolute joint angles, the action is defined as a residual offset added to a fixed nominal joint angle qnominal ∈ Rnq ,
+
+qdes = qnominal + ∆ qdes , (5) where qdes ∈ Rnq denotes the desired joint angle. This residual action formulation anchors the learned policy around a physically meaningful posture prior, facilitating stable ex-ploration during training [28]–[30]. The desired joint angles 
+
+qdes are tracked by a low-level joint-space PD controller, which produces the corresponding joint torques τ ∈ Rnq .
+
+B. Observation Space 
+
+The policy receives a proprioceptive observation ot ob-tained from onboard state estimation. As illustrated in Fig. 2, the observation is defined as 
+
+ot =   ˙q, ∆q, ω, g, ϕ, (6) where ˙q denotes the joint velocities, ∆q denotes joint angle differences, ω is the angular velocity measured by the IMU, 
+
+g is the gravity vector expressed in the body frame measured by the IMU, and ϕ represents the current gait phase. 
+
+Phase input: To facilitate foot clearance without intro-ducing an explicit gait generator, we define a phase input 
+
+ϕ [31]–[33]. It is provided as an additional input to the policy and is used in computing phase-conditioned reward terms that encourage foot clearance, as described in Sect. III-C. Importantly, the phase variable does not generate joint commands and is not tracked by the low-level controller. All joint commands are directly produced by the learned policy. 
+
+Observation without linear velocity: The IMU linear velocity is excluded from the observation. For the salamander robot, estimating linear velocity requires inertial integration, which is prone to drift and difficult to stabilize due to the robot’s compact body and limited sensing capabilities. To compensate for the absence of explicit linear velocity information, the policy additionally takes a short history of past actions {at−1, at−2, at−3} as a separate input, which provides temporal information for locomotion dynamics. 
+
+C. Reward Functions 
+
+The reward function is designed to promote stable and efficient whole-body locomotion while tracking commanded motion. In particular, we define the tracking rewards using the equivalent center-of-mass (CoM) linear and angular ve-locities, rather than velocities measured at local sensors by the IMU. Due to the oscillatory motions of the body during salamander locomotion, velocities measured by IMU exhibit periodic fluctuations and do not reliably reflect the overall motion of the system. In contrast, CoM velocities reduce the influence of oscillations and better capture the overall motion. Fig. 2. Control architecture of the learned joint-space controller. The policy receives commanded planar velocity vcmd and a proprioceptive observation 
+
+ot = ( q, ∆q, ω, g, ϕ), together with a short history of past actions. The policy outputs joint angle residuals ∆qdes , which are added to a nominal joint angle qnominal to form the desired joint angle qdes . A low-level joint-space PD controller tracks qdes and produces joint torques τ .
+
+At each timestep t, the total reward is defined as aweighted sum of four components, 
+
+rt = wv rv + wω rω + wenergy renergy + wphase rphase . (7) Individual reward terms are summarized in Tab. I. The linear and angular velocity tracking terms, rv and 
+
+rω , constitute the primary task objectives and encourage the robot to follow the commanded planar velocity and yaw rate. Energy consumption is penalized through the instantaneous mechanical power at each joint, renergy , promoting efficient whole-body coordination. The foot phase consistency term 
+
+rphase regularizes foot height by comparing each foot’s ver-tical height zfoot  
+
+> j
+
+to a smooth phase-conditioned reference profile zref  
+
+> j
+
+(ϕj ) parameterized by a B´ ezier curve [33]. Here, 
+
+ϕj ∈ [−π, π ] denotes the gait phase of foot j. This formu-lation introduces a weak rhythmic prior without explicitly enforcing a fixed gait. In the experiments, we set wv = 1 .0dt ,
+
+wω = 0 .5dt , wenergy = 1 × 10 −3dt , and wphase = 1 .0dt with 
+
+dt = 0 .02 , where all physical quantities are expressed in standard SI units. 
+
+TABLE I REWARD FUNCTIONS 
+
+Reward Term Expression 
+
+Linear Velocity Tracking rv = exp 
+
+
+
+− ∥vcmd ,xy −vb,xy ∥2
+
+> σv
+
+
+
+Angular Velocity Tracking rω = exp 
+
+
+
+− (ωcmd ,z −ωb,z )2
+
+> σω
+
+
+
+Energy Cost renergy = − P 
+
+> i
+
+˙qi τi
+
+Feet Phase Consistency rphase = exp −   
+
+> P
+> j
+> 
+> zfoot
+> j−zref
+> j(ϕj)
+> 2
+> σphase
+
+!
+
+D. Training Details 
+
+All policies are trained in simulation using the MuJoCo Playground framework [34], as visualized in Fig. 3. Training is performed with PPO [35] on a single NVIDIA RTX 4070 GPU for approximately 1.5 hours, corresponding to 3 × 10 8
+
+steps, as summarized in Tab. II. The policy operates at a control frequency of 50 Hz, while desired joint positions are tracked by a low-level joint PD controller with gains 
+
+Kp = 15 Nm /rad and Kd = 0 .15 Nms /rad .
+
+TABLE II PPO T RAINING CONFIGURATION 
+
+Parameter Value 
+
+Training steps 3 × 10 8
+
+Number of environments 8192 Episode length 1000 Discount factor γ 0.97 Learning rate 3 × 10 −4
+
+Entropy coefficient 1 × 10 −2
+
+Unroll length 20 Minibatches per update 32 Updates per batch 4Batch size 256 Gradient clipping 1.0 Observation normalization Enabled Policy network MLP (512, 256, 128) Value network MLP (512, 256, 128) 
+
+Fig. 3. Training terrains used for locomotion learning with the robot having a maximum ground clearance of 10 .2 cm when all tibia links are vertical. (i) Hill terrain with the max slope angle of 15 ◦. (ii) Rugged terrain with the max height variation of 4 cm . (iii) Valley terrain with the max slope angle of 15 ◦.
+
+E. Sim-to-Real Transfer 
+
+This work addresses sim-to-real transfer for a highly serial, servo-actuated salamander robot, where modeling errors of the mechanical properties and motor dynamics accumulate along the kinematic chain and result in significant differences on whole-body dynamics. To bridge this gap, we implement a full-stack alignment pipeline spanning the observation, action, and kinematic layers. The objective is to ensure consistency between (i) the observations provided to the policy, (ii) the action commands admissible by the hardware, and (iii) the resulting kinematics observed on the physical system. 
+
+Observation Alignment: To reduce discrepancies be-tween simulated and real proprioceptive inputs, we inject observation noise during training based on observation mea-surements collected on the physical robot. The real sensor data are recorded while the robot executes reference motions generated from previous studies. From these recordings, we determine bounded noise ranges such that the injected noise envelopes the variability observed on hardware. 
+
+Action Alignment: To ensure that policy outputs remain within the tracking capabilities of the actuators, we apply a first-order low-pass filter to the commanded joint position offsets before execution [36]. In addition, a servo enve-lope model is used to capture actuator saturation, velocity-dependent torque limits, and braking asymmetry [24]. The motor parameters in simulation are further calibrated using tracking data collected from the physical robot, improv-ing the consistency between simulated and real actuator responses. 
+
+Kinematic Alignment: Mechanical clearances in the real robot introduce backlash that accumulates under oscillatory locomotion, reducing reachable leg workspace and lowering foot height. To account for this, we augment the simulation model with two auxiliary rotational DoFs at the front and back girdle connections, each allowing 4◦ passive rotation. The magnitude of passive rotation is determined by com-paring simulated and real kinematic data, and the simulated model reproduces the accumulated orientation drift observed on hardware, yielding foot trajectories that more closely match those of the physical robot.     
+
+> Fig. 4. Kinematic modeling of structural backlash. In addition to the actu-ated joint rotation about the z-axis (blue), two auxiliary passive rotational degrees of freedom about the x-axis and y-axis (orange and green) are introduced at the front and back girdle connections to model accumulated mechanical clearances. All other joints in the model remain rigid and do not include additional passive degrees of freedom.
+
+To improve robustness to unmodeled dynamics and envi-ronmental variability, we expose the policy to external dis-turbances by applying randomized forces to the torso during training. In addition, domain randomization is applied over a subset of physical and control parameters [37], including contact friction, mass distribution, joint friction losses, and PD gains. The training environment is visualized in Fig. 3. 
+
+F. Transition across Land and Water  
+
+> Fig. 5. Training environment for the transition task. Blue regions indicate water areas.
+
+As described in Sect. II-B, terrestrial and aquatic locomo-tion is defined by different dominant physical interactions in MuJoCo. On land, motion follows contact-based rigid-body dynamics, whereas in water, buoyancy and hydrodynamic drag are additionally applied to each body segment. We formulate the resulting environment-dependent dy-namics as 
+
+st+1 = f σ (st, at), (8) where σ ∈ { land , water } indicates the locomotion mode. Here, f σ reflects the different physical simulation config-urations defined in MuJoCo and serves to characterize the hybrid dynamical system; it is not used for explicit model-based control or switching. A single unified policy can be trained across both modes, as illustrated in Fig. 5. To allow the policy to condition on the environment, a binary mode indicator σ is appended to the proprioceptive observation: 
+
+ot =   ˙q, ∆q, ω, g, ϕ, σ . (9) IV. R ESULTS 
+
+A. Locomotion Performances 
+
+Omnidirectional Walking: We evaluate the learned con-troller on omnidirectional walking on flat ground. The robot achieves stable omnidirectional walking under diverse com-manded velocities. As shown in Fig. 6, the policy generates coordinated motions that adapt to different commands. A for-ward velocity command leads to consistent rhythmic walk-ing, a nonzero yaw rate produces smooth turning through gait asymmetry, and combined forward and lateral commands result in motion along diagonal directions. These results show that a single policy enables omnidirectional and flexible locomotion under varying velocity commands. 
+
+Walking on Rough Terrain: We evaluate locomotion over uneven terrain. Quantitative results are summarized in Table IV. We visualize the Rough-Medium setting reported in Table IV, where the robot traverses ramps and fragmented elevated patches, as shown in Fig. 7. We measure the Fig. 6. Real-world omnidirectional locomotion behaviors. (A) Forward walking under a constant forward velocity command, exhibiting coordinated axial–limb propulsion. (B) Turning behavior driven by a nonzero yaw-rate command, where asymmetric limb coordination induces rotational motion. (C) Diagonal walking resulting from simultaneous forward and lateral velocity commands, demonstrating continuous adaptation of whole-body coordination to mixed-direction motion. 
+
+forward velocity vb,x in the body frame by dividing the front girdle displacement by the total traversal time. The achieved forward velocity decreases with terrain difficulty, and the robot sustains locomotion across all tested con-ditions. On flat terrain with a fixed forward command of 0.3 m/s , the average forward velocity is 0.23 m/s . On rough terrains under manual joystick control, velocities remain in a comparable range with degradation as ruggedness and slope increase. Overall, these results show that the learning framework supports different terrestrial locomotion, enabling walking on flat ground and adaptive traversal over rough terrain. 
+
+Fig. 7. The robot successfully traverses rough-medium terrain. The terrain consists of inclined ramps and fragmented surface patches with varying elevations. The arrow indicates the direction of motion over time. 
+
+B. Evaluation of Sim-to-Real Transfer 
+
+We evaluate sim-to-real transfer through system-level alignment analysis and a velocity tracking experiment using the learned controller. 
+
+Evaluation of System Alignment: We evaluate sim-to-real consistency at the system level, including action alignment and kinematic alignment. As shown in Fig. 8A, 
+
+TABLE III TERRAIN DEFINITIONS AND CORRESPONDING REAL -WORLD FORWARD VELOCITY STATISTICS . E ACH RESULT INCLUDES DATA AGGREGATED FROM AT LEAST THREE TRIALS . C LEARANCE (%) IS DEFINED AS TERRAIN RUGGEDNESS NORMALIZED BY THE ROBOT ’S GROUND CLEARANCE .
+
+Terrain Ruggedness (cm) Clearance (%) Slope (°) 
+
+Flat 0 0.0 0Rough–Easy 2 19.6 15 Rough–Medium 4 39.2 15 Rough–Hard 4 39.2 25 
+
+Terrain Command Type vb,x (m/s) Flat Fixed forward velocity (0.3 m/s) 0.23 ± 0.01 Rough–Easy Manual joystick control (0–0.3 m/s) 0.19 ± 0.03 Rough–Medium Manual joystick control (0–0.3 m/s) 0.18 ± 0.01 Rough–Hard Manual joystick control (0–0.3 m/s) 0.17 ± 0.04 
+
+the calibrated simulated motors reproduce the joint angle trajectories of the physical robot, with simulated responses remaining close to real measurements under the same com-mands. We further examine the effect of structural backlash modeling. As illustrated in Fig. 8B, without backlash the simulated front foot clearance is overestimated. Introducing passive rotational degrees of freedom at the torso–girdle connections reduces the predicted swing foot height and produces trajectories that more closely match those observed on hardware. These results show that incorporating backlash improves kinematic alignment between simulation and the real robot. 
+
+Evaluation of Tracking Performances: We evaluate forward velocity tracking, where the real-world speed of the front girdle is measured using an OptiTrack motion capture system. As shown in Fig. 9, both simulated and real forward velocities follow the commanded profile with similar temporal trends. Tracking errors are observed in both domains, and deviations from the command are present in the measured velocities. Despite these discrepancies, the overall evolution of forward velocity remains similar between simulation and hardware, showing that the policy produces comparable locomotion behavior on the physical platform.   
+
+> Fig. 8. (A) Joint angle tracking of two representative joints on the front-left (FL) leg: the hip joint (left) and the foot joint (right). The cyan curve denotes the target command (Goal), the purple curve the simulated response (Sim), and the orange curve the real robot measurement (Real). (B) Visualization of modeling backlash.
+> Fig. 9. Sim-to-real tracking evaluation of the robot forward velocity. The yellow curve (cmd vx) denotes the commanded forward velocity, the blue curve (sim vx) represents the velocity in simulation, and the purple curve (real vx) shows the velocity measured on the real robot.
+
+C. Transition from Land to Water 
+
+We demonstrate in simulation that a unified policy transi-tions from land to water, shifting from limb-driven walking to body-driven undulatory swimming, as visualized in Fig. 10. We train the policy in the amphibious environment shown in Fig. 5, using the observation formulation described in Sect. III-F, which includes the binary mode indicator σ in Eq. 9. All training hyperparameters follow Tab. II without additional fine-tuning. To evaluate the transition, we initialize the robot on land near the water boundary, facing toward the fluid region. A constant forward velocity command is applied, driving the robot to move from land into water under a single policy. The resulting behavior is illustrated in Fig. 11. The emergent spine and tail traveling waves during this transition qualitatively resemble the land–water transition waves observed in biological salamanders [4]. The top panel shows body joint trajectories over time. As the robot transitions toward swimming, the spine and tail joints develop traveling wave patterns. The middle panel presents leg joint trajectories for all four limbs, where the limb joints gradually decrease as propulsion shifts from leg stepping to body undulation. The bottom panel shows binary foot contact states, where contacts progressively disappear, marking the transition from walking to swimming. Together, these results demonstrate that a single unified policy enables seamless transition from terrestrial walking to aquatic propulsion with-out controller switching.     
+
+> Fig. 10. Snapshots of the robot during the transition from land locomotion to swimming. The sequence (i–iv) illustrates the robot approaching the water, entering the water region, and progressively shifting from limb-driven walking to body-driven undulatory swimming.
+> Fig. 11. Transition from terrestrial to aquatic locomotion in simulation, where xirepresents the joint angle. (Top) Body joint trajectories for the spine and tail joints. (Middle) Leg joint trajectories for the four limbs (HL, HR, FL, FR). (Bottom) Binary foot contact states.
+
+V. C ONCLUSION 
+
+This work presents an RL framework for joint-level whole-body control of a highly articulated salamander robot. The learned policy directly commands all actuated joints and achieves natural terrestrial locomotion with successful sim-to-real transfer on hardware. Beyond terrestrial walking, we extend the framework to amphibious environments and demonstrate that a single unified policy transitions from land to water without controller switching. Future work will focus on enabling seamless walking and swimming transitions on physical hardware. ACKNOWLEDGMENT 
+
+We used LLMs (e.g., ChatGPT) to assist with language editing and manuscript polishing during the preparation of this paper. REFERENCES [1] E. Bizzi, M. C. Tresch, P. Saltiel, and A. d’Avella, “New perspectives on spinal motor systems,” Nature Reviews Neuroscience , vol. 1, no. 2, pp. 101–108, 2000. [2] M. H. Dickinson, C. T. Farley, R. J. Full, M. Koehl, R. Kram, and S. Lehman, “How animals move: an integrative view,” science , vol. 288, no. 5463, pp. 100–106, 2000. [3] S. Grillner, “Biological pattern generation: the cellular and compu-tational logic of networks in motion,” Neuron , vol. 52, no. 5, pp. 751–766, 2006. [4] A. J. Ijspeert, “Central pattern generators for locomotion control in animals and robots: A review,” Neural Networks , vol. 21, no. 4, pp. 642–653, 2008, robotics and Neuroscience. [Online]. Available: https: //www.sciencedirect.com/science/article/pii/S0893608008000804 [5] A. J. Ijspeert, A. Crespi, D. Ryczko, and J.-M. Cabelguen, “From swimming to walking with a salamander robot driven by a spinal cord model,” science , vol. 315, no. 5817, pp. 1416–1420, 2007. [6] A. J. Ijspeert, “Biorobotics: Using robots to emulate and investigate agile locomotion,” science , vol. 346, no. 6206, pp. 196–203, 2014. [7] K. Melo, T. Horvat, and A. J. Ijspeert, “Animal robots in the african wilderness: Lessons learned and outlook for field robotics,” Science Robotics , vol. 8, no. 85, p. eadd8662, 2023. [8] R. Thandiackal, K. Melo, L. Paez, J. Herault, T. Kano, K. Akiyama, F. Boyer, D. Ryczko, A. Ishiguro, and A. J. Ijspeert, “Emergence of robust self-organized undulatory swimming based on local hydrody-namic force sensing,” Science robotics , vol. 6, no. 57, p. eabf6354, 2021. [9] X. Liu, M. D. Loring, L. Zunino, K. E. Fouke, F. A. Longchamp, A. Bernardino, A. J. Ijspeert, and E. A. Naumann, “Artificial em-bodied circuits uncover neural architectures of vertebrate visuomotor behaviors,” Science Robotics , vol. 10, no. 107, p. eadv4408, 2025. [10] J. Arreguit, S. T. Ramalingasetty, and A. Ijspeert, “Farms: framework for animal and robot modeling and simulation,” BioRxiv , pp. 2023–09, 2025. [11] N. K. Hosseini, M. Ishida, F. Berio, V. Di Santo, and F. Iida, “A minimalistic walking fish robot twin based on the single actuator wave-like mechanism,” Bioinspiration & Biomimetics , vol. 21, no. 1, p. 016002, 2025. [12] T. Horvat, K. Karakasiliotis, K. Melo, L. Fleury, R. Thandiackal, and A. J. Ijspeert, “Inverse kinematics and reflex based controller for body-limb coordination of a salamander-like robot walking on uneven terrain,” in 2015 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2015, pp. 195–201. [13] T. Horvat, K. Melo, and A. J. Ijspeert, “Spine controller for a sprawling posture robot,” IEEE Robotics and Automation Letters , vol. 2, no. 2, pp. 1195–1202, 2017. [14] ——, “Model predictive control based framework for com control of a quadruped robot,” in 2017 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2017, pp. 3372–3378. [15] J. Hwangbo, J. Lee, A. Dosovitskiy, D. Bellicoso, V. Tsounis, V. Koltun, and M. Hutter, “Learning agile and dynamic motor skills for legged robots,” Science Robotics , vol. 4, no. 26, p. eaau5872, 2019. [16] X. B. Peng, P. Abbeel, S. Levine, and M. Van de Panne, “Deepmimic: Example-guided deep reinforcement learning of physics-based char-acter skills,” ACM Transactions On Graphics (TOG) , vol. 37, no. 4, pp. 1–14, 2018. [17] E. Kaufmann, L. Bauersfeld, A. Loquercio, M. M¨ uller, V. Koltun, and D. Scaramuzza, “Champion-level drone racing using deep reinforce-ment learning,” Nature , vol. 620, no. 7976, pp. 982–987, 2023. [18] W. D. Shin, H.-V. Phan, M. A. Daley, A. J. Ijspeert, and D. Flore-ano, “Fast ground-to-air transition with avian-inspired multifunctional legs,” Nature , vol. 636, no. 8041, pp. 86–91, 2024. [19] M. S. Branicky, “Introduction to hybrid systems,” in Handbook of networked and embedded control systems . Springer, pp. 91–116. [20] D. L. Ly and H. Lipson, “Learning symbolic representations of hybrid dynamical systems,” The Journal of Machine Learning Research ,vol. 13, no. 1, pp. 3585–3618, 2012. [21] X. Liu, C. D. Onal, and J. Fu, “Integrating contact-aware cpg system for learning-based soft snake robot locomotion controllers,” IEEE Transactions on Robotics , vol. 41, pp. 1581–1601, 2025. [22] Z. Liu, Y. Liu, Y. Fang, and X. Guo, “Learning omnidirectional locomotion for a salamander-like quadruped robot,” arXiv preprint arXiv:2511.08299 , 2025. [23] H. SORENSON, “Kalman filtering techniques,” ser. Advances in Control Systems, C. LEONDES, Ed. Elsevier, 1966, vol. 3, pp. 219–292. [Online]. Available: https://www.sciencedirect.com/science/ article/pii/B9781483167169500102 [24] H. Shi, W. Wang, S. Song, and C. K. Liu, “Toddlerbot: Open-source ml-compatible humanoid platform for loco-manipulation,” 
+
+arXiv preprint arXiv:2502.00893 , 2025. [25] R. Goebel, R. G. Sanfelice, and A. R. Teel, “Hybrid dynamical systems,” IEEE control systems magazine , vol. 29, no. 2, pp. 28–93, 2009. [26] E. Todorov, T. Erez, and Y. Tassa, “Mujoco: A physics engine for model-based control,” in 2012 IEEE/RSJ International Conference on Intelligent Robots and Systems . IEEE, 2012, pp. 5026–5033. [27] O. Contributors, “Onnx: Open neural network exchange,” https:// github.com/onnx/onnx, 2017, open source project. [28] T. Silver, K. Allen, J. Tenenbaum, and L. Kaelbling, “Residual policy learning,” arXiv preprint arXiv:1812.06298 , 2018. [29] T. Johannink, S. Bahl, A. Nair, J. Luo, A. Kumar, M. Loskyll, J. A. Ojea, E. Solowjow, and S. Levine, “Residual reinforcement learning for robot control,” in 2019 international conference on robotics and automation (ICRA) . IEEE, 2019, pp. 6023–6029. [30] J. Carvalho, D. Koert, M. Daniv, and J. Peters, “Residual robot learning for object-centric probabilistic movement primitives,” arXiv preprint arXiv:2203.03918 , 2022. [31] J. Siekmann, Y. Godse, A. Fern, and J. Hurst, “Sim-to-real learning of all common bipedal gaits via periodic reward composition,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) .IEEE, 2021, pp. 7309–7315. [32] G. B. Margolis and P. Agrawal, “Walk these ways: Tuning robot control for generalization with multiplicity of behavior,” in Conference on Robot Learning . PMLR, 2023, pp. 22–31. [33] Q. Liao, B. Zhang, X. Huang, X. Huang, Z. Li, and K. Sreenath, “Berkeley humanoid: A research platform for learning-based control,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025, pp. 2897–2904. [34] K. Zakka, B. Tabanpour, Q. Liao, M. Haiderbhai, S. Holt, J. Y. Luo, A. Allshire, E. Frey, K. Sreenath, L. A. Kahrs et al. , “Mujoco playground,” arXiv preprint arXiv:2502.08844 , 2025. [35] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 , 2017. [36] Z. Li, X. Cheng, X. B. Peng, P. Abbeel, S. Levine, G. Berseth, and K. Sreenath, “Reinforcement learning for robust parameterized locomotion control of bipedal robots,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2021, pp. 2811–2817. [37] X. B. Peng, M. Andrychowicz, W. Zaremba, and P. Abbeel, “Sim-to-real transfer of robotic control with dynamics randomization,” in 2018 IEEE international conference on robotics and automation (ICRA) .IEEE, 2018, pp. 3803–3810.

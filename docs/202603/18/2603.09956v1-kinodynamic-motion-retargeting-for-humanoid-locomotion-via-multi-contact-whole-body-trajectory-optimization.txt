@@ -1,0 +1,492 @@
+Title: Kinodynamic Motion Retargeting for Humanoid Locomotion via Multi-Contact Whole-Body Trajectory Optimization
+
+URL Source: https://arxiv.org/pdf/2603.09956v1
+
+Published Time: Wed, 11 Mar 2026 01:28:09 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Kinodynamic Motion Retargeting for Humanoid Locomotion via Multi-Contact Whole-Body Trajectory Optimization 
+
+Xiaoyu Zhang, Steven Haener, Varun Madabushi and Maegan Tucker  
+
+> Fig. 1. The presented Kinodynamic Motion Retargeting (KDMR) framework translates human motion references and ground reaction forces into retargeted motions that are dynamically feasible and respect multi-contact holonomic constraints. We further demonstrate that policies trained using our retargeted motions exhibit superior sample efficiency than those trained on kinematic data alone.
+
+Abstract — We present the KinoDynamic Motion Retarget-ing (KDMR) framework, a novel approach for humanoid locomotion that models the retargeting process as a multi-contact, whole-body trajectory optimization problem. Conven-tional kinematics-based retargeting methods rely solely on spatial motion capture (MoCap) data, inevitably introducing physically inconsistent artifacts, such as foot sliding and ground penetration, that severely degrade the performance of down-stream imitation learning policies. To bridge this gap, KDMR extends beyond pure kinematics by explicitly enforcing rigid-body dynamics and contact complementarity constraints. Fur-ther, by integrating ground reaction force (GRF) measurements alongside MoCap data, our method automatically detects heel-toe contact events to accurately replicate complex human-like contact patterns. We evaluate KDMR against the state-of-the-art baseline, GMR, across three key dimensions: 1) the dynamic feasibility and smoothness of the retargeted motions, 2) the accuracy of GRF tracking compared to raw source data, and 3) the training efficiency and final performance of downstream control policies trained via the BeyondMimic framework. Experimental results demonstrate that KDMR significantly outperforms purely kinematic methods, yielding dynamically viable reference trajectories that accelerate policy convergence and enhance overall locomotion stability. Our end-to-end pipeline will be open-sourced upon publication. 
+
+I. I NTRODUCTION 
+
+Recent advances in humanoid locomotion have been largely driven by imitation learning and related approaches that transfer human-based motions, obtained primarily using motion capture (MoCap), to real-world humanoid robots. By incorporating human motion references into reward design, humanoid robots can reproduce agile and natural human-like behaviors. Furthermore, prior work has demonstrated that 
+
+> Authors are with Georgia Institute of Technology, Atlanta, GA, USA {xzhang636,shaener3,vmadabushi3,mtucker }@gatech.edu
+
+high-quality motion references can be leveraged to distilling reusable motion policies for generalizable control across a variety of downstream tasks [1], [2]. However, human-based motions cannot be applied to robot motion directly; bridging the gap between human and robot morphology necessitates a motion retargeting process. This process must rigorously account for discrepancies in joint limits, mass distribution, and actuation capabilities. Conse-quently, it inevitably introduces physical artifacts, such as foot sliding, ground penetration, and dynamically infeasible transitions. If these artifacts are not explicitly resolved, they persist throughout the training process, forcing the learning agent to compensate for physically impossible references. This inherently limits the sample efficiency and ultimate performance of the downstream control policies [3]. Effectively eliminating these artifacts without explicitly enforcing system dynamics and contact complementarity constraints remains a formidable challenge for existing purely kinematics-based optimization methods. This defi-ciency is particularly evident in multi-contact locomotion, where the system must accurately manage the natural human heel-to-toe roll. As illustrated in Fig. 2, this continuous rolling motion involves a complex stance phase contact sequence that begins with an initial heel strike, progressing to a full flat-foot stance, and ends in a concentrated, toe-only contact. [4]. Replicating this fluid weight transfer on a humanoid robot is inherently difficult due to the hybrid, time-varying nature of the contact sequence and the additional instability it introduces. To address these complexities, we propose a novel method for kinodynamic motion retargeting that explicitly certifies dynamic feasibility and holonomic constraint satisfaction for          
+
+> arXiv:2603.09956v1 [cs.RO] 10 Mar 2026 Stance Phase Swing Phase
+> Right Heel Contact RH Left Heel Contact Right Heel Impact Right Toe Impact RH
+> Lift LH
+> Impact Right Toe Lift Midswing Midstance Right Heel Impact Right Toe Contact Left Toe Contact 0% 60% 100%
+> LT Fig. 2. Natural human walking, which we call multi-contact locomotion ,is characterized by a heel-to-toe rolling motion. The diagram illustrates one complete gait cycle, beginning and ending with right heel strike.
+
+multi-contact locomotion. Our approach processes human motion capture data by leveraging ground reaction forces as a primary physical anchor. By formulating the retargeting process to account for the continuous evolution of contact points, the proposed method maintains physical consistency during the critical transitions of the heel-toe roll. We show that this framework results in dynamically feasible motion references and improves the efficiency of imitation learning. The main contributions of this work are as follows: 1) A comprehensive pipeline, named KDMR, that jointly optimizes kinematics and whole-body dynamics. The result is mathematically guaranteed, smooth and dynam-ically feasible reference trajectories that bridge the mor-phological gap between humans and humanoid robots. 2) A human biomechanics-inspired approach to compute contact states and force distributions from time-series GRF data. Integrating this data into the dynamic opti-mization enables KDMR to generate reference trajecto-ries featuring a natural, human-like heel-to-toe roll. 3) Systematic comparison with a pure kinematics retarget-ing baseline (GMR) and application towards imitation learning. The results demonstrate that references ob-tained using KDMR improve sample efficiency. II. R ELATED WORK 
+
+A. Imitation Learning for Humanoid Locomotion 
+
+Imitation Learning (IL) is a common class of approaches to generate natural-looking and smooth robot motion tracking policies by imitating human data. DeepMimic [5] introduced a reinforcement learning (RL) approach to learn to reproduce motion references for different characters in a simulated environment using a goal-oriented reward function. Then, Adversarial Motion Prior (AMP) [1] employs an adversarial discriminator to model motion style as a distributional prior, enabling better generalization beyond individual reference trajectories. Building upon these prior efforts, several works [6], [7], [8] demonstrated quadrupedal locomotion by leveraging dog motion capture (MoCap) data to learn animal-like behaviors. More recently, to enable human-like motion generation, methods such as ASAP [9], KungFuBot [10], Hub [11], OmniH2O [12], UniTracker [13], TWIST [14], and Be-yondMimic [2] have adopted imitation learning frameworks to achieve humanoid locomotion skills. Although these ap-proaches demonstrate agile and natural movements using retargeted kinematic trajectories, handling dynamic incon-sistencies and retargeting artifacts during training remains challenging, critically impact sample efficiency, learning stability, and performance [3]. In this paper, we mitigate retargeting artifacts and improve dynamic feasibility by incorporating both MoCap data and ground reaction force (GRF) measurements into the retargeting process. 
+
+B. Kinematic Motion Retargeting 
+
+Motion retargeting originally aimed to transfer human motions to character animations in computer graphics [15], [16]. When extending this process to humanoid robots, ad-ditional challenges emerge due to morphological differences and dynamic inconsistencies, such as variations in degrees of freedom (DoFs), link lengths, inertial properties, and actuator limits. Consequently, directly mapping joint values from human data to humanoid robots is insufficient [17], [18], often leading to non-physical artifacts such as base floating, foot penetration, foot sliding, and non-smooth motions. Recent works such as PHC [19] and its subsequent ex-tensions [12], [9], [20], aim to mitigate these morphological challenges. They formulate retargeting as an inverse kinemat-ics (IK) problem solved via gradient descent through forward kinematics. However, the resulting motions may be dynam-ically infeasible and still exhibit noticeable artifacts. GMR [3] improves upon this paradigm by incorporating a non-uniform local scaling strategy combined with a two-stage IK formulation to improve geometric consistency. While they perform well in common human skeleton models, differences in skeleton structure (e.g., additional intermediate foot joints) can introduce systematic height and grounding offsets, since ground alignment is often computed from specific joint positions rather than true contact geometry. Despite these improvements, GMR still suffers from similar limitations, as ensuring dynamic feasibility and eliminating artifacts across the entire motion reference trajectories remain unresolved. 
+
+C. Dynamics-Informed Motion Retargeting 
+
+The artifacts arising from purely kinematic motion retar-geting are closely coupled with violations of dynamic feasi-bility [21], [22], as system dynamics and contact complemen-tarity constraints are typically not enforced. Consequently, incorporating system dynamics into the retargeting process can substantially improve the physical plausibility of the generated motions and facilitate their transfer to real robots beyond visually convincing animations. Several works have attempted to address this issue by refining kinematic reference trajectories through dynamics-aware optimization. For example, [23] enables robust transfer of complex animal motions to quadruped robots by jointly aligning spatial kinematics and temporal dynamics. Their approach first generates kinematically feasible reference tra-jectories and subsequently optimizes the timing to ensure dynamically consistent imitation on the target platform. Similarly, DynaRetarget [24] improves dynamic feasibility for loco-manipulation tasks by leveraging a rollout-based evaluation function to optimize control sequences within Convert marker to joint poses in global frame  
+
+> Kinodynamic Motion Retargeting Data Processing Human Motion
+> GRF Data Motion Capture Marker Data Kinematic Optimization Dynamic Optimization Get Multi-Contact Patterns
+> LLH LT RH RT RFig. 3. Algorithm overview: The KDMR algorithm converts time-series marker and ground reaction force data into joint position targets for the humanoid robot. This is accomplished in two steps: (1) Data Processing, which converts spatial marker trajectories and GRF data to human model poses and contact states; (2) Kinodynamic Motion Retargeting, which converts a sequence of human poses and contacts to a corresponding robot trajectory.
+
+the MuJoCo simulator [25]. However, while DynaRetarget relies on black-box sampling to approximate feasibility, it lacks the explicit multi-contact whole-body dynamics and contact complementarity constraints required for complex locomotion transitions, which our method addresses directly within the optimization formulation. Furthermore, several works explore the necessity of in-tegrating ground reaction force (GRF) measurements into human motion capture systems to compensate for the limita-tions of purely kinematic data [26], [27], [28], [29]. Although primarily focused on manipulation tasks, SoftMimic [30] corroborates this deficiency by utilizing data augmentation techniques to model the geometric impact of varying pay-loads on joint configurations. Consequently, much like PHC and GMR in the context of whole-body locomotion, we move beyond purely kinematic representations; our approach ex-plicitly enforces multi-contact dynamics and contact comple-mentarity constraints via a constrained optimization problem that leverages GRF data in a biomechanically-grounded way. III. M ETHOD 
+
+Solving the entire kinodynamic optimization problem is challenging due to its non-convexity and the large volume of data involved. We mitigate this issue by dividing this problem into two subproblems: kinematic optimization and dynamic optimization. In this section, we detail our proposed pipeline from human data collection to the generation of dynamically feasible retargeted trajectories, as illustrated in Fig. 3. 
+
+A. Human Reference Dataset 
+
+Throughout this work, we used an open-source biome-chanics dataset [26] containing synchronized motion and force measurements of a walking patient. The raw motion data consists of the 3D spatial trajectories of optical mark-ers, obtained from Motion Capture, and ground reaction wrenches, obtained from force plates which the reference human steps on. When direct GRF measurements are un-available, several toolboxes and estimation methods can infer ground reaction forces from motion data [28]. 
+
+B. Compute Human Reference Poses 
+
+The set of 3D marker positions Pmarker = {pmarker  
+
+> i
+
+}Nm 
+
+> i=1
+
+⊂
+
+R3 in the global frame, with Nm being the total num-ber of markers, is converted to corresponding target frame poses X target ⊂ SE (3) by first fitting these points to a human skeletal model. We accomplish this using OpenSim, a commonly used biomechanical analysis software [31]. Specifically, we use the inverse kinematics tool which solves for the skeleton configuration qh ∈ RNh (where Nh denotes the total degrees of freedom of the skeleton model) that best fits the marker positions. We then choose relevant target frames on the human skeleton, typically selected to coincide with joint centers (hip, knee, ankle). The poses of these target frames are computed via the forward kinematics mapping: FK j : RNh → SE (3) where each xtarget  
+
+> j
+
+:= [ptarget  
+
+> x
+
+, p target  
+
+> y
+
+, p target  
+
+> z
+
+, ϕ target  
+
+> x
+
+, ϕ target  
+
+> y
+
+, ϕ target  
+
+> z
+
+] = FK j (qh) denotes the pose of the j-th target frame. This procedure is repeated for each keyframe in the marker data set to obtain a time-series of target frame poses X target = {xtarget  
+
+> j
+
+}Nf
+
+> j=1
+
+, where Nf
+
+is the number of target frames. 
+
+C. Estimate Heel-Toe Contact Patterns 
+
+As illustrated in Fig. 2, humans naturally exhibit a multi-contact gait pattern while walking, allowing them to extend their stride and preserve forward momentum [22]. To achieve such human-like locomotion in humanoid robots, we embed distinct heel and toe contact domains into the retargeting problem. However, the raw GRF data acquired from standard force plates provide only the aggregated resultant force, with-out differentiating between the individual forces acting at the heel and toe. To address this, we introduce a biomechanics-inspired approach to accurately extract contact phases and decompose the forces using time-series GRF data. Inspired by the biomechanics literature [4], a standard human walking gait cycle is divided into a stance phase (accounting for approximately 60% of the cycle) and a swing phase. For walking, the corresponding vertical GRF profile typically exhibits a characteristic double-peak, rising (a) Heel-toe-roll event with associated GRF  
+
+> (b) Vertical GRF (normalized by subject body weight) over one foot contact event, and associ-ated contact phase Fig. 4. Illustration of the human GRF pattern used to estimate the contact sequence for steady-state walking.
+
+above body weight during weight acceptance and push-off, and falling below body weight during the mid-stance dip. Concurrently, the horizontal GRF exerts a braking (posterior) force at initial contact and transitions into a propulsive (anterior) force towards the end of the stance. Based on these principles, we deduce the discrete contact states for the heel and toe directly from the vertical GRF profile of the corresponding foot. Specifically, we identify a temporal window centered around the mid-stance dip to represent the flat-foot phase, labeling both the heel and toe as being in contact. The periods of non-zero vertical force preceding and succeeding this window are strictly extracted as heel-only and toe-only contacts, respectively. This yields the robust contact state decomposition illustrated in Fig. 4b. Finally, we extract the continuous GRF trajectories to inform the downstream dynamic optimization. To account for morphological discrepancies, these forces are dynamically rescaled based on the mass ratio between the target robot and the human subject: λ = mrobot  
+
+> mhuman
+
+λhuman , where mrobot 
+
+and mhuman denote the scalar masses, and λ, λhuman ∈ R3
+
+represent the corresponding 3D GRF vectors. We map this total mass-rescaled GRF onto our humanoid model by for-mulating it as the sum: λ = λheel + λtoe . This results in a total of four independent GRF vectors (i.e., left/right heel and left/right toe) to be optimized across the entire system. 
+
+D. Kinematics-Based Retargeting 
+
+Robots typically possess different kinematic structures than those of humans. We consider a floating-base model, where the base pose qb = [ px, p y , p z , ϕ x, ϕ y , ϕ z ] ∈ SE (3) 
+
+is attached to the robot’s pelvis. The remaining degrees of freedom are described by local coordinates ql ∈ Ql ⊆
+
+RNl . Thus, the full configuration of the robot is defined as q = [qb, ql] ∈ Q := SE (3) × Q l. Consequently, finding the corresponding configuration for the target robot entails mapping from the set of human target poses X target 
+
+to the robot’s configuration space Q. This is done with an optimization problem that is inherently non-convex and highly constrained, particularly when full-body dynamics and joint limits are taken into account. To mitigate the severe non-convexity arising from hybrid system dynamics, we first perform a purely kinematic-based optimization. This step yields an initial, albeit dynamically imperfect, reference trajectory qref , which represents the joint configurations of the target robot. This initialization strategy shares conceptual similarities with the unrefined output of GMR, but requires fewer steps. From the procedure in III-B, a collection of site pose trajectories xtarget  
+
+> j
+
+is obtained. We formulate the initial IK-based retargeting as the following optimization problem: 
+
+qref = argmin 
+
+> q
+
+X
+
+> (i,j )
+
+∥FK i(q) − xtarget  
+
+> j
+
+∥2
+
+s.t. qmin ≤ q ≤ qmax 
+
+(1) where FK i is the forward kinematic function mapping from its i-th joint in configuration space to the task space. Rather than directly solving this nonlinear position-level optimization, we linearize the forward kinematics FK i(q)
+
+and reformulate Equation (1) at the velocity level. By estab-lishing a topological correspondence between link j of the human model and link i of the robot model, the differential IK problem solves for the joint velocities ˙q as follows: 
+
+˙qref = argmin 
+
+> ˙q
+
+X
+
+> (j,i )
+
+∥Ji(q) ˙ q − ˙xtarget  
+
+> j→i
+
+∥2
+
+> W
+
+s.t. qmin ≤ qt + ∆ t ˙qt ≤ qmax 
+
+˙qmin ≤ ˙q ≤ ˙qmax 
+
+(2) where ˙xtarget  
+
+> j→i
+
+denotes the desired Cartesian velocity for robot link i derived from its corresponding human link j.The term Ji(q) is the geometric Jacobian matrix associated with robot link i, and W ∈ Rn×n represents a diagonal weighting matrix used to prioritize specific task-space track-ing objectives. 
+
+E. Dynamics-Based Retargeting 
+
+The kinematic reference trajectory qref obtained from section III-D nominally encodes the motion in the robot’s coordinate system, but is not best-suited for tracking. This trajectory may contain non-physical artifacts such as foot-slip, ground penetration, or high-acceleration movement which exceeds actuator torque limits. Thus, we introduce a dynamic retargeting step, which adjusts the kinematic reference in order to respect the dynamics of the robot. As described in Section III-C, our framework supports retargeting under arbitrary combinations of heel and toe contacts. The robot dynamics are therefore formulated by explicitly accounting for contact forces at each active contact site: 
+
+D ¨q + H(q, ˙q) = Bu + X JT 
+
+> st
+
+λst (3) where D ∈ R(Nl+6) ×(Nl+6) is the generalized inertia ma-trix, and H(q, ˙q) = C(q, ˙q) ˙q + G(q) collects the Coriolis, centrifugal, and gravity terms. The actuation selection matrix 
+
+B maps joint torques u to the actuated degrees of freedom. 
+
+Jst (q) denotes the geometric Jacobian associated with each contact point in stance phase, and λst is the corresponding GRF during stance phase. In this work, we consider only the linear components of the contact wrench, since we choose to model contacts at the heel and toe as three-dimensional point contacts. This reduces the number of decision variables and avoids over-constraining the problem, potentially allowing for more versatile gaits. The contact sequence, detailed in Section III-C, is pa-rameterized by the binary vector that indicates whether a specific contact point is in the stance or swing phase. During the swing phase, no reaction force is exerted on the corresponding contact point, yielding λ = 0. Conversely, during the stance phase, the contact point is strictly con-strained to be stationary, implying zero spatial velocity and acceleration. For contact points in the stance phase, the kinematic constraints are formulated as: 
+
+Jst (q) ˙q = 0 (4) 
+
+Jst (q) ¨ q + ˙Jst (q, ˙q) ˙ q = 0 (5) 
+
+pz,st = 0 (6) Furthermore, to prevent the foot from slipping along the tangential plane, the contact forces must strictly reside within the friction cone. We employ a linearized friction pyramid approximation to enforce these bounds on the tangential forces relative to the normal (vertical) force, where the constraints are defined as: 
+
+λzst > 0 (7) 
+
+|λxst | < μ
+
+√2 λzst (8) 
+
+|λyst | < μ
+
+√2 λzst (9) where μ denotes the coefficient of friction, and 
+
+λxst , λyst , λzst are the directional components of the contact force λst along the x (forward), y (lateral), and z (vertical) axes, respectively. The cost function is formulated to minimize the error to the reference trajectory, promote smoothness, and softly enforce constraint (6). We observe that solving (6) as a hard constraint is strictly non-smooth and thus numerically challenging. The cost function is: 
+
+L(.) = ∥qbase − qref 
+
+> base
+
+∥2
+
+> wb
+
+| {z }
+
+> Base tracking
+
++ ∥ql − qref  
+
+> l
+
+∥2
+
+> wj
+
+| {z }
+
+> Joint tracking
+
++ ∥ ˙qt+1 − ˙qt∥2
+
+> wv
+
+| {z }
+
+> Velocity smoothing
+
++ ∥λst,t +1 − λst,t ∥2
+
+> wλ
+
+| {z }
+
+> Force smoothing
+
+∥τ ∥2
+
+> wτ
+
+| {z } 
+
+> Torque regularization
+
++ ∥pz,st ∥2
+
+> wc
+
+| {z }
+
+> Ground Contact Eq. 6
+
+Lastly, we represent the trajectory as a discrete sequence of positions qt, each with associated derivatives ˙qt, ¨qt. These positions, velocities, and accelerations must obey a trape-zoidal integration law: 
+
+qt+1 = qt + ∆t
+
+2 [ ˙ qt+1 − ˙qt] (10) 
+
+˙qt+1 = ˙ qt + ∆t
+
+2 [ ¨ qt+1 − ¨qt] (11) Ultimately, the dynamics-based retargeting problem is formulated as the following nonlinear program: 
+
+q∗, λ∗ = argmin  
+
+> qt,˙qt,ut,λt
+> T
+
+X
+
+> t=1
+
+L(qt, ˙qt, ut, λt, qref  
+
+> t
+
+)
+
+s.t. Constrained Dynamics (Eq. 3) Kinematic Constraints (Eq. 4 - 5) Force Constraints (Eq. 7 - 9) Trapezoid Integration (Eq. 10 - 11) 
+
+|| ut||≤ umax 
+
+qmin ≤ qt ≤ qmax 
+
+where umax , q min , q max are force and joint position limits. IV. R ESULTS 
+
+In this section, we evaluate our proposed method, KDMR, against the state-of-the-art baseline, GMR [3], by retargeting human motions to the Unitree G1 humanoid robot using an open-source biomechanics dataset [26]. Subsection IV-B compares the retargeted base and joint trajectories in terms of kinematic accuracy and motion smoothness. Furthermore, we validate the physical fidelity of our multi-contact formulation by quantifying ground penetration and total GRF errors. Finally, Subsection IV-C demonstrates the efficacy of KDMR in a downstream imitation learning task. 
+
+A. Implementation Details 
+
+We implement our optimization framework using CasADi [32] to formulate and solve the nonlinear programming (NLP) problem, alongside Pinocchio [33] for efficiently computing the rigid-body kinematics and dynamics. This im-plementation makes introducing a new target robot straight-forward. The cost function weights are empirically config-ured as follows: wb = diag ([10 .0, 10 .0, 3.0, 5.0, 5.0, 5.0]) ,
+
+wλ = 10 −4, wj = diag ([ wL, wR]) with wL = wR =
+
+diag ([2 .0, 5.0, 5.0, 2.0, 2.0, 2.0]) , wv = 10 −3, wτ = 10 −4,and wc = 10 3. For the downstream evaluation, the motion tracking policies are trained using the BeyondMimic pipeline [2], which facilitates robust policy learning without necessi-tating extensive reward shaping. 
+
+B. Comparison of Retargeted Motion with Baseline 
+
+We evaluate our method against GMR using human tread-mill locomotion data with varying velocities, specifically focusing on the transition periods where the walking speed increases. Our evaluation aims to demonstrate that our method successfully 1) preserves the original motion style, 2) generates spatiotemporally smooth trajectories, 3) eliminates 15.0          
+
+> 17.5
+> px
+> 0.50
+> 0.45
+> py
+> 0.775
+> 0.800
+> 0.825
+> pz
+> 0.0
+> 0.1
+> x
+> 0.05
+> 0.00
+> 0.05
+> y
+> 32 33 34 35 36 37 38 39 40
+> Time [s]
+> 0.25
+> 0.00
+> 0.25
+> z
+> KDMR(ours) GMR
+
+(a) Base position and orientation 0          
+
+> 1
+> px
+> 0.0
+> 0.5
+> py
+> 0.00
+> 0.25
+> pz
+> 1
+> 0
+> 1
+> x
+> 1
+> 0
+> 1
+> y
+> 32 33 34 35 36 37 38 39 40
+> Time [s]
+> 2
+> 0
+> 2
+> z
+> KDMR(ours) GMR
+
+(b) Base linear and angular velocity 0.25          
+
+> 0.00
+> 0.25
+> L0
+> 0.1
+> 0.0
+> 0.1
+> L1
+> 0.00
+> 0.25
+> L2
+> 0
+> 1
+> L3
+> 0.25
+> 0.00
+> L4
+> 32 33 34 35 36 37 38 39 40
+> Time [s]
+> 0.00
+> 0.25
+> L5
+> KDMR(ours) GMR
+
+(c) Joint angular for one leg 2.5           
+
+> 0.0
+> 2.5
+> L0
+> 1
+> 0
+> 1
+> L1
+> 2.5
+> 0.0
+> 2.5
+> L2
+> 10
+> 0
+> 10
+> L3
+> 0
+> 5
+> L4
+> 32 33 34 35 36 37 38 39 40
+> Time [s]
+> 0.0
+> 2.5
+> L5
+> KDMR(ours) GMR
+
+(d) Joint velocity for one leg Fig. 5. Comparison of retargeted trajectories between KDMR and GMR over a selected time segment (32–40 s) from the full motion sequence. (a) Robot base position (x, y, z) and orientation (roll, pitch, yaw). (b) Corresponding base linear and angular velocities. (c) Joint position of the left leg (hip, knee, and ankle joints). (d) Corresponding joint velocity. The θLi and ˙θLi indicate the joint position and velocity of i-th joint. 
+
+physical artifacts, and 4) closely resembles the rescaled GRF reference from the human source data. As shown in Fig. 5, KDMR generates a reference trajec-tory that largely matches that of GMR, with minor deviations in the base roll ( ϕx), base pitch ( ϕy ), and foot pitch ( ϕz )angles, and a large deviation in the foot ankle pitch ( θ4). While it is difficult to determine which trajectory is superior based solely on this joint comparison, the foot height analysis in Fig. 6a resolves this ambiguity. This figure illustrates that GMR violates the source contact patterns by failing to guarantee consistent foot-ground interactions, whereas our method strictly adheres to them. This indirectly proves that the divergence at θ4 is actually a reflection of our method’s superior contact handling. This observation is further supported by the authors of Be-yondMimic [2] who note that global drift is often inevitable when preserving motion style, largely due to morphological discrepancies. Many such artifacts observed in purely kine-matic retargeting methods, such as PHC and GMR, originate from dynamic infeasibility. While these artifacts can some-times be manually corrected, they can be explicitly addressed through dynamic constraints in trajectory optimization. As shown in Fig. 6a, as well as the supplementary video, our method clearly removes foot floating and improves con-tact preservation compared to GMR, while still preserving the kinematic gait style. In contrast, GMR compensates for height artifacts by subtracting the minimum foot height from the global base translation, which can reduce pen-etration/floating but often degrades base smoothness. As illustrated in the velocity profiles of Fig. 5b and Fig. 5d, our method generates significantly smoother trajectories without the severe discontinuities present in GMR. Finally, because GMR does not optimize for contact forces, we evaluate our GRF tracking directly against the mass-rescaled human source data (Fig. 6b). With the multi-contact formulation, our method successfully recovers both the timing of the foot contact events and the magnitude of the required forces. Although minor transient inconsistencies re-main during the rapid weight transfer from heel-strike to toe-off, the overall dynamic fidelity is substantially improved. 0.0          
+
+> 0.1
+> 0.2
+> pz, heel  [m]
+> 32 33 34 35 36 37 38 39 40
+> Time [s]
+> 0.00
+> 0.05
+> 0.10
+> pz, toe  [m]
+> KDMR(ours) GMR
+
+(a) The height of heel and toe with contact window 50            
+
+> 0
+> 50
+> x [N]
+> 32 33 34 35 36 37 38 39 40
+> Time [s]
+> 0
+> 100
+> 200
+> 300
+> 400
+> z [N]
+> Heel (KDMR(ours)) Toe (KDMR(ours)) Source
+
+(b) The GRF of heel and toe Fig. 6. Comparison of heel–toe height and contact forces with respect to the baseline method. (a) Heel and toe heights of the left foot for KDMR and GMR, along with the desired contact window derived from the source GRF data. (b) Comparison of heel–toe ground reaction forces between our method and source GRF data. 0 1000 2000 3000 4000 5000  
+
+> Step
+> 0
+> 10
+> 20
+> 30
+> 40
+> Mean Reward
+> KDMR(ours) GMR
+
+(a) Mean Reward 0 1000 2000 3000 4000 5000   
+
+> Step
+> 0.00
+> 0.01
+> 0.02
+> 0.03
+> 0.04
+> 0.05
+> Value Function
+> KDMR(ours) GMR
+
+(b) Value Function Loss Fig. 7. Comparison of mean episode reward and value function loss over five independent training runs using BeyondMimic for each method. All methods were trained for an identical number of iterations, differing only in random initialization seeds. The results demonstrate that our method achieves superior performance and improved sample efficiency compared to the baselines. 
+
+C. Comparison of Learned Policies 
+
+To evaluate the utility of the retargeted motions in down-stream tasks, we trained motion tracking policies on the datasets generated by both KDMR and GMR using Be-yondMimic [2]. We utilized the default hyperparameters and conducted five independent training runs for each method across an identical number of training iterations, varying only the random initialization seeds. The mean and standard deviation of the training metrics, processed with a moving average filter for visual clarity, are presented in Fig. 7. Furthermore, the resulting simulated behaviors are provided in the supplementary video. As depicted by the mean reward (Fig. 7a) and value function loss (Fig. 7b), policies trained on KDMR-generated references exhibit faster convergence compared to the GMR baseline. This accelerated learning indicates superior sample efficiency, which we attribute to the physical viability of our reference motions. Because KDMR inherently resolves dynamic violations during the retargeting phase, the rein-forcement learning agent is not burdened with implicitly learning to compensate for severe physical artifacts (e.g., foot penetration or base floating) during training. V. L IMITATION 
+
+Despite the demonstrated advantages of our retargeting pipeline, the current approach exhibits certain limitations that point toward exciting avenues for future research. Empirically, while our underlying kinodynamic optimiza-tion problem is fundamentally motion-agnostic and only relies on labeled contact sequences, our proposed method for obtaining these contact sequences from GRF data makes assumptions specific to steady-state walking. Moreover, we assume access to synchronized motion-force time-series data. While such data can be obtained using force-instrumented treadmills, we recognize that this technology is expensive and limits the range of possible motions. While it is also possible to obtain force data using standard overground force plates, this introduces additional challenges that will need to be addressed such as the intermittent nature of this data. We are hopeful that future research will help address this concern since there is a growing interest in the robotics community towards inferring contact sequences and ground reaction forces from only kinematics or images. For example, prior work estimated ground reaction force from motion references using neural networks trained with supervised learning [28], [29], [34]. VI. C ONCLUSION 
+
+In this work, we introduced a kinodynamic motion retar-geting pipeline for humanoid whole-body locomotion tasks, formulated through a multi-contact dynamic model. Our experiments demonstrate that the proposed method signifi-cantly outperforms purely kinematic baselines in mitigating physical artifacts arising from dynamic inconsistencies. Ex-tending beyond generating visually plausible kinematics, our framework successfully recovers accurate foot contact events and the corresponding ground reaction force magnitudes directly from human source data. REFERENCES [1] X. B. Peng, Z. Ma, P. Abbeel, S. Levine, and A. Kanazawa, “AMP: Adversarial motion priors for stylized physics-based character con-trol,” ACM Transactions on Graphics (ToG) , 2021. [2] Q. Liao, T. E. Truong, X. Huang, Y. Gao, G. Tevet, K. Sreenath, and C. K. Liu, “Beyondmimic: From motion tracking to versatile humanoid control via guided diffusion,” arXiv preprint arXiv:2508.08241 , 2025. [Online]. Available: https://github.com/HybridRobotics/whole_body_ tracking [3] J. P. Araujo, Y. Ze, P. Xu, J. Wu, and C. K. Liu, “Retargeting matters: General motion retargeting for humanoid motion tracking,” 
+
+arXiv preprint arXiv:2510.02252 , 2025. [4] T. K. Uchida and S. L. Delp, Biomechanics of movement: the science of sports, robotics, and rehabilitation . Mit Press, 2021. [5] X. B. Peng, P. Abbeel, S. Levine, and M. Van de Panne, “Deepmimic: Example-guided deep reinforcement learning of physics-based char-acter skills,” ACM Transactions On Graphics (TOG) , vol. 37, no. 4, pp. 1–14, 2018. [6] X. B. Peng, E. Coumans, T. Zhang, T.-W. E. Lee, J. Tan, and S. Levine, “Learning agile robotic locomotion skills by imitating animals,” in 
+
+Robotics: Science and Systems , 07 2020. [7] C. Li, M. Vlastelica, S. Blaes, J. Frey, F. Grimminger, and G. Mar-tius, “Learning agile skills via adversarial imitation of rough partial demonstrations,” in Conference on Robot Learning . PMLR, 2023, pp. 342–352. [8] E. Vollenweider, M. Bjelonic, V. Klemm, N. Rudin, J. Lee, and M. Hutter, “Advanced skills through multiple adversarial motion priors in reinforcement learning,” arXiv preprint arXiv:2203.14912 , 2022. [9] T. He, J. Gao, W. Xiao, Y. Zhang, Z. Wang, J. Wang, Z. Luo, G. He, N. Sobanbab, C. Pan et al. , “Asap: Aligning simulation and real-world physics for learning agile humanoid whole-body skills,” arXiv preprint arXiv:2502.01143 , 2025. [10] W. Xie, J. Han, J. Zheng, H. Li, X. Liu, J. Shi, W. Zhang, C. Bai, and X. Li, “Kungfubot: Physics-based humanoid whole-body control for learning highly-dynamic skills,” arXiv preprint arXiv:2506.12851 ,2025. [11] T. Zhang, B. Zheng, R. Nai, Y. Hu, Y.-J. Wang, G. Chen, F. Lin, J. Li, C. Hong, K. Sreenath et al. , “Hub: Learning extreme humanoid balance,” arXiv preprint arXiv:2505.07294 , 2025. [12] T. He, Z. Luo, X. He, W. Xiao, C. Zhang, W. Zhang, K. Kitani, C. Liu, and G. Shi, “Omnih2o: Universal and dexterous human-to-humanoid whole-body teleoperation and learning,” arXiv preprint arXiv:2406.08858 , 2024. [13] K. Yin, W. Zeng, K. Fan, M. Dai, Z. Wang, Q. Zhang, Z. Tian, J. Wang, J. Pang, and W. Zhang, “Unitracker: Learning universal whole-body motion tracker for humanoid robots,” arXiv preprint arXiv:2507.07356 , 2025. [14] Y. Ze, Z. Chen, J. P. Araújo, Z.-a. Cao, X. B. Peng, J. Wu, and C. K. Liu, “Twist: Teleoperated whole-body imitation system,” arXiv preprint arXiv:2505.02833 , 2025. [15] Z. Popovi´ c and A. Witkin, “Physically based motion transformation,” in Proceedings of the 26th annual conference on Computer graphics and interactive techniques , 1999, pp. 11–20. [16] S. Tak and H.-S. Ko, “A physically-based motion retargeting filter,” 
+
+ACM Transactions on Graphics (ToG) , vol. 24, no. 1, pp. 98–117, 2005. [17] X. Cheng, Y. Ji, J. Chen, R. Yang, G. Yang, and X. Wang, “Ex-pressive whole-body control for humanoid robots,” arXiv preprint arXiv:2402.16796 , 2024. [18] Z. Fu, Q. Zhao, Q. Wu, G. Wetzstein, and C. Finn, “Humanplus: Humanoid shadowing and imitation from humans,” arXiv preprint arXiv:2406.10454 , 2024. [19] Z. Luo, J. Cao, A. W. Winkler, K. Kitani, and W. Xu, “Perpetual humanoid control for real-time simulated avatars,” in International Conference on Computer Vision (ICCV) , 2023. [20] T. He, W. Xiao, T. Lin, Z. Luo, Z. Xu, Z. Jiang, C. Liu, G. Shi, X. Wang, L. Fan, and Y. Zhu, “Hover: Versatile neural whole-body controller for humanoid robots,” arXiv preprint arXiv:2410.21229 ,2024. [21] J. W. Grizzle, C. Chevallereau, R. W. Sinnet, and A. D. Ames, “Models, feedback control, and open problems of 3d bipedal robotic walking,” Automatica , vol. 50, no. 8, pp. 1955–1988, 2014. [22] J. P. Reher, A. Hereid, S. Kolathaya, C. M. Hubicki, and A. D. Ames, “Algorithmic foundations of realizing multi-contact locomotion on the humanoid robot durus,” in Algorithmic Foundations of Robotics XII: Proceedings of the Twelfth Workshop on the Algorithmic Foundations of Robotics . Springer, 2020, pp. 400–415. [23] T. Yoon, D. Kang, S. Kim, J. Cheng, M. Ahn, S. Coros, and S. Choi, “Spatio-temporal motion retargeting for quadruped robots,” IEEE Transactions on Robotics , 2025. [24] V. Dhedin, I. Taouil, S. Omar, D. Yu, K. Tao, A. Dai, and M. Khadiv, “Dynaretarget: Dynamically-feasible retargeting using sampling-based trajectory optimization,” arXiv preprint arXiv:2602.06827 , 2026. [25] E. Todorov, T. Erez, and Y. Tassa, “Mujoco: A physics engine for model-based control,” in 2012 IEEE/RSJ international conference on intelligent robots and systems . IEEE, 2012, pp. 5026–5033. [26] J. Camargo, A. Ramanathan, W. Flanagan, and A. Young, “A compre-hensive, open-source dataset of lower limb biomechanics in multiple conditions of stairs, ramps, and level-ground ambulation and transi-tions,” Journal of biomechanics , vol. 119, p. 110320, 2021. [27] S. Ren, Y. Lu, J. Huang, J. Zhao, H. Zhang, T. Yu, Q. Shen, and X. Cao, “Motionpro: exploring the role of pressure in human mocap and beyond,” in Proceedings of the Computer Vision and Pattern Recognition Conference , 2025, pp. 27 760–27 770. [28] X. Han, B. Senderling, S. To, D. Kumar, E. Whiting, and J. Saito, “Groundlink: A dataset unifying human body movement and ground reaction dynamics,” in SIGGRAPH Asia 2023 Conference Papers ,2023, pp. 1–10. [29] C. Le, H.-P. Le, D. Le, M.-T. Duong, V.-B. Nguyen, and M.-H. Le, “Physics-informed ground reaction dynamics from human motion capture,” in 2025 17th International Conference on Human System Interaction (HSI) . IEEE, 2025, pp. 1–6. [30] G. B. Margolis, M. Wang, N. Fey, and P. Agrawal, “Softmimic: Learn-ing compliant whole-body control from examples,” arXiv preprint arXiv:2510.17792 , 2025. [31] S. L. Delp, F. C. Anderson, A. S. Arnold, P. Loan, A. Habib, C. T. John, E. Guendelman, and D. G. Thelen, “Opensim: open-source software to create and analyze dynamic simulations of movement,” 
+
+IEEE transactions on biomedical engineering , vol. 54, no. 11, pp. 1940–1950, 2007. [32] J. A. E. Andersson, J. Gillis, G. Horn, J. B. Rawlings, and M. Diehl, “CasADi – A software framework for nonlinear optimization and optimal control,” Mathematical Programming Computation , vol. 11, no. 1, pp. 1–36, 2019. [33] J. Carpentier, G. Saurel, G. Buondonno, J. Mirabel, F. Lamiraux, O. Stasse, and N. Mansard, “The pinocchio c++ library – a fast and flexible implementation of rigid body dynamics algorithms and their analytical derivatives,” in IEEE International Symposium on System Integrations (SII) , 2019. [34] P. Grady, J. A. Collins, C. Tang, C. D. Twigg, K. Aneja, J. Hays, and C. C. Kemp, “Pressurevision++: Estimating fingertip pressure from diverse rgb images,” in Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) , January 2024, pp. 8698–8708.

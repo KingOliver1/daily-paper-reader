@@ -1,0 +1,506 @@
+Title: Perception-Aware Autonomous Exploration in Feature-Limited Environments
+
+URL Source: https://arxiv.org/pdf/2603.15605v1
+
+Published Time: Tue, 17 Mar 2026 06:02:58 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Perception-Aware Autonomous Exploration in Feature-Limited Environments 
+
+Moji Shi 1, Rajitha de Silva 2, Hang Yu 1, Riccardo Polvara 2, and Marija Popovi´ c1
+
+Abstract — Autonomous exploration in unknown environ-ments typically relies on onboard state estimation for locali-sation and mapping. Existing exploration methods primarily maximise coverage efficiency, but often overlook that visual-inertial odometry (VIO) performance strongly depends on the availability of robust visual features. As a result, exploration policies can drive a robot into feature-sparse regions where tracking degrades, leading to odometry drift, corrupted maps, and mission failure. We propose a hierarchical perception-aware exploration framework for a stereo-equipped unmanned aerial vehicle (UAV) that explicitly couples exploration progress with feature observability. Our approach (i) associates each candidate frontier with an expected feature quality using a global feature map, and prioritises visually informative sub-goals, and (ii) optimises a continuous yaw trajectory along the planned motion to maintain stable feature tracks. We evaluate our method in simulation across environments with varying texture levels and in real-world indoor experiments with largely textureless walls. Compared to baselines that ignore feature quality and/or do not optimise continuous yaw, our method maintains more reliable feature tracking, reduces odometry drift, and achieves on average 30% higher coverage before the odometry error exceeds specified thresholds. 
+
+I. I NTRODUCTION 
+
+Autonomous exploration is a key capability for robots op-erating in unknown environments. Most existing exploration systems prioritise coverage efficiency by greedily selecting frontiers or maximising information gain [1], [2], [3], [4], [5], [6], [7], [8]. These strategies typically assume reliable state estimation and treat localisation as a separate module. In practice, however, localisation quality is tightly coupled to the sensing conditions and to the information available along the robot’s trajectory. For unmanned aerial vehicles (UAVs), visual-inertial odometry (VIO) is a common choice for lightweight state estimation [9], [10]. VIO performance depends on the avail-ability of high-quality trackable visual features in the envi-ronment. When the exploration policy guides the UAV into feature-sparse regions, visual tracking degrades, odometry drift increases, and the resulting map can become incon-sistent or unusable [11], [12]. This reveals a fundamental challenge in autonomous exploration: a robot must explore unknown areas while simultaneously ensuring it observes enough visual features to keep its state estimate stable.  
+
+> 1M. Shi, H. Yu, and M. Popovi´ c are with the MAVLab, TU Delft, Netherlands. 2R. de Silva and R. Polvara are with the Lincoln Center for Autonomous Systems (L-CAS), School of Engineering and Physical Sciences, University of Lincoln, UK.
+
+(a) 
+
+(b) 
+
+Fig. 1: Our approach for perception-aware exploration ap-plied on a UAV. (a) Odometry trajectory during an ex-ploration task (blue arrows); arrow headings indicate the planned yaw angle. (b) Corresponding camera view. Our method maintains reliable feature tracking while successfully completing the exploration task. Prior work on perception-aware navigation mitigates this issue by adapting viewpoint trajectories to improve feature co-visibility and tracking robustness [13], [14], [15]. How-ever, these methods are predominantly designed for point-to-point navigation and often assume partially known envi-ronments. They do not address the core exploration problem of trading off frontier progress against perceptual reliability. Consequently, the trade-off between frontier-driven explo-ration and feature observability within a unified exploration framework remains underexplored. This paper presents a hierarchical perception-aware au-tonomous exploration framework that embeds feature quality into both frontier selection and trajectory optimisation. First, we estimate the expected visual feature quality associated with candidate frontiers using a global feature map and prioritise subgoals that are both exploratory and visually informative. Second, given a planned position trajectory, we optimise a continuous yaw profile to maintain stable feature tracks by keeping informative regions in view and reducing adverse relative angular motion. Together, these components actively shape where the UAV explores and how it observes, improving odometry robustness without sacrificing much exploration progress. In sum, we make the following two key claims: 1) Our proposed perception-aware exploration pipeline 
+
+> arXiv:2603.15605v1 [cs.RO] 16 Mar 2026
+
+improves feature tracking compared to perception-agnostic exploration, while still completing the explo-ration task. 2) More reliable feature tracking reduces odometry drift and increases exploration success under realistic VIO error thresholds. We validate the proposed system in simulation across environments with varying texture levels and in real-world indoor experiments with largely textureless walls. We will release the full implementation as open-source to support reproducibility and follow-on research. II. R ELATED WORK 
+
+Our work relates to (i) autonomous exploration methods that select subgoals to maximise coverage or information gain, and (ii) perception-aware planning approaches that ex-plicitly optimise motion to improve vision-based localisation. 
+
+A. Autonomous Exploration 
+
+Autonomous exploration has been studied extensively in robotics. Frontier-based exploration is a classical approach, where the robot incrementally explores unknown environ-ments by navigating toward the boundaries between known and unknown space [1], which is defined as frontiers. For UAVs, recent work has focused primarily on improving exploration efficiency. Several works [2], [3], [16], [17] in-vestigate different strategies for selecting the next frontier as a sub-goal. Beyond purely greedy exploration, several studies propose hierarchical and more global decision-making that mitigates the myopic nature of greedy frontier policies [18], [4], [19]. In addition, learning-based exploration approaches have been proposed to further improve efficiency and robust-ness in complex environments [5], [6], [8]. Many high-performance exploration systems rely on Li-DAR sensing, which provides dense geometric measurements and is comparatively less sensitive to visual texture [20], [21], [22]. In contrast, small UAV platforms usually rely on VIO due to payload and power constraints. In such systems, state estimation quality strongly depends on the availability of trackable visual features: when the robot enters feature-sparse or weakly textured regions, tracking degrades and odometry drift increases, which can corrupt maps and terminate exploration prematurely [11], [12]. De-spite this coupling between exploration and localisation, most exploration frameworks [3], [16], [17] still optimise coverage while implicitly assuming sufficiently reliable state estimation. The interaction between exploration strategy and visual localisation robustness remains underexplored. 
+
+B. Perception-aware Navigation 
+
+Perception-aware navigation aims to improve localisation accuracy by explicitly incorporating perceptual quality into motion planning [13], [14]. Unlike exploration, which seeks to maximise coverage of unknown space, it typically assumes a predefined goal and plans a trajectory that maintains favourable visual conditions along the way. Existing works can be broadly categorised based on how they model perceptual quality. Direct methods estimate lo-calisation uncertainty from image measurements and guide sampling-based planning towards visually informative trajec-tories [23]. Receding-horizon navigation enables reaching a goal while maintaining stable visual feature tracks [13]. Se-mantic information has been leveraged to guide perception-aware navigation and to avoid perceptually degraded re-gions [24], [25]. More recently, Chen et al. [14] introduce a differentiable visibility model that softly penalises feature loss outside the camera field of view and optimises a contin-uous yaw motion accordingly. Our work is closely related in that we also optimise yaw to maintain feature trackability; however, Chen et al. [14] assume that relevant landmarks are known in advance to evaluate visibility, whereas we operate during exploration with an incremental map and uncertain perceptual conditions. Similarly, the LA [15] optimises co-visibility and produces a smooth yaw trajectory for point-to-point navigation. In contrast, we extend these ideas to autonomous exploration by coupling yaw planning with a feature-aware subgoal selection mechanism, and by explicitly accounting for fast motions that can degrade tracking (e.g. via relative angular-velocity considerations), which are not explicitly handled in LA. As far as we know, no prior works explicitly integrate this exploration–perception trade-off, i.e. simultaneously expand-ing into unknown space while maintaining visual observabil-ity, within an autonomous exploration framework. III. O UR APPROACH 
+
+We introduce our perception-aware exploration framework for a UAV equipped with a stereo camera and a VIO esti-mator, targeting autonomous exploration in feature-limited environments. The goal is to expand the mapped free space while maintaining sufficiently reliable visual tracking to avoid odometry drift and map corruption. Our key contri-bution is to embed perceptual considerations directly into the exploration loop. Fig. 2 summarises our hierarchical framework. We (i) select the next exploration subgoal among frontier viewpoints by jointly considering exploration utility and expected feature observability (Sec. III-A), and (ii) generate a collision-free trajectory to this subgoal while optimising the yaw profile to support stable feature tracking along the path (Sec. III-B). This coupling enables the UAV to actively prefer frontiers that are both informative and perceptually feasible, and to execute motions that preserve perceptual quality during travel. 
+
+A. Frontier Selector 
+
+We build on a frontier-based exploration strategy to select the next subgoal during a mission. Following the concept of the Frontier Information Structure (FIS) introduced by Zhou et al. [3], we cluster frontier voxels and sample a set of candidate viewpoints around each cluster. Each viewpoint candidate is denoted as 
+
+vi = [ p⊤ 
+
+> i
+
+, ψ i ]⊤, (1) Frontier Selector   
+
+> R2D2 Feature Map
+> Frontier Map
+> Perception -aware
+> Trajectory Optimi sation
+> Position Trajectory
+> Yaw Trajectory
+> R2D2 Network
+> Visual Inertial
+> Odometry RGB Image
+> Depth Image
+
+Fig. 2: Our perception-aware exploration framework. Two key components are frontier selector and perception-aware trajectory optimisation. where pi = [ xi, y i, z i]⊤ represents the 3D position and ψi
+
+denotes the UAV yaw angle at that viewpoint. A key requirement for perception-aware frontier selection is an estimate of where reliable visual constraints are likely to be available. We therefore maintain a global visual fea-ture map constructed online from a visual frontend, which associates spatial locations with a feature quality score. We represent this map as 
+
+F = { (fj , s j ) | fj ∈ R3, s j ∈ R+ }, (2) where fj denotes the 3D position of the j-th feature and sj is its quality score provided by the frontend. This representation is agnostic to the specific feature type and can be instantiated with either classical or learned features. Fig. 3 illustrates the selection process. Textureless  Obstacles 
+
+> Textured Obstacles
+> Free Voxels
+> Unknown Voxels
+> Frontier Voxels
+> Candidate Viewpoints
+> Current UAV position
+> Visual Features
+
+Fig. 3: Our frontier selector. Frontier voxels are clustered by proximity, and candidate viewpoints are sampled from known free space to observe the frontier clusters. Visual features are overlaid, where blue intensity indicates feature quality: textured obstacles yield more and higher-quality fea-tures than textureless surfaces. Our selector prefers bottom-left viewpoints, which are farther from the current UAV position but provide stronger feature support than closer top-right viewpoints. Given the current UAV state (pc, ψ c), we score each viewpoint candidate vi using a composite cost function that balances three terms: the distance cost , coverage utility , and 
+
+visual feature utility . The total frontier score is defined as 
+
+J(vi) = −wd∥pc − pi∥ + wcQc(vi)+ wv tanh  Qv (vi) − ˆQv
+
+, (3) where wd, wc, and wv are weighting coefficients. 
+
+Distance term . The Euclidean distance ∥pc − pi∥ penalises long travel and encourages efficient exploration. 
+
+Coverage term . Qc(vi) measures expected exploration progress, computed as the number of unknown voxels that would become observed from vi.
+
+Visual feature term . Qv (vi) estimates the local perceptual quality by aggregating the quality scores of visible features: 
+
+Qv (vi) = X 
+
+> fj∈V (pi,ψ i)
+
+sj , (4) where V(pi, ψ i) ⊆ F is the subset of features visible from viewpoint vi. We introduce a perceptual sufficiency threshold 
+
+ˆQv that specifies the minimum feature utility required for reliable visual tracking. Since additional features beyond this threshold make no extra contribution to localisation, we map 
+
+Qv to a bounded score via the tanh function, so that the score grows approximately linearly when Qv ≪ ˆQc and saturates when Qv ≳ ˆQc. This encourages the selector to prefer frontiers that remain perceptually supported, trading aggressive frontier progress for improved VIO robustness. Finally, the next exploration subgoal  p⊤ 
+
+> g
+
+, ψ g
+
+ is chosen as the highest-scoring candidate: 
+
+ p⊤ 
+
+> g
+
+, ψ g
+
+⊤ = arg max  
+
+> vi∈V
+
+J(vi), (5) where V denotes the set of viewpoint candidates. The re-sulting subgoal balances exploration progress with expected feature support and serves as the input to our yaw-aware trajectory optimisation. 
+
+B. Perception-Aware Trajectory Generation 
+
+Once the frontier selector returns the next exploration subgoal   p⊤ 
+
+> g
+
+, ψ g
+
+, we generate a collision-free trajectory that is also perceptually reliable. To exploit the differential flatness of quadrotor dynamics [26], we decompose the planning problem into two coupled parts: (i) a position trajectory p(t) that guarantees safety and dynamic feasibility, and (ii) a yaw trajectory ψ(t) that is optimised to maintain visual observability along the motion. 
+
+1) Position Trajectory Optimisation: We follow a two-stage procedure similar to Chen et al. [27]. First, a Rapidly exploring Random Tree (RRT)-based planner provides a collision-free reference path connecting the current state to the selected subgoal. Second, we refine this path into a smooth, dynamically feasible trajectory using minimum-snap optimisation with B´ ezier curves. The position trajectory p(t)
+
+is composed of M B´ ezier segments, each corresponding to a safe flight corridor [28]. Let pj (t) denote the j-th B´ ezier segment defined over t ∈ [tj−1, t j ]:
+
+pj (t) = 
+
+> N
+
+X
+
+> k=0
+
+pj,k BNk (τ ), τ = t − tj−1
+
+tj − tj−1
+
+, (6) where pj,k ∈ R3 are the control points of the B´ ezier curve, 
+
+BNk (τ ) =  Nk
+
+(1 − τ )N −kτ k are the Bernstein basis polyno-mials of order N . The optimisation objective minimises the overall snap: 
+
+min  
+
+> {pj,k }
+> M
+
+X
+
+> j=1
+
+Z tj
+
+> tj−1
+
+d4pj (t)
+
+dt 4
+
+> 2
+
+dt 
+
+s.t. p1,0 = pc, pM,N = pg ,
+
+pj,N = pj+1 ,0, ∀j = 1 , 2, . . . , M − 1,
+
+∥ ˙pj (t)∥ ≤ vmax , ∥¨pj (t)∥ ≤ amax ,
+
+pj,k ∈ ˆEj , ∀j = 1 , 2, . . . , M, ∀k = 0 , 1, . . . , N. 
+
+(7) Here, pc and pg denote the current and goal positions, and 
+
+ˆEj is the convex safe corridor of the j-th segment. vmax and 
+
+amax are the maximum velocity and acceleration of the UAV. The four constraints correspond to the boundary conditions, continuity constraints, dynamic limits, and collision-free constraints, respectively. 
+
+2) Yaw Trajectory Optimisation: While p(t) ensures safe motion, it does not guarantee that the camera maintains suf-ficient visual constraints throughout the flight. We therefore optimise the yaw trajectory ψ(t) in two steps: a covisibility-based waypoint sampling, followed by a continuous yaw refinement that reduces feature motion in the image. Our sampling algorithm is described in Algorithm 1. The covisi-bility sampling yields a set of waypoint yaw angles {ψj }
+
+and corresponding covisible feature sets {F j }, as shown in Fig. 4. In this algorithm, G ET VISIBLE FEATURES (p, ψ )
+
+returns the set of map features that fall within the camera field of view at viewpoint (p, ψ ) and are not occluded by obstacles; we evaluate visibility via ray-casting (line-of-sight checks) in the occupancy map. The threshold τcov specifies the minimum aggregate feature quality that must be shared between consecutive waypoints. The fallback condition k > 
+
+10 limits the number of yaw sampling attempts per waypoint: if no yaw achieves sufficient covisibility within k times of search, we conclude that the local environment is feature-poor and linearly interpolate the yaw toward the goal. This avoids excessive computation in textureless corridors while still guaranteeing that the algorithm terminates. Covisibility at waypoints alone does not prevent visual degradation between waypoints, especially when features undergo high relative angular motion during translation. Hence, we further optimise the continuous yaw trajectory to maintain feature visibility and reduce the relative angular motion. The yaw angle trajectory ψ(t) is represented as a 1D B´ ezier curve parameterised by control points: 
+
+ψj (t) = 
+
+> n
+
+X
+
+> k=0
+
+ψj,k Bnk (τ ), τ = t − tj−1
+
+tj − tj−1
+
+, (8) where Bnk (τ ) are Bernstein basis polynomials and ψj,k are the control points. The problem is formulated as: 
+
+min  
+
+> {ψj,k }
+> M
+
+X
+
+> j=1
+
+Jpercept (ψj (t)) + λψ Jsmooth (ψj (t)) , (9) 
+
+Algorithm 1 Covisibility Sampling 
+
+Require: Control points {pj,k }, time allocations {tj }, initial pose (pc, ψ c), target yaw ψg , covisibility threshold τcov ,yaw sampling step ∆ψ
+
+Ensure: Sampled waypoint yaws {ψj } and covisible feature sets {F j } 
+
+> 1:
+
+ψlast ← ψc 
+
+> 2:
+
+for j = 1 to M − 1 do  
+
+> 3:
+
+Vlast ← GET VISIBLE FEATURES (pj, 0, ψ last ) 
+
+> 4:
+
+k ← 0 
+
+> 5:
+
+ψs ← ψlast  
+
+> 6:
+
+while true do  
+
+> 7:
+
+Vs ← GET VISIBLE FEATURES (pj+1 ,0, ψ s) 
+
+> 8:
+
+Vrep ← V s ∩ V last {covisible features } 
+
+> 9:
+
+wcov ← P 
+
+> fi∈V rep
+
+si {sum of feature scores } 
+
+> 10:
+
+if wcov > τ cov then  
+
+> 11:
+
+Fj ← V rep , ψj ← ψs, ψlast ← ψs 
+
+> 12:
+
+break  
+
+> 13:
+
+else  
+
+> 14:
+
+if ψg > ψ last then  
+
+> 15:
+
+ψs ← ψs − ∆ψ 
+
+> 16:
+
+else  
+
+> 17:
+
+ψs ← ψs + ∆ ψ 
+
+> 18:
+
+end if {sample yaw angle toward the goal yaw angle } 
+
+> 19:
+
+k ← k + 1  
+
+> 20:
+
+if k > 10 then  
+
+> 21:
+
+ψj ← ψlast +( ψg −ψlast )× jM {if no covisibility is found, sample yaw angle toward the goal yaw angle linearly } 
+
+> 22:
+
+Fj ← ∅  
+
+> 23:
+
+ψlast ← ψj 
+
+> 24:
+
+break  
+
+> 25:
+
+end if  
+
+> 26:
+
+end if  
+
+> 27:
+
+end while  
+
+> 28:
+
+end for  
+
+> 29:
+
+Append final yaw: ψM ← ψg
+
+where Jpercept calculates the integrated relative angular veloc-ity cost over the trajectory, Jsmooth regularises the yaw rate for smooth motion, and λψ is a weighting coefficient. For a given point pj (t) on the trajectory, the target visual features are fi ∈ F j . As the UAV translates, each feature’s bearing angle in the horizontal plane changes. We define the desired yaw rate ˆψj,i (t) as the rate at which the bearing to feature fi changes due to the UAV’s translational velocity 
+
+˙pj (t). Let dj,i (t) = fi − pj (t) be the displacement vector; the bearing rate is the z-component of the angular velocity induced by the cross product: 
+
+ˆψj,i (t) = 
+
+ dj,i (t)
+
+∥dj,i (t)∥ × ˙pj (t)
+
+
+
+> z
+
+· 1
+
+∥dj,i (t)∥ , (10) where (·)z extracts the z-component (i.e. the component about the vertical axis). Intuitively, ˆψj,i (t) represents how fast the UAV should rotate in yaw to keep feature fi station-ሶ𝑝 𝑗 (𝑡 ) ෠𝜓 
+
+𝑝 𝑐 
+
+𝑝 2,0
+
+𝑝 3,0𝑝 4,0
+
+𝑝 gFig. 4: Our yaw angle trajectory optimisation procedure. Dashed field of view sectors represent the waypoint yaws 
+
+{ψj } and arrows with different colours show covisible fea-ture sets {F j }. The zoomed-in view shows the calculation of the relative angular velocity. For any point on trajectory, we decompose the velocity ˙pj (t) in the direction of the feature vectors fi − pj (t) and the perpendicular direction, expecting the yaw rate to compensate the relative angular velocity. ary in the camera frame. We wish the actual yaw rate ˙ψj (t) to track the feature-weighted average of these desired rates. The perceptual cost is: 
+
+Jpercept (ψj (t)) = 
+
+Z tj
+
+> tj−1
+
+X
+
+> fi∈F j
+
+si
+
+ ˆψj,i (t) − ˙ψj (t)
+
+2
+
+dt, (11) The smoothness term regularises the yaw rate: 
+
+Jsmooth (ψj (t)) = 
+
+Z tj
+
+> tj−1
+
+ ˙ψj (t)
+
+2
+
+dt, (12) The cost function is smooth and differentiable with respect to the control points ψj,k :
+
+∂J percept (ψj (t)) 
+
+∂ψ j,k 
+
+=
+
+Z tj
+
+> tj−1
+
+X
+
+> i
+
+2si
+
+  ˙ψj (t) − ˆψj,i (t) ∂ ˙ψj (t)
+
+∂ψ j,k 
+
+dt, 
+
+(13) where ∂ ˙ψj (t) 
+
+> ∂ψ j,k
+
+is derived from the B´ ezier parameterisation in Eq. (8). The yaw trajectory also needs to satisfy kinematic limits: 
+
+| ˙ψj (t)| ≤ ˙ψmax , | ¨ψj (t)| ≤ ¨ψmax , ∀ t ∈ [tj−1, t j ], (14) where ˙ψmax = 1 .5 rad/s and ¨ψmax = 3 .0 rad/s 2. We solve the constrained optimisation with sequential quadratic pro-gramming (SQP) from the NLopt package [29], [30]. Crucially, this module contributes a continuous, feature-aware yaw optimisation that improves perceptual quality along the motion, yielding a perception-aware trajectory 
+
+p(t), ψ (t) that is both safe and VIO-robust. IV. E XPERIMENTAL RESULTS 
+
+We present experimental evaluations designed to assess the effectiveness of our proposed perception-aware explo-ration framework and support our key claims. In particular, the experiments demonstrate two claims: (i) the proposed pipeline maintains more reliable visual feature tracking and 
+
+Fig. 5: Simulation environments with controlled texture richness. Left to right: Low-Texture (few textured pillars), 
+
+Medium-Texture (partially textured construction site), and 
+
+High-Texture (richly textured walls), each 10 m × 10 m .still finishes the exploration task, and (ii) the improvement in feature tracking leads to higher exploration success rates under realistic VIO error conditions. 
+
+A. Experimental Setup 
+
+We evaluate the proposed framework in both simula-tion and real-world settings. All simulation experiments are conducted in Gazebo. We design three environments with controlled levels of visual texture, shown in Fig. 5. We compare our approach against two baselines. First, we use FUEL [3] as a frontier-based exploration method that prioritises coverage efficiency but does not explicitly model visual-feature quality. Second, we use LA [15] as a representative perception-aware point-to-point navigation method and couple it with a simple frontier selector to obtain an exploration pipeline. Together, these baselines represent two complementary paradigms: coverage-driven exploration that is agnostic to state-estimation quality (FUEL), and perception-aware planning designed for point-to-point nav-igation rather than full exploration (LA). Each method is run 10 times per environment. In our approach, we build the global feature map F online using R2D2 features [31], where the R2D2 repeatability/confidence provides the feature quality score sj . For state estimation, we run OpenVINS [10] with its default tracking frontend. The feature map F is used only for exploration scoring and yaw planning and does not replace the VIO frontend. Each run terminates when the exploration rate (ratio of observed-to-total free voxels) exceeds 95% or when the elapsed time exceeds 300 s. We define successful exploration as completing the run (reaching ≥ 95% exploration rate) while maintaining the VIO position error below a given threshold. This definition captures the practical requirement of completing exploration without losing localisation. We further validate the robustness of our method through real-world experiments. To facilitate sim-to-real transfer, we employ the Agilicious pipeline [32] to track generated trajectories in both simulation and on hardware. 
+
+B. Feature-Tracking Comparison 
+
+To support claim (i), we compare all the methods in terms of feature tracking ability during exploration. Fig. 6 reports the spatial distribution of tracked features in the image plane. For each frame, we accumulate a 2D histogram of tracked feature pixel coordinates and then average it over time; brighter regions therefore indicate image locations that consistently contain more tracked features throughout a run. Our method shows higher intensities over a large portion of the image, indicating that it tracks more visual features per frame than FUEL. This is expected since FUEL primarily optimises for coverage efficiency, and thus has no incentive to maintain previously observed features in view when doing so conflicts with rapidly advancing toward unknown space. Fig. 7 further shows the number of tracked features per frame as exploration progresses. Our method maintains consistently higher feature counts, particularly in the early stages of exploration, which indicates that it actively pri-oritises frontiers in visually informative regions while still expanding into unknown space. The LA achieves strong feature tracking due to hard constraints on visible features, but it fails to complete the exploration task; this is reflected by its curve terminating at approximately 40% completion. In contrast, our framework preserves high feature trackability without sacrificing exploration progress, which is critical for maintaining VIO robustness throughout a full mission. 
+
+Fig. 6: Frame-averaged spatial distribution of tracked visual features in the image plane during exploration. The axes show the pixel coordinates (u, v ). For each frame, we build a 2D histogram of tracked feature locations and then average the histogram over time across the entire exploration run; colour indicates the normalised mean feature count per bin. 
+
+C. Exploration Success Rate Comparison Under Odometry Constraints 
+
+To support claim (ii), we compare all methods in terms of exploration success rate under different practical odometry error thresholds ( 1.0 m , 2.0 m , 3.0 m ). Table I shows the results across environments. Our method achieves the highest success rate in every environment and for all thresholds. The largest gain in low-texture environments and under stricter error thresholds highlights that our method is especially effective in feature-limited areas. Fig. 8 provides a qualitative view of this effect. Different from FUEL, our method prioritises feature-rich regions by considering perceptual quality in both the frontier selector and trajectory optimisation, resulting in more complete ex-ploration under the same error constraints. 
+
+Fig. 7: Number of tracked visual features per frame dur-ing exploration. The x-axis is the normalised exploration progress, defined as the explored free-space volume divided by the final explored volume of each run, so that 100% corresponds to the end of an exploration attempt. The y-axis reports the number of features successfully tracked in the current frame. Solid lines show the mean over 10 runs, and shaded areas indicate standard deviations. 
+
+D. Ablation Study 
+
+We conduct an ablation study to isolate the impact of the two key components of our framework: (i) perception-aware frontier selection and (ii) yaw trajectory optimisation, respectively. Similar to Sec. IV-B and Sec. IV-C, we evaluate feature-tracking ability and exploration success rate against the two baselines. Fig. 9 reports the feature-tracking behaviour for the full pipeline and its ablated variants. Removing either compo-nent markedly degrades performance, leading to low feature density. Interestingly, a bimodal per-frame feature-density distribution appears in both the full pipeline and the variant without yaw trajectory optimisation. This effect is driven by the perception-aware frontier selector, which balances fea-ture observability with exploration efficiency. By favouring frontiers near texture-rich regions, the camera captures both informative features and unknown space, sustaining reliable tracking without blocking exploration process. Table II reports the exploration success rates on the low-texture environment. Removing the perception-aware fron-tier module causes the largest drop across all thresholds (54 .2% compared to 11 .9% drop brought by removing yaw trajectory optimisation), confirming that feature-informed subgoal selection is the dominant contributor to robustness in feature-limited settings. Yaw trajectory optimisation provides additional gains, indicating that continuously shaping the camera motion further improves tracking stability beyond what can be achieved by subgoal choice alone. 
+
+E. Real-World Experiment 
+
+We conduct experiments on physical hardware to validate our method in real-world conditions. We use a custom-built UAV 2 equipped with a ZED Mini stereo camera and a NVIDIA Jetson Orin NX. The testing environment is a 10 m × 10 m room with randomly distributed obstacles, TABLE I: Success exploration rate (expressed as mean ± std dev over 10 trials) under different odometry error thresholds (1.0 m , 2.0 m , 3.0 m ) on environments ordered by texture richness (High → Low). Best per column in bold .                                        
+
+> Method High-Texture Map Exploration Rate Medium-Texture Map Exploration Rate Low-Texture Map Exploration Rate 1.0 m 2.0 m 3.0 m 1.0 m 2.0 m 3.0 m 1.0 m 2.0 m 3.0 m Ours 0.913 ±0.065 0.913 ±0.065 0.924 ±0.049 0.888 ±0.070 0.928 ±0.044 0.928 ±0.044 0.326 ±0.169 0.427 ±0.126 0.470 ±0.139 FUEL 0.728 ±0.291 0.846 ±0.207 0.868 ±0.182 0.651 ±0.311 0.731 ±0.257 0.802 ±0.175 0.224 ±0.078 0.271 ±0.100 0.317 ±0.128 LA 0.234 ±0.094 0.235 ±0.093 0.235 ±0.093 0.202 ±0.093 0.220 ±0.082 0.239 ±0.093 0.142 ±0.064 0.162 ±0.071 0.176 ±0.087 FUEL Ours
+> No features! Look at discovered features
+
+Fig. 8: Exploration process in medium-texture map. The blue and green lines indicate the odometry and ground truth pose. The blue arrows show the yaw angle directions. Our perception-aware exploration approach enables looking at known features (top-right) to ensure reliable state estimation. TABLE II: Exploration success rate comparison for abla-tion study under different odometry error thresholds ( 1.0 m ,
+
+2.0 m , 3.0 m ). Best per column in bold .    
+
+> Method Low-Texture Map Exploration Rate 1.0 m 2.0 m 3.0 m Ours 0.326
+
+±0.169 0.427 ±0.126 0.470 ±0.139  
+
+> Ours w/o PA Frontier 0.162
+
+±0.123 0.185 ±0.131 0.209 ±0.130  
+
+> Ours w/o Yaw Optim. 0.300
+
+±0.057 0.368 ±0.047 0.404 ±0.059 
+
+including fake plants and stacks of textured cubes. Most of the walls are black without reliable visual features. Fig. 10 presents the experimental results. As shown in Fig. 10a, the UAV prioritises exploration within feature-rich regions, actively tracking features on obstacle surfaces. Fig. 10b con-trasts currently tracked features (orange rectangles) with non-tracked scene structure (white). Notably, the tracked features exhibit significantly reduced motion blur, demonstrating that relative angular velocity is effectively counteracted by the yaw trajectory optimisation. Fig. 10c depicts the final recon-structed map. A comparison of the OpenVINS estimate with the ground truth yields a position RMSE of 0.6958 m and a maximum error of 1.3069 m .
+
+Fig. 9: Feature tracking comparison for ablation study. Brighter colours indicate a higher number of tracked features in the image plane. Removing either key component reduces feature intensity, indicating degraded feature tracking. V. C ONCLUSION 
+
+We presented a perception-aware exploration framework that explicitly accounts for the fact that exploration per-formance is bounded by state estimation reliability in feature-limited environments. Unlike conventional explo-ration pipelines that optimise coverage under the implicit assumption of stable localisation, our approach closes this gap by embedding perceptual support into the exploration loop: it selects visually informative frontier subgoals and continuously shapes the UAV yaw to preserve feature tracks during motion. This coupling enables reliable VIO while expanding into unknown space, reducing the risk of drift-driven map corruption and premature mission termination. We evaluated the approach in simulation across environ-ments with varying texture availability and in real-world indoor experiments with largely textureless walls. Our results show that explicitly reasoning about feature observability leads to more stable feature tracking and higher mission com-pletion rates under practical VIO error thresholds, compared to exploration baselines that ignore state estimation. Future work will extend this framework to jointly optimise subgoal selection and viewpoint control over longer horizons and incorporate richer perceptual cues. We will also inves-(a)  (b) 
+
+> (c)
+
+Fig. 10: Real-world experiment results. (a) Part of the explo-ration process from top-down view. The white arrows show the camera directions. (b) Camera field of view. Orange and white indicate the visual features currently being tracked by the UAV camera and other obstacles, respectively. (c) Global feature map overlaid on the occupancy map: cubes represent occupied voxels, and spheres denote mapped visual features. Feature quality is visualised using the turbo colourmap (blue: low score, red: high score), showing that high-quality features predominantly lie on textured obstacles. Our pipeline actively prioritises exploration around textured obstacles, optimises the yaw rate to compensate for the blurring effect, enabling successful completion of the exploration task. tigate multi-robot exploration problems where teams must balance coverage with a shared need for localisation stability. REFERENCES [1] B. Yamauchi, “Frontier-based exploration using multiple robots,” in 
+
+Proc. of the Intl. Conf. on Autonomous Agents , 1998. [2] T. Cieslewski, E. Kaufmann, and D. Scaramuzza, “Rapid exploration with multi-rotors: A frontier selection method for high speed flight,” in Proc. of the IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS) .[3] B. Zhou, Y. Zhang, X. Chen, and S. Shen, “Fuel: Fast uav exploration using incremental frontier structure and hierarchical planning,” IEEE Robotics and Automation Letters (RA-L) , vol. 6, no. 2, pp. 779–786, 2021. [4] Y. Zhang, X. Chen, C. Feng, B. Zhou, and S. Shen, “FALCON: Fast autonomous aerial exploration using coverage path guidance,” IEEE Trans. on Robotics (TRO) , vol. 41, pp. 1365–1385, 2025. [5] M. Popovi´ c, J. Ott, J. R¨ uckin, and M. J. Kochenderfer, “Learning-based methods for adaptive informative path planning,” Journal on Robotics and Autonomous Systems (RAS) , vol. 179, p. 104727, 2024. [6] Y. Cao, J. Lew, J. Liang, J. Cheng, and G. Sartoretti, “Dare: Diffusion policy for autonomous robot exploration,” in Proc. of the IEEE Intl. Conf. on Robotics & Automation (ICRA) , 2025. [7] R. Polvara, M. Fernandez-Carmona, G. Neumann, and M. Hanheide, “Next-best-sense: A multi-criteria robotic exploration strategy for RFID tags discovery,” IEEE Robotics and Automation Letters (RA-L) , vol. 5, no. 3, pp. 4477–4484, 2020. [8] J. R¨ uckin, L. Jin, and M. Popovi´ c, “Adaptive Informative Path Planning Using Deep Reinforcement Learning for UAV-based Active Sensing,” in Proc. of the IEEE Intl. Conf. on Robotics & Automation (ICRA) , 2022. [9] T. Qin, P. Li, and S. Shen, “VINS-Mono: A Robust and Versatile Monocular Visual-Inertial State Estimator,” IEEE Trans. on Robotics (TRO) , vol. 34, no. 4, pp. 1004–1020, 2018. [10] P. Geneva, K. Eckenhoff, W. Lee, Y. Yang, and G. Huang, “OpenVINS: A Research Platform for Visual-Inertial Estimation,” in Proc. of the IEEE Intl. Conf. on Robotics & Automation (ICRA) , 2020. [11] Q. Peng, X. Zhao, R. Dang, and Z. Xiang, “RWT-SLAM: Robust Visual SLAM for Weakly Textured Environments,” in Proc. of the IEEE Vehicles Symposium (IV) , 2024. [12] A. Hardt-Stremayr and S. Weiss, “Monocular visual-inertial odometry in low-textured environments with smooth gradients: A fully dense direct filtering approach,” in Proc. of the IEEE Intl. Conf. on Robotics & Automation (ICRA) , 2020. [13] Z. Zhang and D. Scaramuzza, “Perception-aware Receding Horizon Navigation for MAVs,” in Proc. of the IEEE Intl. Conf. on Robotics & Automation (ICRA) .[14] X. Chen, Y. Zhang, B. Zhou, and S. Shen, “APACE: Agile and Perception-aware Trajectory Generation for Quadrotor Flights,” in 
+
+Proc. of the IEEE Intl. Conf. on Robotics & Automation (ICRA) , 2024. [15] C. Yu, Z. Lu, J. Mei, and B. Zhou, “Perception-aware Planning for Quadrotor Flight in Unknown and Feature-limited Environments,” in 
+
+Proc. of the IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS) , 2025. [16] Y. Tao, Y. Wu, B. Li, F. Cladera, A. Zhou, D. Thakur, and V. Kumar, “SEER: Safe Efficient Exploration for Aerial Robots using Learning to Predict Information Gain,” in Proc. of the IEEE Intl. Conf. on Robotics & Automation (ICRA) , 2023. [17] S. Yuan, H. U. Unlu, H. Huang, C. Wen, A. Tzes, and Y. Fang, “Exploring the reliability of foundation model-based frontier selection in zero-shot object goal navigation,” in Proc. of the IEEE Conf. on Computer Vision and Pattern Recognition (CVPR) , 2024. [18] C. Cao, H. Zhu, H. Choset, and J. Zhang, “TARE: A Hierarchical Framework for Efficiently Exploring Complex 3D Environments,” in 
+
+Proc. of Robotics: Science and Systems (RSS) .[19] Q. Dong, X. Zhang, S. Zhang, Z. Wang, Z. Ma, and H. Xi, “EDEN: Efficient Dual-Layer Exploration Planning for Fast UAV Autonomous Exploration in Large 3-D Environments,” IEEE Trans. on Industrial Electronics , pp. 1–11, 2026. [20] H. Zhu, T. Lan, S. Ma, X. Zhao, H. Shang, and R. Li, “CODE: Complete Coverage UAV Exploration Planner using Dual-Type View-points for Multi-Layer Complex Environments,” IEEE Robotics and Automation Letters , vol. 10, pp. 1880–1887, 2024. [21] S. Geng, Z. Ning, F. Zhang, and B. Zhou, “EPIC: A Lightweight LiDAR-Based UAV Exploration Framework for Large-Scale Scenar-ios,” IEEE Robotics and Automation Letters (RA-L) , vol. 10, pp. 5090– 5097, 2025. [22] X. Liu, M. Lin, S. Li, G. Xu, Z. Wang, H. Wu, and Y. Liu, “FLARE: Fast Large-Scale Autonomous Exploration Guided by Un-known Regions,” IEEE Robotics and Automation Letters (RA-L) ,vol. 10, pp. 12197–12204, 2025. [23] G. Costante, C. Forster, J. Delmerico, P. Valigi, and D. Scaramuzza, “Perception-aware path planning,” arXiv preprint:1605.04151 , 2017. [24] L. Bartolomei, L. Teixeira, and M. Chli, “Perception-aware Path Planning for UAVs using Semantic Segmentation,” in Proc. of the IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS) , 2020. [25] L. Bartolomei, L. Teixeira, and M. Chli, “Semantic-aware active perception for UAVs using deep reinforcement learning,” in Proc. of the IEEE/RSJ Intl. Conf. on Intelligent Robots and Systems (IROS) ,2021. [26] D. Mellinger and V. Kumar, “Minimum snap trajectory generation and control for quadrotors,” in Proc. of the IEEE Intl. Conf. on Robotics & Automation (ICRA) , 2011. [27] G. Chen, S. Wu, M. Shi, W. Dong, H. Zhu, and J. Alonso-Mora, “Rast: Risk-aware spatio-temporal safety corridors for mav navigation in dynamic uncertain environments,” IEEE Robotics and Automation Letters (RA-L) , vol. 8, no. 2, pp. 808–815, 2022. [28] S. Liu, M. Watterson, K. Mohta, K. Sun, S. Bhattacharya, C. J. Taylor, and V. Kumar, “Planning dynamically feasible trajectories for quadrotors using safe flight corridors in 3-d complex environments,” 
+
+IEEE Robotics and Automation Letters , vol. 2, no. 3, pp. 1688–1695, 2017. [29] S. G. Johnson, “The nlopt nonlinear-optimization package,” 2007. [30] D. Kraft, “Algorithm 733: Tomp–fortran modules for optimal control calculations,” ACM Transactions on Mathematical Software , vol. 20, pp. 262–281, 1994. [31] J. Revaud, P. Weinzaepfel, C. R. de Souza, and M. Humenberger, “R2D2: repeatable and reliable detector and descriptor,” in Proc. of the Conf. on Neural Information Processing Systems (NeurIPS) , 2019. [32] P. Foehn, E. Kaufmann, A. Romero, R. Penicka, S. Sun, L. Bauersfeld, T. Laengle, G. Cioffi, Y. Song, A. Loquercio, and D. Scaramuzza, “Ag-ilicious: Open-source and open-hardware agile quadrotor for vision-based flight,” Science Robotics , vol. 7, no. 67, 2022.

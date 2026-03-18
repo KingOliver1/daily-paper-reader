@@ -1,0 +1,1455 @@
+Title: Ultrafast Sampling-based Kinodynamic Planning via Differential Flatness
+
+URL Source: https://arxiv.org/pdf/2603.16059v1
+
+Published Time: Wed, 18 Mar 2026 00:36:57 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+> 1
+
+# Ultrafast Sampling-based Kinodynamic Planning via Differential Flatness 
+
+Thai Duong, Clayton W. Ramsey, Zachary Kingston, Wil Thomason, and Lydia E. Kavraki 
+
+Abstract —Motion planning under dynamics constraints, i.e., kinodynamic planning, enables safe robot operation by generating dynamically feasible trajectories that the robot can accurately track. For high-DOF robots such as manipulators, sampling-based motion planners are commonly used, especially for complex tasks in cluttered environments. However, enforcing constraints on robot dynamics in such planners requires solving either challeng-ing two-point boundary value problems (BVPs) or propagating robot dynamics over time, both of which are computational bottlenecks that drastically increase planning times. Meanwhile, recent efforts have shown that sampling-based motion planners can generate plans in microseconds using parallelization, but are limited to geometric paths. This paper develops AkinoPDF , a fast parallelized sampling-based kinodynamic motion planning technique for a broad class of differentially flat robot systems, including manipulators, ground and aerial vehicles, and more. Differential flatness allows us to transform the motion planning problem from the original state space to a flat output space, where an analytical time-parameterized solution of the BVP and dynamics integration can be obtained. A trajectory in the flat output space is then converted back to a closed-form dynamically feasible trajectory in the original state space, enabling fast validation via “single instruction, multiple data” parallelism. Our method is fast, exact, and compatible with any sampling-based motion planner. We extensively verify the effectiveness of our approach in both simulated benchmarks and real experi-ments with cluttered and dynamic environments, requiring mere microseconds to milliseconds of planning time. 
+
+Index Terms —Sampling-based Kinodynamic Planning, Differ-ential Flatness, Hardware Acceleration 
+
+I. I NTRODUCTION 
+
+Motion planning is critical for safe and accurate robot opera-tion in many applications, e.g. , transportation [1], environment monitoring [2, 3], warehouses [4], healthcare [5], and home as-sistance [6]. In such applications, the robot has to react quickly to changes in its environment, promptly (re)plan a collision-free trajectory, and safely track the trajectory, using a controller, to reach a goal state. This task requires fast motion planning, subject to both collision avoidance and robot dynamics con-straints, to generate a dynamically feasible trajectory from a start to a goal that the robot is able to follow. While recent advances have significantly reduced motion planning times for geometric planning via parallelization techniques [7, 8], sampling-based motion planning under dynamics constraints, 
+
+i.e. , kinodynamic planning, remains a challenge for real-time 
+
+Thai Duong, Clayton W. Ramsey, Zachary Kingston, and Wil Thomason are with the Department of Computer Science, Rice University, Houston, TX, 77005, USA. Lydia E. Kavraki is with the Department of Computer Science, Rice University, Houston, TX, 77005 USA, and the Ken Kennedy Institute, Houston, TX, 77005 USA. Correspondence: thaiduong@rice.edu, kavraki@rice.edu.  
+
+> (a) Tracking our trajectory (b) Tracking a geometric path
+
+Fig. 1: Motion planning for a “ pick and place ” task in a cluttered environment with narrow passage: a dynamically feasible trajectory (a) generated from our kinodynamic planner (AkinoPDF) can be accurately tracked by a UR5 robot. Meanwhile, tracking a geometric path (b) leads to collisions (shown in red) that topple the nearby boxes. Multiple intermediate states are overlaid to illustrate the robot’s motion. Our planner is real-time and generates trajectories in ∼ 90 μs by leveraging differential flatness and “single instruction, multiple data” ( SIMD ) parallelism. 
+
+applications especially for high degree-of-freedom ( DOF ) robots such as manipulators. In this paper, we address this problem by leveraging the differential flatness property of many common robot systems, such as ground and aerial vehicles, manipulators, and more, to enable ultrafast sampling-based kinodynamic motion planning via parallelization. Kinodynamic planning [9–11] generates dynamically fea-sible trajectories by directly enforcing dynamics constraints in the planner. Without such constraints, controllers often struggle to accurately track motion plans, especially with high-speed maneuvers, potentially leading to unsafe behavior. Optimization-based approaches, e.g. , [12–17], formulate kin-odynamic planning as a nonlinear optimization problem and solve for the solution by minimizing a trajectory cost subject to constraints such as collision avoidance, robot dynamics, and joint angle and velocity limits. While these approaches can work well in high-dimensional state spaces, they are often susceptible to local minima and are sensitive to initial solutions. Meanwhile, search-based approaches, e.g. , [18–22], build a graph in the state space on a grid or lattice and search for a sequence of motion primitives that connects the start and the goal. Search-based methods provide optimality guarantees but suffer from the curse of dimensionality, thus requiring complex heuristics or domain knowledge to guide the search. On the other hand, sampling-based approaches randomly sample to expand from the start to the goal, constructing a tree [9, 23–27] or sometimes a graph for simple systems [28]. A key challenge in enforcing dynamics constraints in 
+
+> arXiv:2603.16059v1 [cs.RO] 17 Mar 2026 2
+
+sampling-based planning is to solve challenging two-point boundary value problems (BVPs) for dynamically feasible local paths between robot states. Many planners [9, 10, 26] avoid this by instead sampling a control input and then propagating the dynamics forward using numerical integration [29]. Other works solve the BVP problem for simple systems [24] and linearized robot dynamics [23, 30], or approximate the solution using a neural network [31–33]. Instead, we obtain an exact analytical solution of the BVP and dynamics propagation, thanks to the differential flatness of many robot platforms such as mobile robots and manipulators [34, 35]. Differential flatness [34] is a powerful system property that, similar to feedback linearization [36], simplifies motion planning and control designs by converting the nonlinear robot dynamics to an equivalent linear system. For differentially flat systems, the robot states and control inputs can be described by a set of carefully chosen flat outputs and their derivatives (see Def. 1 for more details). A trajectory in the flat output space can be converted to a dynamically feasible trajectory in the robot’s original state space, allowing us to simplify motion planning problems via change of variables. This technique has been used mainly to plan trajectories for mobile robots, most notably quadrotors [21, 35, 37]. However, the planning time is still hindered by computationally expensive subroutines such as forward kinematics and collision checking, which are particularly worse with high-DOF robots such as manipulators. Recently, advances in parallelization [7, 38] have improved planning time to the range of microseconds and milliseconds. However, these works focus on either geometric [7] or kine-matic [38] planning problems. One family of these techniques uses “fine-grained” parallelism via “single instruction, multiple data” ( SIMD ) instructions, available on consumer CPUs, to perform collision checking on multiple samples at the same time [7, 8]. However, directly enforcing dynamics constraints in parallel is non-trivial, as it requires sampling a trajectory at different time steps in advance while obeying robot dynamics. We address this problem by transforming the kinodynamic planning problem from the original state space to a flat output space, where closed-form local paths are time-parameterized polynomials and hence, amenable to SIMD parallelization for fast collision checking. The resulting flat output trajectory is converted to a dynamically feasible collision-free trajectory in the original state space for the robot to execute. Our approach is fast, exact and general for most sampling-based planners. In summary, we develop AkinoPDF , an “Accelerated Sampling-based Kino dynamic Planning via Differential 
+
+Flatness” technique that:  
+
+> •
+
+generates dynamically feasible trajectories in the range of milliseconds for nonlinear differentially-flat robot systems, such as manipulators, and mobile robots,  
+
+> •
+
+constructs a planning tree or graph by solving the bound-ary value problem or dynamics propagation for continuous closed-form trajectories in the flat output space,  
+
+> •
+
+and performs fast collision checking of the closed-form trajectories using fine-grained SIMD parallelism. We extensively verify our approach with challenging motion planning problems on low- and high-DOF , fully- and under-actuated robot systems in both simulated and real experiments. II. R ELATED WORK 
+
+A. Motion Planning with Dynamics Constraints 
+
+Kinodynamic motion planning [39], i.e. , motion planning under dynamics constraints, is a challenging task where the robot plans a dynamically feasible trajectory from a start, 
+
+e.g. , a robot state, containing its joint angles and derivatives, to a goal region while satisfying the robot dynamics and avoiding collision with obstacles in the environment. There are three main approaches: optimization-based, search-based, and sampling-based kinodynamic planning. 
+
+Optimization-based kinodynamic planning , such as Tra-jOpt [13], GuSTO [14], and Crocoddyl [16], generates robot trajectories by formulating and solving an optimization prob-lem, subject to dynamics and collision-avoidance constraints, with an objective function measuring the cost of the trajec-tory. This optimization problem is often nonlinear and can be solved via sequential convex programming [12–14, 40], iterative linear quadratic regulators [15], differential dynamic programming [16, 41], augmented Lagrangian methods [42], or general solvers [43, 44]. In general, optimization-based trajectory planners provide smooth trajectories, but often get stuck in a local minimum and require good initialization. While trajectory optimization with a graph of convex sets [45–47] can avoid local minima, it requires expensive precomputation of the graph in the state space. 
+
+Search-based kinodynamic planning [18–22, 48] instead constructs a graph, often on a predefined grid or lattice, where each edge is chosen from a precomputed, discrete set of motion primitives, generated by propagating the robot dynamics for a short period of time under a set of control inputs. A motion primitive is valid if it does not collide with an obstacle. A search algorithm, such as A∗ [49], can be used to find the shortest path on the graph, providing a trajectory as a sequence of motion primitives connecting the start with the goal. A major challenge of search-based approaches is the need to precompute dynamics propagation, where a numerical approximation with fine lattice resolution is required for high accuracy. They also suffer from the curse of dimensionality and require a good heuristic to guide the search. 
+
+Sampling-based kinodynamic planning [9, 10, 23–27, 50] uses sampling to discretize the high-dimensional state space and build a tree (or, less often, a graph for simple systems such as car-like robots [28]), growing from the start towards the goal region. To find a feasible trajectory connecting two samples, a difficult two-point boundary value problem (BVP) has to be solved [11], posing a major challenge for sampling-based kinodynamic planning. A common approach to avoid solving a BVP problem for tree expansion is to sample the control input space, and propagate the robot dynamics, e.g. , using a numerical integrator [9, 10, 26] or physics-based models [51], for a short period of time, with asymptotic optimality guarantees analyzed in [26]. Other approaches only solve the BVP problem for simple robot dynamics with low-dimensional state space [23, 24], or linearized dynamics [23, 30]. Meanwhile, learning-based kinodynamic motion planning uses neural networks to approximate the control input and the steering cost of expanding the tree towards a new node [31–33, 52, 53]. 3
+
+BVPs and dynamics propagation are both major computa-tional bottlenecks for kinodynamic planning. While BVPs can be analytically solved for linear or simple systems [23, 30], this is not true in general for most nonlinear systems and it is computationally expensive to obtain an approximate solution. Kinodynamic RRT ∗ [23, 30] linearizes the dynamics around an operating point and demonstrates that BVPs can be solved in closed form for certain robots, e.g. , quadrotors around a hovering position. However, the approximated solution only works well around the operating point, limiting aggressive maneuvers. Meanwhile, dynamics propagation, given a sampled control input, often requires numerical integration such as Euler’s or Runge-Kutta methods [29] to sequentially calculate the next robot state over multiple small time steps, which is time consuming and inimical to parallelism. Optimization-based, search-based and sampling-based ap-proaches can be combined to improve trajectory generation [17, 54–62]. For example, a path or trajectory from sampling-based or search-based planners can be used as an initial solution for optimization-based ones [17, 54]. INSAT planners [55–57] interleave between search-based planning on a low dimen-sional subspace and optimization-based planning on the full-dimensional space to improve planning times and success rates. Meanwhile, a library of precomputed motion primitives from search-based planning can be sampled to expand the planning tree in sampling-based motion planning [58, 59]. Furthermore, optimized local paths can be used to generate collision-free edges and bias the sampling regions in a sampling-based planner [60, 61]. Another approach is to fit a geometric path with a time-parameterized trajectory using trajectory optimization such as TOPP-RA [63] or Ruckig [64], typically without considering collision avoidance constraints. Our method performs fast sampling-based kinodynamic plan-ning by leveraging SIMD parallelism (Sec. II-B ) and the differ-ential flatness of the dynamics of common robot platforms [21, 65–67] to directly tackle the BVP and dynamics propagation problems. A system is called differentially flat if there exist variables, called flat outputs, whose values and derivatives dictate the robot state and control inputs (see Def. 1 for details). This approach has been applied to sampling-based [66, 68, 69], search-based [21], and optimization-based motion planning [35, 67, 69, 70], but primarily for low-dimensional robot platforms, 
+
+e.g. , quadrotors, or for a specific system, e.g. , gantry cranes [71]. Instead, we integrate differential flatness with sampling-based kinodynamic planning for generic high-DOF robots, where forward kinematics and collision checking are time-consuming besides enforcing dynamics constraints. While most existing methods approximate a solution to the BVP problem and dynamics propagation, differential flatness allows us to obtain a closed-form fixed- or minimum-time polynomial solution. Such closed-form trajectories are amenable to parallelized collision checking using fine-grained parallelization based on  
+
+> SIMD
+
+instructions (Sec. II-B ), enabling trajectory generation in microseconds to milliseconds. 
+
+B. Hardware-accelerated Motion Planning 
+
+Motion planning can be time-consuming as it relies on mul-tiple computationally expensive subroutines, such as forward kinematics ( FK ), collision checking ( CC ) and nearest neighbor (NN ) search. With recent advances in parallel computing, much progress has been made to improve these subroutines and enhance planning performances via both coarse-grained and 
+
+fine-grained parallelization. 
+
+Coarse-grained parallelization techniques typically run mul-tiple subroutines or even multiple instances of the plan-ners at the thread or process levels. Early work focuses on improving motion plans by merging and averaging out the paths from different instances of the planners [72], or by adapting existing planners to run their subroutines in parallel [73, 74]. Parallelized motion planning can also be achieved by partitioning the configuration space [75, 76] or the planning tree construction [71, 77, 78]. Closely related to our work, [71] also employs differential flatness to generate dynamically feasible trajectories, however, by coarsely growing multiple planning subtrees in parallel for a specific gantry crane system. Recently, the prevalence of GPUs enables impressive improvements in motion planning [38, 79–82] but suffers from costly GPU resources and communication overhead between CPUs and GPUs. GPU-based planning methods often grow a planning tree in parallel by propagating the robot dynamics, e.g. , Kino-PAX [78] , or via approximate dynamic programming recursion, e.g. , GMT* [83], and are shown to generate a robot trajectory in milliseconds for low- 
+
+> DOF
+
+systems with simple forward kinematics. For high-DOF 
+
+robots, cuRobo [38] generates geometric paths as seeds for a parallelized trajectory optimization solver under kinematics constraints such as velocity, acceleration and jerk limits. 
+
+Fine-grained parallelization techniques focus on paralleliz-ing primitive operations in a motion planning algorithm, 
+
+e.g. , via “single instruction/multiple data” ( SIMD ) instructions on consumer-grade CPUs. This has been shown to provide extremely fast geometric motion planning subject to collision avoidance constraints, with planning times ranging from mi-croseconds to milliseconds [7, 8, 84]. To check an edge (a line segment) for collision, VAMP [7] uses SIMD instructions to efficiently perform parallelized forward kinematics and collision checking on multiple configurations, generated via linear interpolation. While this approach is promising, it is challenging to enforce additional requirements via parallelized primitive operations such as dynamics and non-holonomic constraints. As mentioned in Sec. II-A , constructing a robot dynamically feasible trajectory by solving a BVP or dynamics propagation requires either approximation or sequential numer-ical approximation, which is, by design, not compatible with fine-grained parallelism. We instead leverage the differential flatness property to obtain time-parameterized solutions that can be discretized at arbitrary times and hence, amenable to SIMD-based primitive operations. III. P ROBLEM FORMULATION 
+
+Consider a robot with state x ∈ X and control u ∈ U .For example, the state of a manipulator can include the joint configuration q and possibly its derivatives, while the control input can be the torques being applied on the robot joints. Let 
+
+Xf ree and Xobs = X \ X f ree be the free and occupied spaces, 4
+
+respectively, which can be generated from robot constraints such as collision avoidance or joints limits. The robot motion is governed by a nonlinear dynamics function f of the state x
+
+and the control u as follows: 
+
+˙x = f (x, u). (1) A time-parameterized trajectory σ : [0 , 1] → X for time 
+
+t ∈ [0 , 1] is called dynamically feasible if there exists a time-parameterized control input u : [0 , 1] → U such that the robot dynamics is satisfied by the trajectory: 
+
+˙σ = f (σ, u). (2) Given an initial robot state xs and a goal region G ∈ X ,the kinodynamic motion planning problem aims to find a dynamically feasible trajectory σ(t) with control input u(t),connecting the initial state xs to the goal region G in the free space Xf ree as described in Problem 1. 
+
+Problem 1. Given an initial robot state xs and a goal region G,find a control input u(t) that generates a dynamically feasible trajectory σ(t) such that: 
+
+˙σ = f (σ, u),
+
+σ(0) = xs, σ(1) ∈ G ,
+
+σ(t) ∈ X f ree , u(t) ∈ U ∀t ∈ [0 , 1] .
+
+(3) In the remainder of the paper, we solve Problem 1 by devel-oping a parallelized kinodynamic motion planning technique for differential flat robot systems, including common platforms such as ground and aerial vehicles, and manipulators. Our approach offers ultrafast planning time and exact dynamically feasible trajectory solution without the need to approximate the robot dynamics. Occasionally, we will drop the notation of time dependence for readability. IV. P RELIMINARIES 
+
+In this section, we provide a brief review and necessary back-ground on sampling-based kinodynamic planning, differential flatness and fine-grained parallelization that will be useful for the derivation of our approach in Sec. V. 
+
+A. Sampling-based Kinodynamic Motion Planning 
+
+Most sampling-based geometric planners, such as RRT-connect [85] and PRM [86] consider the robot configuration q
+
+as the state x and approximate the robot’s configuration space with a tree or graph G with a set of nodes V and a set of edges 
+
+E. Though individual sampling-based planners differ wildly in their exact approach, they all have roughly the same structure for their main search loop. At each iteration, such planners attempt to add a new sample xf to V, then connect xf to some existing x0 ∈ V, and if successful, add the resulting edge to E. This is called a CONNECT or EXTEND subroutine . To construct edges, all geometric sampling-based planners require a local planner to produce a local path between configurations. However, in kinodynamic motion planning, where robots are subjected to dynamics constraints, finding a local path xloc (t)
+
+to reach xf with control input uloc (t) in duration T , requires solving a boundary value problem (BVP), subject to the robot dynamics with initial state x0 and terminal state xf as follows: 
+
+˙xloc = f (xloc , uloc ), xloc (0) = x0, xloc (T ) = xf . (4) Solving the BVP in practice is often computationally in-tractable, so most kinodynamic planners ( e.g. , [9, 10, 26]) instead take a propagation-based approach: they integrate a sampled control input u0 from a reachable state for a short time T to generate a new state xf rather than connecting sampled states. In this case, the local path xloc (t) and the new state xf are defined as: 
+
+xloc (t) = x0 +
+
+Z t
+
+> 0
+
+f (x(τ ), u0)dτ, 
+
+xf = xloc (T ).
+
+(5) Propagation-based expansion of the search graph, however, severely limits the performance of planners, as the local path 
+
+xloc (t) is often approximated by Euler’s or Runge-Kutta’s integration methods over a sequence of small time steps for high accuracy. 
+
+B. Differential Flatness 
+
+Definition 1 (Differential Flatness) . A dynamical system (1) is called “ differentially flat ” [34] if there exists an n-dimensional output: 
+
+y = h(x, u, ˙u, . . . , u(k)) ∈ Rn, (6) such that the robot state x and control input u can be described in terms of the output y and its derivatives y(·):
+
+x = α(y, ˙y, . . . , y(l)),
+
+u = β(y, ˙y, . . . , y(m)), (7) for non-negative derivative orders k, l and m. The output y
+
+must be differentially independent, i.e. , there does not exist any differential relationship among the components of y. The exact form of the functions α and β depends on the robot system, several of which can be found in [34, 35]. We provide three common examples of differentially flat fully-actuated and under-actuated robot platforms, as follows. 
+
+Example 1. Consider a fully-actuated manipulator with joint angles q, and control input u, e.g. , the joint torques. This is typically the case for common manipulators such as Franka or KUKA platforms. The robot dynamics is described by the Euler-Lagrange equation of motions: 
+
+M(q)¨ q + C(q, ˙q) = B(q)u, (8) where the control gain matrix B(q) is typically invertible, 
+
+i.e. , the system is fully actuated. The robot dynamics can be expressed in the form of Eq. (1) with the robot state x = ( q, ˙q).For this system, the flat output is the same as the configuration: 
+
+y = q. The state x and the control input u can be derived from the flat output y as follows, 
+
+x = α(y, ˙y) = ( q, ˙q)
+
+u = β(y, ˙y, ¨y) = B−1(q) ( M(q)¨ q + C(q, ˙q)) . (9) As the control gain B(q) is invertible, the control input u in (9) is guaranteed to exist. 5
+
+Example 2. Consider a unicyle robot whose state x is defined as 
+
+x = ( x, y, θ ) where (x, y ) is the position and θ is the heading angle of the vehicle. The control input u = ( v, ω ) includes the speed v and angular velocity ω. The flat output y is defined as the position: y = ( x, y ). The yaw angle θ and the control input u can be determined from y as follows: 
+
+x = α(y, ˙y) = ( x, y, arctan2 ( ˙ y, ˙x) + κπ ),
+
+u = β(y, ˙y, ¨y) = 
+
+
+
+(−1) κp ˙x2 + ˙ y2, ˙x¨y − ¨x ˙y
+
+˙x2 + ˙ y2
+
+
+
+, (10) where κ ∈ { 0, 1} depends on whether the vehicle is moving forward or backward, respectively. 
+
+Example 3. Consider an under-actuated quadrotor whose state 
+
+x is defined as x = ( p, R, v, ω), where p = ( x, y, z ) ∈ R3 is the position of the center of mass, R ∈ SO (3) is the rotation matrix, v is the linear velocity, and ω is the angular velocity. The control input u = ( f, τ ) consists of a thrust f ∈ R≥0 and a torque τ ∈ R3, generated from the motors. The flat output for quadrotor systems is y = ( p, ψ ) ∈ R4, where ψ is the yaw angle of the robot [35]. The state x = α(p, ˙p, ¨p, p(3) , ψ, ˙ψ) can be expressed in terms of the flat outputs and their derivatives as follows. Clearly, the position p is already part of the flat output y, and hence the linear velocity is calculated as v = ˙ p. Let m and J
+
+be the mass and inertia matrix of the quadrotor, respectively. Let t = m(¨ p + gez ) be the thrust vector applied on the quadrotor’s center of mass, which coincides with the z−axis of the body frame where g is the gravitational acceleration, and 
+
+ez = 0 0 1⊤ is the z−axis unit vector in the world frame. The rotation matrix R = rx ry rz
+
+ can be calculated as: 
+
+rz = t
+
+∥t∥ , rx = rψ × rz
+
+∥rψ × rz ∥ , ry = rz × rx, (11) where rψ = [ − sin ψ, cos ψ, 0] . The derivative of the rotation matrix is ˙R = ˙rx ˙ry ˙rz
+
+ with: 
+
+˙rx = rx × ˙rψ × rz + rψ × ˙rz
+
+∥rψ × rz ∥ × rx,
+
+˙ry = ˙ rz × rx + rz × ˙rx, ˙rz = rz × ˙t
+
+∥t∥ × rz .
+
+(12) The angular velocity ω is calculated as: ω = (R⊤ ˙R)∨,where the (·)∨ operator maps a skew-symmetric vector 
+
+ˆω ∈ so (3) to a vector ω ∈ R3. Meanwhile, the control input 
+
+u = β(p, ˙p, ¨p, p(3) , p(4) , ψ, ˙ψ, ¨ψ) is described as: 
+
+u = ( f, τ ) = 
+
+
+
+∥t∥, J( ˙R⊤ ˙R + R⊤ ¨R)∨ + R⊤ ˙RJ ω
+
+
+
+. (13) We refer the readers to [35, 87, 88] for the detailed derivation. 
+
+C. CPU fine-grained parallelism 
+
+Fine-grained parallelization techniques such as “single in-struction, multiple data” ( SIMD ) are ubiquitous on consumer CPUs and have recently shown significant improvement in sampling-based geometric motion planning by performing forward kinematics and collision checking on multiple con-figurations in parallel. Vectorization via SIMD allows simulta-neously applying the same primitive operations on multiple variables. VAMP [7], a SIMD -accelerated planning method, uses this technique to perform parallelized collision checking of multiple robot configurations, evenly sampled along a line segment (Fig. 2a) connecting two nodes on a planning tree or graph. Given the set of configurations, the robot’s geometric shape, described by a set of spheres in the workspace, is calculated via branchless forward kinematics and checked for collision against the obstacle geometry. 
+
+> SIMD
+
+-based collision checking requires access to all the states along a local path, typical through an analytical form of the motion. However, under dynamics constraints, the nonlinear local path xloc (t) that solves the BVP problem or dynamics propagation (Sec. IV-A ) is either computationally intractable or can only be sequentially approximated, prohibiting configu-ration sampling at multiple arbitrary times in advance. In the next section, we address this problem by deriving a closed-form time-parameterized local path xloc (t) based on the differential flatness property and sampling multiple states at different times, as illustrated in Fig. 2b. V. T ECHNICAL APPROACH 
+
+In this section, we present our approach to kinodynamic planning by showing that the flat output evolves as a linear system (Sec. V-A ), and hence, allows us to convert Problem 1 from the original state space X to a flat state space (Problem 2 in Sec. V-B ). Problem 2 is, in turn, solved by our sampling-based kinodynamic planning with our F LAT EXTEND subrou-tine in Sec. V-C , where closed-form solutions of the BVP and dynamics integration problems enables efficient parallelized forward kinematics and collision checking (Sec. V-D ). Finally, we discuss trajectory simplification and optimality of our approach in Secs. V-E and V-F, respectively. 
+
+A. Flat Output Dynamics as a Linear System 
+
+Consider the n-dimensional flat output y in Def. 1, that can be used to recover the state x and control input u via Eq. (7) .Let w ∈ Rn be a pseudo-control input, defined as the rth derivative of the output y:
+
+w = y(r), r = max( l, m ), (14) where the derivative orders l, m are defined in (7) .Let z ∈ Z = Rrn be the flat state, defined as: 
+
+z = ( y, ˙y, . . . , y(r−1) ). (15) The state z satisfies linear dynamics with the pseudo-control input w as follows: 
+
+˙z = Az + Bw ∈ Rrn , (16) 
+
+A =
+
+
+
+0 In 0 · · · 00 0 In · · · 0
+
+... ... ... . . . ...
+
+0 0 0 · · · In
+
+0 0 0 · · · 0
+
+
+
+, B =
+
+
+
+000
+
+...
+
+In
+
+
+
+,
+
+with A ∈ Rrn ×rn , B ∈ Rrn ×n, and the identity matrix 
+
+In ∈ Rn×n. Instead of enforcing the nonlinear dynamics constraint (1) in a motion planning problem, we can implicitly 60 t! t" t# t$ T    
+
+> x%
+> x&
+> abc
+> d
+> Original state space
+> (a) Samples from a linear path [7].
+
+0 t! t" t# t$ T
+
+z% z&
+
+z'
+
+z(
+
+z)
+
+z*
+
+𝒛 𝒍𝒐𝒄 𝑡 in *lat state space 
+
+0 t! t" t# t$ T
+
+x%
+
+x&
+
+a
+
+b c d
+
+𝒙 𝒍𝒐𝒄 𝒕 in original state space 
+
+Conversions 
+
+𝜶 , 𝜷 (b) Samples from a nonlinear local path xloc (t).       
+
+> Fig. 2: Configuration samples a,b,cand d, discretized from a linear path (a), as in VAMP [7], and from our closed-form time-parameterized motions (b), can be efficiently checked for collision using SIMD parallelism.
+
+enforce a much simpler linear dynamics (16) in the flat state space via the conversion (7) . Note that the matrix A is nilpotent with index r, i.e. , Ar = 0 .
+
+B. Sampling-based Kinodynamic Planning in Flat State Space 
+
+Due to the non-linearity of the robot dynamics (1) , it is challenging to plan robot motions in the original state space 
+
+X , as most sampling-based motion planning algorithms require a challenging E XTEND subroutine that either solves a boundary value problem to connect two states x0 and xf or propagates the dynamics to predict the next state xf given a constant control input u0. As shown in Sec. V-A , the flat state z
+
+satisfies a linear dynamics in (16) with a nilpotent matrix 
+
+A, potentially leading to much simpler BVP problem and dynamics propagation. This motivates us to perform motion planning in the flat state space Z instead of the original state space X , thanks to the conversions (6) and (7) . Our approach is illustrated in Fig. 3. Given an initial state xs with an initial control input us, and a goal region G with a desired control uG , the initial flat output and goal region are calculated as ys = h(xs, us, ˙us, . . . , u(k) 
+
+> s
+
+)
+
+and Gy = {h(x, uG , ˙uG , . . . , u(k) 
+
+> G
+
+) | x ∈ G} , respectively. Note that in many common robot systems such as Examples 1 to 3, the flat output y does not depend on u and therefore, the values of us and uG need not be specified. The original kinodynamic motion planning (Problem 1) becomes finding a dynamically feasible trajectory σz(t) in the flat state space Z
+
+that connects the start zs to the goal region Gz, and satisfies the linear dynamics (16), as summarized in Problem 2. 
+
+Problem 2. Given an initial flat state zs and a goal region Gz,calculated from ys and Gy via (15) , the original kinodynamic motion planning (Problem 1) is equivalent to finding a control input function w(t) that generates a dynamically feasible trajectory σz(t):
+
+˙σz = Aσz + Bw ,
+
+σz(0) = zs, σz(1) ∈ G z,
+
+u(t) = β (σz(t), w(t)) ∈ U ,
+
+x(t) = α(σz(t), w(t)) ∈ X f ree , ∀t ∈ [0 , 1] ,
+
+(17) where the matrices A and B are defined in (16). To solve Problem 2, we propose a sampling-based kinody-namic planning technique in the flat state space Z in Alg. 1, 𝒙 ̇ = 𝒇 (𝐱 , 𝐮 )    
+
+> (nonlinear)
+> 𝒛 ̇=𝐀𝐳 +𝐁𝐯
+> (linear)
+
+Flat output 𝐡   
+
+> 𝝈 (𝑡 )𝝈 𝒛 (𝑡 )
+> Problem 1 Problem 2
+> (our approach)
+
+Conversions 𝜶 , 𝜷 
+
+> Solution in the
+> original state space
+> Solution in the
+> flat state space
+> Fig. 3: Formulating the kinodynamic planning problem in the flat state space with linear dynamics.
+
+which is consistent with most existing sampling-based motion planners [23, 24, 26]. Leveraging the linear dynamics (16) , we develop an efficient F LAT EXTEND subroutine (see Sec. V-C )to construct a graph or tree Gz = ( Vz, Ez) in the flat state space Z, where Vz and Ez denote the sets of nodes and edges, respectively, by solving the BVP and dynamics propagation problems for a polynomial local “flat” path zloc (t). The re-sulting trajectory σz(t) is a continuous piecewise-polynominal, consisting of M local “flat” paths found on Gz:
+
+σz(t) = {(zi(t), t i)}Mi=1 ,
+
+wz(t) = {wi(t), t i)}Mi=1 , (18) with 0 = t0 < t 1 < . . . < t M where the pseudo-control wi(t)
+
+is applied in the time interval [ti−1, t i], for i = 1 , . . . , M . The trajectory σz(t) is converted back to a trajectory σ(t) with control u(t) as follows: 
+
+σ(t) = α(σz(t), w(t)) ,
+
+u(t) = β(σz(t), w(t)) , (19) which is possible because the pseudo-control input w is the 
+
+r-th order derivative of y with r = max( l, m ) in Eq. (14). 
+
+C. FLAT EXTEND Subroutine on Flat Output Space 
+
+The goal of the F LAT EXTEND subroutine, described in Alg. 2, is to find a collision-free dynamically feasible local “flat” path zloc (t), t ∈ [0 , T ] with a time duration T , that connects an existing node z0 ∈ V to a new node zf . A motion 
+
+zloc (t) can be generated by either sampling zf and solving a BVP problem (Sec. V-C 1) or sampling a pseudo-control input w0 and integrating the flat state dynamics (Sec. V-C 2). 7
+
+Algorithm 1: SAMPLING -BASED KINODYNAMIC MO- 
+
+> TION
+
+PLANNING VIA DIFFERENTIAL FLATNESS 
+
+Input: Initial state xs, initial control us, goal region G
+
+with control input uG , maximum iterations N
+
+Output: A collision-free dynamically feasible trajectory σ(t) with control input u(t).
+
+/* Convert to the flat state space */  
+
+> 1
+
+y0 ← h(x0, u0, ˙u0, . . . , u(k)0 ) 
+
+> 2
+
+Gy ← { h(x, uG , ˙uG , . . . , u(k) 
+
+> G
+
+) : x ∈ G}  
+
+> 3
+
+z0 ← (y0, ˙y0, . . . , y(r−1) 0 ) 
+
+> 4
+
+Gz = {(y, ˙y, . . . , y(r−1) ) : y ∈ G y} 
+
+> 5
+
+Create a planning graph or tree Gz = ( Vz, Ez) with set of vertices Vz and set of edges Ez. 
+
+> 6
+
+Vz ← { z0} 
+
+> 7
+
+while Iteration i < N do 
+
+/* Grow Gz on the flat state space */  
+
+> 8
+
+Gz ← FLAT EXTEND (Gz)
+
+/* Return σ(t) if reaching Gz */  
+
+> 9
+
+if Goal region Gz is reached then  
+
+> 10
+
+Find the trajectory σz(t) with pseudo-input 
+
+w(t) from Gz.
+
+/* Convert the trajectory σz (t) to the original state space */  
+
+> 11
+
+σ(t) ← α(σz(t), w(t))  
+
+> 12
+
+u(t) ← β(σz(t), w(t))  
+
+> 13
+
+return Trajectory σ(t) with control u(t). 
+
+> 14
+
+return Trajectory not found. 
+
+Algorithm 2: FLAT EXTEND 
+
+Input: The planning graph/tree Gz = ( Vz, Ez)
+
+Output: Updated Gz 
+
+> 1
+
+if Sample zf ∈ Z then  
+
+> 2
+
+Pick an existing node Z0 ∈ Vz
+
+/* Solve BVP in closed form */  
+
+> 3
+
+zloc (t) ← Eq. (24) with a sampled T or an optimal 
+
+T from (25).  
+
+> 4
+
+wloc (t) ← Eq. (22).  
+
+> 5
+
+if Sample (z0, w0, T ) ∈ Vz × Rn × R+ then 
+
+/* Analytically propagate dynamics */  
+
+> 6
+
+zloc (t) ← Eq. (28).  
+
+> 7
+
+wloc (t) ← w0. 
+
+> 8
+
+if VECTORIZED CC (zloc (t), wloc (t)) then  
+
+> 9
+
+Vz ← Vz ∪ { zf } 
+
+> 10
+
+Ez ← Ez ∪ { (z0, zf , (zloc (t), wloc (t), T )) } 
+
+> 11
+
+return G
+
+For either case, we show that a closed-form expression of 
+
+zloc (t) can be obtained for parallelized collision checking in VECTORIZED CC subroutine in Sec. V-D . If zloc (t) is valid, the node zf is added to Vz while the edge (x0, xf ) associated with the local “flat” path zloc (t) is added to Ez.
+
+1) Solving the BVP Problem in Closed Forms: Given an existing node z0 and a sampled zf , we find a local “flat” path 
+
+zloc (t), t ∈ [0 , T ] that connects z0 and zf and satisfies the flat state dynamics (16) . Consider a cost function of a motion 
+
+z(t), t ∈ [0 , T ] with pseudo-control w(t) that accounts for the total control effort and the time duration T as follows: 
+
+C(z(t), w(t), T ) = 
+
+Z T
+
+> 0
+
+w⊤Rw dt + ρT, (20) where R ≻ 0 is a user-defined positive definite weight matrix, and ρ controls the trade-off between the control effort and the time it takes to finish the trajectory. We formulate the following Linear Quadratic Minimum Time (LQMT) problem [89] to solve for our local “flat” path zloc (t):
+
+min  
+
+> w(t),T
+
+C(z(t), w(t), T )
+
+s.t. ˙z = Az + Bw ,
+
+z(0) = z0, z(T ) = zf ,
+
+(21) where the matrices A and B are defined in (16) . Let us define dT = zf − eAT z0 and the Grammian matrix 
+
+GT = R T 
+
+> 0
+
+eAtBR −1BT eA⊤tdt . The time duration T can be either a) set to a fixed or sampled value or b) optimized for a minimum-time trajectory, as shown next. 
+
+a) Fixed-time Optimal Local Paths: For a fixed time duration T , the LQMT problem (21) has a closed-form solution, by following [89], for the optimal pseudo-control input: 
+
+wloc (t) = R−1B⊤eA⊤(T −t)G−1 
+
+> T
+
+dT . (22) with the optimal cost: 
+
+Cloc (T ) = d⊤ 
+
+> T
+
+G−1 
+
+> T
+
+dT + ρT, (23) and the optimal local “flat” path: 
+
+zloc (t) = eAtz0 + GteA⊤(T −t)G−1 
+
+> T
+
+dT . (24) Since the matrix A is nilpotent, i.e., Ar = 0, we have 
+
+eAt = Pr−1   
+
+> j=0 Ajtj
+> j!
+
+. Therefore, the Grammian GT and dT
+
+become polynomials of the time duration T . The optimal con-trol input wloc (t) becomes a (r − 1) th order polynomial while the optimal flat output trajectory yloc (t) is a (2 r − 1) th order polynomial, which is compatible with SIMD -based collision checking in Sec. V-D. 
+
+b) Minimum-time Optimal Local Paths: If we have the freedom to choose the duration T , we can solve the following equation for a minimum time [89]: 
+
+ddT Cloc (T ) = 0 , T > 0. (25) For an arbitrary value of the pseudo-control order r, the minimum-time condition (25) can be solved for a positive T
+
+using a numerical root-finding solver [90], that is amenable to SIMD parallelization such as L-BFGS [91]. More notably, many common systems such as manipulators (Example 1) or unicycles (Example 2) have r = 2 while systems with higher 
+
+r, such as quadrotors (Example 3), can reduce the pseudo-control order to r = 2 to simplify motion planning in practice, as shown in [21]. For such cases, Example 4 below shows the optimal local “flat” path, pseudo-control input, and optimal duration, where the condition (25) is equivalent to solving a 
+
+4th-order polynomial in (27) for a positive root, which can also be done in closed forms. As a result, solving for an optimal time T is suitable for SIMD parallelization. 8
+
+Example 4 (Fixed-time and minimum-time local paths) . We consider a special case with r = 2 and R = In, e.g. , for a fully-actuated manipulator or a unicycle. Given a flat output 
+
+y, the flat state is z = ( y, ˙y) with the pseudo-control input w
+
+defined as the acceleration: w = ¨ y. Similar to [21] (for n = 3 ), the flat state z follows the linear dynamics (16) with: 
+
+A =
+
+0 In
+
+0 0
+
+
+
+, B =
+
+ 0In
+
+
+
+. (26) Since Aj = 0 for all j ≥ 2, we have eAt = I2n + At and 
+
+eA⊤t = I2n + A⊤t, leading to: 
+
+dT = zf − (I2n + AT )z0 = zf − z0 − T Az 0,
+
+GT =
+
+Z T
+
+> 0
+
+eAtBR −1BT eA⊤tdt =
+
+" T 3 
+
+> 3
+
+In T 2 
+
+> 2
+
+InT 2 
+
+> 2
+
+In T In
+
+#
+
+.
+
+The matrix inverse of GT can be derived using the Schur complement [92]: G−1 
+
+> T
+
+=
+
+ 12   
+
+> T3
+
+In − 6  
+
+> T2
+
+In
+
+− 6  
+
+> T2
+
+In 4 
+
+> T
+
+In
+
+
+
+. The optimal control input (22) becomes: 
+
+wloc (t) = R−1B⊤eA⊤(T −t)G−1 
+
+> T
+
+dT ,
+
+= − 12 In  
+
+> T3
+> 6In
+> T2
+
+ dT t +  6In  
+
+> T2
+
+− 2In
+
+> T
+
+ dT .
+
+This leads to a minimum-acceleration local “flat” path zloc (t)
+
+as follows: 
+
+zloc (t) = GteA⊤(T −t)G−1 
+
+> T
+
+dT + eAtz0,
+
+=
+
+ − 2In  
+
+> T3
+> In
+> T2
+
+ dT t3 +  3In  
+
+> T2
+
+− In
+
+> T
+
+ dT t2 + ˙ y0t + y0− 6In  
+
+> T3
+> 3In
+> T2
+
+ dT t2 +  6In  
+
+> T2
+
+− 2In
+
+> T
+
+ dT t + ˙ y0
+
+
+
+.
+
+In other words, the optimal flat output is: 
+
+yloc (t) = − 2In  
+
+> T3
+> In
+> T2
+
+ dT t3 +  3In  
+
+> T2
+
+− In
+
+> T
+
+ dT t2 + ˙ y0t + y0.
+
+The optimal cost function (23) is calculated as: 
+
+Cloc (T ) = d⊤ 
+
+> T
+
+G−1 
+
+> T
+
+dT + ρT, 
+
+= 12 ∥yf − y0∥2
+
+T 3 − 12( ˙ yf + ˙ y0)⊤(yf − y0)
+
+T 2
+
++ 4( ∥ ˙y0∥2 + ˙ y⊤ 
+
+> 0
+
+˙yf + ∥ ˙yf ∥2)
+
+T + ρT. 
+
+To find a minimum time T , we solve dCloc /dT for a positive real root T ∗:
+
+dCloc (T )
+
+dT = − 36 ∥yf − y0∥2
+
+T 4 + 24( ˙ yf + ˙ y0)⊤(yf − y0)
+
+T 3
+
+− 4( ∥ ˙y0∥2 + ˙ y⊤ 
+
+> 0
+
+˙yf + ∥ ˙yf ∥2)
+
+T 2 + ρ, 
+
+which is equivalent to solving a 4th-order polynomial with closed-form solutions: 
+
+− 36 ∥yf − y0∥2 + 24( ˙ yf + ˙ y0)⊤(yf − y0)T
+
+− 4( ∥ ˙y0∥2 + ˙ y⊤ 
+
+> 0
+
+˙yf + ∥ ˙yf ∥2)T 2 + ρT 4 = 0 . (27) The detailed derivation can be found in Sec. VIII-A. 
+
+Algorithm 3: VECTORIZED CC 
+
+Input: Flat state path zloc (t) with pseudo-control w(t)
+
+Output: Whether zloc (t) collides with obstacles 
+
+/* Convert to the original state space */  
+
+> 1
+
+xloc (t) ← α(zloc (t), wloc (t)) , 
+
+> 2
+
+uloc (t) ← β(zloc (t), wloc (t))  
+
+> 3
+
+for i ∈ { 0, . . . ,  NK
+
+} do 
+
+/* Parallel checking via S I M D [7] */  
+
+> 4
+
+if ∃j ∈ bi : xloc (tj ) ∈ X obs then  
+
+> 5
+
+return true 
+
+/* checking other constraints such as state and control limits */  
+
+> 6
+
+if ∃j ∈ bi: xloc (tj ), uloc (tj ) violate other constraints then  
+
+> 7
+
+return true  
+
+> 8
+
+return false 
+
+2) Dynamics Propagation in Closed-Forms: Instead of sampling states and solving a BVP, another common approach for extending the graph/tree Gz is to sample the pseudo-control input wloc (t) = w0 and the duration T , leading to a closed-form local path: 
+
+zloc (t) = 
+
+
+
+yloc , ˙yloc , . . . , y(r−1) 
+
+> loc
+
+
+
+, (28) where yloc (t) = w0 
+
+> r!
+
+tr + Pr−1 
+
+> i=0
+> y(i)0
+> i!
+
+ti. These local “flat” paths can be used to in tree-based kinodynamic planners such as Stable Sparse RRT [26] and are also suitable for parallelized forward kinematics and collision checking in Sec. V-D. 
+
+D. Vectorized Collision Checking 
+
+To perform collision checking on a local “flat” path zloc (t)
+
+with pseudo-control wloc (t) (Alg. 3), we convert it back to the original state space X and obtain the corresponding closed-form local path and control: 
+
+xloc (t) = α(zloc (t), wloc (t)) 
+
+uloc (t) = β(zloc (t), wloc (t)) . (29) We next discretize xloc (t) and uloc (t) at N times: 
+
+t1, t 2, . . . , t N ∈ [0 , T ], grouped into several spatially dis-tributed batches of size K:
+
+bi =
+
+n
+
+ti, t ⌈ NK ⌉+i, t 2⌈ NK ⌉+i, . . . , t (K−1) ⌈ NK ⌉+i
+
+o
+
+,
+
+for i = 0 , . . . ,  NK
+
+. For each batch bi, we obtain a set of samples {xloc (tj )}tj ∈bi and perform fast parallelized collision checking via SIMD instructions, as illustrated in Fig. 2b. The batch size K is the number of floats that a SIMD register can store, e.g. , K = 8 for the commonly used AVX2 instruction set. The robot’s geometry is represented by a set of spheres, whose poses are calculated via forward kinematics for multiple states, and checked against the obstacles for collisions using SIMD 
+
+parallelism. If any state in batch bi leads to collision with an obstacle, we terminate the collision checking subroutine early and move on to other local paths. Similarly, other constraints such as state and control limits can be checked in parallel for each batch bi to validate zloc (t).9
+
+Algorithm 4: TRAJECTORY SIMPLIFICATION 
+
+Input: A collision-free piecewise-polynomial trajectory 
+
+σz(t) = {(zi(t), t i)}Mi=1 , with control inputs 
+
+wz(t) = {wi(t), t i)}Mi=1 , 
+
+> 1
+
+for i ∈ { 1, . . . , M } do  
+
+> 2
+
+for j ∈ { M, . . . , 1} do  
+
+> 3
+
+Calculate zij (t) from Eq. (24) with 
+
+z0 = zi(ti−1), zf = zj (tj ), and a time 
+
+Tij = tj − ti−1 or an optimal Tij from (25).  
+
+> 4
+
+Calculate wij (t) from Eq. (22). 
+
+/* Bypass unnecessary motions */  
+
+> 5
+
+if VECTORIZED CC (zij (t), wij (t)) then  
+
+> 6
+
+Replace {(zi(t), t i)}jk=i by 
+
+(zij (t), t i−1 + Tij ). 
+
+> 7
+
+Replace {(wi(t), t i)}jk=i by 
+
+(wij (t), t i−1 + Tij ).
+
+E. Trajectory Simplification 
+
+Our kinodynamic planning approach in Sec. V-B returns a piecewise-polynomial trajectory: σz(t) = {(zi(t), t i)}Mi=1 ,for 0 = t0 < t1 < . . . < tM where the polynomial 
+
+zi(t), t ∈ [ti−1, t i] corresponds to the pseudo-control wi(t)
+
+and time duration Ti = ti − ti−1. Due to the sampling-based nature of our approach, the trajectory might contain unnecessary local paths and often requires further simplification, e.g. , by looking for shortcuts between the nodes. For completeness, a simple simplification scheme is provided in Alg. 4 such that if there exists a collision-free trajectory zij (t) that connects two nodes zi(ti−1) and zj (tj ), the local paths zk, i ≤ k ≤ j
+
+in between can simply be bypassed by zij (t). We note that our approach is general and therefore, compatible with other complex simplification methods for sampling-based motion planning, such as [93, 94]. 
+
+F. Optimality 
+
+Let C∗ = min σz(t) C(σz(t), w(t), T ) be the minimum cost, defined in Eq. (20) , over all collision-free trajectories that solve Problem 2. A trajectory σ∗
+
+> z
+
+(t) is called optimal if it achieves the minimum cost C∗. As we focus on solving for a closed-form local path and enabling fast trajectory validation via parallelization, our F LAT EXTEND subroutine is compatible with common sampling-based kinodynamic motion planners such as [23, 26]. Therefore, the optimality guarantees of the resulting trajectory σz(t) on the flat state space Z depend on the optimality guarantees of the specific planner that integrates our F LAT EXTEND subroutine. Furthermore, how optimality guarantees on Z translate to optimality guarantees in the original state space X is an interesting research question that we would like to leave for future work. VI. E VALUATION 
+
+In this section, we will evaluate the effectiveness of our 
+
+AkinoPDF approach on different robot platforms, from low to high dimensional state spaces in both simulation and real experiments. The results from our planners and the baselines are both reported from an Intel i7-6900K CPU for a fair comparison. As our method focuses on fast kinodynamic planning on CPUs, comparison to other GPU-based motion planners is out of scope of this paper. 
+
+A. Kinodynamic planning for low-DOF systems 
+
+In this section, we compare our approach with other kin-odynamic planning algorithms provided by the DynoBench 
+
+benchmark [17], which contains multiple low-DOF robots and benchmarking environments. We consider 3 robot platforms: a unicycle (Example 2), a 2D quadrotor , and a 3D quadrotor 
+
+(Example 3). The unicycle robot has the following constraints: maximum linear velocity v ≤ vmax = 1 .0 m /s, maximum angular velocity ω ≤ 1.5 rad /s. The 3D quadrotor has the following parameters: mass m = 1 kg , inertia matrix 
+
+J = diag ([0 .1, 0.1, 0.2])kg m 2, maximum linear velocity 
+
+∥v∥ ≤ 4 m /s, maximum angular velocity ∥ω∥ ≤ 8 rad /s, max-imum thrust f = 1 .5mg N, and maximum torque τ ≤ 2 N m ,where g ≈ 9.81 m /s2 is the gravitational acceleration. The 2D
+
+quadrotor ’s dynamics is a special case of the 3D quadrotor ’s with position p = [0 , y, z ], yaw angle ψ = 0, and the rotation matrix R = Rϕ of a pitch angle ϕ, leading to a simplified flat output y = [ y, z ] ∈ R2. The 2D quadrotor is modeled after a Crazyflie [96] with mass m = 0 .034 kg , inertia 
+
+J = 1 × 10 −4 kg m 2, and arm length ℓ = 0 .1 m . The thrusts 
+
+f1 and f2, generated from the two onboard motors, satisfy the following constraint: 0 ≤ f1, f 2 ≤ 0.65 mg N. The thrust and torque applied on the 2D quadrotor’s center of mass are calculated as: f = f1 + f2 and τ = ℓ(f1 − f2).For each platform, we consider 2 DynoBench environments, shown in Fig. 4: Bugtrap and Wall for the unicycle, Bugtrap 
+
+and Hole for the 2D quadrotor, and Window and Obstacle 
+
+for the 3D quadrotor. To be compatible with SIMD -based collision checking, e.g. , [7], the obstacles in each environment are represented by a set of spheres, while the unicycle and quadrotor’s geometries are both modeled as single spheres. As we obtain closed-form solutions for both BVPs and dynamics propagation for tree expansion, we implement two planners: a kinodynamic version of RRT-Connect [85] with BVP solutions in Sec. V-C 1 and an SST* [26] with dynamics propagation in Sec. V-C 2. Our kinodynamic RRT-Connect replaces a line segment connecting two nodes in an RRT tree by our closed-form BVP solution (local “flat” path) in the FLAT EXTEND subroutine (Alg. 2), using Eq. (24) with an optimal T from Eq. (25) and ρ = 1 . In our SST* version, the FLAT EXTEND subroutine uses Eq. (28) to propagate robot dynamics in closed forms. While the original SST* keeps expanding the tree using dynamics propagation until it reaches the goal, our version takes advantage of our minimum-time local “flat” path in (24) to check whether there is a direct connection from an existing node to the goal. The resulting trajectories are simplified by skipping unnecessary local paths using Alg. 4. We compare our approach with two baseline planners: iDb-A* [17] and SST* [26] from OMPL [97], provided by the DynoBench benchmark [17]. We maintain the aforementioned robot state and control constraints in our planners, enforced via our parallelized collision checking algorithm in Alg. 3, and in the baselines for a fair comparison. 10 0 1 2 3 4 5 6                                                                                                     
+
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 60123456
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> (a) Unicycle: Bugtrap (top) and Wall (bottom). 0123456
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 60123456
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6(b) 2D quadrotor: Bugtrap (top) and Hole (bot-tom).
+> (c) 3D quadrotor: Window (top) and Obstacle (bottom).
+> Fig. 4: Visualization of our trajectories with DynoBench [17] benchmarking problems: the trajectories from our kinodynamic RRT* and our version of SST* are plotted as blue and magenta solid curves, respectively, while the iDb-A* and SST* baselines’ are shown as orange dashed and green dotted curves, respectively. TABLE I: Planning performance with DynoBench benchmarks [17]. Robot Problem Our RRT-Connect Our SST* iDb-A* SST* Length Planning Time Length Planning Time Length Planning Time Length Planning Time (m) (ms) (m) (ms) (m) (ms) (m) (ms) Unicycle Bugtrap 12 .39 6.012 .51 48 .611 .51 400 12 .38 200
+> Wall 4.82 0.65.24 11 .03.89 100 4.97 100
+> 2D Quadrotor Bugtrap 11 .46 2.711 .67 45 9.69 10800 9.64 28700
+> Hole 5.16 0.44.93 270 4.62 400 4.59 17700
+> 3D Quadrotor Block 8.08 0.98.61 1.47.94 4600 9.32 45800
+> Window 5.49 0.56.28 22 .65.12 2700 6.72 46300
+
+As each method has their own definition of trajectory costs, we choose the trajectory length and planning time as com-mon metrics for comparison, shown in Table I. Qualitatively, Fig. 4 plots the trajectories generated by our RRT-Connect (blue solid curves), our SST* (magenta solid curves), iDb-A* (orange dashed curves), and SST* (green dotted curves). The baselines iDb-A* and SST* generate shorter trajectories but often take several seconds to plan, especially for complicated robot dynamics such as quadrotors’. For all 3 robot platforms, our RRT-Connect shows significantly faster planning times compared to the baselines, in just a few milliseconds, offering the capability of real-time kinodynamic planning. Our SST* planner is slightly slower than our RRT-Connect since it is restricted to a constant control input for each local “flat” path instead of directly calculating a time-parameterized optimal control value. However, it is still significantly faster than the baselines in most cases. Meanwhile, our methods maintain comparable trajectory lengths, within 10–20% of the shortest length across the benchmarking problems. While our generated trajectories can be further optimized by combining with other optimization-based motion planners, e.g. , as initial solutions, this is out of the scope of our paper and left for future work. 
+
+B. Kinodynamic planning for high-DOF manipulators 
+
+In this section, we evaluate our algorithms with a simulated 
+
+7-DOF Franka Emika Panda robot in PyBullet [98]. We consider 
+
+7 realistic and challenging environments, including bookshelf thin , bookshelf tall , bookshelf small , cage , box , table under pick 
+
+and table pick , from the MotionBenchMaker benchmark [95]. For each environment, 100 motion planning problems with 100 
+
+different pairs of start and goal configurations are generated for our experiments. The obstacles and the robot’s geometries 11                                                                                                                                                                                                                                                                                                                                                   
+
+> TABLE II: Planning performance with a Franka Emika Panda robot over 100 runs of our kinodynamic RRT-Connect with different environments in MotionBenchMaker [95]. For a baseline, we use a collision-free geometric path, provided by a SIMD-parallelized geometric RRT-Connect [7], followed by time parameterization (TOPP-RA [63]). Overall, our kinodynamic RRT-Connect generates a dynamically feasible trajectory faster than the baseline in almost all environments. Our trajectory is slightly longer but verified to be collision-free while the baseline’s trajectory is colliding in approximately 30% of the cases, due to the time parameterization. Better metrics are shown in bold, while the collision risk is marked as red if positive. Env. Metrics Our kinodynamic RRT-Connect (AkinoPDF) Geometric RRT-Connect (VAMP) + TOPP-RA Mean SD 25% 50% 75% 95% Mean SD 25% 50% 75% 95%
+> Bookshelf (thin) Total planning time (ms) 0.61 1.50.10 0.20 0.46 3.50 3.96 1.02 3.14 3.70 4.60 5.47
+> Final traj. length (rad) 5.25 1.08 4.53 5.15 5.90 7.63 4.66 0.79 4.15 4.68 5.05 5.92
+> Collision risk 0000000.32 0.47 0011
+> Bookshelf (tall) Total planning time (ms) 1.09 3.55 0.07 0.15 0.36 5.23.91 0.99 3.21 3.57 4.62 5.72
+> Final traj. length (rad) 5.30 1.01 4.56 5.19 5.96 7.01 4.86 0.69 4.34 4.85 5.28 6.08
+> Collision risk 0000000.34 0.48 0011
+> Bookshelf (small) Total planning time (ms) 7.80 35 .63 0.08 0.17 0.64 38 .49 4.11 1.04 3.19 3.85 4.93 5.74
+> Final traj. length (rad) 5.50 1.31 4.69 5.31 6.17 8.23 4.83 0.91 4.34 4.83 5.32 6.05
+> Collision risk 0000000.32 0.47 0011
+> Cage Total planning time (ms) 12 .96 27 .54 1.83 6.35 14 .05 41 .32 5.81 1.80 4.36 5.32 7.21 8.92
+> Final traj. length (rad) 10 .07 3.61 7.17 9.27 12 .30 16 .60 7.09 1.67 5.55 6.54 8.52 9.63
+> Collision risk 0000000.29 0.46 0011
+> Box Total planning time (ms) 0.86 4.25 0.08 0.25 0.59 1.40 4.22 0.93 3.35 4.25 4.97 5.64
+> Final traj. length (rad) 5.64 1.20 4.79 5.26 6.14 8.10 4.68 0.82 4.07 4.45 5.02 6.35
+> Collision risk 0000000.13 0.34 0001
+> Table under pick Total planning time (ms) 0.34 0.45 0.17 0.25 0.35 0.63 5.13 0.99 4.41 5.10 5.89 6.45
+> Final traj. length (rad) 8.46 1.89 7.07 8.48 9.55 11 .82 6.80 1.39 5.61 6.75 7.71 9.01
+> Collision risk 0000000.40 0.49 0011
+> Table pick Total planning time (ms) 0.28 0.91 0.08 0.12 0.18 0.57 3.78 0.76 3.08 3.60 4.50 5.00
+> Final traj. length (rad) 5.24 0.91 4.57 5.10 5.69 6.51 4.76 0.71 4.26 4.53 5.18 6.27
+> Collision risk 0000000.42 0.49 0011
+> Overall Total planning time (ms) 3.49 18 .00 0.11 0.24 0.76 14 .65 4.43 1.34 3.36 4.19 5.14 7.16
+> ▷RRT-Connect time 3.45 18 .00 0.08 0.20.70 14 .54 0.18 0.36 0.05 0.07 0.15 0.83
+> ▷Simpl./TOPP-RA time 0.04 0.03 0.02 0.04 0.05 0.09 4.24 1.22 3.28 4.02 4.99 6.58
+> Final traj. length (rad) 6.50 2.56 4.89 5.67 7.37 11 .73 5.26 1.40 4.30 4.88 5.74 8.43
+> Collision risk 0000000.33 0.47 0011
+
+are represented by sets of spheres, which are compatible to  
+
+> SIMD
+
+parallelized collision checking as shown in [7]. For each problem, the robot’s task is to plan a dynamically feasible trajectory from a start to a goal configuration in the free space. In our experiments, we use our kinodynamic RRT-Connect planner, described in Sec. VI-A with trajectory simplification in Alg. 4. Our baseline is a common approach that generates a time-parameterized trajectory, e.g. , using TOPP-RA [63], from a collision-free geometric path, under kinematic constraints such as velocity and acceleration limits. The geometric path is provided by a SIMD -parallelized geometric RRT-Connect planner from VAMP [7]. For each environment, we use both our planner and the baseline to solve the pre-generated benchmarking problems and report the results in Table II. Our planner’s total planning time is calculated as the sum of the RRT-Connect time and trajectory simplification time. Meanwhile, the baseline’s total planning time includes the RRT-Connect time, path simplification time, and TOPP-RA time. As our trajectory and the baseline’s are optimized for different cost functions, we use their length as a common metrics, similar to Sec. VI-A . As TOPP-RA [63] only fits a time-parameterized trajectory to geometric path, i.e. , a sequence of waypoints, it does not consider any collision avoidance constraints. While the geometric path is collision-free, there is no guarantee that the time-parameterized trajectory from TOPP-RA will be valid. Therefore, we sample the resulting trajectories, check for collision and compare the collision risk, measured by the percentage of collided trajectories. Table II compares our kinodynamic planner and the baseline, in terms of the total planning time, the final trajectory’s length, and the collision risk, for each environments and overall. On average, we are able to generate a valid trajectory in around 
+
+3.5ms , and in less than 1ms for 75% of the problems, while the baseline’s total planning time is consistently around 4.5ms 
+
+for almost all problems. While VAMP can generate a collision-free geometric path fast, the baseline’s total planning time is dominated by the TOPP-RA time. Our approach, instead, spends most of the time in the kinodynamic RRT-Connect planner, as we directly enforce the dynamics constraints in the RRT tree construction. Across all the problems, the baseline offers shorter trajectory but, more importantly, poses a collision risk of ∼ 30% on average, highlighting the benefit of our approach with guarantees of collision-free trajectories up to the sampling resolution. Fig. 5 visualizes the trajectories from our kinodynamic RRT (bottom) with no collisions and from the baseline (top) with collided configurations shown in red. For the table under pick and table pick environments, our total planning time is approximately ∼ 15 times faster than that of the baseline, while maintaining ∼ 4 times shorter time for the box , bookshelf thin and bookshelf tall environments. For the bookshelf small and cage environments, our approach is slightly slower on average. Yet, it is still ∼ 8 times faster for 
+
+75% of the bookshelf small problems, suggesting that there are certain challenging cases in those environments that our approach takes slightly longer than the baseline to plan, but still achieves milliseconds of planning time. We emphasize that even though the baseline can be faster in those cases, it still leads to a significant risk of collision, around 30% of the 
+
+bookshelf small and cage problems, as shown in Table II. 12    
+
+> (a) (b) (c) (d)
+
+Fig. 5: Visualization of trajectories generated by our kinodynamic RRT-Connect (bottom) and by the baseline planner, RRT-Connect + TOPP-RA (top), for a Franka Emika Panda robot in: (a) cage , (b) box , (c) bookshelf thin , and (d) table pick environments. For each environment, the top image shows a trajectory from the baseline with collided configurations in red, while the bottom image demonstrates that our trajectory is collision-free. 0 2 4 6 8 10 12               
+
+> Time (s)
+> −0.4
+> −0.2
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Joint angle (rad)  q3 (actual)
+> q3 (desired)
+> (a) Tracking our trajectory 0246810 12
+> Time (s)
+> −0.4
+> −0.2
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Joint angle (rad)  q3 (actual)
+> q3 (desired) (b) Tracking a geometric path 0246810 12
+> Time (s)
+> 0.00
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+> 0.12
+> 0.14
+> Joint tracking error (rad)
+> tracking error (kinodynamic)
+> tracking error (geometric) (c) Tracking error
+
+Fig. 6: Our trajectory is smoother and dynamically feasible, leading to better tracking performance. For example, the third joint angle q3 in the our UR5’s configuration stays close to the desired value from our trajectory (a) while there are overshoots and fluctuates with a geometric path [7] (b), causing collision in Fig. 7b. The tracking error ∥qactual − qdesired ∥ also shows two overshooting peaks with the geometric path in Fig. 6c.  
+
+> (a) (b)
+
+Fig. 7: The “pick and place” task with UR5 robot in a cluttered environment with narrow passages: (a) our kinodynamic planner successfully finishes the task as it generates a smooth and dynamically feasible trajectory that the robot can track accurately; (b) the robot collides with obstacles when trying to track a geometric path [7] due to overshoots caused by the lack of dynamics constraints. 
+
+C. Real experiments 
+
+Finally, we verify the benefit of our approach for online motion planning on a real Universal Robots (UR5) platform in a cluttered environment. The environment consists of multiple static and dynamic objects, perceived by an Intel Realsense camera with a top-down view. The depth image from the camera is used to generate a set of spheres stored in a collision-affording point tree (CAPT) compatible with SIMD -parallelized motion planning [8]. The spheres represent the obstacles in the environment in our Alg. 3. Our kinodynamic RRT-Connect planner in Sec. VI-A is used to find a trajectory from the start configuration to the goal. 
+
+1) Kinodynamic Planning versus Geometric Planning: We first consider a “ pick and place ” scenario in Fig. 1, where the robot generates a motion plan from its start position to a “pick” 
+
+position near a granola box, and then move to a “place” 
+
+position above a basket. The environment is cluttered with multiple objects, creating narrow passages such that a minor deviation from the planned trajectory can cause collisions. Therefore, accurate tracking is crucial for the safe realization of this “ pick and place ” task. The baseline is a geometric path, generated by a SIMD-parallelized RRT-Connect planner from VAMP [7]. The path is sampled with a constant open-loop velocity, chosen such that the task’s duration is similar to ours 13              
+
+> Fig. 8: Reactive planning with moving obstacles: our UR5 robot successfully performs a “ pick, place, and reset ” loop with our kinodynamic RRT-Connect planner without colliding with any of the static or moving obstacles. The obstacles are observed by an overhead Intel Realsense camera. 020 40 60 80 100 120
+> Time (s)
+> 10 −6
+> 10 −5
+> 10 −4
+> 10 −3
+> simplication time (s)
+> planning time (s)
+> Fig. 9: Planning and simplification time in our “ pick, place, and reset ” loop: our planner takes ∼90 μs and ∼40 μs for planning and simplification, respectively, illustrating the reactiveness of our approach for real-time applications.
+
+for a fair comparison. A closed-loop velocity control input is computed by Ruckig [64] and sent to the UR5 robot to execute. Fig. 6 plots the tracking error during the experiments. Our tra-jectory is dynamically feasible, allowing the robot to smoothly and accurately execute the task without any collisions (Figs. 6a and 7a). Meanwhile, the geometric path has sharp turns, leading to overshoots and fluctuations (Fig. 6b). As a result, the robot collides with two nearby boxes while trying to turn, as seen in Fig. 7b. The overshoots can be observed in Fig. 6c with two spikes in total tracking error ∥qactual − qdesired ∥, at times t ≈ 4s and t ≈ 9s, where qactual and qdesired denote the actual and desired values of the joint angles from the motion plans. Meanwhile, our tracking error stays low without any spikes, highlighting the benefits of having a dynamically feasible trajectory from our kinodynamic planner for accurate task executions. 
+
+2) Reactive Kinodynamic Planning: To examine the reac-tiveness of our kinodynamic planning approach, we consider a “pick, place, and reset ” loop, where the robot keeps planning its trajectory to perform a “ pick ” action near a pile of blocks, a “ place ” action above the basket, and then “ reset ” to its original configuration. During the experiment, we move a foam obstacle in the environment and verify that our kinodynamic motion planner is able to quickly react to object changes and safely achieve the task as shown in Fig. 8. On average, our kinodynamic planner takes ∼ 90 μs to plan and ∼ 40 μs to simplify the trajectory (Fig. 9), leading to a total planning time of 0.13 ms . The results illustrate that our approach is fast and suitable for online and reactive planning with dynamic environments, while satisfying the dynamics constraints. VII. C ONCLUSIONS 
+
+This paper develops AkinoPDF , an ultrafast sampling-based kinodynamic planning technique, by solving the two-point boundary value problem and dynamics propagation in closed forms for a common class of differentially flat robot platforms, and performing extremely fast forward kinematics and collision checking via SIMD parallelism, available on most consumer CPUs. Our approach is exact, general, and able to generate a dynamically feasible trajectory in the range of microseconds to milliseconds, which is suitable for online and reactive planning in dynamic environments. Our method outperforms common sampling-based and optimization-based kinodynamic planners as well as time-parameterization of a geometric path in terms of planning times, offering a fast, reliable, and feasible solution for trajectory generation. We believe our approach unfolds a promising and exciting research area where it is possible to transform existing sampling-based motion planners into fast kinodynamic versions while only requiring general-purpose and widely available CPUs. This ability potentially can lead to a wide application of our method on different robots, in different settings, and for various tasks. It also spawns a challenging but intriguing research question of analyzing the optimality guarantees of our approach in the original state space, 
+
+e.g. , by combining the property of differential flatness with existing guarantees [99] or by combining with an optimization-based planner. A limitation of our approach is that the robot system has to be differentially flat, which raises an interesting question of how we can extend our method to non-flat systems. VIII. A PPENDICES 
+
+A. Derivation of closed-form solutions in Example 4 
+
+The optimal control input (22) becomes: 
+
+wloc (t) = R−1B⊤eA⊤(T −t)G−1 
+
+> T
+
+dT ,
+
+= 0 In
+
+   I2n + AT (T − t) G−1 
+
+> T
+
+dT
+
+= 0 In
+
+  In 0
+
+(T − t)In In
+
+  12   
+
+> T3
+
+In − 6  
+
+> T2
+
+In
+
+− 6  
+
+> T2
+
+In 4 
+
+> T
+
+In
+
+
+
+dT ,
+
+= − 12 In  
+
+> T3
+> 6In
+> T2
+
+ dT t +  6In  
+
+> T2
+
+− 2In
+
+> T
+
+ dT .14 
+
+This leads to a minimum-acceleration optimal motion zloc (t)
+
+as follows: 
+
+zloc (t) = GteA⊤(T −t)G−1 
+
+> T
+
+dT + eAtz0,
+
+=
+
+" t3 
+
+> 3
+
+In t2 
+
+> 2
+
+Int2 
+
+> 2
+
+In tIn
+
+#  In 0
+
+(T − t)In In
+
+  12   
+
+> T3
+
+In − 6  
+
+> T2
+
+In
+
+− 6  
+
+> T2
+
+In 4 
+
+> T
+
+In
+
+
+
+dT
+
++
+
+In tIn
+
+0 In
+
+  y0
+
+˙y0
+
+
+
+,
+
+=
+
+ − 2In  
+
+> T3
+> In
+> T2
+
+ dT t3 +  3In  
+
+> T2
+
+− In
+
+> T
+
+ dT t2 + ˙ y0t + y0− 6In  
+
+> T3
+> 3In
+> T2
+
+ dT t2 +  6In  
+
+> T2
+
+− 2In
+
+> T
+
+ dT t + ˙ y0
+
+
+
+.
+
+In other words, the optimal flat output trajectory is: 
+
+yloc (t) = − 2In  
+
+> T3
+> In
+> T2
+
+ dT t3 +  3In  
+
+> T2
+
+− In
+
+> T
+
+ dT t2 + ˙ y0t + y0.
+
+The optimal cost function (23) is: 
+
+Cloc (T ) = d⊤ 
+
+> T
+
+G−1 
+
+> T
+
+dT + ρT, 
+
+=
+
+yf − y0 − T ˙y0
+
+˙yf − ˙y0
+
+⊤  12   
+
+> T3
+
+In − 6  
+
+> T2
+
+In
+
+− 6  
+
+> T2
+
+In 4 
+
+> T
+
+In
+
+  yf − y0 − T ˙y0
+
+˙yf − ˙y0
+
+
+
++ ρT 
+
+= 12 ∥yf − y0∥2
+
+T 3 − 12( ˙ yf + ˙ y0)⊤(yf − y0)
+
+T 2
+
++ 4( ∥ ˙y0∥2 + ˙ y⊤ 
+
+> 0
+
+˙yf + ∥ ˙yf ∥2)
+
+T + ρT. 
+
+REFERENCES [1] L. Claussmann, M. Revilloud, D. Gruyer, and S. Glaser. “A Review of Motion Planning for Highway Autonomous Driving”. In: IEEE Transac-tions on Intelligent Transportation Systems 21.5 (2020), pp. 1826–1848. [2] W. H ¨onig, J. A. Preiss, T. K. S. Kumar, G. S. Sukhatme, and N. Ayanian. “Trajectory Planning for Quadrotor Swarms”. In: IEEE Transactions on Robotics 34.4 (2018), pp. 856–869. [3] X. Zhou, X. Wen, Z. Wang, Y. Gao, H. Li, Q. Wang, T. Yang, H. Lu, Y. Cao, C. Xu, et al. “Swarm of micro flying robots in the wild”. In: 
+
+Science Robotics 7.66 (2022). [4] C. Eppner, S. H ¨ofer, R. Jonschkowski, R. Mart ´ın-Mart ´ın, A. Sieverling, V. Wall, and O. Brock. “Lessons from the amazon picking challenge: Four aspects of building robotic systems.” In: Robotics: Science and Systems . Vol. 12. 2016. [5] L. D. Riek. “Healthcare robotics”. In: Communications of the ACM 
+
+60.11 (2017), pp. 68–78. [6] R. K. Jenamani, T. Silver, B. Dodson, S. Tong, A. Song, Y. Yang, Z. Liu, B. Howe, A. Whitneck, and T. Bhattacharjee. “FEAST: A Flexible Mealtime-Assistance System Towards In-the-Wild Personalization”. In: 
+
+Robotics: Science and Systems . LosAngeles, CA, USA, 2025. [7] W. Thomason, Z. Kingston, and L. E. Kavraki. “Motions in Microsec-onds via Vectorized Sampling-Based Planning”. In: IEEE International Conference on Robotics and Automation (ICRA) . 2024, pp. 8749–8756. [8] C. W. Ramsey, Z. Kingston, W. Thomason, and L. E. Kavraki. “Collision-Affording Point Trees: SIMD-Amenable Nearest Neighbors for Fast Collision Checking”. In: Robotics: Science and Systems . 2024. [9] S. M. LaValle and J. J. KuffnerJr. “Randomized Kinodynamic Planning”. In: The International Journal of Robotics Research 20.5 (2001), pp. 378– 400. [10] D. Hsu, R. Kindel, J. -C. Latombe, and S. Rock. “Randomized Kinody-namic Motion Planning with Moving Obstacles”. In: The International Journal of Robotics Research 21.3 (2002), pp. 233–255. [11] S. M. LaValle. Planning algorithms . Cambridge university press, 2006. [12] F. Augugliaro, A. P. Schoellig, and R. D’Andrea. “Generation of collision-free trajectories for a quadrocopter fleet: A sequential convex programming approach”. In: IEEE/RSJ International Conference on Intelligent Robots and Systems . 2012, pp. 1917–1922. [13] J. Schulman, Y. Duan, J. Ho, A. Lee, I. Awwal, H. Bradlow, J. Pan, S. Patil, K. Goldberg, and P. Abbeel. “Motion planning with sequential convex optimization and convex collision checking”. In: The Interna-tional Journal of Robotics Research 33.9 (2014), pp. 1251–1270. [14] R. Bonalli, A. Cauligi, A. Bylard, and M. Pavone. “GuSTO: Guaranteed Sequential Trajectory optimization via Sequential Convex Program-ming”. In: International Conference on Robotics and Automation (ICRA) . 2019, pp. 6741–6747. [15] Y. Tassa, T. Erez, and E. Todorov. “Synthesis and stabilization of com-plex behaviors through online trajectory optimization”. In: IEEE/RSJ International Conference on Intelligent Robots and Systems . 2012, pp. 4906–4913. [16] C. Mastalli, R. Budhiraja, W. Merkt, G. Saurel, B. Hammoud, M. Naveau, J. Carpentier, L. Righetti, S. Vijayakumar, and N. Mansard. “Crocoddyl: An Efficient and Versatile Framework for Multi-Contact Optimal Control”. In: IEEE International Conference on Robotics and Automation (ICRA) . 2020, pp. 2536–2542. [17] J. Ortiz-Haro, W. H ¨onig, V. N. Hartmann, and M. Toussaint. “iDb-A*: Iterative Search and Optimization for Optimal Kinodynamic Motion Planning”. In: IEEE Transactions on Robotics 41 (2025). [18] M. Pivtoraiko and A. Kelly. “Efficient constrained path planning via search in state lattices”. In: International Symposium on Artificial Intelligence, Robotics, and Automation in Space . 2005, pp. 1–7. [19] M. Pivtoraiko and A. Kelly. “Kinodynamic motion planning with state lattice motion primitives”. In: IEEE/RSJ International Conference on Intelligent Robots and Systems . 2011, pp. 2172–2179. [20] B. J. Cohen, S. Chitta, and M. Likhachev. “Search-based planning for manipulation with motion primitives”. In: IEEE international conference on robotics and automation . 2010, pp. 2902–2908. [21] S. Liu, N. Atanasov, K. Mohta, and V. Kumar. “Search-based motion planning for quadrotors using linear quadratic minimum time control”. In: IEEE/RSJ international conference on intelligent robots and systems (IROS) . 2017, pp. 2872–2879. [22] Z. Ajanovic, B. Lacevic, B. Shyrokau, M. Stolz, and M. Horn. “Search-Based Optimal Motion Planning for Automated Driving”. In: IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) .2018, pp. 4523–4530. [23] D. J. Webb and J. van den Berg. “Kinodynamic RRT*: Asymptotically optimal motion planning for robots with linear dynamics”. In: IEEE International Conference on Robotics and Automation . 2013, pp. 5054– 5061. [24] S. Karaman and E. Frazzoli. “Optimal kinodynamic motion planning using incremental sampling-based methods”. In: IEEE Conference on Decision and Control (CDC) . 2010, pp. 7681–7687. [25] K. Hauser and Y. Zhou. “Asymptotically Optimal Planning by Feasible Kinodynamic Planning in a State–Cost Space”. In: IEEE Transactions on Robotics 32.6 (2016), pp. 1431–1443. [26] Y. Li, Z. Littlefield, and K. E. Bekris. “Asymptotically optimal sampling-based kinodynamic planning”. In: The International Journal of Robotics Research 35.5 (2016), pp. 528–564. [27] C. K. Verginis, D. V. Dimarogonas, and L. E. Kavraki. “KDF: Kino-dynamic Motion Planning via Geometric Sampling-Based Algorithms and Funnel Control”. In: IEEE Transactions on Robotics 39.2 (2023), pp. 978–997. [28] J. van den Berg and M. Overmars. “Kinodynamic motion planning on roadmaps in dynamic environments”. In: IEEE/RSJ International Conference on Intelligent Robots and Systems . 2007, pp. 4253–4258. [29] J. C. Butcher. Numerical Methods for Ordinary Differential Equations .John Wiley & Sons, 2016. [30] A. Perez, R. Platt, G. Konidaris, L. Kaelbling, and T. Lozano-Perez. “LQR-RRT*: Optimal sampling-based motion planning with automat-ically derived extension heuristics”. In: 2012 IEEE International Conference on Robotics and Automation . 2012, pp. 2537–2542. [31] W. J. Wolfslag, M. Bharatheesha, T. M. Moerland, and M. Wisse. “RRT-CoLearn: towards kinodynamic planning without numerical trajectory optimization”. In: IEEE Robotics and Automation Letters 3.3 (2018), pp. 1655–1662. [32] H. -T. L. Chiang, J. Hsu, M. Fiser, L. Tapia, and A. Faust. “RL-RRT: Kinodynamic motion planning via learning reachability estimators from RL policies”. In: IEEE Robotics and Automation Letters 4.4 (2019), pp. 4298–4305. [33] D. Zheng and P. Tsiotras. “Sampling-based kinodynamic motion planning using a neural network controller”. In: AIAA Scitech Forum .2021, p. 1754. [34] R. M. Murray, M. Rathinam, and W. Sluis. “Differential flatness of mechanical control systems: A catalog of prototype systems”. In: ASME International Mechanical Engineering Congress and Exposition . 1995, pp. 349–357. [35] D. Mellinger and V. Kumar. “Minimum snap trajectory generation and control for quadrotors”. In: IEEE International Conference on Robotics and Automation . 2011, pp. 2520–2525. 15 
+
+[36] H. K. Khalil. Nonlinear systems . Upper Saddle River, NJ: Prentice-Hall, 2002. [37] D. Mellinger, N. Michael, and V. Kumar. “Trajectory generation and control for precise aggressive maneuvers with quadrotors”. In: The International Journal of Robotics Research 31.5 (2012), pp. 664–674. [38] B. Sundaralingam, S. K. S. Hari, A. Fishman, C. Garrett, K. Van Wyk, V. Blukis, A. Millane, H. Oleynikova, A. Handa, F. Ramos, et al. “Curobo: Parallelized collision-free robot motion generation”. In: 2023 IEEE International Conference on Robotics and Automation (ICRA) . IEEE. 2023, pp. 8112–8119. [39] E. Schmerling and M. Pavone. “Kinodynamic planning”. In: Encyclo-pedia of Robotics . Springer, 2019. [40] Y. Chen, M. Cutler, and J. P. How. “Decoupled multiagent path planning via incremental sequential convex programming”. In: IEEE International Conference on Robotics and Automation (ICRA) . 2015. [41] T. A. Howell, B. E. Jackson, and Z. Manchester. “ALTRO: A Fast Solver for Constrained Trajectory Optimization”. In: IEEE/RSJ Inter-national Conference on Intelligent Robots and Systems (IROS) . 2019, pp. 7674–7679. [42] M. Toussaint. “A tutorial on Newton methods for constrained trajectory optimization and relations to SLAM, Gaussian Process smoothing, opti-mal control, and probabilistic inference”. In: Geometric and Numerical Foundations of Movements (2017), pp. 361–392. [43] G. L’Erario, G. Nava, G. Romualdi, F. Bergonti, V. Razza, S. Dafarra, and D. Pucci. “Whole-body trajectory optimization for robot multi-modal locomotion”. In: IEEE-RAS 21st International Conference on Humanoid Robots (Humanoids) . 2022, pp. 651–658. [44] S. Beck, C. Nguyen, T. Duong, N. Atanasov, and Q. Nguyen. “High Accuracy Aerial Maneuvers on Legged Robots using Variational Integrator Discretized Trajectory Optimization”. In: IEEE International Conference on Robotics and Automation (ICRA) . 2025, pp. 10253– 10260. [45] T. Marcucci, M. Petersen, D. von Wrangel, and R. Tedrake. “Motion planning around obstacles with convex optimization”. In: Science Robotics 8.84 (2023). [46] D. von Wrangel and R. Tedrake. “Using Graphs of Convex Sets to Guide Nonconvex Trajectory Optimization”. In: IEEE/RSJ Interna-tional Conference on Intelligent Robots and Systems (IROS) . 2024, pp. 9863–9870. [47] B. P. Graesdal, S. Y. C. Chia, T. Marcucci, S. Morozov, A. Amice, P. Parrilo, and R. Tedrake. “Towards Tight Convex Relaxations for Contact-Rich Manipulation”. In: Robotics: Science and Systems . Delft, Netherlands, 2024. [48] I. Mishani, Y. Shaoul, R. Natarajan, J. Li, and M. Likhachev. “SRMP: Search-Based Robot Motion Planning Library”. In: arXiv preprint arXiv:2509.25352 (2025). [49] P. E. Hart, N. J. Nilsson, and B. Raphael. “A formal basis for the heuristic determination of minimum cost paths”. In: IEEE Transactions on Systems Science and Cybernetics 4.2 (1968), pp. 100–107. [50] A. Orthey, C. Chamzas, and L. E. Kavraki. “Sampling-Based Motion Planning: A Comparative Review”. In: Annual Review of Control, Robotics, and Autonomous Systems 7.1 (July 2024), pp. 285–310. [51] Y. Gao, L. Chen, P. Bhovad, S. Wang, Z. Kingston, and L. H. Blumen-schein. “Parallel Simulation of Contact and Actuation for Soft Growing Robots”. In: arXiv preprint arXiv:2509.15180 (2025). [52] B. Ichter and M. Pavone. “Robot Motion Planning in Learned Latent Spaces”. In: IEEE Robotics and Automation Letters 4.3 (2019), pp. 2407–2414. [53] L. Li, Y. Miao, A. H. Qureshi, and M. C. Yip. “MPC-MPNet: Model-Predictive Motion Planning Networks for Fast, Near-Optimal Planning Under Kinodynamic Constraints”. In: IEEE Robotics and Automation Letters 6.3 (2021), pp. 4496–4503. [54] J. Ortiz-Haro, W. H ¨onig, V. N. Hartmann, M. Toussaint, and L. Righetti. “iDb-RRT: Sampling-based Kinodynamic Motion Planning with Motion Primitives and Trajectory Optimization”. In: IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . 2024, pp. 10702– 10709. [55] R. Natarajan, S. Mukherjee, H. Choset, and M. Likhachev. “PINSAT: Parallelized Interleaving of Graph Search and Trajectory Optimization for Kinodynamic Motion Planning”. In: 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . 2024. [56] R. Natarajan, G. L. Johnston, N. Simaan, M. Likhachev, and H. Choset. “Torque-Limited Manipulation Planning through Contact by Interleaving Graph Search and Trajectory Optimization”. In: IEEE International Conference on Robotics and Automation (ICRA) . 2023. [57] R. Natarajan, H. Choset, and M. Likhachev. “Interleaving Graph Search and Trajectory Optimization for Aggressive Quadrotor Flight”. In: IEEE Robotics and Automation Letters 6.3 (2021), pp. 5357–5364. [58] B. Sakcak, L. Bascetta, G. Ferretti, and M. Prandini. “Sampling-based optimal kinodynamic planning with motion primitives”. In: Autonomous Robots 43.7 (2019), pp. 1715–1732. [59] R. Shome and L. E. Kavraki. “Asymptotically optimal kinodynamic planning using bundles of edges”. In: IEEE International Conference on Robotics and Automation (ICRA) . 2021, pp. 9988–9994. [60] J. Kamat, J. Ortiz-Haro, M. Toussaint, F. T. Pokorny, and A. Orthey. “BITKOMO: Combining Sampling and Optimization for Fast Conver-gence in Optimal Motion Planning”. In: IEEE/RSJ International Confer-ence on Intelligent Robots and Systems (IROS) . 2022, pp. 4492–4497. [61] S. Choudhury, J. D. Gammell, T. D. Barfoot, S. S. Srinivasa, and S. Scherer. “Regionally accelerated batch informed trees (rabit*): A framework to integrate local information into optimal path planning”. In: IEEE International Conference on Robotics and Automation (ICRA) .2016, pp. 4207–4214. [62] K. V. Alwala and M. Mukadam. “Joint sampling and trajectory optimization over graphs for online motion planning”. In: IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) .2021, pp. 4700–4707. [63] H. Pham and Q. -C. Pham. “A New Approach to Time-Optimal Path Parameterization Based on Reachability Analysis”. In: IEEE Transactions on Robotics 34.3 (2018), pp. 645–659. [64] L. Berscheid and T. Kr ¨oger. “Jerk-limited Real-time Trajectory Gener-ation with Arbitrary Target States”. In: Robotics: Science and Systems 
+
+(2021). [65] R. E. Allen and M. Pavone. “A real-time framework for kinodynamic planning in dynamic environments with application to quadrotor obstacle avoidance”. In: Robotics and Autonomous Systems 115 (2019), pp. 174–193. [66] L. Bascetta, I. M. Arrieta, and M. Prandini. “Flat-RRT*: A sampling-based optimal trajectory planner for differentially flat vehicles with constrained dynamics”. In: IFAC-PapersOnLine 50.1 (2017), pp. 6965– 6970. [67] J. Welde, J. Paulos, and V. Kumar. “Dynamically Feasible Task Space Planning for Underactuated Aerial Manipulators”. In: IEEE Robotics and Automation Letters 6.2 (2021), pp. 3232–3239. [68] H. Ye, N. Pan, Q. Wang, C. Xu, and F. Gao. “Efficient Sampling-based Multirotors Kinodynamic Planning with Fast Regional Optimization and Post Refining”. In: IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . 2022, pp. 3356–3363. [69] Z. Han, Y. Wu, T. Li, L. Zhang, L. Pei, L. Xu, C. Li, C. Ma, C. Xu, S. Shen, et al. “An efficient spatial-temporal trajectory planner for autonomous vehicles in unstructured environments”. In: IEEE Transac-tions on Intelligent Transportation Systems 25.2 (2023), pp. 1797–1814. [70] Y. Hao, A. Davari, and A. Manesh. “Differential flatness-based tra-jectory planning for multiple unmanned aerial vehicles using mixed-integer linear programming”. In: American Control Conference . 2005, pp. 104–109. [71] M. N. Vu, M. Schwegel, C. Hartl-Nesic, and A. Kugi. “Sampling-based trajectory (re) planning for differentially flat systems: Application to a 3D gantry crane”. In: IFAC-PapersOnLine 55.38 (2022), pp. 33–40. [72] B. Raveh, A. Enosh, and D. Halperin. “A little more, a lot better: Improving path quality by a path-merging algorithm”. In: IEEE Transactions on Robotics 27.2 (2011), pp. 365–371. [73] N. M. Amato and L. K. Dale. “Probabilistic roadmap methods are embarrassingly parallel”. In: IEEE International Conference on Robotics and Automation (ICRA) . Vol. 1. 1999, pp. 688–694. [74] J. Ichnowski and R. Alterovitz. “Parallel sampling-based motion plan-ning with superlinear speedup”. In: IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE. 2012, pp. 1206–1212. [75] S. A. Jacobs, K. Manavi, J. Burgos, J. Denny, S. Thomas, and N. M. Amato. “A scalable method for parallelizing sampling-based motion planning algorithms”. In: IEEE International Conference on Robotics and Automation . 2012, pp. 2529–2536. [76] P. Werner, R. Cheng, T. Stewart, R. Tedrake, and D. Rus. “Superfast Configuration-Space Convex Set Computation on GPUs for Online Motion Planning”. In: Robotics: Science and Systems . LosAngeles, CA, USA, 2025. [77] E. Plaku, K. E. Bekris, B. Y. Chen, A. M. Ladd, and L. E. Kavraki. “Sampling-based roadmap of trees for parallel motion planning”. In: 
+
+IEEE Transactions on Robotics 21.4 (2005), pp. 597–608. [78] N. Perrault, Q. H. Ho, and M. Lahijanian. “Kino-PAX: Highly Par-allel Kinodynamic Sampling-based Planner”. In: IEEE Robotics and Automation Letters (2025). 16 
+
+[79] M. Bhardwaj, B. Sundaralingam, A. Mousavian, N. D. Ratliff, D. Fox, F. Ramos, and B. Boots. “Storm: An integrated framework for fast joint-space model-predictive control for reactive manipulation”. In: 
+
+Conference on Robot Learning . PMLR. 2022, pp. 750–759. [80] A. Fishman, A. Murali, C. Eppner, B. Peele, B. Boots, and D. Fox. “Motion policy networks”. In: Conference on Robot Learning . PMLR. 2023, pp. 967–977. [81] A. T. Le, K. Hansel, J. Carvalho, J. Watson, J. Urain, A. Biess, G. Chalvatzaki, and J. Peters. “Global tensor motion planning”. In: IEEE Robotics and Automation Letters (2025). [82] A. T. Le, K. Nguyen, M. N. VU, J. Carvalho, and J. Peters. “Model Tensor Planning”. In: Transactions on Machine Learning Research 
+
+(2025). [83] B. Ichter, E. Schmerling, and M. Pavone. “Group Marching Tree: Sampling-Based Approximately Optimal Motion Planning on GPUs”. In: First IEEE International Conference on Robotic Computing (IRC) .2017, pp. 219–226. [84] T. S. Wilson, W. Thomason, Z. Kingston, L. E. Kavraki, and J. D. Gammell. “Nearest-Neighbourless Asymptotically Optimal Motion Planning with Fully Connected Informed Trees (FCIT*)”. In: IEEE International Conference on Robotics and Automation (ICRA) . 2025, pp. 14140–14146. [85] J. J. Kuffner and S. M. LaValle. “RRT-connect: An efficient approach to single-query path planning”. In: IEEE International Conference on Robotics and Automation (ICRA) . Vol. 2. 2000, pp. 995–1001. [86] L. E. Kavraki, P. Svestka, J. -C. Latombe, and M. H. Overmars. “Prob-abilistic roadmaps for path planning in high-dimensional configuration spaces”. In: IEEE transactions on Robotics and Automation 12.4 (2002), pp. 566–580. [87] D. Zhou and M. Schwager. “Vector field following for quadrotors using differential flatness”. In: IEEE International Conference on Robotics and Automation (ICRA) . 2014, pp. 6567–6572. [88] S. Liu, K. Mohta, N. Atanasov, and V. Kumar. “Search-Based Motion Planning for Aggressive Flight in SE(3)”. In: IEEE Robotics and Automation Letters 3.3 (2018), pp. 2439–2446. [89] E. Verriest and F. Lewis. “On the linear quadratic minimum-time problem”. In: IEEE Transactions on Automatic Control 36.7 (1991), pp. 859–863. [90] J. Nocedal and S. J. Wright. Numerical optimization . Springer, 1999. [91] C. Zhu, R. H. Byrd, P. Lu, and J. Nocedal. “Algorithm 778: L-BFGS-B: Fortran subroutines for large-scale bound-constrained optimization”. In: 
+
+ACM Trans. Math. Softw. 23.4 (1997), pp. 550–560. [92] K. B. Petersen, M. S. Pedersen, et al. “The matrix cookbook”. In: 
+
+Technical University of Denmark 7.15 (2008), p. 510. [93] R. Geraerts and M. H. Overmars. “Creating high-quality paths for motion planning”. In: The International Journal of Robotics Research 
+
+26.8 (2007), pp. 845–863. [94] K. Hauser and V. Ng-Thow-Hing. “Fast smoothing of manipulator trajectories using optimal bounded-acceleration shortcuts”. In: IEEE International Conference on Robotics and Automation . 2010, pp. 2493– 2498. [95] C. Chamzas, C. Quintero-Pe ˜na, Z. Kingston, A. Orthey, D. Rakita, M. Gleicher, M. Toussaint, and L. E. Kavraki. “MotionBenchMaker: A Tool to Generate and Benchmark Motion Planning Datasets”. In: IEEE Robotics and Automation Letters 7.2 (Apr. 2022), pp. 882–889. [96] W. Giernacki, M. Skwierczy ´nski, W. Witwicki, P. Wro ´nski, and P. Kozierski. “Crazyflie 2.0 quadrotor as a platform for research and education in robotics and control engineering”. In: International Conference on Methods and Models in Automation and Robotics (MMAR) . 2017, pp. 37–42. [97] I. A. S¸ ucan, M. Moll, and L. E. Kavraki. “The Open Motion Planning Library”. In: IEEE Robotics & Automation Magazine 19.4 (Dec. 2012). https://ompl.kavrakilab.org. [98] E. Coumans and Y. Bai. PyBullet, a Python module for physics simulation for games, robotics and machine learning . http://pybullet.org. 2021. [99] S. Karaman and E. Frazzoli. “Sampling-based algorithms for optimal motion planning”. In: The International Journal of Robotics Research 
+
+30.7 (2011), pp. 846–894.

@@ -6,79 +6,49 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-17
-- 运行时间：2026-03-17 19:39:22 UTC
+- 最新运行日期：2026-03-18
+- 运行时间：2026-03-18 19:46:27 UTC
 - 运行状态：成功
-- 本次总论文数：19
-- 精读区：9
-- 速读区：10
+- 本次总论文数：9
+- 精读区：5
+- 速读区：4
 
 ### 今日简报（AI）
-今日聚焦19篇机器人顶尖成果，深度拆解类人机器人平衡恢复与四足机器人地形感知技术。
-核心突破在于将经典控制原理植入强化学习，并实现仅靠本体感知即可在复杂地形安全穿梭。
-推荐关注多足机器人如何利用触觉天线与物理交互感知环境，这是提升野外作业能力的必读方向。
-- 详情：[/202603/17/README](/202603/17/README)
+今日聚焦人形机器人运动控制，深度解析了多接触全身轨迹优化与工业负载搬运技术。
+重点突破了动力学约束下的运动重定向，并实现了人形机器人在工业运输中的负载感知控制。
+建议关注人形机器人从实验室走向工业实战的进展，同时留意微型四足与视觉语言模型的新动态。
+- 详情：[/202603/18/README](/202603/18/README)
 
 ### 精读区论文标签
-1. [Embedding Classical Balance Control Principles in Reinforcement Learning for Humanoid Recovery](/202603/17/2603.08619v1-embedding-classical-balance-control-principles-in-reinforcement-learning-for-humanoid-recovery)  
+1. [Kinodynamic Motion Retargeting for Humanoid Locomotion via Multi-Contact Whole-Body Trajectory Optimization](/202603/18/2603.09956v1-kinodynamic-motion-retargeting-for-humanoid-locomotion-via-multi-contact-whole-body-trajectory-optimization)  
    标签：评分：10.0/10、query:robot
-   evidence：利用经典平衡指标进行人形机器人恢复的强化学习策略
-2. [Towards Terrain-Aware Safe Locomotion for Quadrupedal Robots Using Proprioceptive Sensing](/202603/17/2603.09585v1-towards-terrain-aware-safe-locomotion-for-quadrupedal-robots-using-proprioceptive-sensing)  
+   evidence：通过轨迹优化实现人形机器人运动的动力学运动重定向
+2. [Load-Aware Locomotion Control for Humanoid Robots in Industrial Transportation Tasks](/202603/18/2603.14308v1-load-aware-locomotion-control-for-humanoid-robots-in-industrial-transportation-tasks)  
    标签：评分：10.0/10、query:robot
-   evidence：四足机器人的地形感知状态估计与控制
-3. [Data-Driven Physics Embedded Dynamics with Predictive Control and Reinforcement Learning for Quadrupeds](/202603/17/2603.14333v1-data-driven-physics-embedded-dynamics-with-predictive-control-and-reinforcement-learning-for-quadrupeds)  
+   evidence：基于强化学习的人形机器人负载感知运动控制
+3. [ADAPT: Adaptive Dual-projection Architecture for Perceptive Traversal](/202603/18/2603.16328v1-adapt-adaptive-dual-projection-architecture-for-perceptive-traversal)  
    标签：评分：10.0/10、query:robot
-   evidence：四足机器人运动的预测控制与强化学习
-4. [VIP-Loco: A Visually Guided Infinite Horizon Planning Framework for Legged Locomotion](/202603/17/2603.14345v1-vip-loco-a-visually-guided-infinite-horizon-planning-framework-for-legged-locomotion)  
-   标签：评分：10.0/10、query:robot
-   evidence：足式机器人运动的视觉引导无限时界规划
-5. [CyboRacket: A Perception-to-Action Framework for Humanoid Racket Sports](/202603/17/2603.14605v1-cyboracket-a-perception-to-action-framework-for-humanoid-racket-sports)  
-   标签：评分：10.0/10、query:robot
-   evidence：人形机器人全身控制的感知到动作框架
-6. [Dual-Horizon Hybrid Internal Model for Low-Gravity Quadrupedal Jumping with Hardware-in-the-Loop Validation](/202603/17/2603.07999v1-dual-horizon-hybrid-internal-model-for-low-gravity-quadrupedal-jumping-with-hardware-in-the-loop-validation)  
-   标签：评分：9.0/10、query:robot
-   evidence：低重力环境下利用本体感受感知的四足跳跃
-7. [Proprioceptive Safe Active Navigation and Exploration for Planetary Environments](/202603/17/2603.08905v1-proprioceptive-safe-active-navigation-and-exploration-for-planetary-environments)  
-   标签：评分：9.0/10、query:robot
-   evidence：足式机器人感知地形属性用于导航规划
-8. [Energy Prediction on Sloping Ground for Quadruped Robots](/202603/17/2603.11963v1-energy-prediction-on-sloping-ground-for-quadruped-robots)  
-   标签：评分：9.0/10、query:robot
-   evidence：使用车载传感器的四足机器人运动能量模型
-9. [KiRAS: Keyframe Guided Self-Imitation for Robust and Adaptive Skill Learning in Quadruped Robots](/202603/17/2603.15179v1-kiras-keyframe-guided-self-imitation-for-robust-and-adaptive-skill-learning-in-quadruped-robots)  
-   标签：评分：9.0/10、query:robot
-   evidence：复杂地形下四足机器人技能学习的强化学习
+   evidence：复杂3D环境下具有自适应感知的敏捷类人机器人运动
+4. [Dynamic Modeling and Attitude Control of a Reaction-Wheel-Based Low-Gravity Bipedal Hopper](/202603/18/2603.10670v1-dynamic-modeling-and-attitude-control-of-a-reaction-wheel-based-low-gravity-bipedal-hopper)  
+   标签：评分：8.0/10、query:robot
+   evidence：双足跳跃运动的动力学建模与姿态控制
+5. [Learning Whole-Body Control for a Salamander Robot](/202603/18/2603.16683v1-learning-whole-body-control-for-a-salamander-robot)  
+   标签：评分：8.0/10、query:robot
+   evidence：两栖足式机器人全身控制的强化学习
 
 ### 速读区论文标签
-1. [A Robust Antenna Provides Tactile Feedback in a Multi-legged Robot](/202603/17/2603.07795v1-a-robust-antenna-provides-tactile-feedback-in-a-multi-legged-robot)  
-   标签：评分：8.0/10、query:robot
-   evidence：多足机器人在受限空间内的触觉反馈感知
-2. [Inverse Resistive Force Theory (I-RFT): Learning granular properties through robot-terrain physical interactions](/202603/17/2603.07796v1-inverse-resistive-force-theory-i-rft-learning-granular-properties-through-robot-terrain-physical-interactions)  
-   标签：评分：8.0/10、query:robot
-   evidence：通过机器人与地形的物理交互感知地形属性
-3. [Walking on Rough Terrain with Any Number of Legs](/202603/17/2603.09147v1-walking-on-rough-terrain-with-any-number-of-legs)  
-   标签：评分：8.0/10、query:robot
-   evidence：用于粗糙地形的多足机器人控制架构
-4. [STRIDE: Structured Lagrangian and Stochastic Residual Dynamics via Flow Matching](/202603/17/2603.08478v1-stride-structured-lagrangian-and-stochastic-residual-dynamics-via-flow-matching)  
+1. [MiNI-Q: A Miniature, Wire-Free Quadruped with Unbounded, Independently Actuated Leg Joints](/202603/18/2603.11537v1-mini-q-a-miniature-wire-free-quadruped-with-unbounded-independently-actuated-leg-joints)  
    标签：评分：7.0/10、query:robot
-   evidence：非结构化环境下用于规划和控制的动力学学习
-5. [STRIDE: Structured Lagrangian and Stochastic Residual Dynamics via Flow Matching](/202603/17/2603.08478v2-stride-structured-lagrangian-and-stochastic-residual-dynamics-via-flow-matching)  
+   evidence：具有无限制腿部关节的微型四足机器人，可实现多种运动
+2. [Perception-Aware Autonomous Exploration in Feature-Limited Environments](/202603/18/2603.15605v1-perception-aware-autonomous-exploration-in-feature-limited-environments)  
    标签：评分：7.0/10、query:robot
-   evidence：非结构化环境下用于规划的动力学学习
-6. [Perceptive Hierarchical-Task MPC for Sequential Mobile Manipulation in Unstructured Semi-Static Environments](/202603/17/2603.10227v1-perceptive-hierarchical-task-mpc-for-sequential-mobile-manipulation-in-unstructured-semi-static-environments)  
-   标签：评分：7.0/10、query:robot
-   evidence：半静态环境下的移动操作感知运动规划
-7. [OA-NBV: Occlusion-Aware Next-Best-View Planning for Human-Centered Active Perception on Mobile Robots](/202603/17/2603.11072v1-oa-nbv-occlusion-aware-next-best-view-planning-for-human-centered-active-perception-on-mobile-robots)  
-   标签：评分：7.0/10、query:robot
-   evidence：移动机器人的主动感知与视角规划
-8. [Perception-Aware Communication-Free Multi-UAV Coordination in the Wild](/202603/17/2603.08379v1-perception-aware-communication-free-multi-uav-coordination-in-the-wild)  
+   evidence：自主机器人的感知感知探索与状态估计
+3. [SaPaVe: Towards Active Perception and Manipulation in Vision-Language-Action Models for Robotics](/202603/18/2603.12193v1-sapave-towards-active-perception-and-manipulation-in-vision-language-action-models-for-robotics)  
    标签：评分：6.0/10、query:robot
-   evidence：复杂环境下的感知感知导航与SLAM
-9. [Provably Safe Trajectory Generation for Manipulators Under Motion and Environmental Uncertainties](/202603/17/2603.09083v1-provably-safe-trajectory-generation-for-manipulators-under-motion-and-environmental-uncertainties)  
+   evidence：机器人主动感知与语义相机控制
+4. [Ultrafast Sampling-based Kinodynamic Planning via Differential Flatness](/202603/18/2603.16059v1-ultrafast-sampling-based-kinodynamic-planning-via-differential-flatness)  
    标签：评分：6.0/10、query:robot
-   evidence：运动和环境不确定性下的安全轨迹生成
-10. [Decentralized Cooperative Localization for Multi-Robot Systems with Asynchronous Sensor Fusion](/202603/17/2603.12075v1-decentralized-cooperative-localization-for-multi-robot-systems-with-asynchronous-sensor-fusion)  
-   标签：评分：6.0/10、query:robot
-   evidence：分布式协作定位与状态估计
+   evidence：高自由度机器人的动力学约束规划与轨迹生成
 
 
 <div class="dpr-home-promo-card">
