@@ -1,0 +1,432 @@
+Title: SmoothTurn: Learning to Turn Smoothly for Agile Navigation with Quadrupedal Robots
+
+URL Source: https://arxiv.org/pdf/2603.12842v1
+
+Published Time: Mon, 16 Mar 2026 00:59:27 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# SmoothTurn: Learning to Turn Smoothly for Agile Navigation with Quadrupedal Robots 
+
+Zunzhi You, Haolan Guo, Yunke Wang, Chang Xu 
+
+Abstract — Quadrupedal robots show great potential for valu-able real-world applications such as fire rescue and industrial inspection. Such applications often require urgency and the ability to navigate agilely, which in turn demands the capability to change directions smoothly while running in high speed. Existing approaches for agile navigation typically learn a single-goal reaching policy by encouraging the robot to stay at the target position after reaching there. As a result, when the policy is used to reach sequential goals that require changing directions, it cannot anticipate upcoming maneuvers or maintain momentum across the switch of goals, thereby preventing the robot from fully exploiting its agility potential. In this work, we formulate the task as sequential local nav-igation, extending the single-goal-conditioned local navigation formulation in prior work. We then introduce SmoothTurn, a learning-based control framework that learns to turn smoothly while running rapidly for agile sequential local navigation. The framework adopts a novel sequential goal-reaching reward, an expanded observation space with a lookahead window for future goals, and an automatic goal curriculum that progressively expands the difficulty of sampled goal sequences based on the goal-reaching performance. The trained policy can be directly deployed on real quadrupedal robots with onboard sensors and computation. Both simulation and real-world empirical results show that SmoothTurn learns an agile locomotion policy that performs smooth turning across goals, with emergent behaviors such as controlling momentum when switching goals, facing towards the future goal in advance, and planning efficient paths. We have provided video demos of the learned motions in the supplementary materials. The source code and trained policies will be made available upon acceptance. 
+
+I. I NTRODUCTION 
+
+Legged robots can operate in environments where wheeled platforms often struggle, including stairs, debris, discontin-uous footholds, and uneven outdoor terrain. Quadrupedal robots are especially useful because they provide stable sup-port and can traverse complex terrain while carrying onboard sensing and computation [1]. Many target applications of quadrupedal robots are time-sensitive. For example, in fire rescue [2], rapid reconnaissance and response can reduce risk to firefighters and save more lives and property. Even in routine service scenarios such as hospital delivery or campus logistics, efficient navigation through sequences of waypoints is highly desirable. Achieving high speed in the real world requires more than fast straight-line locomotion. Navigation in buildings and cluttered spaces involves frequent direction changes to follow corridors, pass doorways, and maneuver around corners. These maneuvers can be viewed as reaching a sequence of goals. For example, when leaving the room through a  
+
+> *All authors are with School of Computer Science, University of Sydney.
+> Fig. 1. Composited images of SmoothTurn deployed on a Unitree Go2 performing agile navigation in an indoor office environment. The learned policy enables the robot to maintain momentum and high speed while executing turns rapidly through corridors and corners.
+
+doorway, one needs to first reach the doorway (the initial goal), and then change the direction to navigate to some-where outside the room (the subsequent goal). A stop-and-go behavior at each turn largely increases overall traversal time, while turning too aggressively without anticipation risks instability and falls. To date, most legged locomotion controllers are designed to track commanded base velocities [3]–[5]. This approach is effective for producing robust gaits, but it places the respon-sibility for when and how much to turn on an operator or an upstream navigation module that must generate velocity and yaw commands. More recently, goal-conditioned approaches learn local navigation by conditioning the policy on a target goal, reducing the need for manual velocity commands [6]– [8]. However, most existing formulations and evaluations focus on reaching a single terminal goal. They do not directly target the setting where the robot must traverse a sequence 
+
+of local goals at speed, where the primary challenge is the direction changing between successive goals. In this work, we formulate the sequential local navigation 
+
+task, in which the robot is given an ordered sequence of local goals and must reach the previous one before advancing to the next. Based on the task formulation, we propose 
+
+SmoothTurn , a learning-based control framework for ag-ile navigation through sequential goals. A primary training 
+
+> arXiv:2603.12842v1 [cs.RO] 13 Mar 2026
+
+objective is to overcome a common failure mode in existing goal-reaching methods: slowing down at each goal before proceeding to the next. To this end, we design a sequential goal-reaching reward that encourages continuous progress through the goal sequence. Moreover, since smooth turning requires anticipation, we augment the observation with a multi-goal lookahead window so that the policy conditions its actions on both the current goal and upcoming goals. We further use an automatic goal curriculum that progressively expands the difficulty of sampled goal sequences based on goal-reaching performance. We evaluate the learned policies on custom tracks designed to emphasize smooth turning and deploy them on a Unitree Go2 robot, demonstrating stable and efficient turning capability in both simulation and the real world. Beyond outperforming a single-goal baseline under standard reaching thresholds, SmoothTurn also adapts effectively to relaxed goal-reaching conditions, learning behaviors such as reorienting toward the next goal earlier and taking shorter paths to reduce traversal time. To summarize, our contributions include:  
+
+> •
+
+The formulation of the sequential local navigation task to evaluate the crucial ability to change direction smoothly during high-speed locomotion.  
+
+> •
+
+An RL framework with a novel sequential goal-reaching reward, lookahead observation space, and goal cur-riculum design to enable smooth turning across goal transitions.  
+
+> •
+
+Extensive validation in simulation and on a physical quadrupedal robot under both standard and relaxed goal-reaching conditions, showing that SmoothTurn achieves faster traversal with smoother transitions and more efficient paths. II. R ELATED WORK 
+
+A. Agile Legged Locomotion 
+
+Locomotion controllers for legged robots have been exten-sively studied and broadly fall into two categories: model-based and learning-based. Model-based methods optimize control actions using dynamic models [5], [9], [10]. They can produce stable and predictable behaviors, but often struggle under significant model inaccuracies or when extreme agility is demanded. Learning-based methods, in contrast, follow the reinforcement learning paradigm and train policies from experience in simulation [11], [12] or in the real world [13], [14]. These approaches have achieved robust locomotion on a wide range of terrains [3], [15], [16] and have also enabled more agile skills, such as obstacle traversal [4], [17], continuous jumping [18], [19] , and fall recovery [20], [21]. Several works consider skills closely related to our focus, namely high-speed running and turning. High forward speeds have been achieved using both model predictive control (MPC) [22], [23] and reinforcement learning [24]–[26], but these methods primarily aim to maximize straight-line speed rather than to handle changes of direction. Other works study maneuverability, including spinning in place [26], [27], twisting jumps [28], and turning while moving [29], [30]. Some of these methods exploit additional effectors, such as using a manipulator as a tail to manage angular momentum during turning [31], [32]. In these works, turning commands are typically provided externally (e.g., via human teleoperation or upstream planners), meaning the controller is not responsible for anticipating when and how sharply to turn. By contrast, our focus is on autonomous navigation where the policy must orchestrate turning behaviors given only sequences of positional goals. 
+
+B. Reaching Goals with Legged Robots 
+
+A critical motivation for legged locomotion research is to enable navigation in complex environments that demand agility. While many works focus on tracking a commanded base velocity [4], [5], recent methods learn goal-conditioned policies that drive the robot to a specified target pose in challenging settings. With carefully designed rewards and curricula, such policies can acquire agile behaviors for obstacle traversal [6], difficult terrain negotiation [7], [33], [34], collision avoidance [8], [35], and even ladder climb-ing [36]. These capabilities are realized either in an end-to-end fashion, or via hierarchical architectures where a planner provides local goals [37] or foothold plans [38] to a low-level locomotion controller. Despite this progress, existing navigation methods almost always only consider a single terminal goal and roughly forward-moving trajectories. A notable exception is RobotKeyframing [39], where the robot is conditioned on a sequence of poses or postures. However, this approach requires assigning precise timestamps to each intermediate target and penalizes deviations from the exact keyframe timings. It also focuses on generating diverse infilling behaviors through imitation learning, whereas our work focuses on a critical missing aspect of agile navigation: smoothly turning during high-speed running. This involves autonomously controlling its momentum and traversing the goal sequence with minimal time delays. III. S EQUENTIAL LOCAL NAVIGATION 
+
+In this section, we first review the single-goal local nav-igation formulation used in prior work [6], [8], then extend it to the sequential local navigation task where a robot must traverse an ordered sequence of goals. 
+
+A. Background: Single-Goal Local Navigation 
+
+Recent work on agile legged locomotion formulates the control problem as goal-conditioned local navigation [6]–[8]. Instead of tracking a commanded base velocity, the robot is given a target pose and must reach it within a fixed-length episode. We briefly review the formulation of [8], which serves as our baseline and starting point. 
+
+Observation and action spaces. The policy receives an observation ot consisting of proprioceptive states, goal com-mands, and the remaining episode time T − t. The propri-oceptive states include foot contact indicators c f ∈ { 0, 1}4,
+
+c f ∈ { 0, 1}4, base angular velocity ω ∈ R3, projected gravity in the base frame g ∈ R3, joint positions q ∈ R12 , joint velocities ˙ q ∈ R12 , and the previous action at−1 ∈ R12 . The Observations 
+
+Policy 
+
+Simulation 
+
+> Proprioception
+> Foot Contacts
+> Joint Positions
+> Angular Velocity
+
+Joint 
+
+Targets 
+
+Goal Sequence   
+
+> Goal 1
+> Goal 2
+
+PPO 
+
+Optimization 
+
+Goal Sampler  Command Updater 
+
+Goal Curriculum                
+
+> Δ𝜃 ∈−𝑐𝜋 ,𝑐𝜋
+> 𝑙 ∈1.5−1.5𝑐 ,2+2.5𝑐
+> 𝑐 ∈[0,1]controls the
+> curriculum progress
+> Goal -Reaching
+> Conditions
+> Goal commands
+> in robot base frame
+> (Δ𝑥 ,Δ𝑦 ,Δ𝜃 )
+> Projected Gravity
+> Projected Gravity
+
+Sequential Goal -
+
+Reaching Reward          
+
+> ൞
+> 𝑘 𝑡 +𝜌 𝜎 𝑔 𝑒 𝑡
+> 𝑁 ,𝑖𝑓 𝑘 𝑡 <𝑁
+> 1,𝑜𝑡ℎ𝑒𝑟𝑤𝑖𝑠𝑒
+> Previous Actions
+
+Lookahead 
+
+Commands         
+
+> 𝑔 𝑘 𝑡 ,…,𝑔 min 𝑘 𝑡 +𝑛 −1,𝑁
+> in robot base frame.
+> 𝑁 : Number of
+> total goals.
+> 𝑛 : Number of
+> goals in observation
+> Goal Sequence
+> Goal Index 𝑘 𝑡
+> Robot Pose
+
+Output:                       
+
+> 1∥𝒑 ∥<𝜖 𝑥𝑦
+> ∧Δ𝜃 <𝜖 𝜃
+> 2∥𝒑 ∥<𝜖 𝑥𝑦
+> +
+> ∧Δ𝜃 <𝜖 𝜃
+> +
+> ∧𝑣 <0.1m/s
+> ∧𝜔 <0.1rad/s Fig. 2. Overview of the SmoothTurn framework. The Goal Sampler generates a sequence of segment goals based on the curriculum. The Command Updater advances the goal index upon goal reaching and provides the pose of current and future goals in the robot base frame. The Policy takes the commands and proprioceptive states as input to output joint position targets.
+
+goal command Gc ∈ R3 encodes the relative position (∆x, ∆y)
+
+and heading ∆θ of the goal in the robot’s base frame. The action at ∈ R12 specifies the target joint positions. 
+
+Single-goal reward. The single-goal reward used in [6], [8] encourages the robot to reach and stay at the goal near the end of the episode. Its tracking terms share the following form: 
+
+rtrack = 11 + e 
+
+> σ
+> 2
+
+· 1(t > T − Tr)
+
+Tr
+
+, (1) where e is the tracking error (e.g., the Euclidean distance to the goal position, or the heading error), σ > 0 is a constant controlling the kernel’s sharpness, T is the total episode length, and Tr is a time threshold. The indicator function 
+
+1(t > T − Tr) restricts the reward strictly to the final Tr
+
+seconds of the episode, normalized by 1 /Tr.This design frees the robot from explicit velocity con-straints during earlier phases of the episode: it simply needs to arrive at the goal before T − Tr and remain there to maxi-mize the reward [6]. Additional task rewards (e.g., an agility bonus and a stall penalty) and regularizations (penalizing large torques, joint accelerations, etc.) complete the reward function. However, because the reward heavily prioritizes stable standing at the terminal goal, the policy is inherently incentivized to decelerate upon approach. Therefore, when such a policy is deployed for sequential navigation by instan-taneously updating the target upon reaching the current goal, this stop-and-go behavior persists, which will significantly increase traversal time and prevent the robot from performing smooth turns through direction changes. 
+
+B. Task Formulation 
+
+We extend the single-goal setting to sequential local navigation , where the robot must traverse an ordered goal sequence G = {g1, . . . , gN }.
+
+Goal indexing and switching. Let kt ∈ { 0, . . . , N} denote the number of goals already reached by time step t. If kt < N,the current goal is gkt +1. Once the reaching condition for 
+
+gkt +1 is satisfied, the counter increments by one (up to N). For goals defined by SE (2) poses, g = ( xg, yg, θg), the reaching condition is bounded by two thresholds: εxy for position and εθ for heading. Given the robot’s planar pose 
+
+(xt , yt , θt ) at time step t, the goal is reached if: 
+
+(xt , yt ) − (xg, yg) 2 < εxy ∧ wrap (θt − θg) < εθ , (2) where wrap (·) maps angles to (−π, π].In practice, we find that relying solely on this condition is brittle for existing single-goal-reaching methods. Without meticulous tuning, the thresholds are either too restrictive or too loose, causing the robot to stop near a goal without ever formally reaching it, or encouraging the robot to turn at high speeds, which often leads to falls (see Section V-B.1 for detailed analysis). To mitigate this, we introduce a supplementary reaching condition. This condition employs relaxed positional and heading thresholds ( ε+ 
+
+> xy
+
+and ε+ 
+
+> θ
+
+) but strictly triggers only when the robot is nearly stationary, defined by limits on its base planar linear velocity v and angular velocity ω:
+
+(xt , yt ) − (xg, yg) 2 < ε+ 
+
+> xy
+
+∧ wrap (θt − θg) < ε+
+
+> θ
+
+∧ v < 0.1 m/s ∧ ω < 0.1 rad/s . (3) IV. S MOOTH TURN : L EARNING TO TURN SMOOTHLY 
+
+A. Sequential Goal-Reaching Reward 
+
+As discussed in Section III-A, the single-goal reward (Eq. 1) trains the robot to decelerate, resulting in stop-and-go behavior when extended to sequential navigation. To overcome this, we design a sequential goal-reaching reward that drives the robot to progress continuously through the entire goal sequence without pausing at intermediate waypoints. 
+
+rseq  
+
+> t
+
+=
+
+
+
+kt + ρσg (et )
+
+N , if kt < N,
+
+1, otherwise. (4) Here ρσg (e) is a smooth kernel that approaches 1 as the error e approaches 0: 
+
+ρσg (e) = 11 +   e
+
+> σg
+
+2 , (5) where ρσθ (·) is a smooth kernel that approaches 1 as the error et diminishes to 0, and the multi-objective error et is defined as: 
+
+et = dxy + λθ ρσθ (dxy ) dθ . (6) Here, dxy = (xt , yt ) − (xg, yg) 2 and dθ = wrap (θt − θg) .The constant λθ weights the heading error, while ρσθ (dxy )
+
+dynamically down-weights this heading penalty when the robot is far from the target. This ensures the robot initially prioritizes closing the distance before making fine heading adjustments. Upon satisfying the reaching condition for the current goal 
+
+gkt +1, the index increments, and et is subsequently evaluated against the new goal. This reward structure intrinsically allocates 1 
+
+> N
+
+of the maximum reward to each goal in the sequence. It increases smoothly as the robot approaches its current objective and naturally avoids discontinuous drops upon goal switching, providing a dense and stable learning signal. 
+
+B. Goal Generation and Curriculum 
+
+Goal generation. During training, the Goal Sampler (Fig. 2) generates an episode goal sequence G = {g1, . . . , gN }. The first goal g1 is sampled relative to the robot start pose; each subsequent goal gi>1 is sampled relative to the previous goal pose. In the local reference frame, we first advance a 0.5 m pre-step along the reference heading to ensure forward motion and avoid degenerate near-goal cases. We then sample a signed turning offset ∆θ and a travel length ℓ
+
+from the active curriculum ranges, and set 
+
+θg = wrap (θref + ∆θ ), pg = pref + 0.5 h(θref ) + ℓ h(θg),
+
+(7) where (xref , yref , θref ) denotes the reference planar pose, 
+
+pref = ( xref , yref ) and pg = ( xg, yg), and h(θ ) = ( cos θ , sin θ ).
+
+Goal curriculum. We implement an automatic curriculum that rescales the sampling ranges of (∆θ , ℓ ) based on the goal-reaching success rate over a rolling window. Each reached goal counts as a success, whereas any remaining unreached goals at sequence termination are recorded as failures. Periodically, we update a scalar curriculum progress variable c ∈ [0, 1]: if the current success rate exceeds an expansion threshold (80%), we increase c to heighten dif-ficulty; if it drops below a contraction threshold (20%), we decrease c. We then linearly interpolate the sampling ranges between an easy regime (straight, short goals: ∆θ = 0, 
+
+ℓ ∈ [1.5, 2.0] m) and a hard regime (large turns with variable distances: ∆θ ∈ [−π, π], ℓ ∈ [0, 4.5] m). 
+
+C. Lookahead Command in Observation Space 
+
+Executing smooth, high-speed turns requires the ability to anticipate upcoming changes in direction. Instead of myopically conditioning the policy on a single active goal, we provide a short lookahead window of future goals. This allows the policy to proactively prepare for subsequent maneuvers before the current goal is explicitly completed. Based on the goal counter kt , the i-th goal in the lookahead window is defined as: ˆgt,i = gmin (kt +i+1, N), i ∈ { 0, . . . , n − 1}, (8) where n is the number of goals included in the observation. To maintain a constant observation dimension when fewer than n goals remain, we duplicate the final goal (e.g., after reaching gN−1, the lookahead window repeats gN ). This lookahead design elevates the learned behavior from sequential waypoint-tracking to trajectory-aware control. By observing upcoming goals, the policy learns to intelligently regulate momentum by maintaining speed, strategically de-celerating, or preemptively adjusting its heading when tol-erances permit, empowering it to execute highly agile and smooth turns. V. E XPERIMENTAL RESULTS 
+
+In this section, we demonstrate the effectiveness of the proposed method by comparing the performance on se-quential local navigation tasks in simulation and real-world experiments. 
+
+A. Implementation Details and Baseline Method 
+
+Observation and action spaces. Both policies use the same 47-dimensional proprioceptive backbone: filtered foot-contact indicators, base angular velocity, projected gravity in the base frame, joint positions, joint velocities, the previous action, and the normalized remaining episode time. The base-line appends one goal command Gc ∈ R3, while SmoothTurn appends the lookahead window of n goal commands defined in Eq. 8, each encoded as (∆x, ∆y, ∆θ ) in the robot base frame. The resulting observation dimension is 47 + 3n: 50 for the baseline and 53 for our main SmoothTurn model with 
+
+n = 2. The action at ∈ R12 specifies target joint positions tracked by a PD controller with gains Kp = 25, Kd = 0.6, and action scale 0 .25. 
+
+Reward function. The baseline uses the single-goal reward structure from [8], consisting of time-gated position and heading tracking terms (Eq. 1), forward-motion shaping, a near-goal standing term, a stall penalty, termination and collision penalties, and regularization terms on torques, joint velocities, joint accelerations, action rates, and body orientation. SmoothTurn replaces the single-goal tracking terms with the sequential goal-reaching reward rseq  
+
+> t
+
+(Eq. 4), removes the agility bonus and stall penalty (which are specific to the single-goal episode structure), and retains all regularization terms unchanged. 
+
+Network architecture and training. Both the actor and critic are multilayer perceptrons (MLPs) with hidden layers 
+
+[512 , 256 , 128 ] and ELU activations. All policies are trained with PPO [40] in the Isaac Gym [41] GPU-based simulator using the Unitree Go2 robot model on a single NVIDIA RTX 3060 GPU for 6000 iterations (approximately 2.5 hours), with 1280 parallel environments and 48 steps per environment per iteration. Domain randomization includes observation noise, friction randomization, added base mass, joint position biases, and randomized initial robot pose and velocity, following [8]. 
+
+Baseline and reaching thresholds. The baseline is trained with the same goal sampler and curriculum settings as SmoothTurn (see Section IV-B), and the curriculum progress 
+
+c reaches 1 before 1000 iterations, except that N is set to 1 as it is a single-goal policy and the reward encourages the robot to stay at the goal at the end of the episode (Eq. 1). During SmoothTurn’s training, the direct-switch threshold (εxy , εθ ) and the stop-switch threshold (ε+
+
+> xy
+
+, ε+ 
+
+> θ
+
+)
+
+are both set to 0 .1 m and π/36 to encourage the robot to get close to the goal before switching to the next. Since the baseline’s training does not involve goal switching, the reaching condition thresholds have no effect on its training process. 
+
+B. Simulation Experiments 1) Comparison with the Baseline: We evaluate the trained policies on four fixed goal sequences to test the smooth turning behavior and enable direct quantitative comparison. Each episode contains N = 3 goals with 3 m step length and a prescribed turning pattern: 60º clockwise, 90º counterclock-wise, 120º zigzag (first turn right, then turn left) , and 150º zigzag (first turn right, then turn left). Each evaluation run executes 512 parallel environments, and an environment is marked successful if all goals in the sequence are reached within a 10 s time limit; the finish time is computed only over successful episodes. We also report the fallen rate (FR) as the percentage of robots that fall down to the ground during the episode. Table 1 summarizes the performance comparison under 4 different threshold settings of the reaching conditions (see Section III-B). The baseline behaves differently under different threshold settings, while SmoothTurn achieves good performance across nearly all sequences under all threshold settings: ( i) When both thresholds are loose (0 .5, π/3), the baseline’s FR is high because the robot switches goals and changes directions before it gets very close to the goal and still running fast, making it highly unstable and susceptible to falling, especially when the turning angle is sharp. In contrast, SmoothTurn handles this scenario much better even though its highly unstable and susceptible to falling are much tighter (0 .1, π/36). ( ii ) When the direct-switch thresholds (εxy , εθ ) are tight (0 .1, π/36), but the stop-switch thresholds ( ε+
+
+> xy
+
+, ε+ 
+
+> θ
+
+) are loose (0 .5, π/3), the FR is low because the robot tends to come to a complete stop before switching goals, increasing total completion time due to a loss of momentum. Meanwhile, SmoothTurn uses much less time because it switches the goal directly when getting under the direct-switch threshold without slowing down and losing momentum at each goal. ( iii ) When the direct-switch thresholds are not too tight (0 .2, π/6), but the stop-switch thresholds are not loose enough (0 .2, π/6), the FR remains low, but the SR also drops significantly because the robot stops before it approaches the goal closely enough, meaning the reaching condition is never satisfied. On the other hand, SmoothTurn does not have this problem because it will get to the goal close enough to switch to the next goal. (iv ) Finally, with the proper threshold settings, the baseline achieves rather high SR and short completion time, but it still slows down before switching to the next goal, failing to perform smooth turning as SmoothTurn does. Figure 3 (a) and (b) visualizes the trajectories of the baseline and SmoothTurn colored by velocity magnitude with the goal sequence labeled by the blue arrows. It is shown that the baseline has to slow down near each goal, while SmoothTurn can maintain higher speed through successive turns and exhibits smoother transitions between goals. 
+
+2) Performance under Relaxed Goal-Reaching Condi-tions: In the formulation of the sequential local navigation task, the thresholds of the reaching conditions are set manu-ally and reflect the constraints of when a goal is considered to be reached, which can be varied depending on the application and the navigation environment. For example, when passing through a doorway, we generally do not care about the heading as long as the robot is close enough to the goal and able to get itself through. Or, the doorway could be wide enough that the robot can be 0.5 m away from the goal and still be able to pass through. Under such relaxed goal-reaching conditions, we expect the robot to pass through each goal more easily and com-plete the sequence faster. To test this, we train two more SmoothTurn policies under relaxed goal-reaching conditions: (1) SmoothTurn ( εθ = + ∞) with εxy and ε+ 
+
+> xy
+
+in training still set to 0.1 but εθ and ε+ 
+
+> θ
+
+set to +∞, meaning the heading error is not considered. The λθ in Eq. 6 is set to 0 to make the heading error not contribute to the reward. (2) SmoothTurn (εxy = 0.5) with εxy and ε+ 
+
+> xy
+
+set to 0.5 and εθ and ε+ 
+
+> θ
+
+set to 
+
++∞, meaning the distance threshold is largely relaxed from 0.1 in addition to the heading error being not considered. The λθ in Eq. 6 is also set to 0. Table 2 shows the completion time for the successful episodes on four goal sequences under the relaxed goal-reaching conditions (FR and SR are all near perfect and thus omitted for brevity). We can see that compared to SmoothTurn, SmoothTurn ( εθ = + ∞) learns to complete the goal sequence faster and SmoothTurn ( εxy = 0.5) achieves further improvement. With the trajectories shown in Figure 3 (c) and (d), we can learn how exactly the two variants achieve the better performance. Compared to SmoothTurn, SmoothTurn TABLE 1. Fallen rate (FR), success rate (SR), and completion time for the successful episodes on four goal sequences in simulation. Threshold settings for the reaching conditions are under the columns of (εxy , εθ )( ε+
+
+> xy
+
+, ε+ 
+
+> θ
+
+). Best results are highlighted in bold. 
+
+(εxy , εθ )(ε+
+
+> xy
+
+, ε+ 
+
+> θ
+
+) Policy 60° (CW) 90° (CCW) 120° (Zigzag) 150° (Zigzag) FR(%) SR(%) Time (s) FR(%) SR(%) Time (s) FR(%) SR(%) Time (s) FR(%) SR(%) Time (s) 
+
+(0.5, π/3)(0.5, π/3)
+
+Baseline 18.0 82.0 4.16 ± 0.13 42.6 57.4 4.57 ± 0.10 83.2 16.8 4.91 ± 0.23 93.9 6.1 5.06 ± 0.29 
+
+SmoothTurn 0.4 99.6 3.74 ± 0.08 0.2 99.8 4.03 ± 0.08 6.8 93.2 4.50 ± 0.12 10.7 89.3 4.43 ± 0.15 
+
+(0.1, π/36 )(0.5, π/3)
+
+Baseline 0.2 99.8 5.69 ± 0.37 5.3 94.7 5.82 ± 0.33 2.3 97.7 5.74 ± 0.28 13.9 86.1 5.87 ± 0.28 
+
+SmoothTurn 0.0 100.0 4.18 ± 0.09 0.2 99.8 4.44 ± 0.08 0.6 99.4 4.65 ± 0.08 0.2 99.8 4.80 ± 0.09 
+
+(0.2, π/6)(0.2, π/6)
+
+Baseline 1.0 30.1 4.60 ± 0.15 0.4 84.2 4.90 ± 0.29 8.2 42.6 5.17 ± 0.52 61.1 22.5 5.22 ± 0.21 
+
+SmoothTurn 0.0 100.0 4.04 ± 0.09 0.2 99.8 4.31 ± 0.08 0.4 99.6 4.63 ± 0.09 0.4 99.6 4.69 ± 0.10 
+
+(0.2, π/6)(0.5, π/3)
+
+Baseline 1.0 99.0 4.85 ± 0.23 1.6 98.4 4.96 ± 0.23 7.4 92.6 5.33 ± 0.29 62.3 37.5 5.29 ± 0.24 
+
+SmoothTurn 0.0 100.0 4.04 ± 0.09 0.2 99.8 4.31 ± 0.08 0.4 99.6 4.63 ± 0.10 0.4 99.6 4.70 ± 0.10 60 º (CW)  123      
+
+> Baseline
+> Start
+> 123
+> SmoothTurn
+> 123
+> SmoothTurn ( θ=∞)
+> 123
+> SmoothTurn ( xy = 0 .5)
+> 90 º (CCW)
+> 123
+> 123
+> 123
+> 123
+> 120 º (Zigzag)
+> 123
+> 123
+> 123
+> 123
+> 150 º (Zigzag)  123
+> 123
+> 123
+> 123
+> 0.00.51.01.52.02.53.03.54.0
+> Velocity Magnitude (m/s) (a) (b) (c) (d)
+
+Fig. 3. Example trajectories colored by the instantaneous base linear velocity magnitude (m/s) on the four goal sequences. The goals in the sequences are labeled by the blue arrows. 
+
+(εθ = + ∞) can pass through the goal while facing towards the next goal. Therefore, the robot wouldn’t have to travel additional distance past the previous goal before turning to the next goal, like the trajectory in (b) 90º (CCW) shows. Interestingly, when commanded on sharp turns like 150º (Zigzag), SmoothTurn (εθ = + ∞) actually has near-zero velocity at each goal, but since it faces towards the next goal when it reaches the current goal, it can move directly towards the next goal in a straight line, resulting in a shorter path than SmoothTurn and reduced completion time. Such optimal behaviors are autonomously learned by the policy without any manual guidance. Further, SmoothTurn ( εxy = 0.5) can finish the goal sequence faster by running a shorter, more efficient path compared to SmoothTurn and SmoothTurn (εθ = + ∞) as it can switch to the next goal as long as it is within 0.5 m away from the goal. It learns to move left or right in advance to the next goal to take a more direct path to finish the sequence in less time. Fig. 4 shows the motions of the SmoothTurn and its vari-
+
+TABLE 2. Time (s) used for the successful episodes on four goal sequences in simulation under relaxed goal-reaching conditions (cf. Table 1). For each policy column header, the last two lines correspond to (εxy , εθ ) and (ε+
+
+> xy
+
+, ε+ 
+
+> θ
+
+),respectively. Policy SmoothTurn SmoothTurn (εθ = + ∞)SmoothTurn (εxy = 0.5) 
+
+(εxy , εθ )(ε+
+
+> xy
+
+, ε+ 
+
+> θ
+
+)(0.2, π/6)(0.5, π/3)(0.2, +∞)(0.5, +∞)(0.5, +∞)(0.5, +∞)
+
+60º (CW) 4.04 ± 0.09 3.72 ± 0.07 3.40 ± 0.08 90º (CCW) 4.31 ± 0.08 3.93 ± 0.10 3.67 ± 0.09 120º (Zigzag) 4.63 ± 0.10 4.24 ± 0.10 3.93 ± 0.09 150º (Zigzag) 4.70 ± 0.10 4.49 ± 0.13 4.08 ± 0.11 
+
+ants under relaxed goal-reaching conditions when the robot is commanded to complete the 90º (CCW) goal sequence. Frame 1, 3, 4, 6, 7, 9 are the moments before they reach the current goal. We can observe and compare the behaviors of how they reach the goal differently under different reaching conditions. Fig. 4 also visualizes the instantaneous reward during one 90º (CCW) sequence rollout of SmoothTurn and its variants under relaxed goal-reaching conditions. The se-quential goal-reaching reward is the reward defined in Eq. 4 and it increases smoothly throughout the episode and remains continuous at goal switches, validating the proposed reward formulation provides a dense signal. Meanwhile, the total reward contains occasional sharp drops caused by auxiliary penalty terms. It is observed that SmoothTurn ( εθ = + ∞)experiences the fewest and least severe reward drops. while SmoothTurn ( εxy = 0.5) has the most. We hypothesize this is because it learns to orient itself toward the next goal before the switch occurs, meaning the new goal is consistently in front of the robot. This allows it to learn a highly stable gait. In contrast, the other variants face a much higher likelihood of direction discrepancy upon switching, leading to less stable maneuvers that incur intermittent penalties. 
+
+3) Lookahead Window Ablation: We ablate the lookahead window size n (Eq. 8) and the number of training goals per episode N on the four fixed sequences to understand their impact. Table 3 shows the FR and completion time (SR omitted for brevity as it is basically 100% − FR). Without lookahead (i.e., n=1), performance degrades substantially. This confirms that anticipating upcoming goals is essential for smooth turning. Comparing (N, n) = ( 2, 2) with (N, n) = Fig. 4. Reward curves of SmoothTurn and its variants under relaxed goal-reaching conditions when the robot is commanded to complete the 90º (CCW) goal sequence, with robots motions at some key moments labeled. Frames 1-3 are from SmoothTurn, frames 4-6 are from SmoothTurn (εθ = + ∞), frames 7-9 are from SmoothTurn ( εxy = 0.5). 
+
+(3, 3), we observe similar FR and completion time across all sequences, indicating that a single lookahead goal ( n=2) and two training goals per episode ( N=2) are sufficient. Increasing either parameter beyond 2 does not yield consis-tent improvements, while the minimal configuration reduces observation dimensionality and training complexity. 
+
+4) Goal Curriculum Ablation: When we disable the goal curriculum (Section IV-B) and train from the hardest goal range ( ∆θ ∈ [−π, π], ℓ ∈ [0, 4.5]) from the start, performance collapses across all goal sequences. Specifically, both the baseline and SmoothTurn frequently fall or get stuck before getting near the goal, achieving near-zero success rates on ev-ery sequence. This phenomenon indicates that progressively expanding goal difficulty is critical for learning stable turning behaviors; without curriculum, exploration is insufficient and training becomes stuck at failure. 
+
+C. Real-World Experiments 
+
+We deploy the trained policies from simulation on the Unitree Go2 quadrupedal robot for our real-world experi-ments. The robot is equipped with a Jetson Orin Nano for                                                                                                
+
+> TABLE 3. FR and completion time for the successful episodes on four fixed goal sequences in simulation for different lookahead window sizes n
+> and training goals per episode N. Each entry reports FR(%) and time (s, mean ±std) on separate lines. Goal sequence Metrics (N,n) = ( 2,1)(N,n) = ( 2,2)(N,n) = ( 3,3)
+> 60º (CW) FR(%) 0.0 0.0 0.0 Time (s) 6.05 ±0.25 4.04 ±0.09 3.96 ±0.09 90º (CCW) FR(%) 0.0 0.2 1.4 Time (s) 6.73 ±0.21 4.31 ±0.08 4.20 ±0.10 120º (Zigzag) FR(%) 0.4 0.4 4.1 Time (s) 6.38 ±0.23 4.63 ±0.10 4.56 ±0.10 150º (Zigzag) FR(%) 0.2 0.4 0.2 Time (s) 6.48 ±0.23 4.70 ±0.10 4.68 ±0.11 TABLE 4. Comparison of mean traversal time (s) of the baseline and SmoothTurn variants on four real-world turning tasks over 10 trials. Goal sequence Baseline SmoothTurn SmoothTurn
+> (εθ=∞)
+> SmoothTurn
+> (εxy =0.5)
+> 60 ◦(CW) 7.12 5.85 5.58 6.01 90 ◦(CCW) 7.14 5.98 5.68 5.30 120 ◦(Zigzag) 7.19 6.16 6.11 5.48 150 ◦(Zigzag) 7.72 6.82 7.21 6.36
+
+onboard computation. For odometry estimation, we adopt an invariant extended Kalman filter-based [42] codebase 1 to estimate the robot’s pose using onboard sensors including IMU, foot contacts, and joint positions. Table 4 shows the comparison of mean traversal time (s) on four goal sequences in the real world over 10 trials. The results demonstrate that SmoothTurn achieves better performance than the baseline in all four tasks, consistent with the simulation results. The robot motions of performing smooth turns by reaching sequential goals are shown in Figure 1 and the supplementary video. VI. C ONCLUSION 
+
+When deploying agile legged robots in the real world, straight-line speed is rarely the true bottleneck; the bottleneck lies in maneuvering. If a robot must decelerate and reorient itself at every waypoint, the advantage gained from sprinting in a straight line is entirely lost. In this work, we introduced SmoothTurn and evaluated its ability to navigate sequences of varying goals. By providing the policy with a lookahead window and a continuous sequential reward, the robot learns to orchestrate its momentum, proactively adjust its gait, begin turning before reaching a waypoint, and cut corners when tolerances allow. These behaviors were never explicitly rewarded; they arise because the sequential reward structure and lookahead observation create an optimization landscape where anticipatory motion is genuinely advantageous. Looking ahead, integrating SmoothTurn with global plan-ners and exteroceptive sensing (e.g., LiDAR or vision) would enable the policy to anticipate not only upcoming goals but also obstacles and terrain changes, bringing smooth, high-speed navigation closer to real-world deployment in cluttered and dynamic environments. 
+
+> 1https://github.com/inria-paris-robotics-lab/invariant-ekf
+
+REFERENCES [1] M. Tranzatto, T. Miki, M. Dharmadhikari, L. Bernreiter, M. Kulkarni, F. Mascarich, O. Andersson, S. Khattak, M. Hutter, R. Siegwart, et al. ,“Cerberus in the darpa subterranean challenge,” Science Robotics ,vol. 7, no. 66, p. eabp9742, 2022. [2] Unitree Robotics, “Quadruped robot fire rescue solutions,” https:// www.unitree.com/industry/fireRescue/, accessed: 2025-12-15. [3] T. Miki, J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning robust perceptive locomotion for quadrupedal robots in the wild,” Science robotics , vol. 7, no. 62, p. eabk2822, 2022. [4] Z. Zhuang, Z. Fu, J. Wang, C. G. Atkeson, S. Schwertfeger, C. Finn, and H. Zhao, “Robot parkour learning,” in Conference on Robot Learning . PMLR, 2023, pp. 73–92. [5] H. Xue, C. Pan, Z. Yi, G. Qu, and G. Shi, “Full-order sampling-based mpc for torque-level locomotion control via diffusion-style annealing,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025, pp. 4974–4981. [6] N. Rudin, D. Hoeller, M. Bjelonic, and M. Hutter, “Advanced skills by learning locomotion and local navigation end-to-end,” in IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) ,2022. [7] C. Zhang, N. Rudin, D. Hoeller, and M. Hutter, “Learning agile loco-motion on risky terrains,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2024, pp. 11 864– 11 871. [8] T. He, C. Zhang, W. Xiao, G. He, C. Liu, and G. Shi, “Agile but safe: Learning collision-free high-speed legged locomotion,” in Robotics: Science and Systems (RSS) , 2024. [9] R. Grandia, F. Jenelten, S. Yang, F. Farshidian, and M. Hutter, “Perceptive locomotion through nonlinear model-predictive control,” 
+
+IEEE Transactions on Robotics , vol. 39, no. 5, pp. 3402–3421, 2023. [10] J. Di Carlo, P. M. Wensing, B. Katz, G. Bledt, and S. Kim, “Dynamic locomotion in the mit cheetah 3 through convex model-predictive control,” in 2018 IEEE/RSJ international conference on intelligent robots and systems (IROS) . IEEE, 2018, pp. 1–9. [11] S. Ha, J. Lee, M. van de Panne, Z. Xie, W. Yu, and M. Khadiv, “Learning-based legged locomotion: State of the art and future per-spectives,” The International Journal of Robotics Research , 2025. [12] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk in minutes using massively parallel deep reinforcement learning,” in 
+
+Conference on robot learning . PMLR, 2022, pp. 91–100. [13] T. Haarnoja, S. Ha, A. Zhou, J. Tan, G. Tucker, and S. Levine, “Learning to walk via deep reinforcement learning,” arXiv preprint arXiv:1812.11103 , 2018. [14] L. Smith, Y. Cao, and S. Levine, “Grow your limits: Continuous improvement with real-world rl for robotic locomotion,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 10 829–10 836. [15] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning quadrupedal locomotion over challenging terrain,” Science Robotics , vol. 5, no. 47, p. eabc5986, 2020. [16] J. He, C. Zhang, F. Jenelten, R. Grandia, M. B¨ acher, and M. Hutter, “Attention-based map encoding for learning generalized legged loco-motion,” Science Robotics , vol. 10, no. 105, p. eadv3604, 2025. [17] X. Cheng, K. Shi, A. Agarwal, and D. Pathak, “Extreme parkour with legged robots,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 11 443–11 450. [18] Y. Yang, G. Shi, X. Meng, W. Yu, T. Zhang, J. Tan, and B. Boots, “Cajun: Continuous adaptive jumping using a learned centroidal controller,” in Conference on Robot Learning . PMLR, 2023, pp. 2791–2806. [19] Y. Yang, G. Shi, C. Lin, X. Meng, R. Scalise, M. G. Castro, W. Yu, T. Zhang, D. Zhao, J. Tan, et al. , “Agile continuous jumping in discontinuous terrains,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025, pp. 10 245–10 252. [20] Y. Ma, F. Farshidian, and M. Hutter, “Learning arm-assisted fall damage reduction and recovery for legged mobile manipulators,” in 
+
+2023 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2023, pp. 12 149–12 155. [21] Y. Wang, M. Xu, G. Shi, and D. Zhao, “Guardians as you fall: Active mode transition for safe falling,” in 2024 IEEE International Automated Vehicle Validation Conference (IAVVC) . IEEE, 2024, pp. 1–8. [22] H.-W. Park, P. M. Wensing, and S. Kim, “High-speed bounding with the mit cheetah 2: Control design and experiments,” The International Journal of Robotics Research , vol. 36, no. 2, pp. 167–192, 2017. [23] D. Kim, J. Di Carlo, B. Katz, G. Bledt, and S. Kim, “Highly dynamic quadruped locomotion via whole-body impulse control and model predictive control,” arXiv preprint arXiv:1909.06586 , 2019. [24] Y. Jin, X. Liu, Y. Shao, H. Wang, and W. Yang, “High-speed quadrupedal locomotion by imitation-relaxation reinforcement learn-ing,” Nature Machine Intelligence , vol. 4, no. 12, pp. 1198–1208, 2022. [25] G. Bellegarda, Y. Chen, Z. Liu, and Q. Nguyen, “Robust high-speed running for quadruped robots via deep reinforcement learning,” in 
+
+2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2022, pp. 10 364–10 370. [26] G. B. Margolis, G. Yang, K. Paigwar, T. Chen, and P. Agrawal, “Rapid locomotion via reinforcement learning,” The International Journal of Robotics Research , vol. 43, no. 4, pp. 572–587, 2024. [27] C. Mastalli, W. Merkt, G. Xin, J. Shim, M. Mistry, I. Havoutis, and S. Vijayakumar, “Agile maneuvers in legged robots: a predictive control approach,” arXiv preprint arXiv:2203.07554 , 2022. [28] Z. Zhou, B. Wingo, N. Boyd, S. Hutchinson, and Y. Zhao, “Momentum-aware trajectory optimization and control for agile quadrupedal locomotion,” IEEE Robotics and Automation Letters ,vol. 7, no. 3, pp. 7755–7762, 2022. [29] F. Yu, R. Batke, J. Dao, J. Hurst, K. Green, and A. Fern, “Dynamic bipedal turning through sim-to-real reinforcement learning,” in 2022 IEEE-RAS 21st International Conference on Humanoid Robots (Hu-manoids) . IEEE, 2022. [30] L. Han, Q. Zhu, J. Sheng, C. Zhang, T. Li, Y. Zhang, H. Zhang, Y. Liu, C. Zhou, R. Zhao, et al. , “Lifelike agility and play in quadrupedal robots using reinforcement learning and generative pre-trained models,” Nature Machine Intelligence , vol. 6, no. 7, pp. 787– 798, 2024. [31] H. Huang, A. Loquercio, A. Kumar, N. Thakkar, K. Goldberg, and J. Malik, “Manipulator as a tail: Promoting dynamic stability for legged locomotion,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 9712–9719. [32] I. Yang and J. Hwangbo, “Learning rapid turning, aerial reorientation, and balancing using manipulator as a tail,” in 2025 IEEE 21st Inter-national Conference on Automation Science and Engineering (CASE) .IEEE, 2025, pp. 165–170. [33] Z. Xu, A. H. Raj, X. Xiao, and P. Stone, “Dexterous legged locomotion in confined 3d spaces with reinforcement learning,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 11 474–11 480. [34] Z. Zhang, C. Li, T. Miki, and M. Hutter, “Motion priors reimagined: Adapting flat-terrain skills for complex quadruped mobility,” arXiv preprint arXiv:2505.16084 , 2025. [35] Y. Zhong, C. Zhang, T. He, and G. Shi, “Bridging adaptivity and safety: Learning agile collision-free locomotion across varied physics,” in 7th Annual Learning for Dynamics \& Control Conference . PMLR, 2025, pp. 1498–1511. [36] D. Vogel, R. Baines, J. Church, J. Lotzer, K. Werner, and M. Hutter, “Robust ladder climbing with a quadrupedal robot,” arXiv preprint arXiv:2409.17731 , 2024. [37] D. Hoeller, N. Rudin, D. Sako, and M. Hutter, “Anymal parkour: Learning agile navigation for quadrupedal robots,” Science Robotics ,vol. 9, no. 88, p. eadi7566, 2024. [38] H. Kim, H. Oh, J. Park, Y. Kim, D. Youm, M. Jung, M. Lee, and J. Hwangbo, “High-speed control and navigation for quadrupedal robots on complex and discrete terrain,” Science Robotics , vol. 10, no. 102, p. eads6192, 2025. [39] F. Zargarbashi, J. Cheng, D. Kang, R. Sumner, and S. Coros, “Robotkeyframing: Learning locomotion with high-level objectives via mixture of dense and sparse rewards,” in Conference on Robot Learning . PMLR, 2024. [40] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 , 2017. [41] V. Makoviychuk, L. Wawrzyniak, Y. Guo, M. Lu, K. Storey, M. Mack-lin, D. Hoeller, N. Rudin, A. Allshire, A. Handa, et al. , “Isaac gym: High performance gpu based physics simulation for robot learning,” in NeurIPS Datasets and Benchmarks , 2021. [42] A. Barrau and S. Bonnabel, “The invariant extended kalman filter as a stable observer,” IEEE Transactions on Automatic Control , vol. 62, no. 4, pp. 1797–1812, 2017.

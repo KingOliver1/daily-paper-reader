@@ -1,0 +1,648 @@
+Title: MorFiC: Fixing Value Miscalibration for Zero-Shot Quadruped Transfer
+
+URL Source: https://arxiv.org/pdf/2603.14554v1
+
+Published Time: Tue, 17 Mar 2026 06:21:54 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# MorFiC: Fixing Value Miscalibration for Zero-Shot Quadruped Transfer 
+
+Prakhar Mishra 1,∗, Amir Hossain Raj 2, Xuesu Xiao 2, and Dinesh Manocha 1
+
+> 1
+
+University of Maryland, College Park, MD, USA 
+
+> 2
+
+George Mason University, Fairfax, VA, USA 
+
+> ∗
+
+Collaborating Researcher; M.Eng. University of Maryland, 2023 
+
+Fig. 1. We present MorFiC , a reinforcement learning framework for cross-morphology locomotion that trains a single policy on one source quadruped and transfers it to other robots with different morphologies (e.g., different mass distributions, joint limits, and actuation constraints) without retraining, by improving how the value function generalizes under morphology shift using a morphology-aware FiLM-modulated critic. Real-world deployment on a Unitree Go1: MorFiC runs stably at ≈ 1.4–1.7 m/s without task-specific fine-tuning. Top two rows: representative Go1 roll-outs (indoor and outdoor). Third row: 
+
+push-disturbance recovery on Go1. Bottom row: Zero-shot deployment on Unitree Go2 (runs at ≈ 1.1–1.3 m/s) using the same trained policy weights. 
+
+Abstract —Generalizing learned locomotion policies across quadrupedal robots with different morphologies remain a chal-lenge. Policies trained on a single robot often break when deployed on embodiments with different mass distributions, kinematics, joint limits, or actuation constraints, forcing per-robot retraining. We present MorFiC, a reinforcement learning approach for zero-shot cross-morphology locomotion using asingle shared policy. MorFiC resolves a key failure mode in multi-morphology actor–critic training: a shared critic tends to average incompatible value targets across embodiments, yielding miscalibrated advantages. To address this, MorFiC conditions the critic via morphology-aware modulation driven by robot physical and control parameters, generating morphology-specific value estimates within a shared network. Trained with a single source robot with morphology randomization in simulation, MorFiC can transfer to unseen robots and surpasses morphology-conditioned PPO baselines by improving stable average speed and longest stable run on multiple targets, including speed gains of +16 .1% 
+
+on A1, ≈ 2× on Cheetah, and ≈ 5× on B1. We additionally show that MorFiC reduces the value-prediction error variance across morphologies and stabilizes the advantage estimates, demonstrat-ing that the improved value-function calibration corresponds to a stronger transfer performance. Finally, we demonstrate zero-shot deployment on two Unitree Go1 and Go2 robots without fine-tuning, indicating that critic-side conditioning is a practical approach for cross-morphology generalization. 
+
+I. I NTRODUCTION 
+
+Reinforcement learning has allowed quadrupedal robots to achieve agile and robust locomotion across a wide range of speeds, terrains, and disturbances. Using large-scale simulation and massively parallel training, recent methods have demon-strated behaviors that are difficult to obtain through classical model-based control alone [1, 2, 3]. Despite this progress, most of the learned locomotion policies remain tightly coupled to a single robot embodiment. Even within the same family of quadrupeds, policies trained on one platform often fail when deployed on another [4], substantially limiting policy reuse and increasing the deployment cost. Generalizing locomotion policies across robot morphologies is challenging because relatively small changes in physical structure, such as mass distribution, joint limits, or actuation capacity, can significantly alter the underlying dynamics [5]. Policies trained on a single robot tend to exploit morphology-specific regularities, which leads to brittle behavior when transferred to robots with different physical properties. Al-
+
+> arXiv:2603.14554v1 [cs.RO] 15 Mar 2026
+
+though domain randomization improves robustness to model-ing errors and facilitates sim-to-real transfer [6, 7, 8], it does not explicitly address systematic shifts in dynamics caused by morphology variation. As a result, policies often degrade sharply when evaluated in robots whose morphology lies near or beyond the boundary of the training distribution. A natural response to this limitation is to condition policies on explicit morphology descriptors, i.e., a vector of robot physical and control parameters (e.g., masses, joint limits, torque limits). Previous work has shown that providing phys-ical parameters or learned embodiment representations can enable a single policy to control multiple quadrupedal robots [9, 10, 11]. These approaches demonstrate that morphology-aware policies can generalize within a limited range of em-bodiments. However, in practice, reliable zero-shot transfer remains difficult, particularly for robots that differ substantially from those seen during training. In many cases, morphology-conditioned policies achieve conservative behavior or reduced performance in unseen robots, suggesting that conditioning alone is insufficient [12, 13]. We argue that this limitation arises not primarily from insufficient policy expressiveness but from miscalibrated value estimation (i.e., the model’s predicted long-term return for a given state, action and morphology) across morphologies. We argue that policy is not the only component which should generalize, value function must generalize first. In standard actor-critic methods such as PPO [14], a single critic is trained to approximate expected returns in all training environments. When multiple morphologies are present, the same state can correspond to fundamentally different future outcomes depending on the robot’s physical properties. For example, a state that is recoverable for a lightweight robot may correspond to imminent failure for a heavier one. A shared critic is there-fore forced to average incompatible value targets, inducing morphology-dependent bias in the value function. This bias propagates directly to the advantage estimates used for policy updates, destabilizing learning and disproportionately harming performance on edge-case morphologies [15]. 
+
+Main Results and Contributions: In this work, we intro-duce MorFiC , a Mor phology-Aware Fi LM Critic for zero-shot generalizable quadruped locomotion. Our key novelty in MorFiC lies in the way that morphology information is incorporated into the critic. Rather than concatenating the morphology parameters with the input of the critic, MorFiC conditions intermediate features of the critic using feature-wise linear modulation (FiLM) driven by latent learned morphology [16]. This architectural choice allows the critic to represent distinct morphology-specific value landscapes within a single shared network while avoiding destructive interference be-tween morphologies. By explicitly decoupling value estimation across robots, MorFiC directly corrects morphology-induced value bias and improves advantage calibration during training. MorFiC is trained using explicit morphology randomization over physically significant ranges, for example masses, inertia, and joint torque limits, applied to a single robot template in simulation. Crucially, the resulting improvements do not arise merely from exposure to more morphologies, but from more accurate and stable value estimation across them. This enables the policy to exploit the physical capabilities of each robot more effectively, resulting in higher achievable speeds on capable platforms and improved robustness on challenging or edge-case morphologies. We evaluate MorFiC on a diverse suite of quadrupedal robots, including Unitree Go1, Go2, A1, B1, and the MIT Mini Cheetah, and compare against standard PPO baselines, morphology-conditioned critics, and representative multi-robot locomotion methods. Across all platforms, MorFiC consis-tently achieves higher maximum forward speeds, higher task success rates, and stronger zero-shot transfer performance, particularly on robots that differ significantly from the train-ing morphology. We further demonstrate successful zero-shot deployment on a real Unitree Go1 robot without fine-tuning. Together, these results show that morphology-aware value learning, rather than increased policy complexity or online adaptation, is a critical and previously underexplored component for reliable cross-morphology locomotion. Our contributions are summarized as follows:  
+
+> •
+
+We identify morphology-dependent value bias as a key failure mode limiting zero-shot cross-morphology loco-motion.  
+
+> •
+
+We propose MorFiC, a FiLM-modulated critic architec-ture that enables morphology-specific value estimation within a single shared network.  
+
+> •
+
+We show that correcting value-function bias leads to higher maximum speed, improved stability, and better generalization compared to prior morphology-conditioned and multi-robot methods (Fig. 4 & Table IV).  
+
+> •
+
+We demonstrate strong zero-shot transfer across multiple quadrupedal robots in simulation and successful deploy-ment on real hardware using a single policy trained on one robot template. MorFiC achieves ≈ 1.4–1.7 m/s on Unitree Go1 and ≈ 1.1–1.3 m/s on Go2 robot. II. R ELATED WORK 
+
+A. Learning-Based Quadrupedal Locomotion 
+
+Reinforcement learning has enabled quadrupedal robots to achieve agile and robust locomotion, including high-speed running and disturbance recovery, both in simulation and on hardware [3, 2, 17]. These successes are largely driven by large-scale simulation and careful reward design, but typically assume a fixed robot embodiment during training. As a result, the learned policies are highly robot-specific and often fail when deployed on robots with different morphologies. In contrast, MorFiC explicitly targets cross-morphology gener-alization by addressing value-function errors that arise when training across varying robot dynamics. 
+
+B. Morphology-Conditioned and Multi-Robot Policies 
+
+Several recent works explore generalizing locomotion poli-cies across robot morphologies by conditioning on physical pa-rameters or learned embodiment representations. GenLoco [9], TABLE I MORPHOLOGY RANDOMIZATION RANGES USED DURING TRAINING . A LL PARAMETERS ARE SAMPLED INDEPENDENTLY FROM UNIFORM DISTRIBUTIONS .                              
+
+> Mass Joint limits Segment [kg] min [rad] max [rad]
+> Hip [0 .51 ,0.70] [−1.10 ,−0.80] [+0 .80 ,+1 .10]
+> Thigh [0 .63 ,1.15] [−1.65 ,−1.05] [+3 .49 ,+4 .05]
+> Calf [0 .06 ,0.17] [−2.72 ,−2.60] [−0.95 ,−0.78]
+> Foot [0 .00 ,0.06] ––Base [3 .30 ,6.92] ––
+
+Body Transformer [10], and ManyQuadrupeds [11] demon-strate that a single policy can control multiple quadrupedal robots when provided with morphology information. However, these approaches rely on shared critics and assume that value functions generalize across morphologies through conditioning alone. MorFiC departs from this assumption by explicitly con-ditioning the critic architecture itself, enabling morphology-specific value estimation and reducing interference between morphologies. This leads to improved zero-shot performance, particularly OOD robots. 
+
+C. Adaptation-Based Generalization 
+
+Another line of work addresses embodiment and dynamics variation through online adaptation or system identification. Rapid Motor Adaptation (RMA) and related methods infer latent dynamics from observation history and adapt the policy during deployment [18, 19]. Although effective, these ap-proaches introduce additional complexity of inference and rely on temporal adaptation. MorFiC instead improves generaliza-tion at training time by correcting value estimation across mor-phologies, achieving strong zero-shot transfer without online adaptation or recurrent policies. 
+
+D. Value Learning and Training Stability 
+
+Value-function accuracy is critical for stable actor-critic learning, yet its role in cross-morphology generalization has received limited attention in locomotion research. Previous work has shown that value misestimation can destabilize deep reinforcement learning [15], and recent studies high-light interference issues in shared critics in multiple tasks or environments [20]. MorFiC addresses this issue directly by identifying morphology-induced value bias and mitigating it through morphology-aware critic modulation, leading to more stable advantage estimates and improved policy optimization. 
+
+E. Sim-to-Real Transfer Across Morphologies 
+
+Sim-to-real transfer for legged locomotion is commonly based on domain randomization and robust policy learning [6, 7]. Recent work emphasizes the rapid deployment of RL policies on hardware [17]. MorFiC complements these approaches by showing that morphology-aware value learning improves not only sim-to-sim transfer across robots, but also zero-shot deployment on real hardware without fine-tuning. III. P RELIMINARIES 
+
+This section fixes notation and formalizes multi-morphology locomotion as a parameterized control problem. It then isolates how value estimation errors arise under morphology variation in advantage-based actor–critic training, motivating MorFiC in Section IV. 
+
+A. Zero-Shot Cross-Morphology Evaluation 
+
+We consider quadrupedal locomotion under morphology variation. Each robot embodiment is identified by a vector of morphology parameters m ∈ M encoding physical and control properties (for example, mass distribution, joint limits, actuator limits). Training is performed on a morphology distri-bution ptrain (m), while evaluation is performed on a holdout morphology m⋆ without additional training, fine-tuning, or online adaptation. We refer to this protocol as zero-shot cross-morphology evaluation [9, 18]. 
+
+B. Parameterized MDP for Multi-Morphology Locomotion 
+
+Locomotion across embodiments is modeled as a parame-terized Markov Decision Process: 
+
+M(m) = ⟨S , A, P m, r m, γ ⟩, (1) where S and A denote the state and action spaces, Pm is the morphology-dependent transition kernel, rm is the reward function and γ ∈ (0 , 1) is the discount factor. This formulation is closely related to contextual and hidden-parameter MDPs that model families of environments with shared structure but varying dynamics [21]. A common approach is to optimize a morphology-conditioned policy πθ (a | s, m ) by sampling 
+
+m ∼ ptrain (m) during simulation [22, 9]. IV. M OR FIC A PPROACH 
+
+MorFiC is a morphology-aware actor–critic framework for zero-shot cross-morphology locomotion. The starting point is the failure mode in Section III: under morphology ran-domization, a shared critic tends to average incompatible value targets, which distorts advantages and destabilizes policy improvement. MorFiC addresses this by (i) explicitly sampling morphology and control parameters during training, and (ii) conditioning the critic through feature-wise linear modulation (FiLM) driven by a latent learned morphology [16]. The resulting critic represents V (x, m ) more faithfully, improving advantage calibration and allowing stronger zero-shot transfer. 
+
+A. Value Interference Under Morphology Variation 
+
+Multi-morph training aggregates roll-outs collected under a range of morphologies m ∼ ptrain (m) and commonly fits a single critic using shared parameters. When identical inputs 
+
+xt correspond to different future outcomes under different morphologies, the value regression target becomes heteroge-neous across m. A shared critic then tends to represent an average over incompatible value targets, yielding morphology-dependent value bias. Fig. 2. Overview of MorFiC. First we sample morphology descriptor m ∼ p(m) and then apply it to the simulator (masses/inertia, joint limits/angles, torque limits, and PD/action scaling) to instantiate morphology-specific dynamics and generate roll-outs. After that we train a policy with PPO using a morphology latent z = f (m); the critic is FiLM modulated by z to predict a morphology conditioned value and improve advantage estimates. Deployment (right) runs the trained JIT modules (morph encoder and body network, with optional adaptation) with an LCM based state estimator and RC/command profile input. 
+
+Such interference effects are well-known in multi-task and multi-domain learning with shared networks [23], and have been observed empirically in multi-robot locomotion policies [11]. In actor–critic methods, this mismatch is particularly consequential because the critic defines the baseline used in (3). Small morphology-dependent value errors can flip the sign or scale of ˆAt, producing inconsistent updates across morphologies and brittle zero-shot behavior near the boundary of ptrain (m) (Fig. 3). This motivates conditioning the value pathway itself so that the critic can represent the morphology-specific return structure while retaining the efficiency of a single shared network. 
+
+B. Morphology Randomization and Episode Instantiation 
+
+At episode reset, each parallel environment samples amorphology m ∼ ptrain (m) and applies it to the simulator, thus defining the morphology-dependent dynamics Pm in (1). The sampled m is kept fixed throughout the episode so that each rollout corresponds to a coherent robot instance. This episode-consistent randomization follows standard practice for robustness and transfer [8, 7, 6]. In this work, we use a simulator-supported morphology vector m ∈ Rdm with parameters dm = 11 (for example, link and base masses, joint-limit ranges). Each component is independently normalized to [−1, 1] before being provided to the networks. 
+
+C. Morphology Latent Encoder 
+
+Rather than concatenating raw morphology parameters, MorFiC maps m to a learned latent representation 
+
+z = fψ (m), z ∈ Rdz ,
+
+using a lightweight MLP. The latent reduces scale mismatch across morphology dimensions and emphasizes morphology factors relevant for value learning. The same z is provided to both the actor and the critic. 
+
+D. FiLM-Modulated Critic 
+
+MorFiC conditions the critic by modulating intermediate critic features using FiLM [16]. Let the critic backbone com-pute features from the critic input stream xt := ( ot, h t, p t):
+
+h = gϕ(xt).
+
+A FiLM network maps z to affine feature-wise parameters 
+
+γ(z), β (z) = FiLM η (z),
+
+which produce modulated features; 
+
+˜h = γ(z) ⊙ h + β(z).
+
+The value function is then predicted as 
+
+Vϕ(xt, m ) = vϕ(˜h). (2) Compared to input concatenation, intermediate modulation allows the critic to represent a conditional family of value functions through morphology-dependent reparameterization of features, mitigating value interference across morphologies while retaining a single shared network. 
+
+E. Advantage-Based Actor–Critic Optimization 
+
+Policies are trained using advantage-based actor–critic methods, most commonly PPO [14]. Let ˆGt denote an empir-ical return estimate. PPO updates the policy using advantage estimates ˆAt = ˆGt − Vϕ(xt), (3) Fig. 3. Critic calibration and advantage stability under morphology shift. (a) Explained variance (EV) between bootstrapped returns and critic predictions across target robots; MorFiC maintains higher EV on out-of-distribution morphologies than PPO and morphology-to-policy baselines. (b) Advantage-noise proxy computed from the same rollouts; MorFiC reduces advantage noise on OOD robots, supporting the thesis that morphology-conditioned value calibration yields more stable updates and stronger zero-shot transfer. 
+
+where Vϕ is a function of the learned value. In practice, generalized advantage estimation is widely used to compute 
+
+ˆAt with a favorable bias–variance tradeoff [24]. Because the advantage weights the policy gradient, the systematic value error directly alters the direction and magnitude of policy updates [14]. 
+
+F. Policy and PPO Training Objective 
+
+The actor is conditioned on the same morphology latent and outputs actions as 
+
+at ∼ πθ (a | ot, z ).
+
+MorFiC is trained using standard PPO [14]. 
+
+rt(θ) = πθ (at | ot, z )
+
+πθold (at | ot, z ) .
+
+The clipped surrogate objective is 
+
+Lclip (θ) = Et
+
+h
+
+min  rt(θ) ˆAt, clip (rt(θ), 1 − ϵ, 1 + ϵ) ˆAt
+
+i
+
+,
+
+(4) where advantages are computed using the morphology-aware critic: 
+
+ˆAt = ˆGt − Vϕ(xt, m ). (5) The value function is trained by regression to returns (with optional value clipping as in PPO) [14]. In addition to condi-tioning, MorFiC does not alter PPO; the change is the critic parameterization in eqn. 2, which improves the advantage calibration across morphologies. 
+
+> TABLE II OBSERVATION STREAMS USED FOR POLICY AND VALUE LEARNING .
+
+Stream Signals Dim 
+
+ot [ v, ω, g proj , c, q − q0, ˙q, a t−1 ] 48 height grid (17 × 11) 187 
+
+ht {ot−k }15  
+
+> k=1
+
+15 × 48 
+
+pt [μfric , e, m base , ∆c, μ joint ] 18 
+
+zm morphology encoder output d = 11 
+
+G. Training and Evaluation Protocol 
+
+Each parallel environment samples the descriptor m at the reset, applies it to the simulator, and rolls out the policy condi-tioned on z = fψ (m). The same sampled m is passed through the morphology encoder and used consistently throughout the implementation. Training is performed on a single source robot template with morphology randomization applied to that template, while evaluation is conducted zero-shot on held-out robot morphologies m⋆ without retraining or hyperparameter tuning. V. E XPERIMENTAL SETUP 
+
+A. Tasks and Observation Space 
+
+For our MorFiC approach, we have considered command velocity tracking for locomotion. We have considered linear and angular velocity and sampled it from the range, and we ran a curriculum over the command range to increase difficulty. And the episode ends after the fall, collapses, or timeouts. For detailed observations (see Table II), Each training environment is applied with the 11D morph vector in the simulation to represent a diverse set of robot behaviors. MorFiC maps m to latent through the encoder z = E(m) and uses it to condition the critic via FiLM modulation. 
+
+B. Reward structure 
+
+Our reward structure is divided into three main categories: Task/Tracking, Penalties and stability shaping rewards, and the total reward sum is given by (6). 
+
+rt = X
+
+> i∈T
+
+wi r(i) 
+
+> t
+
+− X
+
+> j∈P
+
+wj p(j) 
+
+> t
+
++ X
+
+> k∈S
+
+wk s(k) 
+
+> t
+
+. (6) 
+
+Task/Tracking rewards encourage the robot to complete the commanded locomotion objective. Specifically, we tracked the commanded linear velocity and the angular velocity using exponential rewards. (Details in the Appendix) 
+
+Penalties are assigned as a way to discourage unsafe move-ment, which could lead to collisions, bad gait, or physically collapse(like jerks, jerky motions, base collision, joint limit violation, etc). For example, we penalize body collisions 
+
+pcol = X
+
+> b∈B
+
+1.(∥fb∥ > f min ) , (7) TABLE III 
+
+SOTA C OMPARISON . MOR FIC IS THE SINGLE TRAIN ROBOT WHICH HAS HIGHEST ZERO -SHOT GENERALIZATION COUNT WHILE HITTING ALL THE KEY ATTRIBUTES . ZS (N): ZERO -SHOT MORPH TRANSFER (NUMBER OF TEST MORPHS ). X-EMB : CROSS -EMBODIMENT TRANSFER . D OF: VARYING ACTION /OBS DIMENSIONS . M ORPH @TEST / H IST @TEST : REQUIRES MORPHOLOGY PARAMETERS OR HISTORY BUFFER AT TEST TIME . V ALUE -COND :
+
+> CONDITIONING APPLIED IN VALUE PATHWAY
+
+. R OBUST : SAFETY /ROBUSTNESS -FOCUSED EVALUATION . HW (N): REAL -ROBOT TESTS (COUNT ).                                                                                     
+
+> Paper Train Robots (N) Zero-shot (N) Cross-Embod Morph + DR Randomization Morph @test Hist @test Critic condition-ing Robust/Safety HW (N)
+> URMA [25] 16 ✓(2) ✓Morph + DR ✓×DescVec ✓✓(1) URMAv2 [26] 50 ✓(5) ✓Morph + DR ✓×DescVec ✓✓(3) LocoFormer [27] Large-scale ✓(10) ✓Morph ×✓Transformer ✓✓(4) ManyQuadrupeds [11] 16 ✓(3) ✓×✓××✓✓(2) GenLoco [9] Large-scale ✓(10) ✓Morph + DR ✓✓None ✓✓(3) BodyTransformer [10] 1×××✓×Transformer ×✓(1) RL2AC [28] 1××DR ×✓Latent z ✓✓(1) Emb. Scaling [29] 817 ✓(204) ✓Morph ×✓×✓✓(2)
+> MorFiC (Ours) 1✓(7) ✓Morph + DR ✓✓FiLM ✓✓(2)
+
+joint limit violations and is given by; 
+
+plim = X
+
+> i
+
+
+
+max(0 , q i − qmax  
+
+> i
+
+) + max  0, q min  
+
+> i
+
+− qi
+
+ 
+
+.
+
+(8) These help the robot in not deviating from the desired locomotion gait. 
+
+Stability Shaping. Motivated by our repeated failure on unseen morphologies, we introduce 3 lightweight stability re-wards namely upright stability, CoP stability, and feet-contact stability to reduce catastrophic tipping and improve recovery. 1) Upright stability. Encourages recovery from large pitch/tilt by penalizing deviation from projected gravity. 
+
+supright = exp − ∥gxy ∥2
+
+sin 2(θ0)
+
+!
+
+. (9) 2) Center-of-pressure (CoP) stability. Promotes balanced load distribution across the support polygon. 
+
+sCoP = exp 
+
+
+
+− ∥CoP − center ∥
+
+τ
+
+
+
+· 1( ncontact ≥ 2) .
+
+(10) 3) Feet-contact / stance-width stability. Penalize overly narrow instances during unstable locomotion (caused by large tilt or rapid movement when unstable). We gate this using eqns. 11, 12. 
+
+gate = 1 
+
+
+
+∥gxy ∥2 > η ∨ ∥ vxy ∥ > v th 
+
+
+
+, (11) and define 
+
+swidth = gate ·exp 
+
+
+
+− max(0 , w min − w)
+
+σw
+
+
+
++(1 −gate) .
+
+(12) In addition to these components, we include a small set of rewards adapted from earlier work [30]. All baselines were trained with the same reward , so as to clearly isolate the performance difference caused by the poor approximation of the value function. 
+
+C. Baseline Comparison 
+
+We have compared 4 variants of PPO under identical training conditions like reward structure, morphology, domain randomization, and neural networks parameters: 1) PPO: No morphology conditioning 2) Actor only: Actor receives z 3) Actor + Critic Both receive via concatenation to obser-vations 4) MorFiC (FiLM Critic: Actor gets z, but critic receives z via FiLM modulation). In addition to analysis of PPO variants, we have also included recent work on morphology generalization and cross embodied locomotion URMA and URMAv2, LocoFormer, ManyQuadrupeds, GenLoco, BodyTransformer, RL2AC, and Embodiment Scaling Laws [25, 26, 27, 11, 9, 10, 28, 29] (Table III & IV). 
+
+D. Metrics 
+
+We utilized the following key metrics to measure the performance, stability, and speed of MorFiC trained policy. 
+
+1) Max forward speed ¯v (m/s): We measured the maximum stable forward velocity without tipping or falling on a given command velocity vcmd , which was 1, 2, 2.5 m/s. 
+
+2) Stable speed window Twin : : It is defined as the duration for which the robot runs at ¯v without any tripping or falling. 
+
+3) Fall free duration Tmax : : It’s longest fall free duration for the given command velocity. 
+
+Normalized morphology distance. To analyze how transfer performance degrades with morphology shift, we have defined the normalized distance d ∈ [0 , 1] between target robot and training robot based on the 11-D morphology descriptor selected from Table I. We compute 
+
+d = ∥ ˜mtarget − ˜mtrain ∥2 . (13) We use this for transfer loss analysis and not for training (refer to Fig. 5). TABLE IV                         
+
+> ZERO -SHOT CROSS -ROBOT TRANSFER .TRAINING ON GO2; M OR FICACHIEVES BEST STABLE SPEED ON ALL 6ROBOTS ,IMPROVING ¯v0.26 M/S OVER STRONGEST BASELINES WHILE MAINTAINING A HIGH Tmax ;EVALUATION IS ZERO -SHOT ON ALL OTHER ROBOTS . W E REPORT STABLE AVERAGE SPEED
+> ¯v(M/S)↑,THE EVALUATION WINDOW USED Twin (S), AND THE LONGEST STABLE RUN Tmax (S)↑.BOLD DENOTES THE BEST VALUE per target robot .
+
+Target robot PPO 1 (vanilla) PPO 2 (Actor Only) PPO 3 (Actor + Critic) MorFiC 
+
+¯v ↑ Twin Tmax ↑ ¯v ↑ Twin Tmax ↑ ¯v ↑ Twin Tmax ↑ ¯v ↑ Twin Tmax ↑
+
+(m/s) (s) (s) (m/s) (s) (s) (m/s) (s) (s) (m/s) (s) (s) Go2 † 1.942 3.00 18.96 1.311 3.000 8.884 2.174 3.000 20.028 1.911 3.00 20.03 
+
+Go1 2.103 3.00 19.00 1.478 3.000 20.028 2.100 3.000 20.028 2.171 3.00 20.03 
+
+A1 1.969 3.00 19.04 0.365 0.920 0.920 1.698 3.000 5.462 2.286 3.00 20.03 
+
+AlienGo 0.470 3.00 18.92 0.650 1.240 1.240 0.439 3.000 20.028 0.993 3.00 9.08 B1 0.047 1.60 0.60 0.039 1.661 1.661 0.049 3.000 5.028 0.245 0.72 4.72 Cheetah 0.325 3.00 18.38 0.037 0.380 0.380 0.595 3.000 4.182 1.193 3.00 20.03 
+
+ANYmal 0.043 2.64 2.64 0.173 0.500 0.500 0.300 3.000 2.885 0.364 3.00 5.18 
+
+> †Training morphology.
+
+E. Training Details 
+
+We simulate Unitree Go2 for MorFiC evaluation, using the robot’s respective URDF file in the simulated environ-ment (IsaacGym Simulator [31]). Each episode of simulation lasts for roughly 20 s with a total of 4000 parallel envi-ronments with a time-step of dt = 0.005. And, Commands  vcmd  
+
+> x
+
+, v cmd  
+
+> y
+
+, ω cmd 
+
+> z
+
+ are provided at the beginning of each episode. We have adapted our code mainly from open-source repositories [30, 3]. A total of 400 million time steps were used in simulation training utilizing a Nvidia RTX 4090 laptop-based GPU. (Refer to the Appendix) 
+
+Curriculum. For curriculum, we utilize command curricu-lum expanding the popular fixed-rule-based [17] and game-inspired curriculum [3] to gradually increase difficulty. We use a history-aware update rule using Recurrent neural network. This curriculum is identical across all baselines. 
+
+Domain Randomization. To improve robustness and sim-to-real transfer in our setting we have used domain random-ization [6] etc. and have randomized the following parameters joint friction, motor delays, sensor noise, etc. VI. R ESULTS 
+
+A. Zero-shot cross morphology transfer (Simulation) 
+
+We trained MorFiC on the single Unitree Go2 robot, with morphology randomization, and evaluated zero-shot on the other robots without any retraining or hyperparameter fine-tuning (Table IV). MorFiC is designed to improve transfer when there are poor critic value estimates. MorFic delivers the most consistent gain over the PPO variants in terms of speed ¯v and stability Tmax . Overall, MorFiC improves performance on the OOD robots Cheetah (reaches 1.193 m/s) and Aliengo (approximately 0.993 m/s) and has comparatively better performance than the baselines, indicating that the actor alone or concatenating z with both actor and critic is insufficient. Overall Table IV and Figure 5 demonstrate that FiLM based conditioning is substantially more robust than latent concatenation for OOD morphology distribution. 
+
+B. Why MorFiC works: Critic and Advantage miscalibration 
+
+One of the key reasons why transfer fails is that critic fails in value estimation for the OOD robots, which leads to miscalibrated advantage function and subsequently worse PPO updates leading to unstable transfer. As per Fig. 3, the PPO variants are more in accordance with the advantage noise and have poor value estimates, where MorFiC has much better value estimates and which in turn improves the quality of the advantage as ˆAt = ˆGt − Vϕ(xt, m ), leading to a more stable and generalizable policy. Figure 4 indicates that even if the instantaneous rewards are noisy, MorFic has smoother value estimates, which highlights MorFiC’s utility in value function estimate as morphology shift. 
+
+C. Robustness 
+
+To fully measure robustness, we relate the transfer loss with d (Fig. 5) as the normalized distances d increase (i.e. the target robot deviates from the training robot), there is a decrease in all PPO variants, but the MorFiC performance was still better and is maintained higher Tmax than other PPO variants. MorFic performs overall best on OOD morphology cheetah, where its inference is strongest (Table IV). 
+
+MorFiC vs previous Work. Table III identifies the two dominant ways to morphology generalization, which became popular recently. First, scaling i.e training on many robots or large models (eg. Transformers) [9] [27], [10]), which relies heavily on scale or compute. The second is a mixture of the intermediate number of robots and the test-time adaptation [25], [26], [28]. In contrast, MorFiC is single source (Train 1 robot) and deploys zero-shot on 7 target morphologies, including 2 real world deployment (Go1 & Go2), by directly addressing an underlying value function optimization issue under morphology shift. 
+
+D. Fairness (Parameters control) 
+
+In order to maintain the fairness of the evaluation, we kept all the necessary parameters like morphological and domain randomization parameters for the training robot, including all the PPO hyper-parameters, command curriculum ranges and Fig. 4. Above figure shows representative reward and value trajectories during deployment on the Go1 robot. The MorFiC produces smooth value estimates (orange) (second row) that track the expected discounted returns from noisy instantaneous rewards (green). While non-MorFic value estimates are noisy (first row), MorFiC’s morphology-conditioned critic maintains stable value predictions even on unseen morphologies.  
+
+> Fig. 5. From the above image, its clear that as the distance from the trained robot (Go2) increases there is decline in the performance but MorFiC still performs better than other variants of PPO significantly and also improved the generalization across OOD robots better than any other method.
+
+reward functions, latent dimensions the same across all the variants. The key difference is in how the morph information is passed between the different variants (Section V-C) VII. R EAL -R OBOT RESULTS 
+
+A. Hardware setup & Zero-shot hardware results 
+
+Hardware Deployment. We deploy MorFiC policy on two hardware platforms namely Go1 and Go2 using an onboard LCM stack for state estimation and actions. We deploy the final policy on robots without any finetuning, MorFiC reaches a nearly ≈ 1.4–1.7 m/s on Go1 robot over 10 trials with a success rate of over 80% while on Go2 robots it reaches roughly ≈ 1.1–1.3 m/s. We deployed the same go2 policy weights which we used for zero-shot evaluation in sim-transfer. 
+
+Training robot robustness. To test the sensitivity of train-ing morphology,we also train MorFiC on A1 robot and deploy zero-shot on both Go1 and Go2 robots. And the deployed policy reaches similar velocity ranges for both Go1 and Go2 robots with a success rate of 70%. 
+
+B. Failure Modes & Analysis 
+
+We have observed two categories of failures, System-level (generic) failure and Robot specific failures (Go2). The generic failures are mainly due to i) Latency and state-estimator drift, ii) Contact mismatch during runs (either foot slips or uneven gait). For robot specific failures, Go2 exhibits a reduced speed and also a higher failure rate under our current deployment pipeline. We have attributed those failures primarily due to observation mismatch or action scaling issues or aggressive safety layers on Go2 MorFiC reduces policy specific failure even in unseen zero-shot, for example, Go2 trained policy transfer to Go1 or A1 trained policy on both Go1 or Go2, remains functional, but system level constraints still reduce speed and trigger failures. VIII. A BLATIONS & L IMITATIONS 
+
+A. Ablations 
+
+Table IV isolates the key benefit of MorFiC vs. PPO variants: 1) Actor Only: Based on speed and Twin results indicate that its brittle and insufficient compared to PPO. 2) Concatenation helps in some case, for example. Actor + critic improves speed compared to PPO (0.595 vs 0.325 m/s), but still collapse after Tmax = 4.18 s. 3) FiLM critic is the robust choice for both in-family and OOD robots as it improves speed and stability (Cheetah 
+
+¯v= 1.193 m/s & Tmax = 20.03 s). 
+
+B. Limitations & Future work 
+
+One of the key limitations of our work is that MorFiC transfer success drops significantly on the extreme out of distribution morphology, for example Anymal robot, especially B1, as the incidents of tipping and falling increases and along with degraded speed or fail to sustain a stable posture. In addition to that, we currently study MorFic transfer on the quadrupeds and locomotion tasks only, we have not evaluated bipeds/humanoids. As an expansion of our work, we would like to extend MorFiC to bipedal and humanoid locomotion, in order to move towards an even better and more robust sin-gle source trained policy for various morphologies including bipedal and humanoids. IX. C ONCLUSION 
+
+We have studied the zero-shot cross morphology problem and found that transfer failure is strongly driven by the critic function miscalibration, leads to biased advantage, and ultimately leads to poor PPO updates. MorFiC addresses this by conditioning the critic function via FiLM and modulating by a learned morphology latent. By improving value function estimates, we can get better generalization results instead of focusing on a very high number of morphology mixes or using heavier networks like transformers. Based on our results (Table IV, supported by Figures 3-5), MorFic improves stability, speed, and OOD generalization better than any PPO variant while remaining highly competitive in family robot transfer and transfers zero-shot to 2 real robots (Go1 & Go2). REFERENCES 
+
+[1] J. Hwangbo, J. Lee, A. Dosovitskiy, D. Bellicoso, V. Tsounis, V. Koltun, and M. Hutter, “Learning agile and dynamic motor skills for legged robots,” Science Robotics , vol. 4, no. 26, 2019. [2] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning quadrupedal locomotion over chal-lenging terrain,” Science Robotics , vol. 5, no. 47, 2020. [3] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk in minutes using massively parallel deep rein-forcement learning,” in Conference on Robot Learning (CoRL) , 2022. [4] G. Pan, Q. Ben, Z. Yuan, G. Jiang, Y. Ji, S. Li, J. Pang, H. Liu, and H. Xu, “Roboduet: Learning a cooperative policy for whole-body legged loco-manipulation,” IEEE Robotics and Automation Letters , 2025. [5] S. Yang, Z. Fu, Z. Cao, G. Junde, P. Wensing, W. Zhang, and H. Chen, “Multi-loco: Unifying multi-embodiment legged locomotion via reinforcement learning augmented diffusion,” in Proceedings of the Conference on Robot Learning (CoRL) , 2025. [6] J. Tan, T. Zhang, E. Coumans, S. Ha, J. Geijtenbeek, and C. K. Liu, “Sim-to-real: Learning agile locomotion for quadruped robots,” in Robotics: Science and Systems (RSS) , 2018. [7] X. B. Peng, M. Andrychowicz, W. Zaremba, and P. Abbeel, “Sim-to-real transfer of robotic control with dynamics randomization,” in IEEE International Confer-ence on Robotics and Automation (ICRA) , 2018. [8] J. Tobin, R. Fong, A. Ray, J. Schneider, W. Zaremba, and P. Abbeel, “Domain randomization for transferring deep neural networks from simulation to the real world,” in 
+
+IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2017. [9] G. Feng, H. Zhang, Z. Li, X. B. Peng, A. Kanazawa, and S. Levine, “Genloco: Generalized locomotion con-trollers for quadrupedal robots,” in Conference on Robot Learning (CoRL) , 2023. [10] C. Sferrazza and L. Righetti, “Learning generalizable lo-comotion for quadrupedal robots with body transformer,” in Robotics: Science and Systems (RSS) , 2023. [11] S. Shafiee, G. Bellegarda, and A. Ijspeert, “Manyquadrupeds: Learning a single locomotion policy for diverse quadruped robots,” in IEEE International Conference on Robotics and Automation (ICRA) , 2024. [12] J. Hejna, A. Xie, P. Abbeel, A. D. Dragan, J. Gao, and D. Sadigh, “Hierarchically decoupled imitation for morphological transfer,” in Proceedings of the 37th In-ternational Conference on Machine Learning (ICML) .PMLR, 2020. [13] B. Trabucco, M. Phielipp, and G. Berseth, “Anymorph: Learning transferable policies by inferring agent mor-phology,” in Proceedings of the 39th International Con-ference on Machine Learning (ICML) . PMLR, 2022. [14] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” in International Conference on Learning Representations (ICLR) , 2017. [15] P. Henderson, R. Islam, P. Bachman, J. Pineau, D. Pre-cup, and D. Meger, “Deep reinforcement learning that matters,” in AAAI Conference on Artificial Intelligence ,2018. [16] E. Perez, F. Strub, H. De Vries, V. Dumoulin, and A. Courville, “Film: Visual reasoning with a general con-ditioning layer,” in Proceedings of the AAAI conference on artificial intelligence , vol. 32, no. 1, 2018. [17] G. B. Margolis, G.-Z. Yang, K. Paigwar, T. Chen, and P. Agrawal, “Rapid locomotion via reinforcement learn-ing,” The International Journal of Robotics Research ,vol. 43, no. 4, pp. 572–587, 2024. [18] A. Kumar, A. Agarwal, A. Singh, F. Ebert, Y. Duan, C. Finn, and S. Levine, “Learning to walk with rapid motor adaptation,” in Robotics: Science and Systems (RSS) , 2021. [19] H. Zhao, Y. Wang, and T. Chen, “Zero-shot learning for robust quadrupedal locomotion via recurrent rein-forcement learning,” in IEEE International Conference on Robotics and Automation (ICRA) , 2024. [20] S. Liu, D. Xu, and L. Pinto, “Understanding and mitigat-ing interference in multi-task reinforcement learning,” in 
+
+Conference on Robot Learning (CoRL) , 2023. [21] F. Doshi-Velez and G. Konidaris, “Hidden parameter markov decision processes: A semiparametric regression approach for discovering latent task parametrizations,” in 
+
+Proceedings of the 30th AAAI Conference on Artificial Intelligence (AAAI) , 2016. [22] A. Gupta, S. Savarese, S. Ganguli, and L. Fei-Fei, “Meta-morph: Learning universal controllers with transformers,” in International Conference on Learning Representations (ICLR) , 2022. [23] T. Yu et al. , “Gradient surgery for multi-task learning,” in NeurIPS , 2020. [24] J. Schulman et al. , “High-dimensional continuous control using generalized advantage estimation,” in ICLR , 2016. [25] N. Bohlinger, G. Czechmanowski, J. Peters, and D. Tateo, “One policy to run them all: An end-to-end learning ap-proach to multi-embodiment locomotion,” in Conference on Robot Learning (CoRL) , 2024. [26] N. Bohlinger and J. Peters, “Multi-embodiment locomo-tion at scale with extreme embodiment randomization,” 
+
+arXiv preprint arXiv:2509.02815 , 2025. [27] M. Liu, D. Pathak, and A. Agarwal, “Locoformer: Gen-eralist locomotion via long-context adaptation,” arXiv preprint arXiv:2509.23745 , 2025. [28] S. Lyu, X. Lang, H. Zhao, H. Zhang, P. Ding, and D. Wang, “Rl2ac: Reinforcement learning-based rapid online adaptive control for legged robot robust loco-motion,” in Proceedings of the Robotics: Science and Systems , 2024. [29] R. Doshi, H. Walke, O. Mees, S. Dasari, and S. Levine, “Scaling cross-embodied learning: One policy for ma-nipulation, navigation, locomotion and aviation,” arXiv preprint arXiv:2408.11812 , 2024. [30] G. B. Margolis and P. Agrawal, “Walk these ways: Tuning robot control for generalization with multiplicity of behavior,” in Conference on Robot Learning . PMLR, 2023, pp. 22–31. [31] V. Makoviychuk, L. Wawrzyniak, Y. Guo, M. Lu, K. Nguyen, M. Macklin, G. Lukamowicz, Y. State, J. Liang, J. Zhu et al. , “Isaac gym: High performance GPU-based physics simulation for robot learning,” arXiv preprint arXiv:2108.10470 , 2021. Term Definition Weight 
+
+rlin 4 exp 
+
+
+
+− ∥vcmd xy −vxy ∥2
+
+> σlin
+
+
+
+wlin 
+
+ryaw exp 
+
+
+
+− (ωcmd z −ωz )2
+
+> σyaw
+
+
+
+wyaw 
+
+pvz (vz )2 wvz
+
+pωxy ∥ωxy ∥2 wω
+
+pori ∥ˆgxy ∥2 wori 
+
+pτ ∥τ ∥2 wτ
+
+p¨q ˙qt−1− ˙qt
+
+> ∆t
+> 2
+
+w¨q
+
+p∆a ∥at−1 − at∥2 w∆a
+
+pcoll 
+
+P 
+
+> b∈B
+
+I(∥fb∥ > 0.1) wcoll 
+
+pjl 
+
+P
+
+> i
+
+(qi − qmin  
+
+> i
+
+)− + ( qi − qmax  
+
+> i
+
+)+
+
+ wjl 
+
+rupright exp 
+
+
+
+− ∥ˆgxy ∥2
+
+> sin 2(θ0)
+
+
+
+, θ 0=0 .3 wupright 
+
+rcop I(nc ≥ 2) exp 
+
+
+
+− ∥CoP −center ∥
+
+> τ
+
+
+
+, τ =0 .10 wcop 
+
+rwidth (yaw-frame) exp 
+
+
+
+− (wmin −w)+
+
+> σw
+
+
+
+(gated) wwidth 
+
+rgaitF − 14
+
+P
+
+> i
+
+(1 − di)  1 − exp( −f 2 
+
+> i
+
+/σ F ) wgaitF 
+
+rgaitV − 14
+
+P 
+
+> i
+
+di
+
+ 1 − exp( −∥ ˙xi∥2/σ V ) wgaitV 
+
+pslip 
+
+P 
+
+> i
+
+I(ci)∥ ˙xi,xy ∥2 wslip 
+
+pimpact 
+
+P 
+
+> i
+
+I(ci) clip ( ˙ zi,t −1, −100 , 0) 2 wimpact 
+
+pf
+
+P
+
+> i
+
+ ∥fi∥ − fmax 
+
+ 
+
+> +
+
+wf
+
+pq ∥q − q0∥2 wq
+
+p ˙q ∥ ˙q∥2 w ˙q
+
+rjump −(z − (hcmd + h0)) 2 wjump 
+
+rraibert ∥xdes f oot − xf oot ∥2 (body yaw frame) wraibert 
+
+TABLE V REWARD TERMS USED IN OUR MOR FIC LOCOMOTION OBJECTIVE . wk
+
+> ARE SET IN THE REWARD CONFIGURATION
+
+; FIXED SCALINGS APPEARING IN CODE (E.G., THE FACTOR 4 IN rLIN ) ARE SHOWN EXPLICITLY .
+
+APPENDIX AREWARD TERMS AND WEIGHTS 
+
+We shape our MorFiC rewards as a weighted sum of (i) command tracking terms for linear and angular velocities using exponential, (ii) stability rewards that encourage upright posture and dynamic balance via a center-of-pressure (CoP) proximity reward, (iii) gait/contact shaping terms that match desired contact schedules by penalizing unwanted swing forces and stance-phase foot velocities and a detailed definition and weights are given in Table V. APPENDIX BPPO + M OR FIC H YPERPARAMETERS 
+
+A. Policy and critic architectures 
+
+We use an actor–critic policy with separate MLP trunks for the actor and critic. Unless stated otherwise, all hidden layers use ELU activations. The actor and critic base networks each use hidden dimensions [512 , 256 , 128] and the policy outputs actions. For morphology conditioning, we encode the morphology vector m ∈ Rdm using a lightweight MorphologyEncoder 
+
+z = ϕ(m) implemented as a 2-layer MLP with ELU activa-tions. The critic is conditioned via FiLM modulation at each critic hidden layer, To ensure stable early training, the FiLM head is initialized to output near-zero modulation (final layer 
+
+PPO setting Value 
+
+Discount γ 0.99 GAE λ 0.95 Clip ϵ 0.2 Entropy coeff. 0.01 Value loss coeff. 1.0 Clipped value loss True Learning rate 1×10 −3
+
+Schedule adaptive (KL-targeted) Target KL 0.01 Epochs / update 5Mini-batches / update 4Grad norm clip 1.0 
+
+TABLE VI PPO HYPERPARAMETERS USED IN ALL BASELINE AND MOR FIC
+
+> EXPERIMENTS
+
+.
+
+Module Spec 
+
+Actor MLP [512, 256, 128], ELU Critic MLP trunk [512, 256, 128], ELU Init action std. σ0 1.0 MorphologyEncoder dm → 128 → 64 (ELU) FiLM per layer 64 → 128 → 2H (ELU) FiLM type residual: h ← h(1 + γ) + β
+
+FiLM init last layer weights,bias = 0 FiLM scale 0.1 Decoder disabled 
+
+TABLE VII POLICY /CRITIC ARCHITECTURE AND MORPHOLOGY -CONDITIONING DETAILS . H IS THE HIDDEN WIDTH OF THE MODULATED CRITIC LAYER .
+
+weights and biases set to zero), making the critic start close to the unconditioned baseline. We use a FiLM output scale of 
+
+0.1.
+
+B.2 PPO hyperparameters 
+
+We train with PPO using clipped objectives and a clipped value loss. We use discount γ = 0.99 , GAE parameter 
+
+λ = 0 .95 , clipping parameter ϵ = 0 .2, entropy coefficient 
+
+0.01 , value loss coefficient 1.0, and gradient norm clipping at 
+
+1.0. Optimization uses an adaptive learning rate schedule that targets KL divergence KL target = 0 .01 , with a base learning rate 10 −3. Each update uses 5 learning epochs and 4 mini-batches. APPENDIX C. D OMAIN RANDOMIZATION 
+
+We apply domain randomization during training to improve robustness and sim-to-real transfer. Randomization is applied periodically with the interval 10 s (rigid-body properties may be randomized after initialization). We randomize the prop-erties of contact with the ground by sampling the friction coefficient uniformly from [0 .5, 1.25] . We inject external disturbances by pushing the robot at fixed intervals of 15 swith a maximum planar push velocity of 1.0 m/s. To model actuation/communication delay, we randomize action latency using a history buffer of up to 6 timesteps (randomized lag timesteps enabled).

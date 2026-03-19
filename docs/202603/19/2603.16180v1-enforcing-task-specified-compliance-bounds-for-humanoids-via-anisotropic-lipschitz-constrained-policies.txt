@@ -1,0 +1,579 @@
+Title: Enforcing Task-Specified Compliance Bounds for Humanoids via Anisotropic Lipschitz-Constrained Policies
+
+URL Source: https://arxiv.org/pdf/2603.16180v1
+
+Published Time: Wed, 18 Mar 2026 00:43:20 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Enforcing Task-Specified Compliance Bounds for Humanoids via Anisotropic Lipschitz-Constrained Policies 
+
+Zewen He and Yoshihiko Nakamura 
+
+Abstract —Reinforcement learning (RL) has demonstrated sub-stantial potential for humanoid bipedal locomotion and the control of complex motions. To cope with oscillations and impacts induced by environmental interactions, compliant control is widely regarded as an effective remedy. However, the model-free nature of RL makes it difficult to impose task-specified 
+
+and quantitatively verifiable compliance objectives, and classi-cal model-based stiffness designs are not directly applicable. Lipschitz-Constrained Policies (LCP), which regularize the local sensitivity of a policy via gradient penalties, have recently been used to smooth humanoid motions. Nevertheless, existing LCP-based methods typically employ a single scalar Lipschitz budget and lack an explicit connection to physically meaningful compliance specifications in real-world systems. In this study, we propose an anisotropic Lipschitz-constrained policy (ALCP) that maps a task-space stiffness upper bound to a state-dependent Lipschitz-style constraint on the policy Jacobian. The resulting constraint is enforced during RL training via a hinge-squared spectral-norm penalty, preserving physical interpretability while enabling direction-dependent compliance. Experiments on hu-manoid robots show that ALCP improves locomotion stability and impact robustness, while reducing oscillations and energy usage. 
+
+I. I NTRODUCTION 
+
+Humanoid robots, owing to their human-like morphology, have long been regarded as a general-purpose form factor for enabling robots to truly integrate into human society. Since their inception, a core challenge for humanoid robots has been maintaining stability during interactions with the environment. On the one hand, humanoids inherently rely on bipedal locomotion, which is intrinsically less stable than fixed-base mechanisms; on the other hand, in practical ap-plications, robots must physically interact with the environ-ment and, potentially, with humans. Research efforts—from early simplified models [1], through whole-body model-based control (e.g., model predictive control) [2], to reinforcement learning (RL) policies [3]—have consistently revolved around this fundamental challenge. Although current RL-based control policies can satisfy the basic requirements of bipedal locomotion, their black-box nature makes it difficult to reliably enforce many specific and quantifiable objectives beyond “walk without falling” [3]. A representative example is task-specified compliant control, which is crucial for task performance and safety 
+
+The authors are with the Department of Robotics, Mohamed bin Zayed Uni-versity of Artificial Intelligence, Masdar City, Abu Dhabi, United Arab Emi-rates. {zewen.he, yoshihiko.nakamura }@mbzuai.ac.ae 
+
+(a) (b) (c) 
+
+> Fig. 1: Experimental video screenshots. (a) Hand-pulling experiment under the SILC method. (b) Hand impact experiment. A 2.5 kg weight is attached to the robot’s right hand via a rope and released from a certain height to generate an impact. (c) Stepping motion experiment. The robot’s one foot intermittently steps onto a foam pad placed on the ground, thereby introducing disturbances from uneven terrain.
+
+when humanoid robots execute practical manipulation or physical-interaction tasks. Using foot impact during stepping as an example, many RL locomotion pipelines mitigate un-desired transients by adding shaping penalties (e.g., on joint torques, accelerations, or action-rate changes), which can reduce impact-related behaviors [4]. While often effective, this reward-engineering strategy does not naturally yield an interpretable, analyzable compliance specification, and it can introduce objective coupling: the same penalty weights that improve smoothness or reduce impacts may also hinder task performance, requiring tedious retuning across domains [5]. To address the same issue, a broad range of approaches has been developed in classical model-based robot control [6], [7]. However, most of these methods rely purely on model-based theory and require sufficient hardware support (e.g., force sensors). For a long time, these methods and learning-based approaches progressed largely in parallel, with little connection between them, and thus cannot simultaneously benefit from the advantages offered by RL-based approaches. Motivated by this observation, recent studies have attempted to achieve compliant control within RL-based control frame-works. Section II-B of this paper reviews these efforts. Over-all, however, most existing studies effectively wrap model-based controllers around the RL framework, without explicitly observing the equivalent stiffness or analyzing the internal control behavior induced by the policy itself. Meanwhile, in RL-based methods, the use of simplified 
+
+> arXiv:2603.16180v1 [cs.RO] 17 Mar 2026
+
+dynamics and actuation models often biases the policy toward jittery behaviors, which can severely compromise stability in real-world experiments [5]. To mitigate this phenomenon, in addition to directly adding smoothness rewards [8] or a low-pass filter [9], introducing Lipschitz constraints to the policy training is considered a more effective approach, which is referred to as Lipschitz-constrained policies (LCP) [5], [10]. However, in existing LCP methods applied to humanoid robots, the Lipschitz constant is typically set as a scalar. More-over, in practical training, it is relaxed into a soft constraint or enforced only implicitly, which undermines its physical interpretability. Based on the above state of the art, this paper aims to start from quantitatively specified task compliance and, based on Lipschitz-constraint theory, enforce an equivalent stiffness constraint within an RL framework on humanoids. We propose a Stiffness-Induced Lipschitz Constrained (SILC) policy, which maps a prescribed stiffness upper-bound (in task or joint space) to an anisotropic Lipschitz budget on the policy Jacobian, and enforces it via a LCP-style regularization. In this study, we use Lipschitz-style regularization to denote Jacobian-norm penalties that cap a policy’s local sensitivity. Specifically, we first use kinematic relations to map the task-space stiffness constraint to a corresponding joint-space stiffness budget. We then combine this budget with the low-level control law to express it as a target Lipschitz-style constraint, which is incorporated into the loss function during RL training. Finally, in experiments (as shown in Fig. 1), by specifying different target task-space stiffness values, we achieve tunable compliance during whole-body learning-based control on a humanoid robot. The main contributions of this study are as follows: 1) By leveraging the Jacobian of the RL policy, we propose 
+
+policy-induced equivalent joint stiffness , which enables explicit observation of the system’s equivalent joint stiff-ness under an RL-based control framework; 2) We extend scalar Lipschitz-constrained policies to 
+
+anisotropic Lipschitz-constrained policies (ALCP) for RL training, and derive target ALCP budgets from task-space stiffness constraints, thereby endowing ALCP with a clear physical interpretation for the robotic system; 3) Experimental results demonstrate that the proposed ALCP enables both task-specified compliance and stable humanoid locomotion. II. B ACKGROUND 
+
+A. Learning-based Humanoid Control 
+
+In recent years, RL-based motion control for legged robots—particularly humanoid robots—has largely converged toward a well-established paradigm. Through appropriate re-ward design in RL, a humanoid robot’s basic stable gait can generally be ensured [11]. Furthermore, researchers have employed imitation-learning approaches (e.g., AMP [12]) to enable robots to mimic human motions while still maintain-ing their own stability. Meanwhile, research on humanoid robots has shifted from pure locomotion control toward loco-manipulation [13]. Whether in conventional locomotion con-trol or more complex loco-manipulation, the central challenges for humanoid robots remain unchanged: ensuring balance under a floating-base formulation and handling physically reasonable contacts with the environment. To address these issues within learning-based control, many classical model-based control components have been integrated into the frame-work, such as compliance control. 
+
+B. Compliant Control 
+
+Classical model-based compliant control has been stud-ied for many years, and it has also achieved substantial progress in the humanoid robotics community [6]. Recently, there has been a growing interest in integrating classical compliance control into RL-based humanoid robot control. A key challenge in this integration is how to preserve the physical interpretability of compliance while retaining the distinctive advantages of RL-based methods. In early work such as deep compliant control [14], compliance objectives were recast as admittance-like tracking targets and learned via imitation. This “admittance-to-reference” paradigm was later extended in [15], [16], where desired compliance is mapped to a target displacement (in task or joint space) and the policy is trained to track the resulting reference. In parallel, other studies embed model-based compliant control directly into RL, producing behavior closer to classical impedance control [17], [18]. The former integrates cleanly with RL but can blur the intended physical meaning of compliance under learning-based tracking, whereas the latter is physically intuitive yet may conflict with the learned policy (e.g., overly stiff low-level loops can induce oscillations). Finally, neither of the above two categories provides a way to observe the system’s overall compliance characteristics, which makes targeted compliance control considerably inconvenient. 
+
+C. Lipschitz Contunuity and Lipschitz-constrained Policies 1) Lipschitz continuity: Let (X , ∥ · ∥ X ) and (Y, ∥ · ∥ Y ) be normed spaces and f : X → Y be a function. We say that f
+
+is Lipschitz continuous if there exists a constant L ≥ 0 such that, for all x1, x2 ∈ X ,
+
+∥f (x1) − f (x2)∥Y ≤ L ∥x1 − x2∥X . (1) The smallest such L is called the Lipschitz constant of f ,denoted by Lip( f ). If f is differentiable, a common sufficient bound is 
+
+Lip( f ) ≤ sup 
+
+> x∈X
+
+∂f (x)
+
+∂x 2
+
+, (2) where ∥ · ∥ 2 denotes the spectral (operator) norm. 
+
+2) Lipschitz-Constrained policies (LCP): In reinforcement learning, a (deterministic) policy πθ : O → A maps an observation o ∈ O to an action a ∈ A . A policy is called 
+
+Lipschitz-constrained if its input–output sensitivity is bounded, i.e., there exists KLCP ≥ 0 such that 
+
+∥πθ (o1) − πθ (o2)∥2 ≤ KLCP ∥o1 − o2∥2, ∀ o1, o2 ∈ O .
+
+(3) Fig. 2: Control framework in reinforcement learning pipeline. 
+
+Equivalently, for differentiable policies, one can enforce a local Jacobian bound, 
+
+∂π θ (o)
+
+∂o 2
+
+≤ KLCP , ∀ o ∈ O , (4) or relax it using sample-based penalties during training. For stochastic policies πθ (a | o), Lipschitz constraints are often imposed via regularizing the norm of the input-gradient of the log-likelihood, ∥∇ o log πθ (a | o)∥. In several prior studies, LCP-based methods have been incorporated into RL training for humanoid robots; however, their primary objective is to mitigate motion oscillations, and they typically consider only an isotropic Lipschitz constraint [5], [10]. III. P ROBLEM STATEMENT 
+
+We consider a legged humanoid robot controlled by a hierarchical architecture. The low-level controller is a fixed joint-space PD position servo, while a high-level RL policy outputs joint position targets. Let q ∈ Rn and ˙q ∈ Rn
+
+denote joint positions and velocities, and let o ∈ O be the policy observation (e.g., full proprioception). The policy 
+
+qdes = πθ (o) produces desired joint positions, and the PD controller applies joint torques 
+
+τ = Kp(qdes − q) − Kd ˙q, (5) where Kp ≻ 0 and Kd ⪰ 0 are constant gain matrices (typically diagonal). This RL-based control framework can be schematically illustrated in Fig. 2. Let x ∈ Rm denote a task-space coordinate of interest (e.g., center of mass (CoM) position), with Jacobian Jx(q) ≜
+
+∂x/∂ q. In the neighborhood of a nominal motion, a task-space impedance law is commonly written as 
+
+f x = Kx
+
+ xdes − x − Dx ˙x, (6) where f x ∈ Rm is the task-space force, and Kx ⪰ 0, Dx ⪰ 0
+
+denote the task-space stiffness and damping, respectively. Here we consider that Kx and Dx are always symmetric positive semidefinite (PSD). The task-space stiffness matrix 
+
+Kx defines a stiffness ellipsoid with a positive constant c
+
+through the quadratic form 
+
+Ex(Kx, c ) ≜ δx ∈ Rm : δx⊤Kx δx ≤ c , (7) We are given a task-level stiffness budget Kmax  
+
+> x
+
+and require 
+
+Ex(Kmax  
+
+> x
+
+, c ) ⊆ Ex(Kx, c ), which means that the ellipsoid induced by Kmax  
+
+> x
+
+upper-bounds the allowable stiffness in every direction. In this work, Kmax  
+
+> x
+
+is set as a diagonal matrix.       
+
+> Fig. 3: Stiffness upper-bound derivation diagram. Kmax
+> xdenotes the task-space stiffness upper-bound ellipsoid, illustrated as the pink ellipsoid; Kmax
+> qdenotes the joint-space stiffness upper-bound super-ellipsoid, where individual joint stiffnesses are depicted as torsional springs; KLCP represents the Lipschitz upper-bound constraint.
+
+For a position task, Kmax  
+
+> x
+
+can be visualized as a spatial ellipsoid. We aim to learn parameters θ that maximize the expected re-turn under an RL objective while enforcing (or approximately enforcing) a Lipschitz constraint on the policy sensitivity: 
+
+max 
+
+θ E
+
+" TX
+
+> t=0
+
+γtr(st, at)
+
+#
+
+s.t. ∂π θ (ot)
+
+∂ot 2
+
+≤ KLCP , ∀t, 
+
+(8) where at = πθ (ot) and the constraint may be enforced either as a hard constraint or via a soft penalty during training. 
+
+Proposition 1 (Policy-induced equivalent joint stiffness ).
+
+Assume that the observation o contains the joint positions q
+
+and that πθ is differentiable with respect to q in a neigh-borhood of interest. Then, for small perturbations around a nominal state, the incremental torque response to joint-position perturbations satisfies 
+
+δτ = −Keq (o) δq + O
+
+
+
+[δq; δ ˙q] 2
+
+, (9) 
+
+where the policy-induced equivalent joint stiffness is given by 
+
+Keq (o) ≜ − ∂τ
+
+∂q ≈ Kp(I − αJπ (o)) , Jπ (o) ≜ ∂π θ (o)
+
+∂q .
+
+(10) 
+
+where α is the action scale of the policy. The derivation of 
+
+Keq is given by (5) and qdes = αat.
+
+Based on the above derivations, since it accounts for both the prescribed low-level stiffness and the policy’s intrinsic sensitivity, Keq provides a more comprehensive measure for observing compliance. Given a desired task-space stiffness upper bound Kmax  
+
+> x
+
+, our goal is to train a policy whose LCP-regularized local sensitiv-ity induces an effective joint stiffness Keq (o) consistent with the task-level specification. Formally, letting Kx(o) denote the task-space stiffness induced by Keq (o), we seek a training procedure such that 
+
+Kx(o) ⪯ Kmax  
+
+> x
+
+, (11) by appropriately choosing anisotropic Lipschitz budgets in the policy regularization. Following the above derivations, the procedure used in this paper to infer the target upper-bound of the LCP from the task-space stiffness is illustrated in Fig. 3. IV. M ETHODOLOGY 
+
+A. Anisotropic Lipschitz-Constrained Policies 1) Anisotropic LCP upper-bound: Building on the scalar upper-bound LCP introduced in Section II-C, we extend it to the anisotropic setting in this study. Accordingly, we define the following. 
+
+Definition 1 (Anisotropic Lipschitz constraint ). Let πθ :
+
+O → Rn be differentiable in o, with policy Jacobian Jπ (o).Given a matrix KLCP ∈ Rn×n, we say that πθ satisfies an 
+
+anisotropic Lipschitz constraint with budget KLCP on O if 
+
+Jπ (o)Jπ (o)⊤ ⪯ KLCP K⊤
+
+> LCP
+
+, ∀ o ∈ O . (12) Definition 1 specifies a matrix (anisotropic) generalization of the standard scalar Lipschitz bound in (4). Geometrically, 
+
+KLCP K⊤ 
+
+> LCP
+
+defines an output ellipsoid. Hence, KLCP acts as an anisotropic “Lipschitz budget” that shapes the direction-dependent sensitivity of the policy. When KLCP is chosen SPD, this can be written as 
+
+Jπ (o) Jπ (o)⊤ ⪯ K2LCP , ∀ o ∈ O . (13) 
+
+2) Spectral (max-eigenvalue) violation: Define the viola-tion as 
+
+vmax (o) ≜ λmax 
+
+ Jπ (o) Jπ (o)⊤ − K2LCP 
+
+ , (14) and penalize only positive violations: 
+
+Rmax lip (θ) = Eo∼D
+
+h vmax (o)2+
+
+i
+
+. (15) where we define the positive-part operator as x+ ≜ max( x, 0) 
+
+for any scalar x ∈ R. Accordingly, (vmax (o)) 2+ penalizes only constraint violations ( vmax (o) > 0) and is zero otherwise. This yields the unconstrained objective in the loss function 
+
+Ltotal = LRL + λlip Eo∼D
+
+h vmax (o)2+
+
+i
+
+. (16) 
+
+B. Joint-space Stiffness Upper-bound Ellipsoid 
+
+Let x = f (q) be a task-space variable with Jacobian 
+
+Jx(q) = ∂x/∂ q ∈ Rm×n. For clarity, we consider 
+
+anisotropic (matrix-valued) stiffness budgets specified by sym-metric positive-definite matrices Kmax  
+
+> x
+
+≻ 0.According to [19], the contact conditions of a humanoid robot can be categorized into single-support and double-support. In each contact mode, the support foot is assumed to be a fixed base (i.e., no relative slipping). In the single-support case, the relationship between task-space compliance 
+
+Cx and joint-space compliance Cq is 
+
+JxCq J⊤ 
+
+> x
+
+= Cx. (17) A general symmetric solution of (17) is 
+
+Cq = J♯xCxJ⊤♯x + ( Y − J♯xJxY J ⊤ 
+
+> x
+
+J⊤♯x ), (18) where Y is an arbitrary symmetric matrix for null-space compliance. Given a task-space stiffness upper bound Kmax  
+
+> x
+
+, (11) is equivalently expressed as the compliance lower-bound 
+
+Cx ⪰ Cmax  
+
+> x
+
+, (19) 
+
+Cmax  
+
+> x
+
+≜ (Kmax  
+
+> x
+
+)−1. (20) Using (17), a sufficient condition for (20) is to choose a joint-space compliance budget Cmax  
+
+> q
+
+such that 
+
+Jx Cmax  
+
+> q
+
+J⊤ 
+
+> x
+
+⪰ Cmax  
+
+> x
+
+, (21) Finally, defining Kmax  
+
+> q
+
+≜ (Cmax  
+
+> q
+
+)−1, and Kq ≜ C−1 
+
+> q
+
+as the joint stiffness matrix, we obtain the following sufficient joint-space condition: 
+
+Kq ⪯ Kmax  
+
+> q
+
+(22) which guarantees the task-space bound (11). In this study, we consider the joint-space stiffness Kq to be physically equivalent to Keq in (10): Kq = Keq .
+
+C. Anisotropic Lipschitz-Constrained Policies Based on Target Stiffness 1) Anisotropic upper-bound via an ellipsoidal metric in-duced by Kmax  
+
+> q
+
+: Let Kmax  
+
+> q
+
+∈ Rn×n be an arbitrary symmet-ric PSD matrix encoding an anisotropic closed-loop stiffness upper-bound. Assuming Kmax  
+
+> q
+
+≻ 0, we define the weighted norm induced by compliance Cmax  
+
+> q
+
+= ( Kmax  
+
+> q
+
+)−1:
+
+∥v∥Cmax 
+
+> q
+
+≜
+
+q
+
+v⊤(Kmax  
+
+> q
+
+)−1v. (23) We impose the following anisotropic gain constraint on torque perturbations: 
+
+∥δτ ∥Cmax 
+
+> q
+
+≤ ∥ δq∥2, ∀ δq ∈ Rn. (24) Here enforcing (24) for all δq ensures the closed-loop in-cremental torque response is bounded in every joint-space direction. Substituting (9) into (24) yields 
+
+∥Kp(I − αJπ ) δq∥Cmax 
+
+> q
+
+≤ ∥ δq∥2, ∀ δq. (25) 
+
+2) Reduction to a Lipschitz-style (spectral-norm) con-straint: Let Kmax  
+
+> q
+
+= LL ⊤ be a Cholesky factorization with 
+
+L invertible. Then 
+
+∥v∥Cmax 
+
+> q
+
+= ∥L−1v∥2. (26) Using (26), the constraint (25) is equivalent to 
+
+L−1Kp(I − αJπ ) 2 ≤ 1. (27) In this study, we define the constraint in (27) as Stiffness-Induced Lipschitz Constrained (SILC). Up to this point, we can observe that although SILC also imposes a Lipschitz-type constraint on the policy Jacobian, scalar LCP essentially con-strains the Jacobian matrix itself, whereas the SILC constrains the equivalent stiffness directly. Therefore, tightening scalar LCP can only drive the effective stiffness to asymptotically approach the underlying PD stiffness, whereas SILC can constrain the joint stiffness to lie below an arbitrary target upper bound—even lower than the stiffness of the low-level PD controller. 
+
+3) Training objective: Define the whitened Jacobian-like quantity 
+
+Aθ (o) ≜ L−1Kp(I − αJπ (o)) (28) A hinge-squared penalty that softly enforces (27) is 
+
+Raniso (θ) = Eo∼D
+
+h ∥Aθ (o)∥2 − 12+
+
+i
+
+, (29) where ∥ · ∥ 2 denotes the spectral norm (largest singular value), which can be approximated efficiently (e.g., via power iteration). Note that the stiffness upper-bound ellipsoid is not absolutely inviolable, we therefore still adopt a soft-constraint formulation. In addition, the spectral-norm penalty used in this context is still a form of gradient penalty rather than an SN-LCP [10]. The total training loss can be written as 
+
+Ltotal (θ) = LRL (θ) + λaniso Raniso (θ). (30) where λaniso is the weights of anisotropic Lipschitz loss. V. R EINFORCEMENT LEARNING SETUP 
+
+A. Baseline 
+
+This section describes the configuration of the RL training in Isaac Gym environment used in this work. For upper-body motion priors, we employ the AMASS dataset [20]. In the baseline, the network architecture and hyperparameter settings are kept consistent with those of FALCON [21]. Moreover, to enable a more direct comparison with the proposed method, we modify the baseline from the original work as follows. First, we augment the observation space with the contact phase and upper-body torque. Second, we reduce the weight of the regularization (joint velocity, acceleration, and torque) reward term by scaling it by a factor of 0.1. 
+
+B. Training Details 
+
+In this work, all training is conducted on a workstation running Ubuntu 22.04, equipped with an Intel Core i9-14900K CPU and an NVIDIA RTX 4080 GPU. The frequency of the policy output is 50 Hz. The action scale α is 0.25. The policy parameter θ are updated via proximal policy optimization (PPO) [22]. As in the baseline, the observation is constructed by stacking the states from the previous five time steps. However, when computing the equivalent stiffness, we use only the state from the previous time step to evaluate the policy Jacobian. For the introduced SILC loss term, its weight λaniso 
+
+is set to 0.5. To select the appropriate kinematic chain for computing the equivalent joint stiffness, we employ a finite-state machine (FSM) during training to determine whether the robot is in double-support, single-support, or a flight phase based on foot-contact detection. Because the foot contact force is privileged information that is required only during training, it does not pose a concern for deployment, where such measurements may be unavailable.               
+
+> TABLE I: CoM task and null-space stiffness setting in SILC method.
+> Mode CoM Stiffness Null-space Stiffness High-stiff [1000 ,1000 ,20000] 100 .0
+> Compliance [200 ,200 ,20000] 50 .0
+> Hard-nullspace [200 ,200 ,20000] 500 .0
+
+VI. E XPERIMENT 
+
+A. Experiment Setting 
+
+This section primarily evaluates the effect of SILC in both simulation and hardware experiments and compares it against the baseline and scalar LCP. We mainly compare the following approaches:  
+
+> •
+
+Baseline (without LCP) : similar as in FALCON [21], but without action jitter penalty.  
+
+> •
+
+Scalar LCP : set Lipschitz upper-bound as a scalar [10]: 
+
+∥Jθ (o)∥2 ≤ K2LCP , ∀ o ∈ O . (31) We set the Lipschitz constant KLCP values to 2.0 and weight λ = 0 .5. Empirically, this Lipschitz constant is already close to the minimum critical threshold; reducing 
+
+KLCP further would directly lead to control instability.  
+
+> •
+
+Task stiffness-induced anisotropic LCP : in this case, we set a task stiffness-induced Lipschitz upper-bound in the policy. We configured three modes, namely high-stiff ,
+
+compliance , and hard-nullspace . The specific stiffness settings are provided in Table I. λaniso is set to 0.5. To evaluate the performance of each approach, several metrics are used as follows. Beyond several commonly used evaluation criteria (e.g., joint torque, joint velocity), this paper follows [5] and introduces the following metric definitions: 1) Jitter (action, DoF velocity, torque): Let at ∈ Rn be the action vector at discrete time t, sampled with constant timestep ∆t:
+
+1
+
+T − 3
+
+> T
+
+X
+
+> t=4
+
+1
+
+n
+
+> n
+
+X
+
+> i=1
+
+at,i − 3at−1,i + 3 at−2,i − at−3,i 
+
+∆t3 .
+
+(32) To compute other jitters, one can simply replace a⋆ in (32) with ˙q⋆ or τ⋆, respectively. 2) Energy (absolute-mean): 
+
+1
+
+T
+
+> T
+
+X
+
+> t=1
+
+1
+
+n
+
+> n
+
+X
+
+> i=1
+
+|τt,i ˙qt,i | . (33) 3) Directional Quadratic-form Budget : We enforce the stiff-ness upper bound of (11) in a directional (quadratic-form) sense for any joint perturbation δq ∈ Rn:
+
+δq⊤Keq (o) δq ≤ δq⊤Kmax eq δq. (34) That is, the incremental elastic energy induced by Keq (o)
+
+is upper bounded by the budget ellipsoid defined by 
+
+Kmax q in every direction δq.4) High-frequency energy :
+
+X
+
+> i∈{ x,y,z }
+
+Z fN
+
+> f0
+
+Sxixi (f ) df, (35) where Sxixi (f ) is the power spectral density of i-th task position component, f0 is 5 Hz, and fN is 100 Hz. 5) Peak-to-peak (P95-P5) :
+
+P95 
+
+ s(t) − P5
+
+ s(t), (36) where s(t) denote a scalar trajectory signal of interest, and Pp(·) denotes the p-th percentile over the evaluation interval. 
+
+B. Simulation Results 
+
+In this subsection, all simulations are conducted on robot Unitree G1 in the Isaac Gym environment. 
+
+1) CoM Compliance in Stance Mode: In the double-support standing mode, we first enable only the CoM compliance task. In this experiment, we apply an external impulse (-150 N in 0.05 s) to G1’s pelvis link in x-direction while it is standing. Fig. 4 illustrates the CoM fluctuation trajectories under the compliance SILC and high-stiff SILC settings. It can be clearly seen from the figure that, under the same-magnitude impact, the CoM in the compliance case deviates and then returns to the initial equilibrium state. In contrast, in the high-stiff case, the CoM exhibits a larger deviation and does not return to its original position. We attribute this to the larger CoM compliance in the compliance case: the external impact induces a larger displacement, and subsequently, the policy prioritizing balance recovery sacrifices CoM tracking accuracy. This result indicates that, under the proposed SILC method, specifying different task-space stiffness constraints can induce distinct compliance behaviors in the robot. We also observe that the response behavior of scalar LCP is similar to that of high-stiff case. As discussed earlier, this Lipschitz constant is already the smallest value that preserves stability; however, it still cannot satisfy the requirement of high CoM compliance. This is mainly because the two kind of LCP are fundamentally different in essence as mentioned in Section IV-C2. 
+
+2) End-effector Compliance Under Constant Load: In this subsection, the G1 robot stands in double-support while its arms are set to maintain a default L-shape. A constant vertical external force (-40 N in z-axis) is applied to the robot’s left hand. We compared two cases both applying SILC but using different parameter settings. In both cases, CoM and null-space stiffness are the same as in the compliance case in Table I. While in the hard case, the hand task stiff-ness is [1000 , 1000 , 1000] ; in the soft case, hand stiffness is 
+
+[200 , 200 , 200] . Fig. 5 illustrates the z-direction displacement of the left hand during the application of the external force. By combining the displacement between the quasi-steady-state position and the initial position with the known external force, we estimate the measured equivalent task-space stiffness under the two control policies to be approximately 400 (compliance) and 1000 N/m (high-stiff), respectively. Compared with the          
+
+> Fig. 4: The x-direction CoM trajectory receiving an −x-direction impact (150 N in 0.05 s) on pelvis link. The red triangle indicates the time instant at which the impact is applied. Compared with the high-stiff mode—in which the CoM returns to its original state via a damped oscillatory response—the compliance mode exhibits more pronounced compliance, as evidenced by larger oscillation amplitudes and the lack of convergence back to the original state. Meanwhile, scalar LCP also exhibits similarly high stiffness to high-stiff mode.
+> Fig. 5: Hand displacement under different task-space compliance settings of SILC when a constant load (-40 N) is applied to the left hand. It can be observed that, in both cases, the hand displacement responds within a very short time ( <0.1 s). After the response settles, we compare the steady-state position with the initial position and, together with the applied external force, approximately estimate the equivalent task-space stiffness to be 400 (soft) and 1000 N/m (hard), respectively.
+
+setting compliance, this result demonstrates that the proposed SILC not only enforces stiffness constraints in fast transient responses, but also enables controllable compliance under quasi-static deformations induced by external forces. 
+
+3) Walking Motion: In this subsection, the robot switches between different supporting-cases by the FSM. We first evaluate the violations of the directional PSD budget as in Section VI-A during a stepping-in-place motion while the upper limbs track a random trajectory. In this evaluation, we randomly sample unit δq vectors along different DoFs to compute the PSD values as in (34). Fig. 6 illustrates the left-hand side and right-hand side values of (34). We can find that the measured value under SILC is strictly bounded by the budget; while under scalar LCP and baseline, the measured quadratic form periodically exceeds the calculated budget. We then sample random velocity commands for the robot across 1,024 environments. First, after training for a given number of iterations (14,000), the basic tracking rewards are very similar across all settings; we therefore treat this as a fair baseline for comparison. Then we measure the corresponding metrics over an episode, as summarized in Table II. The com-parison of all LCP variants with the baseline shows that the LCP methods yield noticeably smaller energy values and jitter (a) Proposed compliance SILC     
+
+> (b) Scalar LCP
+> (c) Baseline
+> Fig. 6: According to the definition of the Directional Quadratic-form Budget, at each control step we plot the left-hand side (LHS) and right-hand side (RHS) of (34), respectively (unit of quadratic form: N ·m·rad). The yellow curve corresponds to the RHS of the equation, i.e., the quadratic form under the target Kmax
+> q, whereas the blue curve corresponds to the LHS, i.e., the current quadratic form measured Kq(o). The red markers indicate instances where the measured value exceeds the target. As shown, under the SILC method, the measured value is strictly bounded by the target constraint; in contrast, under scalar LCP and baseline, the measured quadratic form periodically exceeds the target during the stepping gait.
+
+of action and torque, but a larger velocity jitter. We attribute this primarily to the fact that the LCP constrains the output stiffness at the policy-Jacobian level, thereby substantially suppressing the baseline’s tendency to achieve task tracking via high-frequency oscillations. Next, relative to the scalar LCP baseline, SILC methods reduce action jitter but increase energy consumption. By decomposing the metrics into upper-and lower-body, we find that this energy increase is driven primarily by the lower body, which also exhibits higher jitter under SILC. These results suggest that SILC attains compli-ance by reallocating effort to the lower body, partially trading motion smoothness for compliance—contrary to the common assumption that greater compliance lowers energy. Notably, SILC compliance is task-conditioned on simultaneously main-taining balance and tracking upper-body motion, making this trade-off reasonable. Consistently, a higher stiffness setting (high-stiff) can even reduce energy consumption. 
+
+C. Experiment Validation 
+
+In this subsection, we deploy the previously trained policy on the physical G1 robot. At first, we evaluate the hand compliance while the robot is standing, as shown in Fig. 1a. We then evaluate the control performance under a hand load. Specifically, we attach a 2.5 kg weight to the robot’s right hand using a rope and release it from a certain height (as shown Fig. 1b). The robot’s right hand is displaced by the external force and oscillates, and then converges to an equilibrium position. Table III summarizes the hand oscillation behavior under different policies. In the SILC situation, we applied the policy trained by SILC with the soft hand task setting as introduced in Section VI-B2. As shown in the table, the settling time under SILC is about half that of the baseline, and the high-frequency energy along the z-axis is nearly an order of magnitude lower. This indicates that the proposed SILC method effectively attenuates the oscillations induced by external impacts by increasing hand compliance. We also similarly set up a stepping motion and placed soft pads on the ground to emulate uneven terrain (as shown in Fig. 1c). During stepping, we recorded the IMU measurements, as shown in Table IV. As shown in the table, the SILC method (compliance setting) outperforms the baseline across all metrics, for both the RMS (root mean square) and peak-to-peak values. In particular, the gyroscope fluctuations under SILC are roughly half of those observed with the baseline. This result indicates that, compared with the baseline, the proposed SILC method reduces body-link oscillations during locomotion by increasing compliance. 
+
+D. Discussion 
+
+Combining the above theoretical derivations and the exper-imental results, imposing an ALCP on the state-dependent equivalent joint stiffness is typically considered to yield the following effects: 1) Equivalent compliance observer in RL framework. 
+
+Through the proposed policy-induced equivalent joint stiffness, the stiffness under a RL controller can be explicitly observed. This equivalent stiffness is neither simply the stiffness of the low-level controller nor the stiffness estimated from a task-space displacement–torque relationship; rather, it is the true effective stiffness derived from the policy’s inherent characteristics. 2) Adjustable compliance and impact robustness. In the proposed SILC method, the equivalent joint-stiffness con-straint is derived directly from the task-space specifica-tion. Therefore, task compliance budget can be tuned via the LCP formulation. Moreover, the experimental results confirm that both the transient and steady-state responses can be modulated using this approach, thereby enabling different robustness under external disturbances. 3) Smoother and more stable motion. Since the Lipschitz constraint limits the equivalent stiffness gain, the policy cannot react to small observation perturbations with ar-bitrarily large changes in action. In practical control, this property can mitigate the high-frequency jitter induced by the policy, improve motion stability, and also contribute to energy efficiency. TABLE II: Comparison of walking motion under random velocity command. (environment number: 1,024) 
+
+Action Jitter (×10 4) ↓ DoF Velocity Jitter [rad/s] (×10 5) ↓ Torque Jitter [Nm] (×10 5) ↓ Energy [J] ↓
+
+High-stiff SILC 3.08 ± 0.19 1.97 ± 0.17 4.89 ± 0.34 4.77 ± 3.07 
+
+Compliance SILC 3.19 ± 0.28 2.03 ± 0.28 5.04 ± 0.38 4.99 ± 5.17 
+
+Hard-nullspace SILC 3.03 ± 0.17 1.84 ± 0.16 4.80 ± 0.22 4.86 ± 4.47 
+
+Scalar LCP ( λ = 0 .5) 3.52 ± 7.00 1.74 ± 1.96 4.47 ± 5.01 5.09 ± 4.76 
+
+Baseline 4.13 ± 1.94 1.68 ± 0.51 5.35 ± 1.13 7.58 ± 10 .74 
+
+TABLE III: Metrics of the right hand z-direction trajectory oscillations under external impacts. 
+
+Settling time [s] ↓ High-frequency energy [J] ↓
+
+SILC (soft) 1.2 1.01 × 10 −8
+
+Baseline 2.4 10 .0 × 10 −8
+
+TABLE IV: IMU measurement in the stepping experiment. 
+
+RMS ↓ Peak-to-Peak (P95-P5) ↓
+
+Compliance Gyro. 0.247 0.726 
+
+SILC Acc. ( x and y) 3.885 12 .66 
+
+Baseline Gyro. 0.472 1.433 
+
+Acc. ( x and y) 4.859 13 .80 
+
+This work has three main limitations. First, although SILC updates its kinematic terms online, the task-space stiffness budget is not yet adjustable at runtime. Second, the current formulation constrains only the policy sensitivity to joint positions, so the induced equivalent stiffness is defined on a limited subspace and ignores other relevant state components (e.g., joint velocities, task-space states, or latent variables). Finally, we regulate stiffness only; the associated damping design and constraints are left for future work. VII. C ONCLUSION 
+
+This study proposes a Stiffness-Induced Lipschitz Con-strained (SILC) policy that transfers a task-specified stiffness upper-bound to an anisotropic Lipschitz budget on the policy Jacobian and enforces it via a Lipschitz constraint during training. Our method builds upon Lipschitz-constrained poli-cies (LCP), but extends the original scalar constraint to an anisotropic form and links it to task-specified compliance. With the proposed theoretical formulation, compliance during policy execution can be achieved by directly specifying an upper-bound on the task-space stiffness during RL training. REFERENCES [1] S. Kajita, F. Kanehiro, K. Kaneko, K. Fujiwara, K. Harada, K. Yokoi, and H. Hirukawa, “Biped walking pattern generation by using preview control of zero-moment point,” in 2003 IEEE international conference on robotics and automation (Cat. No. 03CH37422) , vol. 2. IEEE, 2003, pp. 1620–1626. [2] A. Escande, N. Mansard, and P.-B. Wieber, “Hierarchical quadratic programming: Fast online humanoid-robot motion generation,” The International Journal of Robotics Research , vol. 33, no. 7, pp. 1006– 1028, 2014. [3] I. Radosavovic, T. Xiao, B. Zhang, T. Darrell, J. Malik, and K. Sreenath, “Real-world humanoid locomotion with reinforcement learning,” Sci-ence Robotics , vol. 9, no. 89, p. eadi9579, 2024. [4] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk in minutes using massively parallel deep reinforcement learning,” in 
+
+Conference on robot learning . PMLR, 2022, pp. 91–100. [5] Z. Chen, X. He, Y.-J. Wang, Q. Liao, Y. Ze, Z. Li, S. S. Sastry, J. Wu, K. Sreenath, S. Gupta, et al. , “Learning smooth humanoid locomotion through lipschitz-constrained policies,” in 2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2025, pp. 4743–4750. [6] B. Henze, A. Dietrich, and C. Ott, “An approach to combine balancing with hierarchical whole-body control for legged humanoid robots,” IEEE Robotics and Automation Letters , vol. 1, no. 2, pp. 700–707, 2015. [7] K. Yamamoto, T. Ishigaki, and Y. Nakamura, “Humanoid motion control by compliance optimization explicitly considering its positive definite-ness,” IEEE Transactions on Robotics , 2021. [8] T. He, Z. Luo, W. Xiao, C. Zhang, K. Kitani, C. Liu, and G. Shi, “Learning human-to-humanoid real-time whole-body teleoperation,” in 
+
+2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2024, pp. 8944–8951. [9] Z. Li, X. Cheng, X. B. Peng, P. Abbeel, S. Levine, G. Berseth, and K. Sreenath, “Reinforcement learning for robust parameterized locomo-tion control of bipedal robots,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2021, pp. 2811–2817. [10] J. Shin, W. Cha, D. Kim, J. Cha, and J. Park, “Spectral normalization for lipschitz-constrained policies on learning humanoid locomotion,” arXiv preprint arXiv:2504.08246 , 2025. [11] Y. Gu, G. Shi, F. Shi, I.-C. Chang, Y.-J. Wang, Q. Cheng, Z. Olkin, I. Lopez-Sanchez, Y. Feng, J. Zhang, et al. , “Evolution of humanoid locomotion control.” [12] X. B. Peng, Z. Ma, P. Abbeel, S. Levine, and A. Kanazawa, “Amp: Adversarial motion priors for stylized physics-based character control,” 
+
+ACM Transactions on Graphics (ToG) , vol. 40, no. 4, pp. 1–20, 2021. [13] Z. Gu, J. Li, W. Shen, W. Yu, Z. Xie, S. McCrory, X. Cheng, A. Shamsah, R. Griffin, C. K. Liu, et al. , “Humanoid locomotion and manipulation: Current progress and challenges in control, planning, and learning,” arXiv preprint arXiv:2501.02116 , 2025. [14] S. Lee, P. S. Chang, and J. Lee, “Deep compliant control,” in ACM SIGGRAPH 2022 conference proceedings , 2022, pp. 1–9. [15] B. Xu, H. Weng, Q. Lu, Y. Gao, and H. Xu, “Facet: Force-adaptive control via impedance reference tracking for legged robots,” arXiv preprint arXiv:2505.06883 , 2025. [16] S. Zhao, Y. Ze, Y. Wang, C. K. Liu, P. Abbeel, G. Shi, and R. Duan, “Resmimic: From general motion tracking to humanoid whole-body loco-manipulation via residual learning,” arXiv preprint arXiv:2510.05070 , 2025. [17] L. Wei, X. Peng, R.-Z. Qiu, X. Cheng, and X. Wang, “Hmc: Learning heterogeneous meta-control for contact-rich loco-manipulation,” in RSS 2025 Workshop on Whole-body Control and Bimanual Manipulation: Applications in Humanoids and Beyond , 2025. [18] Z. He, C. Chen, D. Azizov, and Y. Nakamura, “Cotap: Compliant task pipeline and reinforcement learning of its controller with compliance modulation,” arXiv preprint arXiv:2509.25443 , 2025. [19] K. Yamamoto, “Robust Walking by Resolved Viscoelasticity Control Explicitly Considering Structure-Variability of a Humanoid,” in Proc. of IEEE ICRA , 2017, pp. 3461–3468. [20] N. Mahmood, N. Ghorbani, N. F. Troje, G. Pons-Moll, and M. J. Black, “Amass: Archive of motion capture as surface shapes,” in Proceedings of the IEEE/CVF international conference on computer vision , 2019, pp. 5442–5451. [21] Y. Zhang, Y. Yuan, P. Gurunath, I. Gupta, S. Omidshafiei, A.-a. Agha-mohammadi, M. Vazquez-Chanlatte, L. Pedersen, T. He, and G. Shi, “Falcon: Learning force-adaptive humanoid loco-manipulation,” arXiv preprint arXiv:2505.06776 , 2025. [22] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Prox-imal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 ,2017.

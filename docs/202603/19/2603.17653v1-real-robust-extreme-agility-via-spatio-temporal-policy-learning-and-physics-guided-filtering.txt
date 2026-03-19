@@ -1,0 +1,362 @@
+Title: REAL: Robust Extreme Agility via Spatio-Temporal Policy Learning and Physics-Guided Filtering
+
+URL Source: https://arxiv.org/pdf/2603.17653v1
+
+Published Time: Thu, 19 Mar 2026 01:14:18 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# REAL: Robust Extreme Agility via Spatio-Temporal Policy Learning and Physics-Guided Filtering 
+
+Jialong Liu 1, Dehan Shen 1, Yanbo Wen 1, Zeyu Jiang 1, and Changhao Chen 1†
+
+Abstract — Extreme legged parkour demands rapid terrain assessment and precise foot placement under highly dynamic conditions. While recent learning-based systems achieve impres-sive agility, they remain fundamentally fragile to perceptual degradation, where even brief visual noise or latency can cause catastrophic failure. To overcome this, we propose Robust Extreme Agility Learning (REAL), an end-to-end framework for reliable parkour under sensory corruption. Instead of relying on perfectly clean perception, REAL tightly couples vision, proprioceptive history, and temporal memory. We distill a cross-modal teacher policy into a deployable student equipped with a FiLM-modulated Mamba backbone to actively filter visual noise and build short-term terrain memory actively. Furthermore, a physics-guided Bayesian state estimator en-forces rigid-body consistency during high-impact maneuvers. Validated on a Unitree Go2 quadruped, REAL successfully traverses extreme obstacles even with a 1-meter visual blind zone, while strictly satisfying real-time control constraints with a bounded 13.1 ms inference time. The code will be released at https://jialonglong.github.io/REAL_wb/. 
+
+I. I NTRODUCTION 
+
+Extreme legged parkour seeks to endow bipedal and quadrupedal robots with the ability to execute highly agile maneuvers across discontinuous, cluttered, and dynamically challenging terrains. Such tasks require rapid terrain assess-ment, gait transitions, precise foot placement, and continuous balance regulation—all under strict timing and torque con-straints. Advancing robotic parkour not only pushes the limits of dynamic locomotion, but also lays the foundation for de-ploying robots in safety-critical applications such as disaster response, industrial inspection, and planetary exploration in unstructured environments. Recent progress in reinforcement learning (RL) has largely advanced agile locomotion. Early vision-free policies [1]– [3] demonstrated impressive dynamic capabilities but lacked environmental awareness. More recent perception-driven sys-tems incorporate privileged terrain information during train-ing and distill high-performance teacher policies into de-ployable student models [4], [5]. These sim-to-real pipelines enable robots to operate near their physical limits while reducing manual reward engineering. Despite recent advances in agile legged locomotion, exist-ing methods remain highly vulnerable to perceptual degrada-tion. Extreme parkour entails impacts, rapid rotations, flight phases, and motion blur, where even brief visual corrup-tion can cause catastrophic failure. Most approaches treat perception as a direct feedforward input to control, without  
+
+> 1PEAK-Lab, The Hong Kong University of Science and Technology (Guangzhou), Guangzhou, 511453, China.
+> †Corresponding author email: changhaochen@hkust-gz.edu.cn
+
+Severe Visual Degradation 
+
+> Fig. 1: Robust extreme parkour with proposed REAL framework. The robot successfully chains highly dynamic maneuvers across complex terrains with nominal vision (green box), and maintains stable locomotion even under severe visual degradation (red box).
+
+modeling observation uncertainty, exploiting temporal mem-ory, or enforcing physics consistency, allowing visual noise to propagate directly to motor commands and destabilize behavior near dynamic limits. Moreover, state estimation is often performed by deterministic regressors that neither quantify uncertainty nor respect rigid-body dynamics, mak-ing them fragile under slip or high-impact events. Modular mode-switching solutions [6] partially alleviate these issues but introduce additional complexity and heuristic transitions, limiting robustness and scalability. Collectively, existing re-search lacks structured cross-modal terrain–body reasoning, uncertainty-aware and physics-consistent state estimation, and stable policy distillation under perceptual corruption. To overcome these challenges, we propose REAL (Robust 
+
+Extreme Agility Learning), an end-to-end framework for quadrupedal locomotion under perceptual corruption. REAL unifies structured terrain reasoning, adaptive spatio-temporal memory, and physics-guided state estimation within a single training pipeline. A privileged teacher learns precise propri-oception–terrain associations through cross-modal attention, which are distilled into a student equipped with FiLM-based cross-modal fusion and a Mamba temporal backbone to suppress unreliable visual features and maintain short-term terrain memory. A physics-guided Bayesian estima-tor fuses uncertainty-aware neural velocity predictions with rigid-body dynamics via an EKF to ensure consistent motion estimation under impacts and slip. Finally, a consistency-aware loss gating mechanism stabilizes policy distillation and improves sim-to-real transfer. Extensive simulation and hard-ware experiments demonstrate zero-shot transfer to a real quadrupedal platform, achieving reliable extreme parkour even under severe perceptual degradation and outperforming prior baselines. Our contributions are summarized as follows:  
+
+> arXiv:2603.17653v1 [cs.RO] 18 Mar 2026 •
+
+We propose REAL, a novel spatio-temporal policy learning framework that captures structured cross-modal proprioception–terrain associations, enabling robust and computationally efficient quadrupedal locomotion.  
+
+> •
+
+We introduce a physics-guided filtering module that explicitly models uncertainty and enforces rigid-body consistency, ensuring reliable state estimation during high-dynamic maneuvers.  
+
+> •
+
+We develop a consistency-aware loss gating strategy that adaptively balances imitation and reinforcement learning, stabilizing policy distillation and improving sim-to-real robustness.  
+
+> •
+
+We validate REAL through extensive simulation and hardware experiments, demonstrating zero-shot transfer to a real quadrupedal robot and reliable extreme terrain traversal under severe perceptual degradation. II. R ELATED WORKS 
+
+A. Legged Locomotion 
+
+Classical locomotion methods use model-based control to design walking controllers [7]–[9]. These methods typically involve splitting the task into elevation mapping and foothold planning [10]. However, elevation mapping is sensitive to noise and can fail in poor conditions [10], [11]. Noisy terrain maps can also cause planning errors. To address this issue, RL-trained controllers have been proposed to adapt to dynamic changes in both quadrupedal and bipedal platforms [12]–[14]. To bridge the sim-to-real gap, recent methods have been developed that train policies in simulation with a wide range of randomized physical parameters and deploy them alongside concurrent state estimators [1]–[3], [15], [16]. These frameworks use exteroceptive feedback to create latent vectors that describe the local terrain [10], [17], [18]. This enables robust locomotion in unstructured environments. However, these methods rely on continuous visual input and may malfunction if the sensors are not working properly. While some approaches incorporate multi-modal delay randomization to alleviate sensor vulnerabilities [19], the fundamental reliance on clean perception remains a bottleneck. 
+
+B. Robotic Parkour 
+
+Robotic parkour requires robots to move quickly over ob-stacles and operate at the limits of their hardware capabilities. Advanced RL methods such as RPL [5], Extreme Parkour [4], and SoloParkour [20], alongside recent agile navigation frameworks for quadrupeds [21] and extreme jumping for bipeds [22], [23], have achieved strong results. Despite these successes, they often fail when they rely too heavily on continuous visual input. These methods lack the short-term memory required to retain information about recent terrain. Consequently, they are unable to use past observations to address visual issues caused by noise, latency, or temporary sensor signal loss during high-impact dynamic maneuvers. 
+
+C. Robust Sequence Modeling and Estimation 
+
+To mitigate the effects of imprecise sensing, previous stud-ies [17], [24] employed recurrent neural networks (RNNs), while others introduced Cross-Modal Transformers [25], to enable the robot to develop a short-term memory of its own observations. However, noisy or delayed perception can still hinder action planning, and computational de-lays—especially those inherent to Transformer-based archi-tectures—can disrupt the connection between sensing and control, which is essential for rapid execution. For continuous real-time control, state space models such as Mamba [26] outperform standard recurrent and attention-based models by providing bounded O(1) inference complexity [27]. Building on this, we have developed a system that combines a teacher policy, which is trained using additional privileged informa-tion, with a Mamba-FiLM student. This enables the policy to estimate terrain states and robustly recover hidden terrain features using the robot’s proprioceptive movement history. III. M ETHOD 
+
+Our proposed REAL is an end-to-end policy learning framework designed for robust quadrupedal parkour. In contrast to prior agile locomotion approaches that often degrade under sensor noise or perceptual inaccuracies, REAL tightly integrates vision, proprioception, and temporal mem-ory within a unified spatio-temporal policy learning architec-ture. The framework adopts a two-stage training paradigm: In Stage 1, a privileged teacher policy is trained via re-inforcement learning (RL) in simulation. The teacher has access to proprioceptive observations, terrain scan points, and additional privileged information, enabling it to learn precise proprioception–terrain associations for agile locomotion; In Stage 2, the teacher policy is distilled into a deployable student policy that operates using only onboard depth sensing and proprioception. This distillation process transfers terrain-aware locomotion capabilities from privileged simulation training to real-world perception-constrained execution. The REAL framework consists of three key compo-nents: 1) Spatio-Temporal Policy Learning: a privileged teacher learns structured proprioception–terrain associations via cross-modal attention, and its distilled student integrates FiLM-based visual–proprioceptive fusion with a Mamba temporal backbone for robust decision-making under percep-tual corruption; 2) Physics-Guided Filtering: an uncertainty-aware neural velocity estimator is fused with rigid-body dynamics through an EKF to ensure physically consistent and noise-robust motion estimation. 3) Consistency-Aware Loss Gating: an adaptive gating mechanism balances behavioral cloning and reinforcement learning based on teacher–student action discrepancy to stabilize training and improve sim-to-real transfer. 
+
+A. Spatio-Temporal Policy Learning 
+
+We adopt a teacher–student framework for robust quadrupedal locomotion learning. The privileged teacher policy leverages a cross-modal attention mechanism to estab-lish structured proprioception–terrain reasoning. Specifically, Physics -Guided     
+
+> Filtering
+> Terrain Scandots
+> Proprioception
+> Linear
+> Linear
+> Key
+> Value
+> Query Query Key Value
+> Proprioception -Terrain
+> Associated Reasoning Teacher Policy Network Teacher Action
+
+Stage 1 Privileged Teacher Policy Learning Simulation 
+
+Environment 
+
+> Ramp
+> Gap
+> Hurdle
+> Step
+
+Loss 
+
+> Consistency -Aware
+> Loss Gating Strategy
+> RL
+> Loss
+> BC
+> Loss
+> Student Policy Network
+> Proprioception
+> Onboard
+> Depth Image
+> Proprioception
+> History
+> FiLM
+> Layer
+> FiLM
+> Layer
+> Image Encoder
+> 1D
+> ResNet
+> Student Action
+> Velocity
+> Uncertainty
+> Angular Velocity
+> Acceleration
+
+Stage 2 Distilling Student Policy with Spatio -Temporal Reasoning 
+
+> Mamba Backbone Fig. 2: System architecture of REAL. Stage 1(Privileged Teacher Policy Learning) trains a privileged teacher policy via Proprioception-Terrain Associated Reasoning. Stage 2(Distillation Student Policy Learning) distills a deployable student policy using an onboard Mamba-FiLM spatial-temporal backbone and a physics-guided filtering, stabilized by a consistency-aware loss gating strategy.
+
+terrain features are retrieved and aggregated conditioned on the robot’s proprioceptive state, enabling context-aware and dynamically adaptive locomotion decisions. The student policy, designed for real-world deployment, replaces privi-leged terrain access with onboard visual perception. Spatial visual features are adaptively modulated by proprioceptive signals through Feature-wise Linear Modulation (FiLM), enabling effective cross-modal fusion. A Mamba-based tem-poral backbone further maintains long-horizon memory, al-lowing temporally coherent decision-making under partial observability and perceptual corruption. 
+
+Privileged Teacher Policy Learning. Guided by path way-points, terrain scan dots, and robot proprioception, the teacher policy acquires extreme parkour skills under a unified reward formulation, leveraging automated curriculum learn-ing and massive parallel simulation [4]. In our work, the teacher encodes proprioceptive states into Queries via a linear projection, while terrain scan dots are encoded into Keys and Values. We introduce a cross-modal attention mechanism to explicitly model spatial associations between body states and terrain geometry. This design allows the instantaneous body state to interrogate the terrain representation and selectively retrieve environment features relevant to the next action. The attention operation is defined as: Attention (Q, K, V) = softmax 
+
+ QK ⊤
+
+√dk
+
+
+
+V. (1) Unlike conventional approaches that rely on feature con-catenation followed by MLPs [4], our attention-based de-sign enables state-conditioned terrain reasoning. The robot’s proprioceptive state dynamically determines which terrain regions are most relevant for control. Consequently, the teacher learns structured terrain-to-body associations, such as step-edge localization, height discontinuity awareness, and impact-sensitive landing zone identification. This active re-trieval mechanism enhances robustness near dynamic stabil-ity limits and reduces catastrophic failures during aggressive maneuvers. 
+
+Distilling Student Policy with Spatio-Temporal Reason-ing. During real-world deployment, the student policy no longer has access to privileged terrain information and must instead rely on onboard depth images and proprioception. The student model is designed to be computationally efficient and robust to perceptual degradation. Our student policy model primarily consists of three modules: a module that integrates FiLM and Mamba, an EKF-based Physics-guided filtering, and a consistency-aware gating strategy that informs the learning process. FiLM and Mamba form the core of our student’s spatio-temporal processing. Depth images and proprioceptive mea-surements are first processed through FiLM, where propri-oception dynamically modulates visual features to extract terrain representations relevant to the current body state. Let 
+
+FCNN denote visual features extracted by a convolutional neural network (CNN). FiLM modulation is defined as: FiLM (FCNN ) = γ(pt) ⊙ FCNN + β(pt), (2) where γ(pt) and β(pt) are channel-wise scaling and shifting parameters predicted from the proprioceptive state 
+
+pt, and ⊙ denotes element-wise multiplication. This modu-lation adaptively gates visual features based on the robot’s instantaneous dynamics. FiLM serves as an adaptive sensory filter. During impacts or rapid body rotations, unreliable visual features—caused by motion blur or occlusion—are suppressed using fast proprioceptive feedback, thereby re-ducing erroneous actuation. The FiLM-modulated visual features are concatenated with raw proprioception and velocity estimates from the physics-guided filter, forming a comprehensive state repre-sentation xt that is fed into a Mamba backbone for temporal modeling. When exteroceptive input degrades, the controller relies more heavily on temporal memory. Mamba provides efficient sequence modeling with linear-time complexity, making it suitable for onboard deployment. Given input features xt, the hidden state ht evolves as: 
+
+ht = Atht−1 + Btxt, yt = Ctht. (3) where ht encodes spatio-temporal memory and yt is the output. Data-dependent matrices ( At, Bt, Ct) adapt via xt
+
+to selectively filter noise and retain terrain features. With RoPE preserving spatial order, this enables real-time terrain reconstruction as a fallback during visual degradation. 
+
+B. Physics-Guided Filtering 
+
+High-dynamic quadrupedal parkour frequently violates the no-slip assumptions commonly adopted in legged odometry. Pure MLP-based velocity regression lacks uncertainty model-ing and temporal consistency, leading to drift and physically inconsistent estimates. To address this, REAL integrates an uncertainty-aware neural velocity predictor with rigid-body dynamics through an Extended Kalman Filter (EKF). The learned predictor provides adaptive uncertainty estimates, while the dynamics model enforces physical constraints. This hybrid design enhances robustness to perceptual noise and prevents physically implausible state estimates during aggressive maneuvers. 
+
+Uncertainty-Aware Velocity Network. Existing parkour baselines typically estimate base linear velocity from single-frame observations [4], neglecting temporal interaction pat-terns between the robot and terrain. Instead, we employ a 1D ResNet to extract motion features from a 10-frame proprioceptive sequence, including IMU measurements and joint encoder readings [6]. The network predicts a Gaussian distribution N (vnet , Σt),where vnet is the estimated velocity and Σt ∈ R3×3
+
+represents the associated uncertainty. The loss function Lest 
+
+adopts a Huber-Gaussian Loss [28], which integrates the ro-bustness of Huber loss Lhuber with probabilistic calibration. Its formulation is given by: 
+
+Lest = Lhuber (vgt , vnet )+ λ X
+
+> t
+
+ ∥vgt − vnet ∥2
+
+2Σt
+
++ 12 ln |Σt|
+
+
+
+(4) 
+
+LHuber = X
+
+> t
+
+( 12 (vgt − vnet )2, if |vgt − vnet | < δ δ(|vgt − vnet | − 12 δ), otherwise (5) where vgt denotes the ground-truth velocity, δ is the thresh-old. The Huber term Lhuber ensures robust mean estimation under outliers, while the Gaussian negative log-likelihood term calibrates predictive uncertainty. Consequently, the esti-mator jointly predicts velocity and confidence. During highly dynamic events—such as flight phases or foot slippage—the network increases its predicted uncertainty, thereby reducing its influence during subsequent fusion [29]. 
+
+Bayesian Fusion via Extended Kalman Filter. To enforce physical consistency and mitigate integration drift, we fuse the neural estimate vnet with a rigid-body motion model us-ing an EKF [11]. For computational efficiency and numerical stability, we adopt a diagonal covariance formulation. 
+
+Prediction step. The velocity is propagated in the body frame using IMU linear acceleration at and angular velocity 
+
+ωt. We assume the error dynamics are dominated by process noise, simplifying the covariance propagation: 
+
+vt|t−1 = vt−1 + ( at − ωt × vt−1)∆ t (6) 
+
+Pt|t−1 = Pt−1 + F (7) where ∆t is the control interval. F ∈ R3×3 is the process noise covariance matrix, modeling the drift and noise inher-ent in IMU integration. In our implementation, F is set to a constant diagonal matrix. Pt ∈ R3×3 represents the state estimation covariance, tracking the accumulated uncertainty of the fused velocity vt.
+
+Update step. The neural prediction is treated as a virtual measurement. The Kalman gain E adapts automatically according to the predicted covariance: 
+
+Et = Pt|t−1(Pt|t−1 + Σt)−1 (8) 
+
+vt = vt|t−1 + Et(vnet − vt|t−1) (9) 
+
+Pt = ( I − Et)Pt|t−1 (10) When the neural predictor reports high uncertainty, the Kalman gain decreases, reducing correction magnitude. Con-versely, confident predictions exert stronger influence. This probabilistic coupling between learning-based estimation and physics-based prediction ensures stable and drift-resistant velocity tracking under impacts, slippage, and partial sensor degradation. 
+
+C. Consistency-Aware Loss Gating Strategy 
+
+To mitigate the sim-to-real gap in Stage II training, we in-troduce a consistency-aware loss gating strategy that dynam-ically balances behavioral cloning (BC) and reinforcement learning (RL). The key insight is that the discrepancy be-tween the student policy πS and the privileged teacher policy 
+
+πT reflects the student’s reliability under perceptual corrup-tion. While the teacher operates with privileged information, the student must act under noisy onboard observations. 
+
+Adaptive Loss Gating. We introduce a gating coefficient 
+
+λ ∈ [0 , 1] to dynamically balance the RL loss LRL and the behavioral cloning loss LBC . The gating factor is determined by the Euclidean distance between student action aS and TABLE I: Quantitative Performance Breakdown Across Diverse Parkour Terrains 
+
+Method Hurdles Steps Gaps Overall Average SR (↑) MXD (↑) SR (↑) MXD (↑) SR (↑) MXD (↑) SR (↑) MXD (↑) MEV (↓) Time (↓) Coll. (↓)Extreme Parkour [4] 0.18 0.15 0.14 0.18 0.10 0.30 0.16 0.21 34.24 0.14 0.27 RPL [5] 0.05 0.12 0.04 0.09 0.03 0.10 0.04 0.10 1.56 0.02 0.06 SoloParkour [20] 0.42 0.24 0.49 0.28 0.36 0.34 0.39 0.34 96.93 0.06 0.09 
+
+REAL (Ours) 0.82 0.42 0.94 0.53 0.28 0.39 0.78 0.45 18.41 0.02 0.06 
+
+Note: We evaluate agility ( ↑) and safety ( ↓). SR: Success Rate—how often the robot reaches all target goals. MXD: Mean X-Displacement ∈ [0 , 1] ,showing the normalized forward progress. MEV: Mean Edge Violations—the average number of unsafe foot-edge contacts in each episode. Time / Coll.: 
+
+Timeout rate per episode and torso collision rate per step. TABLE II: Robustness Evaluation: Performance Degradation Under Severe Perceptual Interference                                                                                            
+
+> Method Nominal (No Interference) Condition A: Frame Drop Condition B: Gaussian Noise Condition C: Spatial FoV Occlusion SR ( ↑)MXD ( ↑)SR ( ↑)MXD ( ↑)SR ( ↑)MXD ( ↑)SR ( ↑)MXD ( ↑)
+> Extreme Parkour [4] 0.16 0.22 0.16 (↓0.00) 0.22 (↓0.00) 0.11 (↓0.05) 0.21 (↓0.01) 0.13 (↓0.03) 0.21 (↓0.01)
+> RPL [5] 0.04 0.10 0.01 (↓0.04) 0.04 (↓0.06) 0.01 (↓0.03) 0.07 (↓0.04) 0.01 (↓0.03) 0.07 (↓0.03)
+> SoloParkour [20] 0.39 0.35 0.20 (↓0.19 )0.24 (↓0.11) 0.37 (↓0.03) 0.35 (↓0.00) 0.41 (↑0.02) 0.35 (↑0.00)
+> REAL (Ours) 0.78 0.46 0.61 (↓0.17) 0.41 (↓0.05) 0.51 (↓0.27) 0.38 (↓0.08) 0.72 (↓0.06 )0.43 (↓0.02 )
+
+Note: Values in parentheses denote the absolute performance drop ( ↓) or gain ( ↑) compared to the nominal condition (No Interference). 
+
+teacher action aT :
+
+λ = σ (k · (τ − ∥ aS − aT ∥2)) , (11) where σ(·) denotes the sigmoid function, τ is a consistency threshold, and k controls the sharpness of the transition [30]. The overall training objective is then defined as: 
+
+Ltotal = λLRL + (1 − λ)LBC . (12) This formulation enables smooth interpolation between imitation-driven stabilization and reinforcement-driven adap-tation. 
+
+Interpretation. The proposed mechanism can be viewed as an adaptive supervision schedule [31], where the training regime shifts according to the student’s consistency with the teacher: 
+
+Mtrain ≈
+
+
+
+LBC (λ → 0) 
+
+| {z }
+
+> Stability Preservation
+
+, if ∥aS − aT ∥2 ≫ τ
+
+LRL (λ → 1) 
+
+| {z }
+
+> Robustness Adaptation
+
+, otherwise . (13) When the action discrepancy is large, imitation learning dominates to prevent destabilizing deviations and ensure safe policy refinement. As the student’s behavior aligns with the teacher, the objective gradually shifts toward RL, encouraging exploration and robustness to perceptual noise. This adaptive transition stabilizes training while promoting resilience, resulting in improved sim-to-real transfer without sacrificing policy performance. IV. E XPERIMENT 
+
+We evaluate REAL in Isaac Gym [32] and on a real robot. Our evaluation focuses on: 1) extreme terrain traversability, 2) robustness to sensory degradation, 3) blind-zone maneu-vers, and 4) zero-shot sim-to-real transfer. Parkour 
+
+> Gap
+> Hurdle
+> Step
+
+Fig. 3: Left. Snapshots of the REAL policy executing dynamic manoeuvres across extreme terrains. Right. Physical hardware setup. The REAL policy has been deployed on a Unitree Go2 quadrupedal robot. 
+
+A. Experimental Setup 
+
+Simulation & Training. We train our policy in a simu-lated environment that automatically generates challenging terrains, including gaps, hurdles, and slanted ramps (Fig. 3). The terrain difficulty scales dynamically according to the robot’s proficiency during training. The control policy operates at 50 Hz, outputting target joint angles that are tracked by a low-level PD controller running at 1 kHz [33]. The entire policy is trained from scratch in approximately 30 hours using a single NVIDIA RTX 4080 GPU. 
+
+Hardware Platform. We deploy our trained policy on a Unitree Go2 quadrupedal robot (Fig. 3). Proprioceptive data (joint positions, velocities, and IMU) is collected via onboard motor controllers, while exteroception is provided by a front-facing Intel RealSense D435i depth camera. All state estimation and neural network inferences run entirely onboard using an NVIDIA Jetson module. 
+
+Domain Randomization. To bridge the reality gap, we em-ploy extensive domain randomization during training (Table III). We introduce perturbations to environmental dynamics (friction and mass), robot kinematics (center of mass and joint damping), and sensory observations (actuator latency and Gaussian noise). This diverse sampling compels the Mamba and FiLM modules to prioritize noise-invariant latent (a)  
+
+> (b)
+> (c)
+> (a)
+> (b)
+> (c)
+> (d)
+> (e)
+> (f)
+> Extreme Parkour Ours Fig. 4: Simulation results on complex parkour terrains featuring a 1 m vision-masked blind zone (setup detailed in Table IV). REAL successfully traverses all terrains while maintaining kinematic stability. TABLE III: Domain Randomization Parameters for Go2
+
+Parameter Range / Value Distribution 
+
+Environment Dynamics 
+
+Terrain Friction [0 .6, 2.0] Uniform External Push Interval 8 s Fixed External Push Velocity (XY) [−0.5, 0.5] 
+
+m/s Uniform 
+
+Robot Kinematics & Dynamics 
+
+Payload Mass (Base) [0 .0, +3 .0] kg Uniform Center of Mass (CoM) Offset 
+
+[−0.2, 0.2] m Uniform 
+
+Actuator & Observation Deficits 
+
+Motor Strength (Kp, Kd Scaling) 
+
+[0 .8, 1.2] Uniform Proprioceptive Noise (Joint Pos) 
+
+±0.01 rad Uniform Proprioceptive Noise (Joint Vel) 
+
+±0.05 rad/s Uniform Base Linear Velocity Noise ±0.05 m/s Uniform Base Angular Velocity Noise ±0.05 rad/s Uniform Gravity Vector Noise ±0.02 Uniform Height Measurement Noise ±0.02 m Uniform 
+
+features, facilitating zero-shot transfer to the real world without further fine-tuning. 
+
+Reward Formulation. To ensure performance gains are strictly attributable to our architectural design rather than reward engineering, we adopt the exact reward formulation and weights utilized in Extreme Parkour. [4]. 
+
+Baselines & Metrics. We compare REAL with Extreme-Parkour [4], RPL [5], and SoloParkour [20]. As detailed in Table I, we adopt Collision Rate, Mean X-Displacement (MXD), and Mean Edge Violations (MEV) from [4], while using custom definitions for Success Rate (SR) and Timeout Rate. 
+
+B. Main Experiments 
+
+Extreme Terrain Traversability. We adopt the exact ex-treme terrain configurations and difficulty scaling defined in [4]. As reported in Table I, REAL achieves a high overall success rate across these environments, effectively doubling the performance of prior vision-only baselines. Specifically,                                   
+
+> Fig. 5: Real-world extreme blind test. Left: Baseline fails immediately upon losing visual input. Right: REAL utilizes proprioceptive history to maintain environmental memory, enabling robust blind traversal across unstructured obstacles. TABLE IV: Quantitative Performance in Blind-Zone Maneuvers (Vision Masked 1m Before Obstacles)
+> Method SR ( ↑)MXD ( ↑)MEV ( ↓)Time ( ↓)Coll. ( ↓)
+> Extreme Parkour 0.11 0.20 44.03 0.15 0.29 RPL 0.00 0.03 0.35 0.00 0.04 SoloParkour 0.36 0.34 103.50 0.06 0.09
+> REAL (Ours) 0.55 0.39 24.84 0.03 0.08
+> REAL (w/o Mamba) 0.45 0.51 97.24 0.30 0.06
+
+REAL exhibits superior precision when navigating hurdles and steps, where accurate foot placement is critical. While baseline methods suffer from high Mean Edge Violations (MEV) due to poorly planned maneuvers, our approach maintains a significantly lower MEV by relying on the robust spatio-temporal terrain memory built during deployment. 
+
+Robustness Against Perceptual Degradation. Table II evaluates policy performance under simulated sensor degra-dation, including dropped frames, Gaussian noise, and ob-structed field of view (FoV). Under severe FoV occlusion, REAL experiences only a marginal performance decline. This robustness highlights the efficacy of our Cross-Modal mechanism, which seamlessly relies on proprioceptive his-tory when visual data is compromised. Conversely, vision-reliant multi-stage baselines suffer catastrophic failures in the presence of sensor noise, underscoring the vulnerability of methods lacking robust spatio-temporal grounding. 
+
+Blind-Zone Maneuvers. We evaluate spatio-temporal mem-ory by obstructing exteroception 1 m before obstacles (Ta-ble IV, Fig. 5). Without vision, standard baselines suf-fer catastrophic forgetting and immediate kinematic failure. Conversely, REAL leverages historical multi-modal data to implicitly track the terrain. Although perfectly clearing com-plex obstacles blind remains an out-of-distribution challenge causing unstable movements, REAL maintains significantly stronger forward progression than baselines. We exclusively ablate vision, as complete loss of proprioception triggers immediate low-level motor halts. (a) (a)  (b) (b)  (c) (c)          
+
+> Fig. 6: Zero-shot sim-to-real transfer of the REAL policy on a physical Unitree Go2 quadruped. Using only onboard perception and computing, the robot completes various real-world obstacle courses: (a) leaping onto a high platform, (b) moving through scattered boxes, and (c) climbing a steep staircase.
+> Fig. 7: Onboard inference latency measured over 1,000 continuous control steps. The REAL policy maintains a highly predictable execution time of
+> O(1) (∼13 .1ms/step), strictly satisfying the high-frequency real-time control budget.
+
+C. Real-Robot Deployment 
+
+As demonstrated in Fig. 6, our trained REAL policy achieves robust zero-shot sim-to-real transfer on a physical Unitree Go2 quadruped, completing diverse real-world obsta-cle courses with only onboard perception and computing. We deploy the policy onto the Go2 hardware via a custom C++ framework, optimizing both the policy and state estimator with ONNX. To maintain a stable 50 Hz control loop, the total inference time must stay strictly under 20 ms. As illustrated in Fig. 7, we evaluate inference latency across different temporal sequence lengths. With a 10-frame his-torical sequence, our Mamba backbone achieves an average execution time of 13.14 ms per step. In stark contrast, a Transformer-based baseline scales poorly, averaging 23.07 ms and violating the 20 ms real-time constraint. This result confirms that Mamba’s bounded O(1) complexity eliminates the sequence-scaling bottleneck of Transformers, enabling the high-frequency reactivity required for aggressive parkour maneuvers. 
+
+D. Ablation Study 
+
+The Role of Mamba and FiLM. We perform ablation studies to isolate the contribution of our core architectural components in maintaining kinematic stability (Table V).  
+
+> •
+
+W/o Mamba : Removing the Mamba backbone causes the SR to plummet and MEV to increase nearly fivefold                          
+
+> TABLE V: Overall Ablation Analysis of REAL Components
+> Method SR ( ↑)MXD ( ↑)MEV ( ↓)Time ( ↓)Coll. ( ↓)REAL (Ours) 0.78 0.45 18.41 0.02 0.06 REAL (w/ MLP Est.) 0.73 0.43 19.34 0.02 0.06 REAL (w/o FiLM) 0.44 0.51 93.43 0.28 0.06 REAL (w/o Mamba) 0.51 0.47 89.96 0.26 0.05
+> TABLE VI: Velocity Estimation RMSE Comparison
+
+Estimator Architecture RMSE (Velocity) ↓
+
+MLP (Baseline) 0.52 MLP + EKF 0.40 1D ResNet (Single frame) 0.33 1D ResNet (10 frames) 0.28 
+
+1D ResNet + EKF (10 frames, Ours) 0.23 
+
+(from 18.41 to 89.96). This confirms that Mamba’s long-term sequence modeling is strictly necessary for tracking historical terrain features when exteroception is lost.  
+
+> •
+
+W/o FiLM : Disabling the dynamic sensory gating mech-anism drops the success rate to 44%. Without FiLM, the policy fails to robustly fuse multi-modal signals, treating noisy visual inputs as ground truth and leading to frequent torso collisions. 
+
+Physics-Guided Filtering Validation. As demonstrated in Table VI, standard MLP-based estimators suffer from high velocity tracking errors due to a lack of temporal context. Transitioning to a sequence-based ResNet model with a 10-frame proprioceptive sequence drastically reduces these errors. Our Physics-Guided Filter achieves the lowest overall root mean square error (RMSE) by filtering high-frequency impact noise and enforcing strict physical constraints during leg-ground contact. 
+
+Consistency-Aware Loss Gating. To prevent policy collapse under aggressive domain randomization during the imitation phase, we introduce a consistency-aware loss gating strategy. Unlike fixed-weight baselines that frequently collapse dur-ing initial training, our dynamic gating optimally balances autonomous exploration with teacher imitation. As shown in Fig. 8, this mechanism drastically accelerates early-stage convergence and yields a significantly lower final training 
+
+> Fig. 8: Training convergence of the depth actor. Our consistency-aware loss gating accelerates imitation learning and achieves a lower final loss com-pared to a fixed-weight baseline, improving the stability of the distillation process.
+
+loss, providing the robust foundation required for reliable real-world locomotion. V. C ONCLUSION 
+
+In this paper, We presented REAL, an end-to-end frame-work for robust quadrupedal parkour under severe percep-tual degradation. By integrating a FiLM-modulated Mamba backbone, a physics-guided Bayesian state estimator, and consistency-aware loss gating, REAL effectively constructs short-term spatio-temporal memory to suppress unreliable perception and ensure stable sim-to-real distillation. Hard-ware experiments on the Unitree Go2 demonstrate successful zero-shot transfer, outperforming state-of-the-art baselines across extreme terrains. Crucially, REAL exhibits excep-tional resilience to sensory noise and blind zones, all while strictly satisfying the high-frequency real-time control budget with a predictable O(1) inference latency. REFERENCES [1] J. Hwangbo, J. Lee, A. Dosovitskiy, D. Bellicoso, V. Tsounis, V. Koltun, and M. Hutter, “Learning agile and dynamic motor skills for legged robots,” Science Robotics , vol. 4, no. 26, p. eaau5872, 2019. [2] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning quadrupedal locomotion over challenging terrain,” Science robotics , vol. 5, no. 47, p. eabc5986, 2020. [3] A. Kumar, Z. Fu, D. Pathak, and J. Malik, “RMA: rapid motor adaptation for legged robots,” in Robotics: Science and Systems XVII, Virtual Event, July 12-16, 2021 , 2021. [4] X. Cheng, K. Shi, A. Agarwal, and D. Pathak, “Extreme parkour with legged robots,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) , pp. 11443–11450, IEEE, 2024. [5] Z. Zhuang, Z. Fu, J. Wang, C. G. Atkeson, S. Schwertfeger, C. Finn, and H. Zhao, “Robot parkour learning,” in Conference on Robot Learning, CoRL 2023, 6-9 November 2023, Atlanta, GA, USA , pp. 73– 92, PMLR, 2023. [6] Y. Zhang, Q. Qian, T. Hou, P. Zhai, X. Wei, K. Hu, J. Yi, and L. Zhang, “Renet: Fault-tolerant motion control for quadruped robots via redun-dant estimator networks under visual collapse,” IEEE Robotics and Automation Letters , 2025. [7] C. D. Bellicoso, F. Jenelten, C. Gehring, and M. Hutter, “Dy-namic locomotion through online nonlinear motion optimization for quadrupedal robots,” IEEE Robotics and Automation Letters , vol. 3, no. 3, pp. 2261–2268, 2018. [8] A. W. Winkler, C. Mastalli, I. Havoutis, M. Focchi, D. G. Caldwell, and C. Semini, “Planning and execution of dynamic whole-body locomotion for a hydraulic quadruped on challenging terrain,” in 2015 IEEE International Conference on Robotics and Automation (ICRA) ,pp. 5148–5154, IEEE, 2015. [9] F. Farshidian, E. Jelavic, A. Satapathy, M. Giftthaler, and J. Buchli, “Real-time motion planning of legged robots: A model predictive control approach,” in 2017 IEEE-RAS 17th International Conference on Humanoid Robotics (Humanoids) , pp. 577–584, IEEE, 2017. [10] A. Agarwal, A. Kumar, J. Malik, and D. Pathak, “Legged locomotion in challenging terrains using egocentric vision,” in Proceedings of the 6th Conference on Robot Learning (CoRL) (K. Liu, D. Kulic, and J. Ichnowski, eds.), vol. 205 of Proceedings of Machine Learning Research , pp. 403–415, PMLR, 2023. [11] R. Hartley, J. Mangelson, L. Gan, M. G. Jadidi, J. M. Walls, R. M. Eustice, and J. W. Grizzle, “Legged robot state-estimation through combined forward kinematic and preintegrated contact factors,” in 
+
+2018 IEEE International Conference on Robotics and Automation (ICRA) , pp. 4422–4429, IEEE, 2018. [12] J. Siekmann, K. Green, J. Warila, A. Fern, and J. W. Hurst, “Blind bipedal stair traversal via sim-to-real reinforcement learning,” in 
+
+Robotics: Science and Systems XVII, Virtual Event, July 12-16, 2021 ,2021. [13] I. Radosavovic, T. Xiao, B. Zhang, T. Darrell, J. Malik, and K. Sreenath, “Real-world humanoid locomotion with reinforcement learning,” Sci. Robotics , vol. 9, no. 89, 2024. [14] G. Bellegarda, Y. Chen, Z. Liu, and Q. Nguyen, “Robust high-speed running for quadruped robots via deep reinforcement learning,” in 
+
+2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 10364–10370, IEEE, 2022. [15] G. Ji, J. Mun, H. Kim, and J. Hwangbo, “Concurrent training of a control policy and a state estimator for dynamic and robust legged locomotion,” IEEE Robotics and Automation Letters , vol. 7, no. 2, pp. 4630–4637, 2022. [16] G. B. Margolis and P. Agrawal, “Walk these ways: Tuning robot control for generalization with multiplicity of behavior,” in Conference on Robot Learning , pp. 22–31, PMLR, 2023. [17] T. Miki, J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning robust perceptive locomotion for quadrupedal robots in the wild,” Science robotics , vol. 7, no. 62, p. eabk2822, 2022. [18] W. Yu, D. Jain, A. Escontrela, A. Iscen, P. Xu, E. Coumans, S. Ha, J. Tan, and T. Zhang, “Visual-locomotion: Learning to walk on complex terrains with vision,” in 5th Annual Conference on Robot Learning , 2021. [19] C. S. Imai, M. Zhang, Y. Zhang, M. Kierebi´ nski, R. Yang, Y. Qin, and X. Wang, “Vision-guided quadrupedal locomotion in the wild with multi-modal delay randomization,” in 2022 IEEE/RSJ international conference on intelligent robots and systems (IROS) , pp. 5556–5563, IEEE, 2022. [20] E. Chane-Sane, J. Amigo, T. Flayols, L. Righetti, and N. Mansard, “Soloparkour: Constrained reinforcement learning for visual locomo-tion from privileged experience,” in Conference on Robot Learning, 6-9 November 2024, Munich, Germany , pp. 4268–4285, PMLR, 2024. [21] D. Hoeller, N. Rudin, D. Sako, and M. Hutter, “Anymal parkour: Learning agile navigation for quadrupedal robots,” Science Robotics ,vol. 9, no. 88, p. eadi7566, 2024. [22] G. B. Margolis, T. Chen, K. Paigwar, X. Fu, D. Kim, S. bae Kim, and P. Agrawal, “Learning to jump from pixels,” in Conference on Robot Learning , pp. 1025–1034, PMLR, 2022. [23] Z. Zhuang, S. Yao, and H. Zhao, “Humanoid parkour learning,” in 
+
+Conference on Robot Learning , pp. 1975–1991, PMLR, 2025. [24] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk in minutes using massively parallel deep reinforcement learning,” Science Robotics , vol. 7, no. 68, p. eabm6383, 2022. [25] R. Yang, M. Zhang, N. Hansen, H. Xu, and X. Wang, “Learning vision-guided quadrupedal locomotion end-to-end with cross-modal transformers,” in The Tenth International Conference on Learning Representations, ICLR 2022, Virtual Event, April 25-29, 2022 , Open-Review.net, 2022. [26] A. Gu and T. Dao, “Mamba: Linear-time sequence modeling with selective state spaces,” in First conference on language modeling ,2024. [27] Y. Wang and X. Tao, “Locomamba: Vision-driven locomotion via end-to-end deep reinforcement learning with mamba,” Advanced Engineer-ing Informatics , vol. 70, p. 104230, 2026. [28] Y. Qiu, C. Xu, Y. Chen, S. Zhao, J. Geng, and S. Scherer, “Airio: Learning inertial odometry with enhanced imu feature observability,” 
+
+IEEE Robotics and Automation Letters , vol. 10, no. 9, pp. 9368–9375, 2025. [29] S. Lee and K.-S. Kim, “Attention-based neural-augmented kalman filter for legged robot state estimation,” IEEE Robotics and Automation Letters , 2026. [30] G. B. Margolis and P. Agrawal, “Walk these ways: Tuning robot control for generalization with multiplicity of behavior,” in Conference on Robot Learning , pp. 22–31, PMLR, 2023. [31] S. Ross, G. Gordon, and D. Bagnell, “A reduction of imitation learning and structured prediction to no-regret online learning,” in Proceedings of the fourteenth international conference on artificial intelligence and statistics , pp. 627–635, JMLR Workshop and Conference Proceedings, 2011. [32] V. Makoviychuk, L. Wawrzyniak, Y. Guo, M. Lu, K. Storey, M. Mack-lin, D. Hoeller, N. Rudin, A. Allshire, A. Handa, and G. State, “Isaac gym: High performance GPU based physics simulation for robot learning,” in Proceedings of the Neural Information Processing Systems Track on Datasets and Benchmarks 1, NeurIPS Datasets and Benchmarks 2021, December 2021, virtual , 2021. [33] B. Katz, J. D. Carlo, and S. Kim, “Mini cheetah: A platform for pushing the limits of dynamic quadruped control,” in International Conference on Robotics and Automation, ICRA 2019, Montreal, QC, Canada, May 20-24, 2019 , pp. 6295–6301, IEEE, 2019.

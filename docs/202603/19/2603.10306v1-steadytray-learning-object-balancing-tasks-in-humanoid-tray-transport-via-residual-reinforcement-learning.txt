@@ -1,0 +1,801 @@
+Title: SteadyTray: Learning Object Balancing Tasks in Humanoid Tray Transport via Residual Reinforcement Learning
+
+URL Source: https://arxiv.org/pdf/2603.10306v1
+
+Published Time: Thu, 12 Mar 2026 00:25:51 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# SteadyTray: Learning Object Balancing Tasks in Humanoid Tray Transport via Residual Reinforcement Learning 
+
+Anlun Huang ∗, Zhenyu Wu ∗, Soofiyan Atar †, Yuheng Zhi †, Michael Yip UC San Diego ∗† Equal Contribution Website: https://steadytray.github.io 
+
+Fig. 1: ReST-RL enables a Unitree G1 humanoid to perform the SteadyTray task in a real-world setting, with a fluid-filled wine glass as one of the payload. The robot keeps the tray level to prevent fluid sloshing, glass tipping, and payload falling during transport. 
+
+Abstract — Stabilizing unsecured payloads against the in-herent oscillations of dynamic bipedal locomotion remains a critical engineering bottleneck for humanoids in unstructured environments. To solve this, we introduce ReST-RL, a hi-erarchical reinforcement learning architecture that explicitly decouples locomotion from payload stabilization, evaluated via the SteadyTray benchmark. Rather than relying on monolithic end-to-end learning, our framework integrates a robust base locomotion policy with a dynamic residual module engineered to actively cancel gait-induced perturbations at the end-effector. This architectural separation ensures steady tray transport without degrading the underlying bipedal stability. In sim-ulation, the residual design significantly outperforms end-to-end baselines in gait smoothness and orientation accuracy, achieving a 96.9% success rate in variable velocity tracking and 74.5% robustness against external force disturbances. Successfully deployed on the Unitree G1 humanoid hardware, this modular approach demonstrates highly reliable zero-shot sim-to-real generalization across various objects and external force disturbances. 
+
+I. INTRODUCTION In December 2025, U.S. employers reported 1.25 million job openings in health care and social assistance and 0.81 million in accommodation and food services [1]. The need is pressing to ease labor shortages by automating routine delivery and service tasks [2]. Practical service tasks such as spill-free meal delivery, sterile instrument transport in operating rooms, and assistance in elder-care facilities re-quire robots to move and carry objects with human-level reliability in dynamic environments. These human-centered environments are cluttered and designed for humans, often with equipment, cables, and narrow passages that constrain wheeled or quadrupedal platforms. Wheeled platforms can-not generate active stabilizing maneuvers when experiencing large external disturbances. With the rapid progress in hu-manoid locomotion, humanoid robots may arguably be better suited to navigate such spaces considering their small planar footprint and active stabilization capabilities. To maximize transport efficiency and facilitate seamless post-delivery interaction, these scenarios require humanoid robots to walk while balancing unsecured, unstable payloads on trays. It remains unsolved despite substantial recent progress in bipedal locomotion [3] and loco-manipulation [4]. Foot impacts during locomotion are a primary source of torso and base oscillations, and these disturbances propagate through the robot’s kinematic chain. Thus, both the upper body and the gait must adapt to cancel them while maintain-
+
+> arXiv:2603.10306v1 [cs.RO] 11 Mar 2026
+
+ing balance. The most relevant approaches are end-effector stabilization methods such as SoFTA [5], which can reduce oscillation of one object hung or attached to the robot’s hand during walking to some extent. However, to the best of our knowledge, no methods have demonstrated success in balancing unsecured objects on a tray, such as liquid-filled glasses or fragile instruments, during common maneuvers such as turning, accelerating, decelerating, or withstanding external pushes. To address this challenge, we formulate transporting un-secured objects on a tray with a bipedal humanoid robot 
+
+(SteadyTray ) as a bimanual loco-manipulation problem representative of the workforce scenarios above. The key technical difficulty is that the tray introduces a nonrigid intermediate coupling between the robot and payload: the end-effectors regulate tray motion, while objects are only passively constrained and therefore susceptible to slip, tilt, and toppling under dynamic maneuvers. This coupling in-duces an objective conflict between locomotion and stabi-lization, since the controller must generate agile whole-body gaits while maintaining near-level end-effector orientation to stabilize tray and payload [5]. We address this with Resid-ual Student-Teacher Reinforcement Learning (ReST-RL) ,which augments a pre-trained locomotion base policy with a residual module comprising (i) an encoder over privileged robot and payload related observations and (ii) an adapter that outputs corrective residual actions. By freezing the base policy and optimizing only the residual module, ReST-RL 
+
+explicitly separates the two objectives, preserving nominal gait performance while concentrating learning capacity on payload stabilization. Then through policy distillation, the encoder is converted from taking privileged observations to taking deployable ones, while the adapter remains fixed. This paper provides the following technical contributions:  
+
+> •
+
+We propose ReST-RL for SteadyTray , a residual student–teacher RL framework that augments a pre-trained locomotion policy with a payload-stabilization residual adapter for steady tray transport during dy-namic walking.  
+
+> •
+
+We identify key training design choices, including adding observation delay, control latency, and other domain randomizations, that are critical for robustness to disturbance and sim-to-real transfer.  
+
+> •
+
+We evaluate the approach in simulation and real-world deployment on a Unitree G1 humanoid, demonstrating robust transport of diverse unsecured payloads under external disturbances. II. R ELATED WORK 
+
+A. Humanoid Loco-Manipulation 
+
+Loco-manipulation tasks require humanoids to achieve locomotion and manipulation objectives simultaneously, cou-pling gait stability with contact-rich object interaction un-der shared dynamical constraints [2]. Recent sim-to-real reinforcement learning approaches have demonstrated au-tonomous pick and place [6], door opening [7], package carrying and placement [8]–[10], and collaborative transport [11]. Prior works can be viewed through how they inject supervision to reduce the exploration burden of contact-rich whole-body learning, including human-guided imitation (e.g., teleoperation, mocap, or human videos) [8], [12], interaction-preserving retargeting or trajectory optimization [13], [14], and privileged teacher–student distillation [6], [7]. While these methods improve robustness and generaliza-tion, stable transport of unsecured payloads during walking remains underexplored due to non-stationary contact and disturbance-sensitive object dynamics. 
+
+B. Humanoid Policy Architectures 
+
+Humanoid whole-body control (WBC) policies are typi-cally implemented either as monolithic end-to-end RL con-trollers [15], [16] or as structured multi-agent designs that decouple locomotion and upper-body control [17], [18]. Training commonly relies on teacher–student distillation and PPO-style actor–critic optimization [19], [20]. Residual reinforcement learning augments pretrained loco-motion policies with corrective modules to improve robust-ness under modeling errors and disturbances. Prior works apply residual adaptation for sim-to-real transfer [21], ro-bust teleoperation and motion tracking [22], [23], precise interaction and collaborative carrying [8], [11]. In contrast, we adopt residual RL on stabilization of SteadyTray , where object-level dynamics must be regulated without degrading gait stability. 
+
+C. Stability Control in Mobile Manipulation 
+
+Stability control during transport has been studied for wheeled and aerial manipulators using model-based coordi-nation [24], [25]. On legged systems, quadrupedal payload transport has been explored using tactile feedback [26]. For humanoids, SoFTA [5] demonstrates end-effector stabiliza-tion during walking. However, steady transport of unsecured 
+
+objects requires coordinated whole-body adaptation beyond upper-body compensation alone. Our work addresses this gap through residual whole-body stabilization. III. METHODOLOGY 
+
+A. Problem Statement 
+
+This work aims to achieve stable dual-arm load transport during humanoid robot locomotion by maintaining the tray level and resisting object tipping under disturbances. The problem is formulated as a goal-conditioned reinforcement learning problem with policy π : G × S → A , where G, S,and A denote the goal, observation, and action spaces, re-spectively. A ⊆ Rn is target joint positions for all humanoid joints. At time t, the goal is denoted gt = [ ˆvrx 
+
+> t
+
+, ˆvry 
+
+> t
+
+, ˆωryaw  
+
+> t
+
+] ∈G which consists of desired robot linear and angular ve-locity. The observation is st = ( sprop  
+
+> t
+
+, sobj  
+
+> t
+
+) ∈ S , including proprioceptive data and object data. The proprioceptive data 
+
+sprop  
+
+> t
+
+= [qt−H:t, ˙qt−H:t, ωr
+
+> t−H:t
+
+, gr
+
+> t−H:t
+
+, at−H:t−1] ∈ SP
+
+contains H-step histories of joint positions qt ∈ Rn, joint velocities ˙qt ∈ Rn, robot angular velocity ωr 
+
+> t
+
+∈ R3, robot Fig. 2: Overview of the ReST-RL framework. Base Policy Training: A locomotion policy is first trained to carry a tray while maintaining a stable gait. Residual Module Training: using privileged observations, a residual module learns whole-body corrective adjustments on top of the frozen base policy to stabilize the payload under disturbances. Two residual designs are considered: (a) Residual Action Adapter , which adds corrective residual actions to the base action, and (b) Residual FiLM Adapter , which modulates intermediate activations of the frozen base policy via layer-wise FiLM residuals. The student encoder distillation process is shown in Fig. 3. projected gravity gr 
+
+> t
+
+∈ R3, and action at ∈ Rn. The object data sobj  
+
+> t
+
+= [ pct−H:t, qct−H:t ] represents the object pose in the camera frame c , where pct = ( xct , y ct , z ct ) ∈ R3 is the position and qct ∈ R4 is the quaternion orientation. 
+
+B. Base Policy Training 
+
+As shown in Fig. 2, ReST-RL framework starts by training a base policy πbase : G × S P → A to perform robust locomotion while maintaining a level tray. The base policy takes the H = 5 steps observation sprop  
+
+> t
+
+and outputs the base action at, optimized with the goal-conditioned ob-jective rbase  
+
+> t
+
+= Rbase (gt, sprop  
+
+> t
+
+). The policy is updated via PPO [20] to maximize the cumulative discounted reward: 
+
+E
+
+hPTt=1 γt−1rbase 
+
+> t
+
+i
+
+.
+
+C. Residual Module Learning 
+
+As shown in Fig. 2, after obtaining the base policy πbase ,we train an encoder–adapter residual module that encodes observations and applies corrective updates to the frozen base policy in A for robust object stabilization. The residual module is first trained with privileged observations and then distilled to one without the privileged information for real-world deployment. This approach draws inspiration from previous work on rapid motor adaptation with privileged information [27]. Privileged observations are defined as spriv  
+
+> t
+
+=[vr
+
+> t−H:t
+
+, ptray 
+
+> t−H:t
+
+, gtray 
+
+> t−H:t
+
+, pobj 
+
+> t−H:t
+
+, vobj 
+
+> t−H:t
+
+, ωobj 
+
+> t−H:t
+
+, gobj 
+
+> t−H:t
+
+],which contain the robot linear velocity, tray position and projected gravity, and the object position, linear and angular velocities, and projected gravity, all lying in R3. We concatenate the proprioceptive history sprop  
+
+> t
+
+, the goal gt,and the privileged observations spriv  
+
+> t
+
+as the encoder input to provide robot-state context and task intent. A longer temporal window ( H = 32 ) is used for all observations 
+
+(sprop  
+
+> t
+
+, spriv  
+
+> t
+
+) to capture gradual destabilization trends that are not evident from short-horizon observations. The encoder outputs a 64-dim feature vector ˆzt = ϕ(spriv  
+
+> t
+
+, sprop  
+
+> t
+
+, gt) ∈ Z ,
+
+where Z denotes the latent feature space. As shown in Fig. 2, two representative integration mecha-nisms are adopted here to explore residual refinement under different structural configurations. 
+
+1) Residual Action Adapter : The action adapter is de-fined as πadapter : ˆS → A , where ˆS := Z × S P × G . At time 
+
+t, the input is ˆst = [ˆ zt; sprop  
+
+> t
+
+; gt] ∈ ˆS, and the action adapter produces a corrective action ˜at = πadapter (ˆ st) ∈ A , which is applied on top of the base action at from the pretrained base policy. The final refined action sent to the low-level controller is 
+
+ˆat = αbase at + αresidual ˜at + qdefault . (1) where αbase is the action scale for base action, αresidual is the action scale for residual action, and qdefault is the default robot joint position. 
+
+2) Residual FiLM Adapter : We use FiLM adapters [28] to modulate frozen layers of the base policy through affine, feature-wise conditioning from the latent feature ˆzt. For a Fig. 3: Residual module distillation. The teacher encoder uses privileged observations, whereas the student encoder uses object-centric inputs; both feed into a frozen residual adapter for latent alignment. frozen linear layer f (·) in πbase with output y = f (x), an adapter predicts (γt, βt) = FiLM(ˆ zt) and computes 
+
+y′ 
+
+> i
+
+= yi
+
+ 1 + γt,i 
+
+ + βt,i , i = 1 , . . . , d, (2) where d is the output dimensionality of the modulated layer. Each modulated base policy layer is paired with one FiLM adapter. In both instantiations of the residual module, the adapter is initialized to output zero correction at the start of training, so the initial behavior matches the pre-trained base policy and preserves its locomotion skill. As training progresses, the residual modules gradually introduce task-specific refinements. PPO jointly optimizes adapter param-eters θadapter and encoder parameters θencoder to maximize 
+
+E
+
+hPTt=1 γt−1rresidual 
+
+> t
+
+i
+
+. The reward rresidual  
+
+> t
+
+is defined in Sec-tion III-F. 
+
+D. Residual Module Distillation 
+
+The privileged information taken by the encoder of the residual module is not directly observable in the real world. Therefore, a non-privileged state encoder is distilled from the privileged state encoder using DAgger [29] for real-world deployment. As shown in Fig 3, the distillation process focuses exclu-sively on the encoder, while the adapter remains frozen. The student encoder receives only object-centric observations sobj 
+
+> t
+
+(with a 32-step history) and outputs zt = ϕ′(sobj  
+
+> t
+
+, sprop  
+
+> t
+
+, gt).The frozen adapter maps zt to refined student actions ˆastudent  
+
+> t
+
+.These trajectories are collected and stored during rollout. The teacher encoder, trained with privileged observations 
+
+spriv  
+
+> t
+
+, outputs latent features ˆzt = ϕ(spriv  
+
+> t
+
+, sprop  
+
+> t
+
+, gt), which are passed through the same frozen adapter to produce refined teacher actions ˆateacher  
+
+> t
+
+. The student encoder is then trained with a joint loss that aligns both latent features and refined actions: 
+
+L = Lz + La = ∥zt − ˆzt∥22 + ∥ˆastudent  
+
+> t
+
+− ˆateacher  
+
+> t
+
+∥22, (3) 
+
+E. Domain Randomization and Environment 
+
+Robot, tray, and object physical parameters are random-ized during training, including mass, friction, restitution, and the robot torso center of mass. This exposes the policy TABLE I: Key Rewards Functions                                
+
+> Term Equation Object Upright exp( −λupright Pxy
+>  gobj
+> t)22)
+> Object-tray Contact 1{object tray contact }
+> Linear XY Vel Tracking exp( −λvxy vrx,y
+> t−ˆvrx,y
+> t
+> 22)
+> Angular Vel Tracking exp( −λωzωryaw
+> t−ˆωryaw
+> t
+> 22)
+> Torso Vertical Vel exp( −λvvrz2
+> t)
+> Torso Angular Vel exp( −λωωrx,y
+> t
+> 22)
+> Feet Impact exp( −λvzvfeet
+> z,t −vfeet
+> z,t −1
+> 22)
+> Tray Upright exp( −λupright Pxy
+>  gtray
+> t)22)
+> Tray-EE Contact 1{tray ee contact }
+> Tray-EE Quat Error exp( −λquat ∆θ2
+> t)
+
+to diverse contact dynamics and inertial variations. Control delay is also introduced to account for actuation and com-munication latency. Cylindrical objects with diverse scales are sampled during training and initialized near the tray center with randomized horizontal offsets and yaw rotation to avoid overfitting to a fixed initial configuration. To ensure a stable initialization phase, velocity commands are set to zero within the initial second of each episode [26]. Random push perturbations are applied to the object during training to improve robustness and encourage the residual module to learn recovery behav-iors under external disturbances. Observation noise is injected into all observation terms during both training and distillation. To model perception latency, an observation delay is introduced for object-related observations (sobj  
+
+> t
+
+, spriv  
+
+> t
+
+). At time t, a delay ℓt is sampled such that the residual module receives measurements from t − ℓt,and the sampled delay is maintained for multiple steps to mimic temporally correlated latency. This delay is applied only to object observations, as object perception typically incurs higher latency than proprioceptive sensing. 
+
+F. Reward Design 
+
+Several base-locomotion reward terms are adapted from prior open-source works [30], [31], and augmented with object-stabilization terms. We define a base reward rbase  
+
+> t
+
+and a stabilization reward robj  
+
+> t
+
+. The base policy is optimized with rbase  
+
+> t
+
+, while the residual module is optimized with the combined objective rresidual  
+
+> t
+
+= rbase  
+
+> t
+
++ robj  
+
+> t
+
+, where robj 
+
+> t
+
+promotes payload stability during locomotion. TABLE I summarizes the key reward components used in ReST-RL .The base reward rbase  
+
+> t
+
+primarily consists of standard loco-motion objectives, with regularization terms (e.g., joint limits and action rate penalties) to prevent aggressive motions. Torso stabilization terms reward low vertical torso velocity and low roll/pitch angular velocity, promoting smooth upper-body motion during locomotion. Waist-joint deviation is only lightly penalized, since overly strict waist constraints reduce the policy’s ability to compensate for disturbances through active upper-body adjustment. A foot impact term rewards small changes in vertical foot velocity, reducing landing forces propagated to the tray. The base reward also Simulation Results (Isaac Lab) TrackLinErr (m/s) ↓ TrackAngErr (rad/s) ↓ Grav-XY ↓ Success Rate (%) ↑                                                                                                                      
+
+> Task Method mean std mean std mean std
+> Command Track Base Policy (WB) 0.110 0.107 0.078 0.065 0.179 0.064 47.4 End2End 0.116 0.111 0.096 0.078 0.046 0.029 89.1
+> ReST-RL (Action WB) 0.093 0.100 0.081 0.070 0.029 0.022 95.9
+> ReST-RL (Action JT) 0.160 0.102 0.135 0.106 0.031 0.019 96.7
+> ReST-RL (FiLM WB) 0.106 0.098 0.069 0.058 0.046 0.023 96.9
+> Push Robot Base Policy (WB) 0.162 0.222 0.110 0.156 0.190 0.089 9.1 End2End 0.170 0.215 0.123 0.155 0.055 0.051 44.0
+> ReST-RL (Action WB) 0.146 0.204 0.110 0.142 0.039 0.044 73.4
+> ReST-RL (Action JT) 0.190 0.168 0.176 0.213 0.038 0.040 72.5
+> ReST-RL (FiLM WB) 0.142 0.168 0.094 0.123 0.043 0.032 84.6
+> Push Object Base Policy (WB) 0.110 0.111 0.079 0.066 0.186 0.072 25.2 End2End 0.117 0.114 0.099 0.080 0.049 0.043 50.2
+> ReST-RL (Action WB) 0.096 0.103 0.084 0.076 0.023 0.039 71.3
+> ReST-RL (Action JT) 0.161 0.104 0.141 0.118 0.033 0.039 70.7
+> ReST-RL (FiLM WB) 0.107 0.100 0.073 0.068 0.040 0.034 74.6
+
+TABLE II: Simulation results in Isaac Lab. Object stability of baselines and instantiations of ReST-RL with different Residual Module architectures is evaluated across various scenarios. In all three tasks, the target locomotion commands are identical. includes tray-related terms. In particular, a tray–end-effector orientation term rewards maintaining a predefined holding configuration, ensuring consistent contact between the tray and both end-effectors. For the object reward robj  
+
+> t
+
+, we use a sparse formulation which includes two object-related terms: an upright term that encourages alignment between the object’s vertical axis and gravity, and a contact term that rewards object-tray contact. Without explicit position or velocity targets, this design allows adapter to discover emergent recovery strategies under perturbations. IV. EXPERIMENTS This section assesses ReST-RL ’s performance through simulation studies and real-world deployment on a Unitree G1 humanoid robot (29 DoF). In particular, evaluation focus on answering following questions: 
+
+Q1: How do key components (action adapter, FiLM adapter, and observation delay) affect performance on 
+
+SteadyTray task? 
+
+Q2: How robust is ReST-RL to disturbances of different types and magnitudes, and how well does it generalize across objects with diverse scales? 
+
+Q3: Does ReST-RL demonstrate reliable sim-to-real transfer? 
+
+A. Experiment Setup 
+
+All experiments are conducted on Unitree G1 robots with specially designed end effectors for tray holding. The end-effectors support the tray and partially constrain its motion, but the tray is not rigidly attached to either end-effector. In real-world deployment, we place an AprilTag on the object and use the Unitree G1’s head-mounted RealSense D435 camera to estimate the object’s pose. 
+
+1) Tasks : We evaluate three simulation tasks: (i) Com-mand Track, which tracks velocity commands while carrying a payload, with targets resampled every 10s; (ii) Push Robot, which applies random forces to the robot torso during 
+
+(a) Mean total reward (b) Object upright reward 
+
+Fig. 4: Training reward comparison between End2End and 
+
+ReST-RL .locomotion for tr seconds per event; and (iii) Push Object, which applies random forces to the object during locomotion for to seconds per event. All three tasks share the same goal-tracking locomotion commands. Each episode lasts 20s, and pushes are triggered every 5s. Physical properties and randomization settings match training, and object body scales are randomized. 
+
+2) Baselines : Two pre-training base policies are con-sidered: Joint-Training (JT) and Whole-Body (WB). Both follow a two-stage curriculum: (i) a locomotion stage trains a stable gait with observation (sprop  
+
+> t
+
+, gt), then (ii) tray-stability rewards are added while continuing optimization. JT decou-ples the action space into an upper-body policy (arm/wrist joints) and a lower-body policy (leg joints), while WB uses a single policy controlling all joints. We also consider an End-to-End (End2End) baseline, where a single policy is trained from scratch on both locomotion and stabilization rewards, taking the full observation (sprop  
+
+> t
+
+, sobj  
+
+> t
+
+, gt) as input. 
+
+3) Metrics : Success rate is the fraction of trials in which the on-tray object remains upright and stays on the tray for the entire horizon (i.e., no tilt or drop). Linear and angular tracking errors are the absolute differences between the commanded and measured torso linear speed in the horizontal plane and torso yaw rate about the vertical axis, respectively. Object Projected Gravity XY Tilt measures Fig. 5: Success rate of ReST-RL trained with and without observation delay under increasing perception latency in Push Robot task. 
+
+Fig. 6: Velocity tracking and disturbance recovery of ReST-RL . Torso and object velocities closely follow the com-manded velocity under command changes and external pushes. object tilt as the L2 norm of the x, y component of the unit gravity vector projected into the object’s local frame. A value of 0 indicates a perfectly upright object, while a value approaching 1 indicates that the object is nearly horizontal. All simulation metrics are computed over N independent trials. 
+
+B. Ablation Study 
+
+TABLE II reports baselines and ReST-RL results across three simulation tasks, addressing Q1 . To isolate design effects, we evaluate: ReST-RL (FiLM), which employs a FiLM adapter in the residual module; ReST-RL (Action WB) and ReST-RL (Action JT), which use action adapters built on WB and JT bases. All ReST-RL instantiations substantially improve success rates and reduce projected gravity compared to the base pol-icy, while command tracking error remains comparable. This shows the proposed design enhanced object stability without substantially sacrificing command-following performance. Performance across FiLM WB, Action WB, and Action JT is broadly similar, suggesting that the improvement primarily stems from structured residual adaptation conditioned on object-related features rather than a specific architectural choice.  
+
+> (a) Push Robot (b) Push Object
+
+Fig. 7: Success rate of ReST-RL in ( a) Push Robot task and ( b) Push Object task under varying push directions and magnitudes. 
+
+Fig. 8: Success rate of ReST-RL across different object body scales in Push Robot task. Although the End2End policy achieves reasonable perfor-mance in the Command Track task, its robustness under Push Robot and Push Object is significantly lower than that of 
+
+ReST-RL . To better understand this gap, Fig. 4 decomposes the reward components during training. While End2End attains a comparable mean total reward, much of this reward stems from locomotion-related terms. In contrast, its object upright reward remains noticeably lower than that of ReST-RL . This gap suggests that directly optimizing both loco-motion and object-stability objectives is non-trivial, whereas structured residual adaptation provides a more reliable route to robust stabilization. In addition to structured residual adaptation, we further analyze the effect of delayed observation. Fig. 5 evaluates the success rate of ReST-RL trained with and without obser-vation delay under increasing perception latency. Across all delay settings, the ReST-RL trained with delayed observa-tions consistently achieves higher success rates, including the zero-latency case. Although observation delay is primarily introduced to improve sim-to-real transfer by accounting for sensing latency, these results indicate that it also enhances overall stabilization performance. 
+
+C. Simulation Result 
+
+To answer Q2 , we evaluate ReST-RL in simulation under disturbances of varying types and magnitudes, and across objects with diverse scales. Fig. 9: ReST-RL deployed on a Unitree G1 humanoid demonstrating payload stabilization capabilities. ( a) Stabilizing the payload when the robot is kicked; ( b) stabilizing the payload when the object is pushed; ( c,d) stably transporting various payloads. Fig. 6 demonstrates the velocity tracking and disturbance recovery behavior of ReST-RL under command switches and external pushes. The torso velocity closely tracks the commanded value while the object velocity remains tightly coupled to it. Under both robot-level pushes (10s, 13s) and object-level perturbation (around 16s), deviations are quickly corrected without sustained oscillation, demonstrating robust recovery. In Fig. 7a and 7b, both plots illustrate ReST-RL main-tains consistently high success rates across a wide range of push directions and magnitudes for both robot pushes and object pushes. As shown in Fig. 7, ReST-RL main-tains high success rates across diverse push directions and magnitudes for both robot and object pushes (74.4% and 73.9% respectively), with only moderate degradation under extreme forces, demonstrating robustness to both body-level and payload-level perturbations. Fig. 8 evaluates ReST-RL across varying cylinder radius-to-height ratios. Success rates remain consistently high across a broad range of aspect ratios, with only a modest drop for extremely slender objects (e.g., ratio 0.1), demonstrating robustness to diverse payload geometries. 
+
+D. Real-World Results 
+
+As shown in Fig. 9, ReST-RL is deployed on a Unitree G1 humanoid robot to evaluate its payload stabilization capability under external disturbances and object variations in real-world environments. Fig. 9(a) and (b) show experiments where external distur-bances are applied to the robot and the payload, respectively. In both cases, ReST-RL demonstrates timely whole-body recovery behaviors by coordinating upper and lower-body joints to re-stabilize the tray and prevent payload tipping under external disturbances. Recovery is achieved without abrupt corrective motions, demonstrating the robustness of the learned control strategy. Fig. 9(c) and (d) demonstrate generalization to objects with diverse geometries and phys-ical properties, including a standard coffee cup, a water-filled wine glass, medical and surgical tools, and a sealed food container. Despite their varying mass distributions, geometries, and contact properties, ReST-RL generalizes across all objects without retraining or fine-tuning. These results indicate strong sim-to-real transfer and robustness to real-world perception and dynamics. V. D ISCUSSION AND CONCLUSION 
+
+This paper formulates a new bimanual loco-manipulation problem, transporting unsecured objects on a tray with a bipedal humanoid robot under external disturbances, namely 
+
+SteadyTray . This paper also proses ReST-RL , a residual student–teacher reinforcement learning framework for solv-ing SteadyTray . By decoupling locomotion from payload stabilization, the residual module resolves these competing objectives while preserving both gait quality and object sta-bility. Our training strategy further incorporates delayed ob-ject observations, control-latency, and domain randomization over physical and sensing parameters. Together, these design choices reduce reliance on instantaneous measurements and promote temporally consistent control, improving sim-to-real transfer and robustness in real-world conditions. Beyond the SteadyTray problem, ReST-RL may be extended to broader loco-manipulation skills that require task-specific sensing beyond standard proprioception, such as contact-rich manipulation during walking (e.g., door opening and cart pushing) and whole-body adaptation using vision or tactile feedback while preserving a robust pretrained gait. Although potentially extensible, the current object encod-ing is limited to a single object and does not yet capture fine geometric or physical properties. Future work could integrate foundation pose-estimation models or vision-based RL to im-prove object representation. Hardware constraints also limit perception: the fixed head-mounted camera has a narrow field of view. This restricted viewpoint makes it difficult to transport objects in alternative holding poses, which are often needed in cluttered scenes to avoid collisions. More broadly, pure sim-to-real RL often requires extensive reward shaping and careful simulator refinement, which becomes impractical for complex contact-rich loco-manipulation tasks. REFERENCES [1] U.S. Bureau of Labor Statistics, “Job openings and labor turnover – december 2025,” News Release USDL-26-0167, Feb. 2026. [Online]. Available: https://www.bls.gov/news.release/archives/jolts 02052026. htm 1 [2] Z. Gu, J. Li, W. Shen, W. Yu, Z. Xie, S. McCrory, X. Cheng, A. Shamsah, R. Griffin, C. K. Liu et al. , “Humanoid locomotion and manipulation: Current progress and challenges in control, planning, and learning,” arXiv preprint arXiv:2501.02116 , 2025. 1, 2 [3] Z. Wu, X. Huang, L. Yang, Y. Zhang, K. Sreenath, X. Chen, P. Abbeel, R. Duan, A. Kanazawa, C. Sferrazza et al. , “Perceptive humanoid parkour: Chaining dynamic human skills via motion matching,” arXiv preprint arXiv:2602.15827 , 2026. 1 [4] R.-Z. Qiu, S. Yang, X. Cheng, C. Chawla, J. Li, T. He, G. Yan, D. J. Yoon, R. Hoque, L. Paulsen et al. , “Humanoid policy˜ human policy,” 
+
+arXiv preprint arXiv:2503.13441 , 2025. 1 [5] Y. Li, Y. Zhang, W. Xiao, C. Pan, H. Weng, G. He, T. He, and G. Shi, “Hold my beer: Learning gentle humanoid locomotion and end-effector stabilization control,” in RSS 2025 Workshop on Whole-body Control and Bimanual Manipulation: Applications in Humanoids and Beyond , 2025. 2 [6] T. He, Z. Wang, H. Xue, Q. Ben, Z. Luo, W. Xiao, Y. Yuan, X. Da, F. Casta˜ neda, S. Sastry et al. , “Viral: Visual sim-to-real at scale for humanoid loco-manipulation,” arXiv preprint arXiv:2511.15200 , 2025. 2[7] H. Xue, T. He, Z. Wang, Q. Ben, W. Xiao, Z. Luo, X. Da, F. Casta˜ neda, G. Shi, S. Sastry et al. , “Opening the sim-to-real door for humanoid pixel-to-action policy transfer,” arXiv preprint arXiv:2512.01061 ,2025. 2 [8] S. Zhao, Y. Ze, Y. Wang, C. K. Liu, P. Abbeel, G. Shi, and R. Duan, “Resmimic: From general motion tracking to humanoid whole-body loco-manipulation via residual learning,” arXiv preprint arXiv:2510.05070 , 2025. 2 [9] H. Weng, Y. Li, N. Sobanbabu, Z. Wang, Z. Luo, T. He, D. Ramanan, and G. Shi, “Hdmi: Learning interactive humanoid whole-body control from human videos,” arXiv preprint arXiv:2509.16757 , 2025. 2 [10] Y. Fu, F. Xie, C. Xu, J. Xiong, H. Yuan, and Z. Lu, “Demohlm: From one demonstration to generalizable humanoid loco-manipulation,” 
+
+arXiv preprint arXiv:2510.11258 , 2025. 2 [11] Y. Du, Y. Li, B. Jia, Y. Lin, P. Zhou, W. Liang, Y. Yang, and S. Huang, “Learning human-humanoid coordination for collaborative object carrying,” arXiv preprint arXiv:2510.14293 , 2025. 2 [12] S. Yin, Y. Ze, H.-X. Yu, C. K. Liu, and J. Wu, “Visualmimic: Visual humanoid loco-manipulation via motion tracking and generation,” 
+
+arXiv preprint arXiv:2509.20322 , 2025. 2 [13] L. Yang, X. Huang, Z. Wu, A. Kanazawa, P. Abbeel, C. Sferrazza, C. K. Liu, R. Duan, and G. Shi, “Omniretarget: Interaction-preserving data generation for humanoid whole-body loco-manipulation and scene interaction,” arXiv preprint arXiv:2509.26633 , 2025. 2 [14] F. Liu, Z. Gu, Y. Cai, Z. Zhou, H. Jung, J. Jang, S. Zhao, S. Ha, Y. Chen, D. Xu et al. , “Opt2skill: Imitating dynamically-feasible whole-body trajectories for versatile humanoid loco-manipulation,” 
+
+arXiv preprint arXiv:2409.20514 , 2024. 2 [15] T. He, Z. Luo, W. Xiao, C. Zhang, K. Kitani, C. Liu, and G. Shi, “Learning human-to-humanoid real-time whole-body teleoperation,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2024, pp. 8944–8951. 2 [16] M. Ji, X. Peng, F. Liu, J. Li, G. Yang, X. Cheng, and X. Wang, “Exbody2: Advanced expressive humanoid whole-body control,” arXiv preprint arXiv:2412.13196 , 2024. 2 [17] Y. Zhang, Y. Yuan, P. Gurunath, T. He, S. Omidshafiei, A. akbar Agha-mohammadi, M. Vazquez-Chanlatte, L. Pedersen, and G. Shi, “Falcon: Learning force-adaptive humanoid loco-manipulation,” 2025. [Online]. Available: https://arxiv.org/abs/2505.06776 2 [18] C. Lu, X. Cheng, J. Li, S. Yang, M. Ji, C. Yuan, G. Yang, S. Yi, and X. Wang, “Mobile-television: Predictive motion priors for humanoid whole-body control,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025, pp. 5364–5371. 2 [19] G. Hinton, O. Vinyals, and J. Dean, “Distilling the knowledge in a neural network,” arXiv preprint arXiv:1503.02531 , 2015. 2 [20] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” 2017. [Online]. Available: https://arxiv.org/abs/1707.06347 2, 3 [21] T. He, J. Gao, W. Xiao, Y. Zhang, Z. Wang, J. Wang, Z. Luo, G. He, N. Sobanbab, C. Pan et al. , “Asap: Aligning simulation and real-world physics for learning agile humanoid whole-body skills,” arXiv preprint arXiv:2502.01143 , 2025. 2 [22] Z. Sun, B.-S. Huang, Y. Peng, X. Li, J. Ma, Y. Sun, Z. Li, H. Jiang, B. Gao, Z. Bing et al. , “Mosaic: Bridging the sim-to-real gap in generalist humanoid motion tracking and teleoperation with rapid residual adaptation,” arXiv preprint arXiv:2602.08594 , 2026. 2 [23] Z. Zhang, J. Guo, C. Chen, J. Wang, C. Lin, Y. Lian, H. Xue, Z. Wang, M. Liu, J. Lyu et al. , “Track any motions under any disturbances,” 
+
+arXiv preprint arXiv:2509.13833 , 2025. 2 [24] J. Pankert and M. Hutter, “Perceptive model predictive control for continuous mobile manipulation,” IEEE Robotics and Automation Letters , vol. 5, no. 4, pp. 6177–6184, 2020. 2 [25] G. He, X. Guo, L. Tang, Y. Zhang, M. Mousaei, J. Xu, J. Geng, S. Scherer, and G. Shi, “Flying hand: End-effector-centric framework for versatile aerial manipulation teleoperation and policy learning,” 
+
+arXiv preprint arXiv:2504.10334 , 2025. 2 [26] C. Lin, Y. R. Song, B. Huo, M. Yu, Y. Wang, S. Liu, Y. Yang, W. Yu, T. Zhang, J. Tan et al. , “Locotouch: Learning dexterous quadrupedal transport with tactile sensing,” arXiv preprint arXiv:2505.23175 , 2025. 2, 4 [27] H. Qi, B. Yi, S. Suresh, M. Lambeta, Y. Ma, R. Calandra, and J. Malik, “General in-hand object rotation with vision and touch,” in Conference on Robot Learning . PMLR, 2023, pp. 2549–2564. 3 [28] E. Perez, F. Strub, H. de Vries, V. Dumoulin, and A. C. Courville, “Film: Visual reasoning with a general conditioning layer,” CoRR , vol. abs/1709.07871, 2017. [Online]. Available: http://arxiv.org/abs/1709.07871 3 [29] S. Ross, G. J. Gordon, and J. A. Bagnell, “A reduction of imitation learning and structured prediction to no-regret online learning,” 2011. [Online]. Available: https://arxiv.org/abs/1011.0686 4 [30] Unitree Robotics, “Unitree RL Lab,” GitHub repository, Oct. 2025. [Online]. Available: https://github.com/unitreerobotics/unitree rl lab 4 [31] D. M¨ uller, E. Knoop, D. Mylonopoulos, A. Serifi, M. A. Hopkins, R. Grandia, and M. B¨ acher, “Olaf: Bringing an animated character to life in the physical world,” 2025. [Online]. Available: https://arxiv.org/abs/2512.16705 4 APPENDIX 
+
+A. Observation Details 
+
+TABLE III: Observation Terms                     
+
+> Term Dim Proprioception ( sprop )Joint position R29
+> Joint velocity R29
+> Last action R29
+> Base angular velocity R3
+> Base projected gravity R3
+> Object ( sobj )Object position (camera frame) R3
+> Object quaternion (camera frame) R4
+> Privilege ( spriv )Base linear velocity R3
+> Tray position (robot frame) R3
+> Tray projected gravity R3
+> Object position (tray frame) R3
+> Object angular velocity (tray frame) R3
+> Object linear velocity (tray frame) R3
+> Object projected gravity R3
+> Goal ( g)Velocity command R3
+
+B. Reward and Termination Details 
+
+All reward and termination terms used throughout training are summarized in TABLE IV. The training procedure is divided into three stages. Stage 1 (Pre-train Locomotion) trains a base locomotion policy with velocity tracking, body stability, and gait regularization rewards. Stage 2 (Tray Holding Fine-tune) builds upon the Stage 1 policy by intro-ducing tray-specific rewards, including orientation, contact, and holder alignment, to learn stable tray transport. Stage 3 (Residual Object Stabilization) trains the residual module with object-related rewards for keeping an object upright on the tray. Each subsequent stage inherits all terms from the previous stage, modifying or disabling specific terms as needed. For task-specific failure conditions such as the tray or object dropping, we employ a delayed-timeout mechanism rather than immediate episode termination (marked with † in TABLE IV), where episodes are truncated when a tracked condition remains violated for a configured duration (1.0 s in our setup). This design serves two purposes. First, it improves sampling efficiency as continued simulation yields minimal task-relevant learning signal once the object or tray is unrecoverable. Second, the delay window allows the policy to observe post-failure states and learn to maintain stable locomotion, which is critical for safe real-world deployment where unseen object states may trigger erratic behavior. In addition, the value function bootstrap is preserved in truncated episodes and the critic does not incorrectly learn to associate post-failure states with zero future return. 
+
+C. Domain Randomization 
+
+All domain randomization terms used throughout training are summarized in TABLE V. 
+
+D. Training Hyperparameter 
+
+TABLE VI and TABLE VII summarize the training hyper-parameters for the residual teacher and encoder distillation stages, respectively. We experiment with two residual de-signs: residual FiLM and residual action, both of which share the same Transformer-based history encoder. The encoder distillation stage inherits the full teacher architecture and trains a student encoder to replicate the teacher’s embeddings from proprioceptive and object observations. All experiments are conducted on two NVIDIA RTX A6000 GPUs with 4 096 parallel environments per GPU. 
+
+E. Training Strategy 
+
+In this section, we detail an additional strategy applied during Stage 1 (pre-training locomotion) to accelerate policy training. In whole-body policy training, the large action space can significantly slow convergence, as the optimizer simultane-ously explores locomotion gaits and upper-body movements. To address this, we introduce an auxiliary upper-body cur-riculum loss during Stage 1 that effectively freezes the upper-body joints, allowing the policy to focus exclusively on learning stable lower-body locomotion. Concretely, we add a regularization term to the PPO loss that penalizes both the mean and standard deviation of the policy’s action distribution on specified upper-body joint indices Jupper :
+
+Lupper = α
+
+P 
+
+> b,j
+
+μ2
+
+> b,j
+
+|B||J upper | + 12 ·
+
+P 
+
+> b,j
+
+σ2
+
+> b,j
+
+|B||J upper |
+
+!
+
+(4) where μb,j and σb,j are the mean and standard deviation of the policy’s action distribution for joint j in sample b, B
+
+denotes the mini-batch, and α is a coefficient that can be decayed over training via a curriculum schedule. The L2 penalty on μ drives the upper-body actions toward zero (i.e., the default pose), while the penalty on σ suppresses exploration on these joints, preventing the optimizer from wasting gradient updates on uninformative upper-body move-ments during early locomotion learning. This regularizer is applied only in Stage 1 and removed in subsequent stages, where the upper-body joints are freed to learn tray-holding and object-stabilization behaviors. In practice, this strategy reduces Stage 1 training time substantially by suppressing exploration on upper-body joints and focusing gradient up-dates on the lower-body joints relevant for locomotion. TABLE IV: Reward and termination terms across three training stages. Terms marked with † are delayed-timeout termination conditions: they do not immediately reset the episode, but will trigger a timeout (truncation) after the configured delay has elapsed. Terms marked with ‡ indicate a change from the previous stage. 
+
+Training Stage Term Expression Weight Stage 1: 
+
+Pre-train Locomotion 
+
+Locomotion tracking rewards 
+
+Track linear vel exp  − vrx,y  
+
+> t
+
+− ˆvrx,y 
+
+> t
+> 22
+
+/σ 2, σ=√0.25 1.0 Track angular vel exp  − ωryaw  
+
+> t
+
+− ˆωryaw 
+
+> t
+> 22
+
+/σ 2, σ=√0.25 1.5 
+
+Survival & body stability rewards 
+
+Robot Alive bonus 1[alive] 1.0 Torso vertical lin vel exp  −λ v rz 2
+
+> t
+
+, λ=2 0.2 Torso roll/pitch ang vel exp  −λ ωrx,y 
+
+> t
+> 22
+
+, λ=1 0.2 Upright torso exp( −λ Pxy 
+
+ gr
+
+> t
+
+) 22), λ=4 0.25 Torso height exp  −λ |htorso − htarget |, λ=10 , htarget =0 .82 0.5 
+
+Regularization penalties 
+
+Joint velocity P 
+
+> i
+
+˙q2 
+
+> i,t
+
+−0.001 Joint acceleration P 
+
+> i
+
+¨q2 
+
+> i,t
+
+−2.5×10 −7
+
+Action rate P
+
+> i
+
+(ai,t − ai,t −1)2 −0.05 Joint position limits P
+
+> i
+
+max(0 , q i,t −qui,t ) + max(0 , q li,t −qi,t ) −5.0 Energy consumption P 
+
+> i
+
+| ˙qi,t | | τi,t | −2×10 −5
+
+Arm joint deviation (L1) P 
+
+> i∈arms
+
+|qi,t − qdefault  
+
+> i,t
+
+| −0.5 Waist yaw joint deviation |qwaist yaw ,t − qdefault waist yaw ,t | −1.0 
+
+Feet rewards & penalties 
+
+Feet slide P 
+
+> k
+
+∥vxy  
+
+> foot k,t
+
+∥ · 1[foot k contact ] −0.2 Foot clearance exp  − 1
+
+> σ
+
+P 
+
+> k
+
+(zfoot k ,t − 0.1) 2 · tanh(2 ∥vxy  
+
+> foot k,t
+
+∥), σ=0 .05 1.0 Feet impact exp  −λ vfeet  
+
+> z,t
+
+− vfeet 
+
+> z,t −1
+> 22
+
+, λ=5 0.5 Undesired contacts 1[undesired body contact] −1.0 
+
+Termination conditions 
+
+Time out Episode length exceeded ( T =20 s) —Robot Base height 1[zrt <0.4] (terminated) —Robot Bad orientation 1[tilt torso >0.7 rad] (terminated) —
+
+Stage 2: 
+
+Pre-train Tray Holding Fine-tune 
+
+Inherits all Stage 1 terms, with the following changes and additions: Modified terms from Stage 1 ‡
+
+Arm joint deviation (exp) ‡ exp  −λ P 
+
+> i∈arms
+
+|qi,t − qdefault  
+
+> i,t
+
+|, λ=0 .3 0.5 
+
+Tray stability rewards (new) 
+
+Tray upright exp( −λ Pxy 
+
+ gtray  
+
+> t
+
+) 22), λ=4 0.25 Tray vertical lin vel exp  −λ v tray 2 
+
+> z,t
+
+, λ=2 0.2 Tray roll/pitch ang vel exp  −λ ωtray x,y 
+
+> t
+> 22
+
+, λ=1 0.2 Tray-EE contact 1[tray ee contact ] 0.01 Tray-EE contact force exp  −λ F tray ee  
+
+> t2
+
+, λ=0 .005 0.2 Tray–Left-EE quat alignment exp  −λ · 2 arccos( |qtray  
+
+> t
+
+· qleft ee  
+
+> t
+
+|)2, λ=2 0.5 Tray–Left-EE quat alignment exp  −λ · 2 arccos( |qtray  
+
+> t
+
+· qright ee  
+
+> t
+
+|)2, λ=2 0.5 Joint torque penalty P 
+
+> i
+
+τ 2 
+
+> i,t
+
+−2×10 −5
+
+Termination conditions (new) 
+
+Tray fallen † 1[ztray <0.7] (timeout after 1.0 s) —
+
+Stage 3: 
+
+Residual Object Stabilization 
+
+Inherits all Stage 2 terms, with the following changes and additions: Disabled terms from Stage 2 ‡
+
+Tray vertical lin vel ‡ (disabled) —Tray roll/pitch ang vel ‡ (disabled) —
+
+Object stability rewards (new) 
+
+Object-tray contact 1{object tray contact } 0.05 Object upright exp( −λ Pxy 
+
+ gobj  
+
+> t
+
+) 22), λ=4 1.0 
+
+Termination conditions (new) 
+
+Object fallen † 1[zobj <0.7] (timeout after 1.0 s) —Object bad orientation † 1[tilt obj >0.7 rad] (timeout after 1.0 s) —TABLE V: Domain randomization parameters 
+
+Parameter Range / Value 
+
+Robot static friction [0 .3, 1.0] 
+
+Robot dynamic friction [0 .3, 1.0] 
+
+End-effector static friction [2 .0, 3.0] 
+
+End-effector dynamic friction [1 .5, 2.5] 
+
+End-effector restitution [0 .0, 0.05] 
+
+End-effector mass [0 .05 , 0.3] kg Torso added mass [−2.0, 3.0] kg Torso CoM offset x∈[±0.025] , y∈[±0.05] , z∈[±0.05] mTray static friction [1 .2, 2.0] 
+
+Tray dynamic friction [1 .0, 1.8] 
+
+Tray restitution [0 .0, 0.05] 
+
+Tray mass [0 .3, 0.7] kg Object radius scale [0 .7, 1.5] ×0.03m Object height scale [0 .75 , 2.0] ×0.1m Object static friction [0 .5, 1.0] 
+
+Object dynamic friction [0 .4, 0.9] 
+
+Object restitution [0 .0, 0.5] 
+
+Object mass [0 .05 , 1.0] kg Object CoM offset x∈[±0.01] , y∈[±0.01] , z∈[±0.02] mJoint velocity reset [−1.0, 1.0] rad/s External push on robot every [3 , 5] s, vxy ∈[±0.5] m/s External push on object every [2 , 4] s, 
+
+vxy ∈[±0.3] m/s, ωxy ∈[±0.3] rad/s 
+
+TABLE VI: Hyperparameters for residual teacher policy (PPO). Both adapter variants share the same base MLP, encoder, and PPO configuration. 
+
+Hyperparameters Values 
+
+Runner 
+
+Number of environments 8 192 (4 096 × 2 GPUs) Number of steps per environment 24 
+
+Base policy 
+
+MLP size (actor & critic) [512, 256, 128] 
+
+Transformer encoder 
+
+Context dimension ( dctx ) 64 Encoder layers 2Attention heads 4
+
+Residual FiLM adapter 
+
+FiLM hidden dim 128 
+
+γ clamp ±3.0
+
+Residual action adapter 
+
+Residual MLP size [512, 256, 128] 
+
+Algorithm (PPO) 
+
+LR schedule Adaptive Discount factor ( γ) 0.99 GAE λ 0.95 Clip parameter ( ϵ) 0.2 Value loss coefficient 1.0 Entropy coefficient 0.01 Desired KL 0.01 Num learning epochs 5Num mini-batches 4Max gradient norm 1.0 
+
+TABLE VII: Hyperparameters for encoder distillation. 
+
+Hyperparameters Values 
+
+Runner 
+
+Number of environments 8 192 (4 096 × 2 GPUs) Number of steps per environment 24 
+
+Algorithm (Distillation) 
+
+Learning rate 5 × 10 −5
+
+Num learning epochs 1Max gradient norm 0.5 Loss type MSE

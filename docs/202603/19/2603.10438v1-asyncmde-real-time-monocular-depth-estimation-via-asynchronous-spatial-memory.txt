@@ -1,0 +1,388 @@
+Title: AsyncMDE: Real-Time Monocular Depth Estimation via Asynchronous Spatial Memory
+
+URL Source: https://arxiv.org/pdf/2603.10438v1
+
+Published Time: Thu, 12 Mar 2026 00:39:14 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# AsyncMDE: Real-Time Monocular Depth Estimation via Asynchronous Spatial Memory 
+
+Lianjie Ma 1, Yuquan Li 1, Bingzheng Jiang 1, Ziming Zhong 3, Han Ding 2, and Lijun Zhu 1,†
+
+Abstract — Foundation-model-based monocular depth estima-tion offers a viable alternative to active sensors for robot perception, yet its computational cost often prohibits deployment on edge platforms. Existing methods perform independent per-frame inference, wasting the substantial computational redundancy between adjacent viewpoints in continuous robot operation. This paper presents AsyncMDE, an asynchronous depth perception system consisting of a foundation model and a lightweight model that amortizes the foundation model’s com-putational cost over time. The foundation model produces high-quality spatial features in the background, while the lightweight model runs asynchronously in the foreground, fusing cached memory with current observations through complementary fusion, outputting depth estimates, and autoregressively updating the memory. This enables cross-frame feature reuse with bounded accuracy degradation. At a mere 3.83M parameters, it operates at 237 FPS on an RTX 4090, recovering 77% of the accuracy gap to the foundation model while achieving a 25 ×
+
+parameter reduction. Validated across indoor static, dynamic, and synthetic extreme-motion benchmarks, AsyncMDE degrades gracefully between refreshes and achieves 161 FPS on a Jetson AGX Orin with TensorRT, clearly demonstrating its feasibility for real-time edge deployment. 
+
+I. INTRODUCTION Depth perception is a fundamental capability for embodied intelligent systems, playing a key role in autonomous naviga-tion [1]–[4], perceptual control [5]–[7], and vision-language-action decision making [8]. Mainstream approaches use LiDAR or RGB-D cameras, but these active sensors are costly and constrained by lighting conditions, sensing range, and environmental structure, making it difficult to maintain stable performance across diverse deployment scenarios. Monocular depth estimation (MDE) requires only a single RGB camera to produce dense, structured depth maps, offering low cost, minimal calibration, and broad adaptability across environ-ments, which makes it an attractive alternative for robot perception [9]. Recently, depth foundation models [10]–[13] have demonstrated strong zero-shot generalization through large-scale pretraining and ViT architectures. However, their large parameter counts lead to excessive inference latency on edge platforms, failing to meet the real-time perception demands of robots operating in highly dynamic environments.           
+
+> This work was supported by the National Natural Science Foundation of China (U25A6013, 62173155, 52188102).
+> †Corresponding author.
+> 1School of Artificial Intelligence and Automation, Huazhong University of Science and Technology, Wuhan, China. {yingyi1048596, yuquanli, bzjiang, ljzhu}@hust.edu.cn
+> 2School of Mechanical Science and Engineering, Huazhong University of Science and Technology, Wuhan, China. dinghan@hust.edu.cn
+> 3The 710 Institute of China State Shipbuilding Corporation Limited, Wuhan, China. zhongziminghaha@outlook.com
+> Fig. 1. Overview of AsyncMDE. Top : the Slow Path (DAv2-ViTB) periodically refreshes spatial memory; the Fast Path fuses cached memory with each frame at high frequency, with depth maps at increasing lag showing graceful degradation. Bottom : efficiency–accuracy trade-off (three-benchmark average δ1); AsyncMDE (3.83 M, 237 FPS) recovers 77% of the
+> δ1gap between the lightweight baseline and the foundation model.
+
+Beyond single-frame depth estimation, the MDE field continues to advance along two directions. Video depth methods [14]–[18] improve temporal consistency through cross-frame modeling, while Depth Anything V3 [19] and VGGT [20] unify monocular and multi-view geometric con-straints toward general-purpose visual geometry foundation models. However, embodied intelligence requires not just peak single-frame accuracy, but reliable depth estimation under strict latency and resource constraints—all these methods depend on heavy backbone networks, and real-time edge deployment remains out of reach. Knowledge distillation and lightweight architecture design [21], [22] attempt to bridge the efficiency gap by compressing model size, but cross-domain generalization and accuracy both drop significantly once the parameter count is reduced to a few million. The accuracy–efficiency tension extends to the decision-making layer. VLA models such as OpenVLA [8] incur hundreds of milliseconds per inference, far too slow for 50–100 Hz robotic control loops. Inspired by dual-process theory [23], fast–slow architectures [5]–[7], [24] decouple a slow, large-model system for semantic reasoning from a fast system for high-frequency action execution. This paradigm suggests that a similar fast–slow separation can be applied at the perception level, rather than solely compressing the model itself .In continuous robot operation, adjacent viewpoints share substantial 3D structure, enabling a decomposition into two 
+
+> arXiv:2603.10438v1 [cs.RO] 11 Mar 2026
+
+subproblems of vastly different complexity: scene representa-tion —recovering 3D-aware features from a single 2D image— demands large capacity and strong priors; temporal adapta-tion —incrementally updating cached features for the current viewpoint—is far simpler, as physical continuity bounds inter-frame changes. This gap motivates pairing a heavyweight model that runs infrequently with a lightweight model at high frame rates. We thus propose AsyncMDE , an asynchronous depth perception system that amortizes the foundation model’s cost over time. The foundation model [10] solves scene representation in the background, writing high-quality features into spatial memory; the lightweight network solves temporal adaptation in the foreground, detecting changes and selectively updating memory through complementary fusion. The two paths run concurrently on separate CUDA streams; since the lightweight network only injects changes rather than infers from scratch, it far outperforms distilled models of comparable size. The main contributions are:  
+
+> •
+
+We propose the asynchronous depth perception paradigm, which exploits the complexity gap between scene rep-resentation and temporal adaptation to amortize the foundation model’s cost over time. The resulting rate-controlled perception system ’s accuracy is governed by the hardware-determined refresh rate and scales smoothly with platform capability without retraining.  
+
+> •
+
+We design SpatialMemoryUnit, which uses comple-mentary fusion and autoregressive memory updates to leverage foundation model features, maintaining bounded accuracy degradation within refresh intervals.  
+
+> •
+
+The lightweight network has only 3.83M parameters and runs at 237 FPS (RTX 4090), achieving a 25 × parameter compression over DAv2-ViTB (97.5M). With TensorRT optimization, it reaches 161 FPS on a Jetson AGX Orin. The method is validated on indoor static, dynamic, and synthetic extreme-motion benchmarks. II. RELATED WORK 
+
+A. Advances in Monocular Depth Estimation 
+
+Single-frame depth estimation foundation models, including Depth Anything V2 [10], Metric3D [11], UniDepthV2 [12], and Depth Pro [13], have achieved breakthroughs in cross-domain zero-shot generalization through large-scale pretrain-ing and ViT architectures [9]. More recently, Depth Any-thing V3 [19] and VGGT [20] further unify monocular and multi-view geometric constraints within a single framework, moving toward general-purpose visual geometry foundation models. While these efforts continue to raise the accuracy ceiling, they all rely on heavy backbones and high-resolution inference, limiting real-time edge deployment. A related direction is prior-assisted depth estimation, which fuses RGB with sparse depth or camera parameters [25], [26]. Although such methods improve metric accuracy, their additional priors introduce non-negligible overhead and do not address inference efficiency on edge platforms. Video depth methods [14]–[18] improve temporal con-sistency through cross-frame modeling. DepthCrafter [15]                                   
+
+> TABLE I NOMENCLATURE
+> Symbol Description
+> xt∈R3×H×WInput RGB frame at time t
+> ˆyt∈R1×H×WPredicted depth map at time tN∈Z+Refresh interval in frames (for training/evaluation)
+> fθLightweight inference network with parameters θ
+> F(ℓ)
+> B,tFoundation model layer-ℓfeature at time tF(ℓ)
+> SEncoder layer-ℓoutput feature
+> Φ(ℓ)Layer-ℓfeature projector (Conv 1×1+Interp)
+> T(ℓ)
+> t∈(0,1)Layer-ℓspatial modulation factor
+> M(ℓ)
+> t∈R128 ×Hℓ×WℓLayer-ℓspatial memory ( ℓ=1, . . . , 4)
+
+generates long-sequence consistent depth via video diffusion, and Video Depth Anything [16] introduces temporal attention heads on top of a single-frame foundation model for inter-frame alignment. These methods improve cross-frame depth quality but still rely on heavy backbones or diffusion sampling processes, making real-time deployment costly. For persistent 3D perception, Spann3R [27] and CUT3R [28] use external spatial memory for streaming 3D reconstruction. Their “persistent-state-driven inference” paradigm is conceptually close to ours, but they target general geometry estimation and depend on heavy ViT architectures, making them unsuitable for lightweight real-time depth inference. 
+
+B. Efficient Depth Perception and Dual-System Architectures 
+
+For depth model compression, knowledge distillation [21], [22] transfers depth knowledge from large models to lightweight networks via the teacher–student paradigm. How-ever, conventional distillation applies supervision only at the final output level, and the compressed model struggles to in-herit the foundation model’s rich intermediate representations. In practice, accuracy degradation remains significant when the parameter count is reduced to a few million, indicating that reducing capacity alone cannot preserve both perception quality and real-time performance. For dual-system architectures, Kahneman’s dual-process theory [23] provides a cognitive science foundation for fast–slow system separation. Dual MLLM [5], GR00T [6], OpenHelix [7], and FiS-VLA [24] have validated the effec-tiveness of this paradigm for robotic decision-making and manipulation. In these frameworks, the slow system, centered on a VLM, provides high-level semantic understanding, while the fast system executes low-level actions at high frequency. This work extends the idea to depth perception, using the foundation model as a low-frequency quality source, the lightweight network as a high-frequency executor, and spatial memory as the bridge enabling feature reuse between them. III. METHODOLOGY This section describes AsyncMDE. Section III-A outlines the two-phase procedure; III-B describes network components; III-C details spatial memory fusion; and III-D presents the loss. Table I summarizes the nomenclature. Fig. 2. AsyncMDE system overview. DAv2-ViTB runs asynchronously in the background (slow path, ∼60 Hz), writing results to spatial memory when available; the lightweight network continuously predicts depth for the current viewpoint (fast path, ∼240 Hz), combining cached memory with current observations through complementary fusion and autoregressively updating memory. During training, DAv2 also provides pseudo-label depth for supervision. 
+
+A. Asynchronous Perception Framework 
+
+As shown in Fig. 2, the system maintains a set of multi-scale spatial memories {M(ℓ) 
+
+> t
+
+}4
+
+> ℓ=1
+
+, where ℓ denotes the feature level, to cache high-quality features from the foundation model and update them autoregressively across frames. The system operates in two phases. 
+
+Initialization phase (t = 0 ): The input frame x0 is fed into the frozen foundation model (DAv2-ViTB [10]) to extract multi-scale features that initialize the memory: 
+
+M(ℓ) 
+
+> 0
+
+= F(ℓ)
+
+> B,0
+
+, ℓ = 1, . . . , 4 (1) 
+
+Continuous inference phase (t > 0 ): The lightweight net-work runs frame by frame, performing continuous inference through spatial memory fusion: 
+
+( ˆyt , Mt ) = fθ (xt , Mt−1) (2) where fθ consists of an encoder, SpatialMemoryUnit, and decoder. During training, sequence slices with a fixed refresh interval N are used; the foundation model only generates the supervision depth and initializes the first-frame memory, and its parameters are not updated. Although only the lightweight network’s parameters are updated, the two models are coupled through spatial memory: the foundation model sets the representation quality ceiling, while the lightweight network learns to preserve and adapt it, with memory regularization (Section III-D) enforcing this complementarity. Implementation and deployment details are provided in Section IV-B. 
+
+B. Network Architecture 
+
+The overall architecture follows three design principles. 
+
+Maximize reuse —the decoder inherits the RefineNet architec-ture and pretrained weights from the foundation model’s DPT Head; the encoder extracts lightweight multi-scale observa-tions; the projector aligns dimensions and SpatialMemoryUnit fuses memory with current features. Structural minimalism —no optical flow, depth warping, or attention modules are introduced; all cross-frame information transfer uses per-pixel gated fusion, with only 3.83M trainable parameters (decoder 2.52M, encoder 0.93M, SMU 0.38M). External state memory —unlike EMA or RNN approaches, the network contains no recurrent hidden state; M0 is injected by the foundation model, each refresh overwrites memory, and any frame can perform independent inference given memory. 
+
+1) Encoder: The encoder employs MobileNetV3-Small [29] (0.93M parameters), producing multi-scale features {F(ℓ) 
+
+> S
+
+}4 
+
+> ℓ=1
+
+at 4×– 32 × downsampling. Its role is to provide current-frame observations to SpatialMemoryUnit, not to perform depth estimation independently. Ablation experiments (Section IV-D) compare multiple encoder architectures, showing that spatial memory compensates for limited encoder capacity. 
+
+2) Feature Projector: The projector applies a 1 × 1 convo-lution for channel alignment followed by bilinear interpolation for spatial alignment to each feature level, making encoder outputs dimensionally consistent with the memory features: 
+
+Φ(ℓ)(F(ℓ) 
+
+> S
+
+) = Interp  Conv 1×1(F(ℓ) 
+
+> S
+
+), sℓ
+
+ (3) where sℓ is the spatial size of the layer-ℓ memory. After projection, all levels are unified to 128 channels. 
+
+3) Decoder: The decoder directly inherits the RefineNet architecture and pretrained weights from the DPT Head. It progressively fuses the four feature levels from deepest to shallowest, performs cross-scale aggregation through residual convolutional units, and outputs a depth map at the same resolution as the input: ˆ yt ∈ RB×1×H×W .C. Spatial Memory Fusion 
+
+SpatialMemoryUnit is the core component of the system. Viewing the memory update as a discrete-time dynamical system, the fusion form must satisfy two properties. Bound-edness requires that the fused output does not exceed the inputs, preventing long-sequence divergence. Controllable decay requires that the initial memory’s contribution decays predictably with the refresh interval. The per-pixel convex combination O = T · M + ( 1 − T ) · F (T ∈ (0, 1)) naturally satisfies boundedness, since the fused result lies strictly within the convex hull of the two inputs. When combined with the autoregressive update Mt+1 = Ot , the contribution weight of 
+
+M0 to frame t is ∏ts=1 Ts, which decays exponentially at a rate determined by scene dynamics. This ensures that the system remains stable for arbitrary N, with predictable and bounded accuracy degradation. Section IV-C verifies this property. 
+
+Justification for feature-space fusion. Fusion operates in the 8×– 32 × downsampled feature space, where each vector’s receptive field spans hundreds of pixels and encodes semantic and structural information robust to pixel-level displacements. When motion exceeds the receptive field tolerance, T → 0injects new observations without requiring pose estimation or feature warping, trading a predictable degradation rate for robustness against the known failure modes of optical flow, such as occlusion boundaries and dynamic object interference. Based on the above, the fusion procedure has two steps. A semantic gated modulation factor assesses regional change (Section III-C-1), and complementary fusion selectively updates memory (Section III-C-2). 
+
+1) Semantic Gated Modulation Factor: The spatial modula-tion factor T (ℓ) 
+
+> t
+
+∈ (0, 1) governs the per-pixel trust balance be-tween memory and the current observation. When T → 1 the system retains memory (static region); when T → 0 it injects the current frame (changed region). Shallow features (Layer 1) capture fine-grained texture changes but miss semantic shifts, whereas deep features (Layer 4) capture semantic changes but lack spatial precision. The SemanticGatedModulator fuses both scales through a learnable gating mechanism. Given the projected features at Layer 1 and 4 from the previous and current frames, the T values at both scales are: 
+
+TL1 = σ  h(1)([ pL1; cL1])  (4) 
+
+TL4 = σ  h(4)([ pL4; cL4])  (5) where pLi and cLi are the projected features of the previous and current frames at Layer i (i ∈ { 1, 4}), [·; ·] denotes channel-wise concatenation, and h(1) and h(4) denote independently parameterized lightweight convolutional networks. The T
+
+values from the two scales are non-linearly combined via semantic gating: 
+
+g = σ  k · ( eTL4 − 0.5) (6) 
+
+Tfinal = g ⊙ TL1 + ( 1 − g) ⊙ eTL4 (7) where eTL4 = Interp (TL4, s1) is TL4 upsampled to Layer 1 resolution, and k = 4.0 is a temperature parameter. The gate 
+
+g causes semantically stable regions to adopt the fine-grained 
+
+TL1, while semantically changing regions switch to eTL4 to drive global refresh. The modulation factor for each level is obtained by interpolating Tfinal :
+
+T (ℓ) 
+
+> t
+
+= Interp (Tfinal , sℓ), ℓ = 1, . . . , 4 (8) where sℓ is the spatial size of layer ℓ, and T (1) 
+
+> t
+
+= Tfinal .Additionally, the system applies temporal smoothing: 
+
+T ′(ℓ) 
+
+> t
+
+= β T (ℓ) 
+
+> t
+
++ ( 1 − β )T ′(ℓ) 
+
+> t−1
+
+(β = 0.5), suppressing frame-to-frame jitter in the T values. 
+
+2) Complementary Fusion and Memory Update: Given the spatial modulation factor T (ℓ) 
+
+> t
+
+, SpatialMemoryUnit mixes memory and current observations per pixel through comple-mentary fusion: 
+
+O(ℓ) 
+
+> t
+
+= T (ℓ) 
+
+> t
+
+⊙ M(ℓ) 
+
+> t
+
++ ( 1 − T (ℓ) 
+
+> t
+
+) ⊙ Φ(ℓ)(F(ℓ) 
+
+> S,t
+
+) (9) The fused result is written back as an autoregressive memory update, sustaining foundation-model feature quality within the refresh interval: 
+
+M(ℓ) 
+
+> t+1
+
+= O(ℓ) 
+
+> t
+
+(10) where M(ℓ) 
+
+> t
+
+∈ RB×128 ×Hℓ×Wℓ is the layer-ℓ spatial memory at time t, and Φ(ℓ) is the feature projector. 
+
+D. Loss Function 
+
+The training objective consists of three loss terms that con-strain depth accuracy, edge structure, and memory utilization, respectively. 
+
+Scale-Shift Invariant Loss eliminates global scale and shift differences between the predicted depth P and the pseudo-label G:
+
+LSSI = MSE 
+
+ P − μP
+
+σP
+
+, G − μG
+
+σG
+
+
+
+(11) where μ and σ denote the spatial mean and standard deviation, respectively. 
+
+Multi-Scale Gradient Loss enforces edge sharpness on the normalized depth maps: 
+
+Lgrad =
+
+> 4
+
+# ∑
+
+> s=1
+
+1
+
+s2
+
+ |∇xPs − ∇xGs| + |∇yPs − ∇yGs| (12) where s indicates the downsampling scale; gradients are computed at multiple scales to capture both fine and coarse edge structure. 
+
+Memory Regularization Loss prevents the network from ignoring the memory and relying solely on the current frame during early training by introducing a soft lower bound on the T values: 
+
+Lmem = ReLU (τ − ¯T ) (13) where ¯T is the spatial mean of the Layer 1 T values and 
+
+τ = 0.4 is the lower-bound threshold. This constraint activates only when ¯T falls below the threshold, without interfering with the network’s freedom to assign low T values to local dynamic regions. The total loss is: 
+
+L = 1.0 · LSSI + 0.5 · Lgrad + 0.1 · Lmem (14) TABLE II ACCURACY –E FFICIENCY COMPARISON                                                                                                                   
+
+> ScanNet Bonn Sintel Method Params FPS AbsRel ↓RMSE ↓δ1↑AbsRel ↓RMSE ↓δ1↑AbsRel ↓RMSE ↓δ1↑
+> DAv2-ViTL [10] 335.3M 21.1 0.037 0.133 0.984 0.049 0.174 0.979 0.224 4.985 0.735 DAv2-ViTB 97.5M 60.1 0.040 0.137 0.983 0.050 0.177 0.979 0.222 4.867 0.733 DAv2-ViTS 24.8M 132.1 0.044 0.146 0.980 0.052 0.178 0.979 0.235 4.993 0.717 VDA-Base [16] 114.4M 42.4 0.041 0.144 0.982 0.042 0.170 0.985 0.212 4.922 0.758
+> VDA-Small 29.0M 75.9 0.047 0.154 0.979 0.044 0.160 0.986 0.233 5.040 0.716 CUT3R [28] 748.4M 14.4 0.107 0.390 0.888 0.112 0.377 0.877 0.448 6.185 0.425 LiteMono [22] 3.07M 238 0.168 0.431 0.727 0.158 0.455 0.759 0.416 5.956 0.443 LiteMono †3.07M 238 0.120 0.306 0.851 0.123 0.365 0.854 0.383 5.664 0.502 AsyncMDE (ours) 3.83M 237 0.057 0.181 0.968 0.058 0.196 0.969 0.287 5.377 0.640
+> All baselines perform independent per-frame inference; AsyncMDE reports lag 0–9 cycle averages. †Fine-tuned on our training data. LiteMono input 640 ×192, CUT3R input 224 ×224; all others are resized so that the shorter side equals 518 px (divisible by 14).
+
+IV. EXPERIMENTS 
+
+A. Experimental Setup 1) Training Setup: Training mixes three datasets: NYUv2 [30] (indoor static, ∼155K frames), TartanAir [31] (synthetic, ∼112K frames), and BridgeData V2 [32] (robotic interaction, ∼387K frames), totaling ∼654K frames. The supervision signal is pseudo-labeled inverse depth generated by the frozen foundation model. Training uses video clips of length 10 with stride 5; each image is resized so that its short edge measures 518 pixels, aligned to multiples of 14. We use AdamW ( lr =10 −4, weight decay 0.01), batch size 4, 30 epochs, and cosine learning rate scheduling. AMP is enabled with gradient clipping at 1.0. 
+
+2) Evaluation Setup: Evaluation is conducted on three benchmarks covering different scene characteristics. Scan-Net [33] contains 100 indoor scenes (43,600 frames, structured-light depth GT). Bonn [34] contains 14 dynamic indoor scenes (2,850 frames). Sintel [35] contains 23 synthetic sequences (1,064 frames) with large motion and extreme dynamics. The evaluation refresh interval is N=10 . Depth accuracy metrics are AbsRel, RMSE, and δ1 (the fraction of pixels satisfying max (d∗/d, d/d∗) < 1.25 ); efficiency metrics are FPS and parameter count. 
+
+Metric reporting convention. The accuracy of AsyncMDE varies with lag (the number of frames since the last refresh). All values reported in tables are averages over one complete refresh cycle ( lag ∈ [0, N−1]), referred to as the cycle average ;per-lag degradation behavior is presented in Section IV-C. 
+
+3) Baselines: DAv2-ViTB (97.5M) serves as the primary baseline and is also the foundation model used for the slow path; DAv2-ViTS/ViTL serve as same-family references. The baselines also include LiteMono [22] (3.07M, as a lightweight representative), Video Depth Anything [16] (as a video depth representative), and CUT3R [28] (streaming 3D reconstruction with external spatial memory). Because LiteMono performed poorly with its original weights due to limited training data, we fine-tuned it on our dataset for a fairer comparison, denoted LiteMono †.
+
+B. Main Results: Accuracy–Efficiency Comparison 
+
+Accuracy comparison with baselines. As shown in Table II, AsyncMDE achieves δ1=96.8% and 96.9% on ScanNet and Bonn, respectively, with only 3.83M parameters (less than 4% of DAv2-ViTB), keeping the gap within 2 percentage points of DAv2-ViTB (98.3%/97.9%). This comparison highlights the value of spatial memory from three perspectives. (1) vs. standalone lightweight models. Compared with LiteMono † at a similar parameter count, AbsRel is 52% lower, demonstrating that feature amortization is far superior to standalone lightweight models of comparable size. (2) vs. general-purpose memory architectures. CUT3R also uses external memory but targets general 3D reconstruction, achieving only 88.8% δ1 with 748M parameters, still inferior to AsyncMDE at 3.83M, confirming that task-specific design is essential for efficient amortization. (3) vs. extreme scenarios. 
+
+On Sintel, the cycle-average AbsRel of 0.287 reflects the in-herent limitation of the temporal continuity prior under severe scene dynamics; however, the degradation is strictly lower-bounded by the standalone encoder capacity (AbsRel=0.386), confirming that the system retains a guaranteed performance floor. 
+
+Accuracy–latency coupling and deployment architec-ture. Unlike conventional models with deterministic accuracy, AsyncMDE’s accuracy is governed by the rate ratio of the fast and slow paths. At deployment, the two paths occupy separate CUDA streams and exchange data through a lock-free shared feature cache. The slow path writes updated multi-scale features into the cache whenever a new foundation-model inference completes, and the fast path reads the latest cached features at each frame without blocking. The fast-path latency is tfast =4.2 ms; the slow-path latency tslow =16 .6 ms is entirely hidden by the pipeline, yielding an effective refresh interval Neff ≈ 237 /60 ≈ 4 frames on an RTX 4090. As platform compute capability varies, Neff adjusts accordingly and accuracy traces the degradation curve smoothly (Fig. 3). Section IV-C quantifies this property. 
+
+C. System Behavior Analysis: Degradation and Deployment 1) Accuracy Degradation Characteristics: Fig. 3 shows the relationship between lag and accuracy, with N set to 0       
+
+> 1–3 4–5
+> 6–10
+> 11–15
+> 16–20
+> Lag (frames)
+> 0.045
+> 0.075
+> 0.105
+> AbsRel  ↓
+> 0.040
+> (a) ScanNet
+> 0
+> 1–3 4–5
+> 6–10
+> 11–15
+> 16–20
+> Lag (frames)
+> 0.049
+> 0.067
+> 0.085
+> 0.050
+> (b) Bonn
+> 0
+> 1–3 4–5
+> 6–10
+> 11–15
+> 16–20
+> Lag (frames)
+> 0.21
+> 0.27
+> 0.33
+> 0.222
+> (c) Sintel
+> 0.885 0.930 0.975 0.983
+> 0.930 0.955 0.980 0.979
+> 0.60 0.68 0.76 δ1 ↑
+> 0.733
+> AbsRel ↓δ1↑DAv2-ViTB AbsRel DAv2-ViTB δ1
+
+Fig. 3. Lag–accuracy degradation curves. The evaluation interval N=20 exceeds the training setting ( N=10 ) to test out-of-distribution generalization. ScanNet and Bonn degrade gracefully within the training interval (lag ≤10) and more steeply beyond; Sintel AbsRel saturates beyond lag =10 at ∼0.34, exhibiting bounded degradation. 
+
+20 at evaluation to test generalization beyond the training distribution. At lag=0, ScanNet AbsRel is 0.041, nearly identical to DAv2-ViTB (0.040). As lag increases, degradation exhibits two key properties. (1) Graceful and bounded. 
+
+ScanNet and Bonn degrade gradually within the training interval (lag ≤10), consistent with the theory in Section III-C; Sintel saturates for lag >10 at ∼0.34, with the lower bound being the encoder’s standalone inference capability (FastPath Only AbsRel=0.386). (2) Scene-dependent. Bonn has a small fraction of dynamic objects, with AbsRel increasing only 38% relative to lag=0 at lag 6–10; ScanNet increases by 82% due to global camera scanning; Sintel exhibits the steepest rise (AbsRel reaches 0.337) yet saturates beyond lag >10, indicating bounded degradation even under extreme dynamics. 
+
+2) Amortization Efficiency and Deployment Trade-offs: 
+
+When N increases to 20, the ScanNet cycle-average AbsRel rises from 0.057 to 0.081 ( +42%), and δ1 drops from 96.8% to 92.6%; the degradation magnitude can be estimated from Fig. 3. On edge platforms, the slow-path rate decreases and 
+
+Neff increases, but the fast-path frame rate is unaffected. To verify edge feasibility, we conduct inference benchmarks on a Jetson AGX Orin (64 GB, 50 W mode). Table III presents the Orin edge deployment characteristics. Under PyTorch, the fast path runs at 27.8 FPS, a 6.8 × speedup over DAv2-ViTB (higher than the 3.9 × on RTX 4090), as depthwise separable convolutions exhibit a more pronounced efficiency advantage on edge devices; the SMU module accounts for only 14% of latency (5.0 ms), confirming that memory fusion overhead is minimal. TRT FP16 further boosts the fast path to 161.1 FPS (13.1 ×), at which point Neff ≈
+
+161 /12 ≈ 13 frames, still within the graceful degradation region of Fig. 3. Note that under single-GPU concurrency, 
+
+TABLE III JETSON AGX O RIN EDGE DEPLOYMENT , I NPUT 518 ×518 
+
+PyTorch FP32 TRT FP16 FastPath ViTS ViTB FastPath ViTS ViTB 
+
+FPS ↑ 27.8 10.1 4.1 161.1 25.3 12.3 Latency (ms) 36.0 99.3 244.0 6.2 39.5 81.0 Speedup (vs ViTB) 6.8 × 13.1 ×
+
+TABLE IV ENCODER ABLATION ON SCAN NET , N=10 C YCLE AVERAGE 
+
+Encoder Type Params FPS ↑ AbsRel ↓ δ1↑ FastPath% MNv3-S CNN 3.83M 237 0.057 0.968 11.3 MNv3-L CNN 5.93M 198 0.060 0.962 12.7 EViT-B0 Linear 3.53M 207 0.065 0.955 23.4 EViT-B1 Linear 7.52M 147 0.064 0.958 37.6 MViT-XS Hybrid 4.82M 112 0.070 0.945 39.7 MViT-S Hybrid 7.87M 110 0.065 0.956 33.7 
+
+the fast path drops to 13.5 FPS (2.16 × slowdown) due to resource contention; TRT deployment or a dual-GPU setup can mitigate this bottleneck. 
+
+D. Ablation Studies 1) Encoder Selection Ablation: Table IV fixes SpatialMem-oryUnit and the decoder, varying the encoder across pure CNN (MobileNetV3 [29]), hybrid architectures (MobileViT [36]), and linear attention (EfficientViT [37]). The results show a counterintuitive trend: larger encoder capacity leads to lower system accuracy. MNv3-S achieves the best overall performance; EViT-B1 worsens AbsRel by +12% and reduces FPS by 38%. This is explained by FastPath% (the fraction of encoder-dominated regions): MNv3-S has only 11.3% encoder-dominated regions, with 88.7% retaining high-quality memory; EViT-B1 (37.6%) and MViT-XS (39.7%) excessively overwrite memory with lower-quality observations. This indicates that the optimal role of the encoder is as a change detector and observation injector —injecting new observations only where memory has become invalid, rather than performing independent depth inference. 
+
+2) Core Architecture Ablation: Table V progressively introduces core components to quantify each design choice. Using FastPath Only (no memory) as an anchor, initializing memory with encoder features (Enc. Mem.) actually increases ScanNet AbsRel by +7%, as low-quality features introduce drift through autoregressive accumulation. Switching to DAv2 initialization reduces AbsRel by 57% and improves δ1 by 14.3 pp, establishing the value of high-quality memory. DAv2 L4 Only (semantic gating only) closely matches Full SMU (ScanNet AbsRel 0.057 vs. 0.057), while DAv2 w/o SGM (texture gating only) degrades to 0.061 ( +7%), indicating semantic features are the primary gating contributor. Dual-scale fusion (Full SMU) still holds a slight δ1 edge, as texture information contributes to depth details. 
+
+TABLE V CORE ARCHITECTURE ABLATION , N=10 C YCLE AVERAGE 
+
+ScanNet Bonn Sintel Config. M Init SGM AR ↓ δ1 ↑ AR ↓ δ1 ↑ AR ↓ δ1 ↑
+
+FastPath Only ✗ – – 0.132 0.825 0.114 0.873 0.386 0.492 Enc. Mem. ✓ Enc. Full 0.141 0.801 0.112 0.879 0.432 0.444 DAv2 w/o SGM ✓ DAv2 L1 0.061 0.960 0.062 0.965 0.297 0.637 DAv2 L4 Only ✓ DAv2 L4 0.057 0.966 0.056 0.970 0.287 0.637 
+
+Full SMU ✓ DAv2 Full 0.057 0.968 0.058 0.969 0.287 0.640 Input GT Depth DAv2-ViTB CUT3R VDA-ViTS LiteMono† AsyncMDE Fig. 4. Qualitative depth comparison (least-squares aligned). The three rows correspond to ScanNet (indoor static), Bonn (indoor dynamic), and Sintel (synthetic extreme). AsyncMDE produces depth quality comparable to DAv2-ViTB at low lag. Input (lag=0) T -value (lag=1) Depth (lag=1) T -value (lag=5) Depth (lag=5) T -value (lag=10) Depth (lag=10)          
+
+> T value
+> Retain Update
+> Fig. 5. T-value visualization. Each row shows, from left to right, the refresh-frame RGB, T-value masks and depth estimates at lag=1 and lag= N. Top: indoor robotic manipulation; bottom: outdoor dynamic scene. Warm colors ( T→1) indicate static regions; cool colors ( T→0) indicate moving regions. Degradation primarily affects moving objects, while static structures maintain stable estimates even at high lag.
+
+E. Qualitative Results 
+
+Fig. 4 presents a qualitative depth comparison. In ScanNet scenes, AsyncMDE’s edge sharpness and low-texture smooth-ness are close to those of DAv2-ViTB and far superior to LiteMono; in Bonn dynamic scenes, moving object contours are well preserved; in Sintel, distant details show some degradation, consistent with the quantitative findings. Fig. 5 visualizes the spatial evolution of T values across lag. In the indoor robotic scene (top row), T ≈ 1 everywhere at lag=1 except at the robot arm’s end effector; by lag= N,the low-T region expands along the motion trajectory with local depth blurring, while static structures retain high T . In the outdoor scene (bottom row), the parkour figure triggers low T even at lag=1 and the affected area grows markedly by lag= N, whereas the building background stays at T → 1throughout. Two patterns emerge: (1) T values distinguish static from dynamic regions, preserving estimate quality for static structures even at high lag; (2) degradation primarily affects moving objects, consistent with Section IV-C. V. CONCLUSIONS This paper presents AsyncMDE, which bridges the gap between high-accuracy monocular depth estimation and real-time deployment by amortizing the computational cost of a foundation model over time rather than compressing it. The system achieves 237 FPS (RTX 4090) / 161 FPS (Orin TRT) with only 3.83M parameters, delivering a 25 ×
+
+parameter compression relative to DAv2-ViTB while main-taining bounded degradation within refresh intervals. The asynchronous amortization paradigm generalizes to any dense perception task that relies on spatiotemporal continuity. 
+
+Limitations and future work. We identify two limitations that also suggest future research directions. Extreme motion degradation —when scene motion causes large-scale memory invalidation (an excessive fraction of T → 0), the system falls back to standalone encoder inference, reaching the inherent lower bound of the temporal continuity prior. Motion-adaptive memory reset or region-specific memory update strategies could address this. Scale consistency —the current system outputs relative depth without inter-frame metric scale constraints. For applications that require absolute depth, such as robot navigation, incorporating a temporal scale alignment module or integrating with metric depth foundation models would be necessary. REFERENCES [1] F. Yang, C. Wang, C. Cadena, and M. Hutter, “iPlanner: Imperative path planning,” in Robotics: Science and Systems XIX , 2023. [2] P. Roth, J. Nubert, F. Yang, M. Mittal, and M. Hutter, “ViPlanner: Visual semantic imperative learning for local navigation,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) , 2024, pp. 5243–5249. [3] D. Shah, A. Sridhar, N. Dashora, K. Stachowicz, K. Black, N. Hirose, and S. Levine, “ViNT: A foundation model for visual navigation,” in 
+
+Proceedings of The 7th Conference on Robot Learning . PMLR, 2023, pp. 711–733, ISSN: 2640-3498. [4] A. Sridhar, D. Shah, C. Glossop, and S. Levine, “NoMaD: Goal masked diffusion policies for navigation and exploration,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) ,2024, pp. 63–70. [5] B. Han, J. Kim, and J. Jang, “A dual process VLA: Efficient robotic manipulation leveraging VLM,” arXiv preprint arXiv:2410.15549 , 2024. [6] NVIDIA, J. Bjorck, F. Castañeda, N. Cherniadev, X. Da, R. Ding, L. J. Fan, Y. Fang, D. Fox, F. Hu, S. Huang, J. Jang, Z. Jiang, J. Kautz, K. Kundalia, L. Lao, Z. Li, Z. Lin, K. Lin, G. Liu, E. Llontop, L. Magne, A. Mandlekar, A. Narayan, S. Nasiriany, S. Reed, Y. L. Tan, G. Wang, Z. Wang, J. Wang, Q. Wang, J. Xiang, Y. Xie, Y. Xu, Z. Xu, S. Ye, Z. Yu, A. Zhang, H. Zhang, Y. Zhao, R. Zheng, and Y. Zhu, “GR00T N1: An open foundation model for generalist humanoid robots,” arXiv preprint arXiv:2503.14734 , 2025. [7] C. Cui, P. Ding, W. Song, S. Bai, X. Tong, Z. Ge, R. Suo, W. Zhou, Y. Liu, B. Jia, H. Zhao, S. Huang, and D. Wang, “OpenHelix: A short survey, empirical analysis, and open-source dual-system VLA model for robotic manipulation,” arXiv preprint arXiv:2505.03912 , 2025. [8] M. J. Kim, K. Pertsch, S. Karamcheti, T. Xiao, A. Balakrishna, S. Nair, R. Rafailov, E. P. Foster, P. R. Sanketi, Q. Vuong, T. Kollar, B. Burchfiel, R. Tedrake, D. Sadigh, S. Levine, P. Liang, and C. Finn, “OpenVLA: An open-source vision-language-action model,” in Proceedings of The 8th Conference on Robot Learning . PMLR, 2025, pp. 2679–2713, ISSN: 2640-3498. [9] Z. Xu, H. Zhou, S. Peng, H. Lin, H. Guo, J. Shao, P. Yang, Q. Yang, S. Miao, X. He, Y. Wang, Y. Wang, R. Hu, Y. Liao, X. Zhou, and H. Bao, “Towards depth foundation models: Recent trends in vision-based depth estimation,” Computational Visual Media , pp. 1–29, 2026. [10] L. Yang, B. Kang, Z. Huang, Z. Zhao, X. Xu, J. Feng, and H. Zhao, “Depth anything v2,” in Advances in Neural Information Processing Systems , A. Globerson, L. Mackey, D. Belgrave, A. Fan, U. Paquet, J. Tomczak, and C. Zhang, Eds., vol. 37. Curran Associates, Inc., 2024, pp. 21 875–21 911. [11] M. Hu, W. Yin, C. Zhang, Z. Cai, X. Long, H. Chen, K. Wang, G. Yu, C. Shen, and S. Shen, “Metric3d v2: A versatile monocular geometric foundation model for zero-shot metric depth and surface normal estimation,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 46, no. 12, pp. 10 579–10 596, 2024. [12] L. Piccinelli, C. Sakaridis, Y.-H. Yang, M. Segu, S. Li, W. Abbeloos, and L. Van Gool, “UniDepthV2: Universal monocular metric depth estimation made simpler,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 48, no. 3, pp. 2354–2367, 2026. [13] A. Bochkovskiy, A. Delaunoy, H. Germain, M. Santos, Y. Zhou, S. Richter, and V. Koltun, “Depth pro: Sharp monocular metric depth in less than a second,” in The Thirteenth International Conference on Learning Representations , 2024. [14] J. Shao, Y. Yang, H. Zhou, Y. Zhang, Y. Shen, V. Guizilini, Y. Wang, M. Poggi, and Y. Liao, “Learning temporally consistent video depth from video diffusion priors,” in Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition , 2025, pp. 22 841– 22 852. [15] W. Hu, X. Gao, X. Li, S. Zhao, X. Cun, Y. Zhang, L. Quan, and Y. Shan, “DepthCrafter: Generating consistent long depth sequences for open-world videos,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2025, pp. 2005–2015. [16] S. Chen, H. Guo, S. Zhu, F. Zhang, Z. Huang, J. Feng, and B. Kang, “Video depth anything: Consistent depth estimation for super-long videos,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2025, pp. 22 831–22 840. [17] G. Chou, W. Xian, G. Yang, M. Abdelfattah, B. Hariharan, N. Snavely, N. Yu, and P. Debevec, “FlashDepth: Real-time streaming video depth estimation at 2k resolution,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2025, pp. 9638–9648. [18] Z. Kuang, T. Zhang, K. Zhang, H. Tan, S. Bi, Y. Hu, Z. Xu, M. Hasan, G. Wetzstein, and F. Luan, “Buffer anytime: Zero-shot video depth and normal from image priors,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2025, pp. 17 660–17 670. [19] H. Lin, S. Chen, J. Liew, D. Y. Chen, Z. Li, G. Shi, J. Feng, and B. Kang, “Depth anything 3: Recovering the visual space from any views,” arXiv preprint arXiv:2511.10647 , 2025. [20] J. Wang, M. Chen, N. Karaev, A. Vedaldi, C. Rupprecht, and D. Novotny, “VGGT: Visual geometry grounded transformer,” in 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2025, pp. 5294–5306. [21] D. Wofk, F. Ma, T.-J. Yang, S. Karaman, and V. Sze, “FastDepth: Fast monocular depth estimation on embedded systems,” in 2019 International Conference on Robotics and Automation (ICRA) , 2019, pp. 6101–6108, ISSN: 2577-087X. [22] N. Zhang, F. Nex, G. Vosselman, and N. Kerle, “Lite-mono: A lightweight CNN and transformer architecture for self-supervised monocular depth estimation,” in Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition , 2023, pp. 18 537– 18 546. [23] D. Kahneman, Thinking, Fast and Slow . Macmillan, 2011, google-Books-ID: SHvzzuCnuv8C. [24] H. Chen, J. Liu, C. Gu, Z. Liu, R. Zhang, X. Li, X. He, Y. Guo, C.-W. Fu, S. Zhang, and P.-A. Heng, “Fast-in-slow: A dual-system foundation model unifying fast manipulation within slow reasoning,” 
+
+arXiv preprint arXiv:2506.01953 , 2025. [25] H. Lin, S. Peng, J. Chen, S. Peng, J. Sun, M. Liu, H. Bao, J. Feng, X. Zhou, and B. Kang, “Prompting depth anything for 4k resolution accurate metric depth estimation,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2025, pp. 17 070–17 080. [26] M. Liu, Z. Zhu, X. Han, P. Hu, H. Lin, X. Li, J. Chen, J. Xu, Y. Yang, Y. Lin, X. Li, Y. Yu, W. Zhang, T. Kong, and B. Kang, “Manipulation as in simulation: Enabling accurate geometry perception in robots,” 
+
+arXiv preprint arXiv:2509.02530 , 2025. [27] H. Wang and L. Agapito, “3d reconstruction with spatial memory,” in 
+
+2025 International Conference on 3D Vision (3DV) , 2025, pp. 78–89, ISSN: 2475-7888. [28] Q. Wang, Y. Zhang, A. Holynski, A. A. Efros, and A. Kanazawa, “Continuous 3d perception model with persistent state,” in Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2025, pp. 10 510–10 522. [29] A. Howard, M. Sandler, G. Chu, L.-C. Chen, B. Chen, M. Tan, W. Wang, Y. Zhu, R. Pang, V. Vasudevan, Q. V. Le, and H. Adam, “Searching for MobileNetV3,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , 2019. [30] N. Silberman, D. Hoiem, P. Kohli, and R. Fergus, “Indoor segmentation and support inference from RGBD images,” in Computer Vision – ECCV 2012 , A. Fitzgibbon, S. Lazebnik, P. Perona, Y. Sato, and C. Schmid, Eds. Springer, 2012, pp. 746–760. [31] W. Wang, D. Zhu, X. Wang, Y. Hu, Y. Qiu, C. Wang, Y. Hu, A. Kapoor, and S. Scherer, “TartanAir: A dataset to push the limits of visual SLAM,” in 2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2020, pp. 4909–4916, ISSN: 2153-0866. [32] H. R. Walke, K. Black, T. Z. Zhao, Q. Vuong, C. Zheng, P. Hansen-Estruch, A. W. He, V. Myers, M. J. Kim, M. Du, A. Lee, K. Fang, C. Finn, and S. Levine, “BridgeData v2: A dataset for robot learning at scale,” in Proceedings of The 7th Conference on Robot Learning .PMLR, 2023, pp. 1723–1736, ISSN: 2640-3498. [33] A. Dai, A. X. Chang, M. Savva, M. Halber, T. Funkhouser, and M. Niessner, “ScanNet: Richly-annotated 3d reconstructions of indoor scenes,” in Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , 2017, pp. 5828–5839. [34] E. Palazzolo, J. Behley, P. Lottes, P. Giguère, and C. Stachniss, “ReFusion: 3d reconstruction in dynamic environments for RGB-d cameras exploiting residuals,” in 2019 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2019, pp. 7855– 7862, ISSN: 2153-0866. [35] D. J. Butler, J. Wulff, G. B. Stanley, and M. J. Black, “A naturalistic open source movie for optical flow evaluation,” in Computer Vision – ECCV 2012 , A. Fitzgibbon, S. Lazebnik, P. Perona, Y. Sato, and C. Schmid, Eds. Springer, 2012, pp. 611–625. [36] S. Mehta and M. Rastegari, “MobileViT: Light-weight, general-purpose, and mobile-friendly vision transformer,” in International Conference on Learning Representations , 2021. [37] H. Cai, J. Li, M. Hu, C. Gan, and S. Han, “EfficientViT: Lightweight multi-scale attention for high-resolution dense prediction,” in Proceed-ings of the IEEE/CVF International Conference on Computer Vision ,2023, pp. 17 302–17 313.
