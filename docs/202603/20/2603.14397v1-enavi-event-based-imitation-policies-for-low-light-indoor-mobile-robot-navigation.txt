@@ -1,0 +1,383 @@
+Title: eNavi: Event-based Imitation Policies for Low-Light Indoor Mobile Robot Navigation
+
+URL Source: https://arxiv.org/pdf/2603.14397v1
+
+Published Time: Tue, 17 Mar 2026 02:12:47 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# eNavi : Event-based Imitation Policies for Low-Light Indoor Mobile Robot Navigation 
+
+Prithvi Jai Ramesh 1, Kaustav Chanda 1, Krishna Vinod 1, Joseph Raj Vishal 1
+
+Yezhou Yang 1 and Bharatesh Chakravarthi 1
+
+Abstract — Event cameras provide high dynamic range and microsecond-level temporal resolution, making them well-suited for indoor robot navigation, where conventional RGB cameras degrade under fast motion or low-light conditions. Despite advances in event-based perception, spanning detection, SLAM, and pose estimation, there remains limited research on end-to-end control policies that exploit the asynchronous nature of event streams. To address this gap, we introduce eNavi , a first-of-its-kind event-based real-world indoor person-following dataset, collected using a TurtleBot 2 robot, featuring syn-chronized raw event streams, RGB frames, and expert con-trol actions across indoor maps and trajectories under both normal and low-light conditions. We further build a multi-sensor data processing pipeline that temporally aligns event and RGB observations while reconstructing ground-truth actions from odometry to support high-quality supervised imitation learning. Building on this dataset, we propose a late-fusion RGB-Event navigation policy that combines dual MobileNet encoders with a transformer-based fusion module trained via behavioral cloning. A systematic evaluation of RGB-only, Event-only, and RGB-Event fusion models across 12 training varia-tions ranging from constrained single-path to diverse multi-path settings, shows that policies incorporating event data, particularly the fusion model, achieve improved robustness and lower action prediction error, especially in unseen low-light conditions where RGB-only models fail. We release the dataset, synchronization pipeline, and trained models at https:// eventbasedvision.github.io/eNavi/ .
+
+I. I NTRODUCTION 
+
+Indoor robot navigation remains a major challenge in ser-vice robotics, where robots must operate reliably in environ-ments characterized by clutter, dynamic human motion, and highly variable lighting [5]. Tasks such as person following demand responsive perception and control under conditions that frequently push conventional sensing to its limits. In particular, frame-based RGB cameras struggle with motion blur, extreme dynamic range scenes, and dim illumination conditions commonly encountered in homes, offices, and public indoor spaces. These limitations highlight the need for sensing pipelines capable of maintaining perceptual quality in visually degraded environments. Event cameras have recently emerged as a promising sensing modality for robot perception [4], [6], [7]. Un-like RGB cameras, which capture images at fixed frame rates, event cameras record asynchronous brightness changes with microsecond latency and exceptionally high dynamic range. Their ability to capture fine-grained motion cues            
+
+> 1School of Computing and Augmented Intelligence, Arizona State University, Tempe, AZ, USA.
+
+pjramesh@asu.edu and bshettah@asu.edu 
+
+under fast movement and poor illumination has enabled substantial progress in low-level perception tasks, including visual odometry [8], optical flow [9], [10], and SLAM [11]. However, most existing work focuses on reconstructing scene geometry or motion, while the potential of event-based vision for end-to-end navigation and control remains underexplored. Despite recent advances, there is no prior dataset that pairs event streams with high-quality action labels in realistic navigation settings. Likewise, research on event-based imita-tion learning remains limited, particularly for tasks requiring closed-loop robustness under varying illumination. In this work, we address these gaps by introducing a new dataset and an imitation learning framework tailored to event-based indoor navigation. The dataset captures real-world person-following trajectories across diverse indoor layouts and light-ing conditions, providing synchronized RGB frames, raw event streams, and expert control actions. To enable learning from RGB and event modalities, we design a multimodal data preprocessing pipeline that temporally aligns event and RGB observations and reconstructs ground-truth actions from odometry for high-quality imitation learning. Building on this foundation, we present a late-fusion architecture that integrates event-based and RGB cues using lightweight convolutional encoders and a transformer-based cross-modal fusion module. Beyond the dataset and architecture, we conduct a com-prehensive evaluation across multiple sensing configurations under different lighting conditions. By comparing RGB-only, event-only, and fusion-based policies across 12 training variations, we analyze the contribution of each modality to navigation robustness, particularly in low-light settings where RGB vision fails. These studies reveal the conditions under which event data provides advantages and demonstrate the effectiveness of multimodal fusion for end-to-end control. This work aims to bridge the gap between event-based perception and closed-loop robot navigation. We summarize our contributions below.  
+
+> •
+
+A real-world RGB-Event indoor navigation dataset 
+
+featuring synchronized RGB frames, raw event streams, and expert control actions collected across multiple maps, trajectories, and illumination conditions (normal and low light).  
+
+> •
+
+A multimodal processing pipeline that temporally aligns asynchronous event data with RGB observations and reconstructs odometry-based ground-truth actions to enable high-quality supervised imitation learning.  
+
+> •
+
+A late-fusion RGB-Event navigation policy using dual                                 
+
+> arXiv:2603.14397v1 [cs.RO] 15 Mar 2026 TABLE I SUMMARY OF EVENT -BASED DATASETS USED IN ROBOTIC PERCEPTION AND NAVIGATION TASKS .
+> Dataset Environment Sensor Platform Primary Task Contains Action ( v,ω)? Low-Light Focus?
+> MVSEC [1] Indoor/Outdoor Drone / Car SLAM / Pose ××DDD17 [2] Outdoor Car Steering Prediction ✓×MMID [3] Indoor Humanoid Depth Estimation ××SEBVS [4] Synthetic Mobile Robot Navigation ✓×
+> eNavi (Ours) Indoor TurtleBot (Mobile) Navigation ✓✓
+
+MobileNet encoders and a transformer-based fusion module, along with a comprehensive evaluation of RGB-only , Event-only , and fusion models across 12 training regimes demonstrating superior low-light robustness. The remainder of this paper is organized as follows. Section II reviews event-based vision for robot perception and navigation tasks and summarizes relevant policy learning approaches. Section III presents the eNavi dataset, including the collection setup, synchronization pipeline, and ground-truth action reconstruction. Section IV introduces the nav-igation policy, describes the late-fusion architecture, and outlines the training procedure and policy variants. Section V reports our experimental setup and results used to validate the proposed hypotheses. Finally, Section VII summarizes the key findings and discusses directions for future work. II. R ELATED WORKS 
+
+Event-based vision has been extensively investigated across a broad spectrum of application domains, including intelligent transportation systems [12], [13], robotic naviga-tion and manipulation, mobility analysis, pose estimation, and dynamic object tracking [5], [14]–[19]. Building upon these developments, research relevant to our work primarily lies at the intersection of three key areas: event-based robotic perception, multimodal fusion for robust navigation, and end-to-end policy learning for control. In the following section, we review representative contributions in each of these areas and identify the gap that motivates our proposed dataset and policy framework. 
+
+A. Event-based Vision and Datasets for Robotic Perception 
+
+Recent surveys provide a comprehensive overview of event-based vision methods for perception [7]. Represen-tative works include event-based object detection [20] and event-based NeRF-style scene representations [21], demon-strating that asynchronous event streams can support high-quality recognition and 3D reconstruction. For robotic ap-plications, event cameras have been particularly effective for perception tasks that benefit from high-speed motion sensing and robustness to extreme illumination, such as visual odometry, optical flow estimation, and SLAM. These methods primarily exploit event data to build low-level geometric or semantic representations of the scene. However, they generally stop at perception and do not directly address learning closed-loop control policies for navigation. Several event-based datasets have been released over the years [4], [19], [22]. MVSEC [1] is a seminal benchmark collected on drones, cars, and handheld platforms, providing event streams, pose, and IMU ground truth for 3D state estimation and SLAM. DSEC [23] and DDD17 [2] extend this line of work to high-resolution automotive scenarios, focusing on outdoor driving. These datasets are valuable for perception research, but are recorded in outdoor en-vironments with kinematics and scene structure that differ significantly from indoor mobile robotics. For datasets such as MMID [3] and PED-Ro [22], which provide synchro-nized RGB and event streams, are well-suited for tasks like depth estimation or person detection. However, they lack synchronized differential-drive control signals (linear and angular velocity) or wheel odometry aligned with the visual data, making them unsuitable for learning end-to-end navigation or control policies. Synthetic alternatives, including EventScape [24] and SEBVS [4], utilize simulation frameworks to generate event data alongside ground-truth navigation commands. While these datasets are valuable for controlled experiments, they suffer from sim-to-real gaps, particularly in modeling the noise characteristics and re-sponse to illumination behavior of real-world event sensors. A detailed comparison of these datasets with our eNavi is provided in Table I. 
+
+B. Multimodal Fusion for Robust Robot Navigation 
+
+To overcome the limitations of single-sensor systems, many recent work explores multi-sensor systems for robust robot navigation. For example, fusing RGB with LiDAR has been shown to improve both perception and navigation performance in challenging environments [25]. Multimodal architectures typically combine complementary cues, such as geometry from depth/LiDAR and appearance from RGB, within a unified learning framework. In contrast, the integra-tion of event cameras into multimodal navigation policies remains relatively rare. Most existing studies that leverage event data do so in perception-only modules or simulation-focused settings, without demonstrating real-world control policies that benefit from event-driven sensing [26]. This leaves open questions about how best to combine event streams with frame-based vision for closed-loop navigation in real environments. 
+
+C. Policy Learning for Robot Navigation 
+
+End-to-end policy learning with RGB cameras has emerged as a popular approach for robot navigation. Methods such as [25], [27] map raw visual observations directly to control commands using convolutional or transformer-based networks trained via imitation learning or reinforce-ment learning. These approaches simplify the traditional ROS2 Bags 
+
+> /image_raw
+> /event_camera/events
+> /odom
+> /cmd_vel (optional)
+> Jetson
+> Nano
+> RGB
+> Camera
+> Event
+> Camera
+> Teleoperated
+> Recording
+
+(a)  (b) 
+
+> P1
+
+P2       
+
+> P3Fig. 1. Overview of the dataset generation workflow. (a) The process begins with teleoperated data collection using a mobile robot setup. (b) The collection process where the user is teleoperating the bot to follow another person across the room in three different paths ( P1,P2, and P3) in different lighting conditions.
+
+perception-planning pipeline and have shown strong per-formance in structured environments. In the event domain, however, analogous end-to-end navigation policies are still limited. Existing methods [4], [28] often rely on decoupled perception-and-control pipelines or purely synthetic envi-ronments, where the control policy is trained on simulated event data. To the best of our knowledge, there are cur-rently no end-to-end imitation policies trained on real-world 
+
+RGB-Event data for indoor navigation with differential-drive robots. This gap motivates our work, which combines a real-world RGB-Event dataset, a multimodal data processing pipeline, and a late-fusion policy architecture to enable event-driven imitation learning for indoor navigation. III. T HE eNavi DATASET 
+
+A. Hardware and Camera setup 
+
+The data collection platform is built on a TurtleBot 2
+
+mobile robot (Kobuki base), with all cameras and computing units rigidly mounted to the top plate of the chassis, as illustrated in Figure 1. Onboard processing is handled by an NVIDIA Jetson Orin Nano [29], running a robot operating system 2 (ROS 2) for sensor drivers and data logging. The sensing suite consists of a heterogeneous camera configura-tion. To minimize parallax, both cameras are mounted on a beam splitter setup as shown Figure 1(a). The primary sensor is a Prophesee Metavision EVK4 event camera featuring the IMX636 sensor with a resolution of 1280 × 720 , capable of capturing event data at high temporal resolution under 
+
+220 μs latency at 1k lux. The secondary sensor is a Teledyne Blackfly S USB3 RGB camera equipped with the onsemi Python1300 sensor that captures frames at a 1280 × 1024 
+
+resolution up to 170 frames per second. Co-axial alignment is achieved by mounting both cameras to a THORLabs CCM1-BS013 non-polarizing cube beam splitter. Additionally, both cameras were made to share the same field of view using Kowa lenses with 25 mm focal length and maximum aperture of f / 1.4, compatible with the beam splitter mount cage shown in Figure 1. The cameras are time-synchronized at the hardware level by utilizing the onboard external oscillator on an STM32F407 microcontroller to externally trigger both the RGB and event cameras. The microcontroller was configured to send a 30 Hz pulse with 
+
+50% duty cycle to both cameras. This signal is used to both determine the exposure duration of the RGB camera as well as simultaneously inject trigger markers in the event stream, which have been used to temporally align the event and RGB data in post-processing, as depicted in Figure 2. For spatial correspondence, the cameras were calibrated by using a blinking checkerboard pattern to compute ahomography that transforms the RGB frames to the frame of the event camera. The event camera interfaces with ROS 2
+
+via the metavision driver , while the RGB camera uses standard V4L2 drivers. For connectivity, a TP-Link Wi-Fi dongle is attached to the Jetson Orin Nano. This wireless link enables remote development access via SSH and facilitates manual teleoperation of the robot using a joystick controller during data collection. 
+
+B. Data Collection Protocol 
+
+To ensure generalization, we curate the dataset across three distinct indoor environments. We employ two different hu-man subjects to introduce variability in clothing, body shape, and gait. The subjects are instructed to vary their walking speeds and trajectories to capture a broad range of motion dynamics. The full dataset comprises approximately two hours of driving data, segmented into over 175 episodes. To facilitate benchmarking and training, we use single map for in-distribution training and testing, while the remaining two environments are reserved for generalization experiments. This split allows us to evaluate performance both within seen environments and in previously unseen layouts. We plan to release the dataset as an open-source contribution to the research community. 
+
+Collection protocols. To ensure high-quality expert demon-strations, we establish the following protocols during data acquisition:  
+
+> •
+
+Privacy and pose: To address privacy concerns and maintain a consistent following perspective, the target subject is instructed to keep their back facing the robot at all times. ROS2 Bag Files              
+
+> (RGB+Event+Odom)
+> tPrev
+> tCurr
+> RGB Event Odom
+> D = {( I k, E k, A k)} H5
+> Dataset
+> Mean
+> Action
+> N
+> K=1
+> RGB
+> Frame
+> Event
+> Frame Fig. 2. Overview of the dataset generation workflow. The process begins with teleoperated data collection using a mobile robot setup. The recorded ROS 2bags are analyzed for trajectory and velocity consistency (center panels) before being synchronized into paired image, event, and action tuples
+> {(Ik,Ek,ak)}stored in .h5 format.
+> •
+
+Expert teleoperation: The robot is teleoperated by a human expert who controls the base using a joystick while viewing the live video feed from the onboard RGB camera. This first-person-view (FPV) teleoper-ation ensures that the collected trajectories represent valid, obstacle-free paths based on visual input. 
+
+C. Multimodal Data Processing Pipeline 
+
+Raw data is recorded in rosbag2 format to enable low-overhead logging of all sensor and control streams. For effi-cient training and evaluation, these bags are post-processed into structured HDF5 containers that store synchronized image, event, and action tuples. We describe the temporal synchronization methodology and the representation used for event and control data. 
+
+1) Temporal Synchronization of RGB, Events, and Ac-tions: A core challenge in this setup is aligning asynchronous data streams with frame-based observations. The event cam-era produces a continuous stream of asynchronous events 
+
+E, while the RGB camera operates at a fixed frame rate, producing frames I, and the robot chassis publishes control commands C at discrete intervals. We use the RGB frame timestamps as the temporal reference (anchor), as illustrated in Figure 2. Let the sequence of recorded RGB frames be denoted as I = {I1, I 2, . . . , I N } with corresponding timestamps Trgb = {t1, t 2, . . . , t N }.
+
+Event alignment. The continuous event stream is defined as E = {ek}Mk=1 , where each event ek = ( xk, y k, t k, p k)
+
+consists of pixel coordinates, timestamp, and polarity. For every RGB frame Ii at time ti, we aggregate the events that occurred in the interval since the previous frame. The set of synchronized events Ei associated with frame Ii is defined as: 
+
+Ei = {ek ∈ E | ti−1 < t k ≤ ti}, (1) where t0 is the start of the recording. These raw events Ei
+
+are then converted into a dense tensor representation (event frame) to match the spatial dimensions of the RGB input. 
+
+Event representation. To enable feature extraction via a neural network, the raw event set Ei is transformed into a dense representation Ei ∈ RH×W ×2 using a spatial event histogram, separating events by polarity (ON/OFF) into two channels. For a pixel location (x, y ), the values for the positive channel ( c = 0) and negative channel ( c = 1)are computed by accumulating events occurring within the synchronization window ∆t = ti − ti−1:
+
+Ei(x, y, 0) = X 
+
+> ek∈E i
+
+I(xk = x, y k = y, p k = 1) , (2) 
+
+Ei(x, y, 1) = X 
+
+> ek∈E i
+
+I(xk = x, y k = y, p k = 0) , (3) where I(·) is the indicator function. This yields a 2-channel input tensor suitable for the event encoder. 
+
+Control alignment. Robot control commands (linear velocity 
+
+v and angular velocity ω) are published asynchronously. To pair a control action with the i-th visual observation, we aggregate all commands received between the previous frame timestamp ti−1 and the current frame timestamp ti.We compute the mean action ai over this interval to obtain a smooth and representative label: 
+
+ai = 1
+
+|Ci|
+
+X
+
+> c∈Ci
+
+c, where Ci = {ct | ti−1 < t ≤ ti}. (4) This process yields a synchronized tuple (Ii, Ei, ai) for every step i in the dataset. 
+
+2) Odometry-based Action Reconstruction: A critical re-quirement for training end-to-end imitation policies is high-fidelity ground truth for the robot’s actions. Although the dataset is collected via teleoperation, relying solely on raw joystick input signals can introduce noise due to controller dead zones, communication latency, and operator jitter. To ensure that the training labels reflect the actual physical motion of the robot, we derive the ground-truth linear ( v)and angular ( ω) velocities directly from the robot’s wheel odometry feedback ( /odom ). Unlike raw control commands, the odometry stream provides an executed estimate of the robot’s kinematics. Rather than differentiating pose changes, we extract instantaneous velocity reports ( twists ) from the odometry messages. As in the synchronization step, these velocity samples are aggregated over the time window associated with each RGB frame, and their mean is computed to generate the final label ai. This results in a temporally consistent set of action labels that accurately reflect the robot’s executed motion for each synchronized RGB-event 
+
+observation pair. IV. E VENT -BASED NAVIGATION POLICY 
+
+Leveraging the eNavi dataset described in Section III, we introduce an event-based navigation policy ( ENP ) for indoor person-following. Unlike traditional unimodal imita-tion learning approaches, the high temporal resolution and asynchronous nature of event data motivate an architec-ture that can effectively fuse heterogeneous visual streams. Our framework adopts a hybrid CNN-Transformer design RGB Encoder                     
+
+> MobileNetV3 -Small
+> Event Encoder
+> MobileNetV3 -Small
+> Multi -Head
+> Self -Attention
+> Transformer
+> Block
+> (v, ω)
+> (B x128)
+> (B x128)
+> (2 x Bx128) Fig. 3. The Event-based Navigation Policy ( ENP-Fusion ) Architecture. The model fuses a frozen RGB stream and a trainable event stream using a Transformer-based attention mechanism. The system takes synchronized RGB frames ( 320 ×180 ×3) and event frames ( 320 ×180 ×2) as input and outputs continuous differential drive commands ( v, ω ) via an MLP head. The snowflake icon denotes that the RGB backbone weights remain fixed during training to prevent overfitting in low-light scenarios.
+
+inspired by multimodal sensor-fusion techniques such as TransFuser [30] and TokenFusion [31], as well as recent work on event-driven servoing policies [4]. 
+
+A. The ENP Architecture 
+
+The ENP architecture employs a late-fusion strategy to process synchronous RGB and event-frame tensors. As il-lustrated in Figure 3, the model consists of two stages: (i)
+
+modality-specific encoding and (ii ) attention-based fusion followed by a control head. 
+
+1) Modality-specific Encoding: We use two parallel con-volutional encoders to extract feature embeddings from each modality:  
+
+> •
+
+RGB encoder. A pre-trained MobileNetV3-Small back-bone processing the 3-channel RGB frames to output feature vector. To preserve RGB feature representations of pretrained weights, the weights of the RGB encoder are kept frozen during training.  
+
+> •
+
+Event encoder. A MobileNetV3-Small backbone which processes the 2-channel event representation described in Section III-C. Since this encoder’s weights were not originally trained for events, this encoder is kept trainable, allowing it to learn features tailored to the sparse, high-temporal-resolution event data. Each encoder outputs a compact feature vector (or token), which is subsequently passed to the fusion module. 
+
+2) Attention-based Fusion and Control Head: The feature vectors from the RGB and event encoders are tokenized and concatenated into a unified sequence ( 2 feature tokens) pro-cessed by a Transformer encoder block. This self-attention-based fusion mechanism enables the policy to adaptively weigh the contribution of RGB context versus event dynam-ics on a per-sample basis, which is particularly important under varying illumination and motion conditions. The fused representation is fed into a multilayer perceptron (MLP) policy head that predicts continuous differential-drive commands, namely the linear velocity ‘ v’ and angular veloc-ity ‘ ω’. At inference time, the policy maps each synchronized observation (Ii, Ei) to an action ˆai = (ˆ vi, ˆωi).
+
+B. Policy Variants and Training Methods 
+
+To systematically study the contribution of event data under different levels of task complexity and illumination, we train a family of ENP variants. The design spans three ar-chitectures and four different subsets from the eNavi dataset, yielding 12 model variants. 
+
+1) The Architecture Variants: We evaluate three modality configurations:  
+
+> •
+
+ENP-RGB : A baseline model that uses only the frozen RGB encoder. The event branch is removed, and the policy operates purely on frame-based observations.  
+
+> •
+
+ENP-Event : A model that relies exclusively on the trainable event encoder, operating purely on the event representation.  
+
+> •
+
+ENP-Fusion : The proposed multimodal model that uses both encoders and the Transformer fusion block to attend jointly to RGB and event features. These variants allow us to isolate the benefits of event-only sensing and RGB-Event fusion relative to a conventional 
+
+RGB-only baseline. 
+
+2) The Dataset Variants: To probe robustness to both trajectory diversity and illumination changes, we factor our training data along two axes: (i) path complexity and (ii )
+
+lighting conditions. Combined with the three architecture variants (Section IV-B), this yields 3 × 2 × 2 = 12 trained policies. 
+
+a) Path complexity: We consider two trajectory vari-ants:  
+
+> •
+
+Single-Path : A single, relatively simple person-following trajectory ( P1), as in Figure 1(b), used to study imitation performance in a controlled layout.  
+
+> •
+
+Multi-Path : A union of three trajectories ( P1,P2,P3) as in Figure 1(b), used to evaluate generalization across diverse paths and behaviors. 
+
+b) Lighting conditions.: For each path variant, we vary the illumination:  
+
+> •
+
+Normal-Light : Only trajectories recorded under stan-dard indoor lighting. TABLE II VALIDATION METRICS ACROSS ALL THE TRAINING . A LL VARIATIONS ARE TRAINED FOR 50 EPOCHS , WHERE TRAIN * INDICATES THE MODEL WAS RUN WITH EARLY STOPPING AT 8 EPOCHS .                                                 
+
+> Variation Modal Train* Best MAE Variation Modal Train* Best MAE
+> RGB 50 48 0.0548 RGB 50 50 0.0667 Event 37 29 0.0393 Event 44 36 0.0378 (Single-Path, Normal-Light)
+> Fusion 27 19 0.0388 (Multi-Path, Normal-Light)
+> Fusion 29 21 0.0402 RGB 50 50 0.0584 RGB 50 50 0.0707 Event 26 18 0.0388 Event 18 10 0.0416 (Single-Path, Mixed-Light)
+> Fusion 31 23 0.0358 (Multi-Path, Mixed-Light)
+> Fusion 30 22 0.0370
+
+TABLE III EVALUATION OF Normal-Light UNDER VARYING ILLUMINATION . T HE YOLOv8n + PID BASELINE IS EVALUATED ON ITS RESPECTIVE PATH TYPE 
+
+Single-Path (TOP ) AND Multi-Path (DOWN ) FOR DIRECT COMPARISON .                                                           
+
+> Normal-Light Low-Light Method Modal Linear MAE Angular MAE Total MAE Linear MAE Angular MAE Total MAE Yolo8n + PID (Single-Path) RGB 0.0882 0.0756 0.0819 0.0758 0.0667 0.0713 RGB 0.0182 0.0237 0.0210 0.0258 0.0168 0.0213
+> Event 0.0177 0.0275 0.0266 0.0234 0.0236 0.0235 Single-Path, Normal-Light (Ours)
+> Fusion 0.0183 0.0259 0.0221 0.0246 0.0199 0.0222
+> Yolo8n + PID (Multi-Path) RGB 0.0841 0.1155 0.0998 0.0724 0.1342 0.1033 RGB 0.0221 0.0805 0.0463 0.0128 0.0901 0.0514 Event 0.0090 0.0519 0.0305 0.0157 0.0912 0.0534 Multi-Path, Normal-Light (Ours)
+> Fusion 0.0091 0.0578 0.0335 0.0155 0.0779 0.0467
+> •
+
+Mixed-Light : Trajectories recorded under both normal and low-light conditions, representing a more challeng-ing domain with degraded RGB observations. This factorial design allows us to systematically analyze how architecture choice ( ENP-RGB , ENP-Event , ENP-Fusion ), path complexity ( Single-Path vs Multi-Path ), and lighting (Normal-Light vs Mixed-Light ) interact to affect navigation performance and robustness. 
+
+C. Behavioral Cloning Objective 
+
+We train all ENP variants using behavioral cloning (BC), a standard imitation learning method. The problem is for-mulated as supervised regression, where the goal is to find network parameters ‘ θ’ that minimize the discrepancy between the predicted actions and the expert commands. Given a dataset of N synchronized observation-action pairs 
+
+D = {(oi, u ∗ 
+
+> i
+
+)}Ni=1 , where oi denotes the multimodal sensor input (RGB and/or event) and u∗ 
+
+> i
+
+represents the expert’s linear and angular velocities, we optimize the policy using the mean absolute error (MAE) loss: 
+
+LBC (θ) = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+πθ (oi) − u∗ 
+
+> i1
+
+, (5) where πθ (oi) is the action predicted by the network for the i-th observation. We use the L1 norm (MAE) instead of mean squared error (MSE) to improve robustness to outliers and the high-frequency noise often present in expert command signals. V. E XPERIMENTS AND RESULTS 
+
+In this section, we evaluate the proposed ENP on the eNavi 
+
+dataset. Our experimental design is structured around two hypotheses:  
+
+> •
+
+Multimodal training efficiency: Fusing synchronous RGB context with asynchronous event dynamics leads to faster convergence and lower validation error com-pared to RGB baselines, which may struggle to extract robust features under challenging conditions.  
+
+> •
+
+Low-light robustness/Zero-shot generalization: Event-driven policies trained exclusively on Normal-Light data generalize better to unseen low-light conditions than 
+
+RGB-only baselines, which suffer from texture degra-dation in the dark. 
+
+A. Training Setup and Convergence 
+
+All policy variants are implemented in PyTorch and trained using the AdamW optimizer with a learning rate of 2 × 10 −4
+
+and a weight decay of 3 × 10 −4 for regularization. We use a batch size of 64 and an 80 /10 /10 split for training, validation, and test sets, ensuring that test trajectories are completely held out during training. To prevent overfitting and to assess learning efficiency across modalities, we employ early stop-ping with a patience of 8 epochs and a maximum training budget of 50 epochs. Validation performance for all 12 
+
+training configurations is summarized in Table II. Several trends emerge:  
+
+> •
+
+RGB saturation : RGB-only models consistently run to the full 50 -epoch budget, especially on the more com-plex ( Multi-Path , Mixed-Light ) settings. This suggests that the network has difficulty extracting sufficiently robust control features from RGB inputs alone within the allotted training horizon.  
+
+> •
+
+Event-driven efficiency : Models that incorporate event information (Event-only and Fusion) converge substan-tially faster, often triggering early stopping between epochs 20 and 35 . This indicates that the high-temporal-resolution event cues provide a stronger and more informative learning signal.  
+
+> •
+
+Validation performance gap : Fusion and Event-only models achieve the lowest validation MAE in most (a)  (b) Fig. 4. Trajectory Analysis of ENP-Fusion Policy. Comparison of predicted linear velocity (m/s) and angular rate (rad/s) against expert ground truth for representative test trajectory ( P3). (a) and (b) contrast performance under normal-light (top) and low-light (down) conditions. 
+
+regimes. For example, in the (Multi-Path, Mixed-Light) setting in Table II, ENP-Fusion reaches an MAE of 
+
+0.0370 , compared to ENP-RGB ’s 0.0707 . This supports the multimodal training efficiency hypothesis, showing that multimodal policy ENP-Fusion has faster conver-gence and better final validation performance compared to other variants. 
+
+B. Zero-Shot Generalization to Low Light 
+
+To evaluate the Low-Light Robustness hypothesis, we consider policies trained only on ( Normal-Light ) data and test them on both ( Normal-Light ) and ( Low-Light ) conditions. Table III reports results for two scenarios: a simple single-path setting ( Single-Path , Normal-Light ) and a more complex multi-path setting ( Multi-Path , Normal-Light ), alongside a YOLO8n + PID baseline. Since there are no prior end-to-end event-based navigation policies for real indoor robots, we compare against: (a) a classical perception+control pipeline (YOLOv8n+PID), (b) RGB-only (ENP-RGB) and (c) event-only (ENP-Event), where we trained (b) and (c). These rep-resent the closest comparators in the absence of comparable event-based baselines. The results reveal a clear distinction between simple and complex navigation:  
+
+> •
+
+Simple trajectories (Single-Path, Normal-Light) : On the single-path dataset, the ENP-RGB policy generalizes well to low light, with Total MAE changing only slightly ( 0.0210 → 0.0213 ). Fusion and Event-only 
+
+variants perform similarly. This suggests that for simple, structured trajectories, RGB sensors retain sufficient contrast even under reduced illumination.  
+
+> •
+
+Complex trajectories (Multi-Path, Normal-Light): In the Multi-Path training, the benefits of fusion become pronounced. The difference from normal to low light, the ENP-RGB policy changes from ( 0.0463 → 0.0514 ), while the ENP-Fusion policy generalizes well and achieves a lower change ( 0.0335 → 0.0467 ). These findings support Low-light robustness of fusion poli-cies and Zero-shot generalization capabilities of event data. 
+
+C. Trajectory Analysis 
+
+To better understand the control characteristics of the best-performing policy, we analyze the ENP-Fusion , which has been trained on the ( Multi-Path , Mixed-Light ) data. On the test case sample, we plot the difference in Ground Truth from our dataset and our ENP-Fusion model. Figure 4 visualizes the predicted linear and angular velocities against the expert commands for representative trajectories under normal-light (left) and low-light (right) conditions. 
+
+Robustness in low light. Despite degraded RGB features in the low-light domain, The ENP-Fusion policy maintains stable and accurate control:  
+
+> •
+
+Linear velocity: The model successfully tracks high-speed segments ( ≈ 0.33 m/s) with a low linear MAE of 
+
+0.125 as shown in Figure 4(b), indicating that forward motion planning remains accurate even under illumina-tion changes.  
+
+> •
+
+Angular velocity: Similar to linear velocity, steering predictions continue to align with the expert’s turns, with an angular MAE of 0.078 . While slightly noisier than in normal-light conditions, the policy captures all major directional changes, confirming that the event stream provides sufficient information for complex ma-neuvering. Overall, these quantitative and trajectory-level results vali-date both our claims. Integrating event-based sensing into end-to-end navigation policies like ENP-Fusion leads to faster training, improved generalization, and enhanced ro-bustness in low-light indoor environments compared to RGB-only baselines. VI. D ISCUSSION 
+
+As demonstrated in Section V, the ENP-Fusion architec-ture exhibits faster convergence, enhanced robustness, and superior generalization in low-light conditions. We attribute these improvements to the effective integration of high-temporal event data with context-rich RGB frames, which minimizes MAE across all variations. However, our current data processing pipeline, described in Section III, aligns RGB and event streams to a fixed frequency. Because the policies are trained on this synchronized data, optimizing the current processing pipeline in a physical robot for real-time inference presents significant computational challenges. This challenge limits the practicality of time-synchronized fusion approaches, as combining inference with processing is computationally demanding for edge devices, making single-modality approaches such as ENP-RGB and ENP-Event more viable for real-time deployment. As one of the first works exploring this space, we high-light this limitation and outline key directions for future research. We release our first-of-its-kind event-rgb-action 
+
+dataset eNavi , in both raw ROS2 bag and processed H5 for-mats, precisely to enable the community to develop improved fusion techniques between event and RGB data. As our work demonstrates the utility of the event data for low-light generalization, we believe that improved fusion techniques will bring mobile robots a step closer to reliable low-light navigation. Apart from fusion techniques, further research into asynchronous data processing, like passing event and RGB data at their native, separate intervals, could yield more responsive control policies. Additionally, developing policy heads that predict action chunks, for instance, via diffusion-based policy heads, and integrating online learning techniques such as DAgger [32] could yield smoother and more robust robot trajectories. Ultimately, our dataset and pipeline serve as a stepping-stone for the development of specialized event-based datasets for imitation learning and vision-language models that fully exploit the high temporal resolution of event-based vision. VII. C ONCLUSION 
+
+This work addresses the underexplored domain of event-based imitation learning policies for robotic control. We investigate novel fusion techniques for integrating event and RGB data and present a new methodology for developing state-action pair datasets incorporating event-based modal-ities. A primary contribution of this research is the eNavi 
+
+dataset, a first-of-its-kind resource comprising 175 episodes totaling two hours of data collected from a teleoperated physical robot in diverse indoor environments under varying illumination conditions. Our findings evaluate the specific implications of training policies with multimodal sensor inputs, demonstrating how the integration of event and RGB cameras enhances robustness. The experimental results provide strong evidence that fusion-based policies achieve superior generalization across challenging lighting scenarios. Ultimately, this work establishes a comprehensive pipeline for fusing event and RGB data and introduces effective training frameworks for end-to-end control policies capable of performing human-following tasks. REFERENCES [1] A. Z. Zhu, D. Thakur, T. Ozaslan, B. Pfrommer, V. Kumar, and K. Daniilidis, “The multi vehicle stereo event camera dataset: An event camera dataset for 3d perception,” IEEE Robotics and Automation Letters (RA-L) , vol. 3, no. 3, pp. 2032–2039, 2018. [2] J. Binas, D. Neil, S.-C. Liu, and T. Delbruck, “Ddd17: End-to-end davis driving dataset,” in ICML Workshop on Machine Learning for Autonomous Vehicles , 2017. [3] I. Bugueno et al. , “A multi-modal event-based dataset for indoor depth estimation,” arXiv preprint arXiv:2401.00000 , 2024, retrieved from https://ibugueno.github.io/mmid-event-depth-dataset/. [4] K. Vinod, P. J. Ramesh, B. Chakravarthi et al. , “Sebvs: Synthetic event-based visual servoing for robot navigation and manipulation,” 
+
+arXiv preprint arXiv:2508.17643 , 2025. [5] N. Shravan, M. Manoj Kumar, B. Chakravarthi, and C. Bhargavi, “Innovative exploration techniques: Utilizing iot-enabled robots for safe and efficient underground tunnel investigation,” in International Conference on Interdisciplinary Approaches in Civil Engineering for Sustainable Development . Springer, 2023, pp. 71–81. [6] G. Gallego, T. Delbruck, G. Orchard, C. Bartolozzi, B. Taba, A. Censi, S. Leutenegger, A. J. Davison, J. Conradt, K. Daniilidis, and D. Scara-muzza, “Event-based vision: A survey,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 44, no. 1, pp. 154–180, 2022. [7] B. Chakravarthi, A. A. Verma, K. Daniilidis, C. Fermuller, and Y. Yang, “Recent event camera innovations: A survey,” in European Conference on Computer Vision . Springer, 2024, pp. 342–376. [8] S. Klenk, M. Motzet, L. Koestler, and D. Cremers, “Deep event visual odometry,” in 2024 International conference on 3D vision (3DV) .IEEE, 2024, pp. 739–749. [9] S. Shiba, Y. Aoki, and G. Gallego, “Secrets of event-based optical flow,” in European Conference on Computer Vision . Springer, 2022, pp. 628–645. [10] M. Liu and T. Delbruck, “Edflow: Event driven optical flow camera with keypoint detection and adaptive block matching,” IEEE Trans-actions on Circuits and Systems for Video Technology , vol. 32, no. 9, pp. 5776–5789, 2022. [11] S. Tenzin, A. Rassau, and D. Chai, “Application of event cameras and neuromorphic computing to vslam: A survey,” Biomimetics , vol. 9, no. 7, p. 444, 2024. [12] M. R. Aliminati, B. Chakravarthi, A. A. Verma, A. Vaghela, H. Wei, X. Zhou, and Y. Yang, “Sevd: Synthetic event-based vision dataset for ego and fixed traffic perception,” arXiv preprint arXiv:2404.10540 ,2024. [13] A. A. Verma, B. Chakravarthi, A. Vaghela, H. Wei, and Y. Yang, “etram: Event-based traffic monitoring dataset,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,2024, pp. 22 637–22 646. [14] B. Chakravarthi, M. Manoj Kumar, and B. Pavan Kumar, “Event-based sensing for improved traffic detection and tracking in intelligent trans-port systems toward sustainable mobility,” in International Conference on Interdisciplinary Approaches in Civil Engineering for Sustainable Development . Springer, 2023, pp. 83–95. [15] K. Chanda, A. Verma, A. Vaghela, Y. Yang, and B. Chakravarthi, “Event quality score (eqs): Assessing the realism of simulated event camera streams via distance in latent space,” in Proceedings of the Computer Vision and Pattern Recognition Conference , 2025, pp. 5105– 5113. [16] T. Chen, P. Shirke, B. Chakravarthi, A. Vaghela, L. Da, D. Lu, Y. Yang, and H. Wei, “Syntrac: a synthetic dataset for traffic signal control from traffic monitoring cameras,” in 2024 IEEE 27th International Conference on Intelligent Transportation Systems (ITSC) . IEEE, 2024, pp. 2386–2391. [17] K. Chanda, A. A. Verma, A. Vaghela, Y. Yang, and B. Chakravarthi, “Sepose: A synthetic event-based human pose estimation dataset for pedestrian monitoring,” arXiv preprint arXiv:2507.11910 , 2025. [18] K. Tan, B. Chakravarthi et al. , “How real is carlas dynamic vision sensor? a study on the sim-to-real gap in traffic object detection,” 
+
+arXiv preprint arXiv:2506.13722 , 2025. [19] K. Vinod, J. R. Vishal, K. Chanda, P. J. Ramesh, Y. Yang, and B. Chakravarthi, “eskitb: A synthetic event-based dataset for tracking skiers,” arXiv preprint arXiv:2601.06647 , 2026. [20] X. Wang, S. Wang, C. Tang, L. Zhu, B. Jiang, Y. Tian, and J. Tang, “Event stream-based visual object tracking: A high-resolution bench-mark dataset and a novel baseline,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 19 248–19 257. [21] I. Hwang, J. Kim, and Y. M. Kim, “Ev-nerf: Event based neural radiance field,” in Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision , 2023, pp. 837–847. [22] C. Boretti, P. Bich, F. Pareschi, L. Prono, R. Rovatti, and G. Setti, “Pedro: an event-based dataset for person detection in robotics,” in 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2023, pp. 4065–4070. [23] M. Gehrig, W. Aarents, D. Gehrig, and D. Scaramuzza, “Dsec: A stereo event camera dataset for driving scenarios,” IEEE Robotics and Automation Letters (RA-L) , vol. 6, no. 3, pp. 4947–4954, 2021. [24] D. Gehrig, M. Gehrig, J. Hidalgo-Carri´ o, and D. Scaramuzza, “Video to events: Recycling video datasets for event cameras,” in IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) ,2020, pp. 3586–3595. [25] H. Surmann, C. Jestel, R. Marchel, F. Musberg, H. Elhadj, and J. Y. Goulermas, “Deep reinforcement learning for real autonomous mobile robot navigation in indoor environments,” arXiv preprint arXiv:2005.13857 , 2020. [26] A. I. Maqueda, A. Loquercio, G. Gallego, N. Garc´ ıa, and D. Scara-muzza, “Event-based vision meets deep learning on steering prediction for self-driving cars,” in Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 2018, pp. 5419– 5427. [27] M. Bojarski, D. Del Testa, D. Dworakowski, B. Firner, B. Flepp, P. Goyal, L. D. Jackel, M. Monfort, U. Muller, J. Zhang et al. , “End to end learning for self-driving cars,” arXiv preprint arXiv:1604.07316 ,2016. [28] I. Bugueno-Cordova, J. Ruiz-del Solar, and R. Verschae, “Human-robot navigation using event-based cameras and reinforcement learn-ing,” in Proceedings of the Computer Vision and Pattern Recognition Conference , 2025, pp. 5004–5012. [29] NVIDIA Corporation, “NVIDIA jetson orin nano developer kit,” https: //developer.nvidia.com/embedded/jetson-orin-nano-developer-kit, 2023, accessed: 2023-11-25. [30] A. Prakash, K. Chitta, and A. Geiger, “Multi-modal fusion transformer for end-to-end autonomous driving,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) ,2021, pp. 7077–7087. [31] Y. Wang, W. Huang, F. Sun, T. Xu, Y. Rong, and J. Huang, “Mul-timodal token fusion for vision transformers,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2022, pp. 12 186–12 195. [32] S. Ross, G. Gordon, and D. Bagnell, “A reduction of imitation learning and structured prediction to no-regret online learning,” in Proceedings of the fourteenth international conference on artificial intelligence and statistics . JMLR Workshop and Conference Proceedings, 2011, pp. 627–635.

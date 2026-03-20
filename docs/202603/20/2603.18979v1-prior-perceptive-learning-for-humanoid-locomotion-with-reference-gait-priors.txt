@@ -1,0 +1,375 @@
+Title: PRIOR: Perceptive Learning for Humanoid Locomotion with Reference Gait Priors
+
+URL Source: https://arxiv.org/pdf/2603.18979v1
+
+Published Time: Fri, 20 Mar 2026 01:18:06 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# PRIOR: Perceptive Learning for Humanoid Locomotion with Reference Gait Priors 
+
+Chenxi Han 1,2,∗, Shilu He 2,∗, Yi Cheng 2, Linqi Ye 3, Houde Liu 1,† 
+
+> 1
+
+Tsinghua University 2 ZERITH Robotics 3 Shanghai University  
+
+> ∗
+
+Equal contribution † Corresponding author 
+
+Abstract — Training perceptive humanoid locomotion policies that traverse complex terrains with natural gaits remains an open challenge, typically demanding multi-stage training pipelines, adversarial objectives, or extensive real-world cal-ibration. We present PRIOR, an efficient and reproducible framework built on Isaac Lab that achieves robust terrain traversal with human-like gaits through a simple yet effective design: (i) a parametric gait generator that supplies stable reference trajectories derived from motion capture without adversarial training, (ii) a GRU-based state estimator that infers terrain geometry directly from egocentric depth images via self-supervised heightmap reconstruction, and (iii) terrain-adaptive footstep rewards that guide foot placement toward traversable regions. Through systematic analysis of depth image resolution trade-offs, we identify configurations that maximize terrain fidelity under real-time constraints, substantially reducing per-ceptual overhead without degrading traversal performance. Comprehensive experiments across terrains of varying diffi-culty—including stairs, boxes, and gaps—demonstrate that each component yields complementary and essential performance gains, with the full framework achieving a 100% traversal suc-cess rate. We will open-source the complete PRIOR framework, including the training pipeline, parametric gait generator, and evaluation benchmarks, to serve as a reproducible foundation for humanoid locomotion research on Isaac Lab. 
+
+I. INTRODUCTION Deploying humanoid robots in human-centric environ-ments requires locomotion controllers that can negotiate di-verse terrain geometries—stairs, boxes, gaps—while preserv-ing the natural bipedal gaits essential for safe and predictable coexistence with people and infrastructure. Reinforcement learning (RL) has emerged as the dominant paradigm for training such controllers, with recent work demonstrating impressive results in either terrain-robust locomotion through perceptive policies [1], [2] or natural gait synthesis through motion priors [3], [4]. Achieving both capabilities simulta-neously, however, typically incurs substantial system com-plexity: multi-stage teacher–student distillation, adversarial discriminators for style enforcement, or extensive sim-to-real calibration. These requirements hinder reproducibility and raise the barrier to entry for locomotion research. In this work, we ask: can a single-stage RL pipeline, without adver-sarial training or distillation, produce perceptive humanoid locomotion that is both terrain-robust and natural? 
+
+We answer this question with PRIOR , a framework whose design is guided by three observations drawn from recent literature. 
+
+(i) LiDAR-based elevation mapping, while geometrically precise, relies on odometric integration that accumulates drift during extended locomotion; egocentric depth images, B
+
+> DC
+> A
+
+Fig. 1: The proposed PRIOR framework was simulated and demonstrated on the ZERITH Z1 model. (A)–(D) illustrate the robot traversing four representative terrain types. by contrast, provide a self-contained terrain signal that is inherently free of such drift. 
+
+(ii) Adversarial motion priors, the prevailing mechanism for imposing gait style, suffer from well-documented training pathologies—mode collapse, reward ambiguity, and hyperpa-rameter sensitivity — that are exacerbated on challenging terrains where the policy must deviate significantly from reference motions; a parametric gait generator can offer com-parable stylistic guidance through deterministic supervision, sidestepping these instabilities entirely. 
+
+(iii) The ongoing transition from Isaac Gym to Isaac Lab as the community-standard simulation platform calls for training pipelines natively built on the newer stack; we develop PRIOR entirely within Isaac Lab, incorporating systematic optimizations that yield a 3× speedup over the vanilla Isaac Lab baseline. Concretely, PRIOR trains a single locomotion policy end-to-end through three mutually reinforcing mechanisms. A 
+
+parametric gait generator produces phase-conditioned joint trajectories by dynamically blending motion capture prim-itives, supplying the policy with velocity-adaptive motion targets that replace adversarial style losses. A GRU-based state estimator fuses proprioceptive history with egocen-tric depth observations and is trained via self-supervised auxiliary objectives—heightmap reconstruction and linear velocity prediction—to distill local terrain geometry into a compact latent representation, requiring neither external localization nor manual annotation. Terrain-adaptive footstep rewards bias swing-leg placement toward geometrically fa-
+
+> arXiv:2603.18979v1 [cs.RO] 19 Mar 2026
+
+vorable contact regions, enabling reliable footholds on dis-continuous surfaces. Complementing these components, we conduct a depth resolution study that characterizes the Pareto frontier between reconstruction fidelity and computational cost, revealing that perceptual overhead can be substantially reduced with negligible impact on traversal performance. We validate PRIOR on simulated terrains of progressive difficulty—flat ground, boxes, staircases, and gaps. Con-trolled ablations confirm that each component is individually necessary and that their combination produces synergistic gains beyond any subset, with the complete system reaching a 100% traversal success rate. To lower the barrier for future work, we will publicly release the full code. Our contributions are summarized as follows:  
+
+> •
+
+We present PRIOR, a single-stage RL framework that unifies depth-based terrain perception, paramet-ric gait generation, and terrain-adaptive footstep re-wards to achieve robust and natural humanoid loco-motion—eliminating the need for adversarial objectives, teacher–student distillation, or multi-stage training.  
+
+> •
+
+We provide a depth resolution analysis that maps the Pareto frontier between terrain reconstruction quality and computational throughput, together with Isaac Lab-specific training optimizations that yield a 3× training speedup over the vanilla implementation.  
+
+> •
+
+We conduct comprehensive ablations that isolate the necessity and synergy of each component, and commit to open-sourcing the complete framework as a repro-ducible baseline on Isaac Lab. II. RELATED WORK 
+
+A. Perception-Driven Robot Locomotion 
+
+Early research on legged robot locomotion focused primar-ily on ”blind walking” strategies based on proprioception. By constructing closed-loop feedback control using internal sensors such as joint encoders and IMUs, these methods achieved a degree of robust walking on unknown terrains. Studies such as [5], [6], [7], [8], [9] have demonstrated that strong terrain adaptability can be attained relying solely on internal sensing. Based on this, several works have introduced motion prior constraints to generate more agile and holistic locomotion patterns [10], [11]. However, due to the lack of direct environmental observation, these methods struggle with precise, proactive gait planning when encoun-tering significant non-local terrain variations. As task complexity has increased, recent research has gradually shifted toward end-to-end locomotion learning frameworks. One category of methods introduces two-stage teacher-student distillation frameworks with privileged infor-mation [1], [12], [13], [14]. Some studies have incorporated temporal structures and attention mechanisms to enhance the robustness and consistency of terrain representations [2], [15], [16], while some other work has explored the integration of gait optimization [17]. Despite the significant progress made by these methods in complex environments, their motion generation often relies heavily on meticulous reward engineering or multi-stage training pipelines. This results in high system complexity and leaves room for im-provement regarding the naturalness of the generated motion. 
+
+B. Motion-Prior-Based Robot Locomotion 
+
+Research on motion priors primarily focuses on enhancing the human-likeness of robot movements and can be broadly categorized into explicit motion generation and stylistic constraints. One prominent category follows the imitation learning paradigm. Some approaches achieve complex skill synthesis and multi-action switching through explicit tra-jectory constraints [18], [19]. Others utilize latent variables or probabilistic models to model high-dimensional motion distributions in order to generate diverse human-like move-ments [4], [20]. Recently, diffusion models have emerged as a significant tool for constructing motion priors, demonstrat-ing remarkable advantages [21], [22]. Despite significantly improving gait naturalness, insufficient modeling of environ-mental perception and online feedback limits its adaptability and robustness in complex terrain. Another category of methods utilizes reference motions as reward signals or discriminative criteria to guide the policy toward human-like styles in a weakly supervised manner. This approach enhances motion flexibility by relaxing strict trajectory matching constraints. Representative works include adversarial imitation for physical character control [23] and its applications in legged robot locomotion control [10], [24], [25]. Furthermore, some studies have utilized latent space modeling or Mixture-of-Experts (MoE) structures to enhance gait diversity while improving the continuity of motion generation [11], [17]. However, due to insufficient integration of environmental perception, learned human-like styles struggle to maintain consistency in real-world or unstructured environments. III. METHOD In this section, we provide a detailed description of the implementation of the PRIOR framework. PRIOR utilizes an estimator that fuses temporal depth information with proprioception to estimate both terrain features and robot proprioceptive states. Furthermore, reference gaits derived from processed natural motion data are integrated as inputs, providing soft constraints on robot locomotion via gait-aware rewards. Our discussion is organized into four primary components: the overall perceptive locomotion framework, the generation and learning of human-like motions, the high-throughput training infrastructure, and the specific implemen-tation details of the training process. 
+
+A. Perception-Driven Locomotion Framework 1) Asymmetric Actor–Critic Architecture: As illustrated in Fig. 2, the proposed PRIOR framework adopts an asym-metric actor–critic architecture and is trained in a single-stage, end-to-end manner that enables the perception module and the control policy to co-evolve [2]. This design avoids error amplification issues commonly encountered in two-stage teacher–student distillation-based training pipelines. MLP       
+
+> GRU
+> State Estimator
+> Reference Gait Generator
+> CNN
+> Actor 𝐀 𝐀
+> Critic
+> MLP
+> Decoder
+> MLP
+> Decoder
+> 𝐀 𝐀
+> 𝐀 𝐀
+> 𝐀 𝐀
+> 𝐀 𝐀
+> H1
+> 𝐀 𝐀
+> H2
+> 𝐀 𝐀
+> 𝐀 𝐀
+> 𝐀 𝐀
+> 𝐀 𝐀
+> 𝐀 𝐀
+> 𝐀 𝐀 +1
+> 𝐀 𝐀 +1
+> 𝐀 𝐀
+> Environment
+> 𝐀 robot𝐀 robot_clip
+> MSE loss
+> MSE loss
+> MSE loss
+> Preprocess
+> Walk Stand
+> 𝐀 =0𝐀 =2
+> 𝐀 𝐀
+
+Fig. 2: Overview of the proposed PRIOR framework. The framework comprises three components: (a) Asymmetric actor-critic architecture for reinforcement learning. (b) State Estimator (yellow): Fuses multimodal latent features for policy driving and performs self-supervised regression for velocity estimation, terrain reconstruction, and state prediction. (c) Reference Gait Generator (blue): Synthesizes physics-consistent reference trajectories via phase normalization and velocity-driven weighted interpolation, while constraining locomotion through gait-aware rewards. The policy is optimized using Proximal Policy Optimization (PPO) [26]. 
+
+Actor network. The actor network takes (i) a 45-dimensional current proprioceptive observation ot, (ii) a 163-dimensional state estimator output et which is detailed in Section III-A.2, and (iii) a 1-dimensional gait phase signal 
+
+ϕt as input. The current proprioceptive observation is defined as follows: 
+
+ot =
+
+h
+
+ωt, gt, ct, θt, ˙θt, at−1
+
+i⊤
+
+. (1) where ωt is the body angular velocity, gt is the gravity direction vector expressed in the body frame, ct is the velocity command, θt and ˙θt are the joint positions and velocities, respectively, and at−1 is the action applied at the previous time step. 
+
+Critic Network. The critic network receives the noise-free base linear velocity vt from the simulation environment, the proprioceptive observation ot, the height map scan informa-tion mt provided by the RayCaster, and the reference gait phase ϕt. The input is defined as: 
+
+st = [ vt, ot, mt ]⊤ . (2) 
+
+Reward and Action Space. We categorize the reward functions into four groups: task tracking, stability, smooth-ness, and safety. Specific rewards for foot-terrain interaction are crucial for humanoid balance and obstacle negotiation. These foot-related components, summarized in Table I, en-sure gait rhythm, ground clearance, and precise landing on complex environmental features. TABLE I: LANDING STATE REWARD COMPONENTS               
+
+> Reward Description Weight ( wi)
+> rair Promotes gait rhythm. 1.25
+> rslide Minimizes ground slipping. -0.10
+> rdbl-air Penalizes walking on one leg. -1.00
+> rswing Ensures leg lift height. -20.0
+> rstumble Prevents foot-obstacle tripping. -30.0
+> rL/R
+> edge Encourages safe foot placement. -2.00
+
+The actor network outputs a 12-dimensional action vector 
+
+at corresponding to the leg joints of the humanoid robot. This action serves as modulation to the default standing joint configuration θdefault , yielding the target joint positions 
+
+θtarget  
+
+> t
+
+,which is defined as: 
+
+θtarget  
+
+> t
+
+= θdefault + at. (3) The desired joint positions are then fed into a low-level PD controller to calculate the target joint torques τ t, which is defined as: 
+
+τ t = Kp(θtarget  
+
+> t
+
+− θt) − Kd ˙θt. (4) where the stiffness Kp and damping Kd are set to 60.0 and 2.0, respectively, to match the hardware specifications of ZERITH Z1. 
+
+2) State Estimator: The state estimator fuses propriocep-tive sensing and depth visual perception. Compared with estimation methods that rely solely on visual information, this multimodal fusion architecture improves the real-time performance of state feedback and reduces estimation bias caused by noise in a single visual modality. The two input modalities consist of proprioceptive observations oH1  
+
+> t
+
+with a stacking horizon of H1 = 10, and temporally stacked depth images dH2  
+
+> t
+
+with a stacking horizon of H2 = 2, where each depth frame has a cropped resolution of [36,64]. The proprioceptive observation oH1  
+
+> t
+
+is processed by a multilayer perceptron (MLP) encoder to extract a 128-dimensional proprioceptive state feature, while the temporally stacked depth images dH2  
+
+> t
+
+are processed by a convolutional neural network (CNN) encoder to extract a 128-dimensional depth feature. The encoded features of the two modalities are then concatenated and fed into a single-layer gated recurrent unit (GRU) to generate a memory representation of the proprioceptive state and the terrain state. The output of the memory module is a 163-dimensional vector et, which serves as an input to the actor network, composed of a 3-dimensional base velocity ˆvt, a 32-dimensional latent vector 
+
+zt and a 128-dimensional height map latent vector ht.
+
+et = [ˆ vt, zt, ht]⊤ . (5) The height map latent vector ht is decoded by an MLP to obtain the estimated terrain state ˆmt, while et is decoded by another MLP to predict the next-step proprioceptive state 
+
+ˆot+1 . Using the privileged information available in the critic observations, self-supervised learning is applied to ˆvt, as well as the decoded results ˆmt and ˆot+1 , by minimizing the mean squared error (MSE) loss. The overall loss function of the state estimator is defined as follows: 
+
+L = MSE(ˆ vt, vt)+MSE(ˆ ot+1 , ot+1 )+MSE( ˆ mt, mt) (6) 
+
+B. Reference Gait Priors 
+
+Inspired by the Parameterized Motion Generator (PMG) framework [27], we present a data-efficient motion prior extraction method designed to achieve humanoid control on complex terrains using a minimal set of high-fidelity motion templates. Distinguishing itself from conventional imitation learning approaches that necessitate hours of large-scale motion capture data, our method extracts structural features from core gait cycles to construct a continuous and physics-consistent reference gait space. This not only substantially lowers the overhead of data acquisition and preprocessing but also provides robust kinematic guidance for policy con-vergence in non-stationary terrain environments. 
+
+1) Motion Data Preprocessing: We utilize a high-precision motion capture system to collect human movement data, ranging from static postures to various forward veloc-ities, denoted as Dhuman . This data is then retargeted to our humanoid robot, ZERITH Z1, using optimization-based algorithms [28], [29], resulting in the robot dataset Drobot :
+
+Drobot = {θ, ˙θ, v, ω, c} (7) 
+
+θ represents the joint angles, ˙θ represents the joint angular velocities, v represents the base linear velocity, ω represents the base angular velocity, c = {μ, σ } represents the foot contact information, including the contact center and range. Since the raw retargeted dataset Drobot contains initial transitions, terminal decelerations, and measurement noise inherent in the motion capture process, we designed apreprocessing pipeline to extract high-fidelity, periodic, and smooth reference motion segments. To construct reference trajectories with strict periodicity, we utilize the foot con-tact information c to segment the motion data at various velocities. We employ a clip range mechanism to extract a single, stable gait cycle T from the original long sequences. In practice, we typically select the second or third cycle from the sequence to avoid the non-stationary dynamics associated with acceleration or deceleration phases. Fur-thermore, to eliminate high-frequency noise introduced by the motion capture system and ensure the smoothness of joint commands, we apply a 1D Gaussian filter to the raw joint sequences. The resulting processed robot dataset is represented as: 
+
+Drobot clip = {θ, ˙θ, v, ω, c, T } (8) where T denotes the duration of a single gait cycle. 
+
+2) Reference Gait Generation: Given the commanded base velocity v = [ vx, v y , ω ] and the gait phase ϕ ∈ [0 , 1) ,the reference joint trajectory is synthesized through a unified weighted interpolation framework. For each velocity channel x ∈ { vx, v y , ω }, we determine an interpolation coefficient based on the magnitude of the commanded velocity. Assume that the dataset contains a set of motion templates {θi(ϕ), T i}, where θi(ϕ) denotes the phase-dependent joint trajectory and Ti is the corresponding gait period. Given a commanded velocity ux, we select its two neighboring nominal velocities ul and uu, and define the interpolation factor as 
+
+α = clip 
+
+ |ux| − ul
+
+uu − ul + ε , 0, 1
+
+
+
+(9) where ε is a small constant for numerical stability. The commanded gait period is obtained via linear inter-polation: 
+
+Tu = (1 − α)Tl + αT u. (10) The gait phase is then updated according to the normalized phase progression rule: 
+
+ϕt+1 =
+
+
+
+ϕt + ∆tTu
+
+
+
+mod 1 . (11) After obtaining the updated phase ϕ, the reference joint trajectory is synthesized by blending the neighboring motion templates: 
+
+θd(ϕ) = (1 − α) θl(ϕ) + α θ u(ϕ). (12) To handle near-zero velocity commands, we introduce a standing threshold vth :
+
+θd(ϕ) = 
+
+(
+
+θstand , ∥v∥ ≤ vth ,
+
+(1 − α)θl(ϕ) + αθ u(ϕ), otherwise . (13) TABLE II: GAIT-AWARE REWARD COMPONENTS                   
+
+> Reward Equation ( ei)Weight ( wi)
+> rpos ∥θ−θd(ϕ)∥20.10
+> rvel ∥vb−v∥20.05
+> r∆∥∆θ−∆θd(ϕ)∥10.05
+> rankle
+> P
+> j∈{ L,R }
+>  θj−θd,j (ϕ)20.05
+
+In addition, a velocity-dependent stance ratio ρ(v) is defined to construct phase-based contact indicators rL(ϕ)
+
+and rR(ϕ), which are later used for contact supervision and reward formulation. This velocity-conditioned interpolation strategy ensures smooth transitions across different commanded speeds and maintains temporal consistency via unified phase evolution. 
+
+3) Gait-aware Reward Design: To encourage the policy to maintain consistency with the reference gait over complex terrains, we construct a set of exponential tracking reward terms based on the target joint trajectories and commanded base velocities generated by the reference gait module. Each reward term follows a unified exponential form: 
+
+ri = exp( −λiei), (14) where ei denotes the tracking error of the corresponding physical quantity, and λi is a scaling coefficient. All gait-related reward terms are combined as a weighted summation: 
+
+rgait = X
+
+> i
+
+wiri, (15) where wi represents the weight of each component. The detailed definitions of each gait reward term are summarized in Table II. These reward components constrain the policy from four complementary aspects, including pose consistency, velocity matching, dynamic motion trend tracking, and key support joint stabilization. This design allows the robot to preserve the periodic structure imposed by the reference gait generator while maintaining adaptability to complex environments. 
+
+C. High-Throughput Training Infrastructure 
+
+To address the computational overhead and GPU mem-ory (VRAM) bottlenecks caused by high-dimensional depth perception in massively parallel environments, we devel-oped a systematic engineering optimization framework on the NVIDIA Isaac Sim and Isaac Lab platform. Based on our self-developed ZERITH Z1 humanoid robot model, we constructed the training environment and improved overall system throughput from two perspectives: memory manage-ment and rendering strategy. 
+
+1) Heterogeneous Observation Buffer Management: 
+
+VRAM capacity is a primary factor limiting the degree of parallelism (i.e., Nenv ) in reinforcement learning. To address the high-dimensional tensor storage pressure introduced by depth images, we propose a heterogeneous memory manage-ment scheme designed to decouple physics computation from data caching. Under this mechanism, VRAM serves only as a transient buffer for rendering outputs, while the generated TABLE III: PARALLEL SCALE UNDER DIFFERENT MEMORY STRATEGIES              
+
+> GPU Max Nenv Storage VRAM
+> 4090 (24G) 512 GPU ∼24G 4090 (24G) 1024 CPU ∼24G 4090 (48G) 1536 CPU ∼48G
+
+observation tensors are asynchronously transferred to host memory (RAM) for storage and indexing. Experimental results demonstrate that this strategy sig-nificantly frees GPU computational resources. As shown in Table III, on an RTX 4090 (24 GB) platform, the maximum number of parallel environments for vision-based tasks in-creases from the baseline of 512 to 1024. In a 48 GB VRAM configuration, the parallel scale further extends to 1536 envi-ronments, substantially improving sample efficiency during training. 
+
+2) Render-time Pre-processing Optimization: To optimize the vision processing pipeline, we first define the core perceptual requirement: the system must reliably distinguish terrain features with a minimum height of 5 cm. We derive the spatial resolution based on the geometric camera model: rv = z0 sin( −δ)sin( α) sin( α + δ) = z0 sin( βh )sin( α) sin( α − βh ) (16) where z0 represents the mounting height, α is the pitch angle, 
+
+β denotes the vertical Field of View (FOV), h is the image height in pixels, and auxiliary variable δ = −β/h .Under the configuration of z0 = 0 .8 m, β = 58 ◦, and 
+
+α = 45 ◦, an effective vertical resolution of h = 36 px yields a spatial resolution of rv = 0.0463 m/pix at a typical mea-surement distance of 1.13 m. Since 0.0463 m < 0.05 m, this configuration satisfies the critical constraint for sensing 5 cm terrain variations while minimizing the input dimensionality. Based on this analysis, we directly render a low-resolution depth buffer of 45 × 80 instead of high-resolution frames. A 
+
+36 × 64 region is extracted via center cropping, followed by stochastic depth perturbations to improve robustness. This render-time optimization reduces perception overhead and GPU memory bandwidth usage, enabling the policy to pro-cess visual observations at a significantly higher frequency, which is crucial for maintaining stable locomotion on highly irregular terrains.. The overall pipeline is illustrated in Fig. 3. 
+
+D. Training Details 1) Training Curriculum: To prevent policy instability caused by overly challenging terrains during the early stage of training, we adopt an adaptive terrain curriculum strategy based on the traveled distance of the robot, following the approach in [30]. In simulation, curriculum training is con-ducted simultaneously over four types of terrain: Pyramid Stairs, Inverted Stairs, Boxes, and Plane. All four terrain types are native terrain generators provided by Isaac Lab. Detailed terrain configurations and curriculum settings are illustrated in Fig. 4. Raw Buffer          
+
+> 45 ×80 36 ×64 36 ×64
+> Cropped Map Randomized Map
+
+Fig. 3: Depth data flow: Images in the top and bottom rows represent samples from different parallel environments.                          
+
+> AB
+> CDEABCD
+> Terrain Type Pyramid Stairs Inverted Stairs Boxes Plane Range (/m) [0 .05 ,0.23] [0 .05 ,0.23] [0 .05 ,0.20] –Parameter step height step height obstacle height flat surface Weight 0.2 0.2 0.2 0.1
+
+Fig. 4: Overview of the terrain curriculum for training. (A)– (D) represent distinct terrain types posing various physical challenges. Table (E) details the parameter ranges and the distribution (weight) for each terrain type. 
+
+2) Domain Randomization: To enhance robustness and sim-to-real transfer, we apply domain randomization across physical dynamics, initial conditions, and visual inputs. The corresponding perturbation ranges are listed in Table IV. IV. EXPERIMENT 
+
+A. Experimental Setting 
+
+Based on the optimization architecture described in Sec-tion III-C, we conduct high-throughput policy training on a single NVIDIA RTX 4090 (24GB) GPU. The system supports 1024 parallel environments simultaneously perform-ing depth perception and physics simulation, significantly improving data collection efficiency while maintaining stable simulation dynamics. The policy converges after approxi-mately 12,000 training iterations. The depth images are updated at 30 Hz, while the control policy is executed at 50 Hz, ensuring a balance between perception refresh rate and control stability. The trained policy is exported via ONNX and deployed directly on the onboard computing unit of the ZERITH Z1 humanoid robot. The ZERITH Z1 model has 23 degrees of TABLE IV: DOMAIN RANDOMIZATION RANGES                                                   
+
+> Parameter Randomization range Unit
+> Base payload [−5.0,5.0] kg Link mass factor [0 .8,1.2] –Center of mass shift [−0.15 ,0.15] mFriction coefficient [0 .2,1.5] –
+> Kpfactor [0 .9,1.1] –
+> Kdfactor [0 .9,1.1] –Joint armature [2 ×10 −3,2×10 −2]kg ·m2
+> Initial base position ( x, y )[−0.5,0.5] mInitial base orientation (yaw) [−π, π ]rad Initial base linear velocity [−0.5,0.5] m/s Initial base angular velocity [−0.5,0.5] rad/s Initial joint position scale [0 .5,1.5] –Depth image bias [−0.04 ,0.04] mDepth image noise ( σ)0.02 mDepth hole probability 0.03 –
+
+freedom (DoF), including 6 DoF per leg, 3 DoF at the waist, and 4 DoF per arm. 
+
+B. Simulation Ablation Studies 1) Experimental Configurations: To systematically ana-lyze the contribution of each component in the PRIOR framework, we design a staged ablation study to separately evaluate the perception-driven locomotion architecture and the reference gait prior. First, four ablated variants are compared against the con-figuration without the reference gait prior (“PRIOR w/o reference gait”) to investigate the impact of architectural components within the perception-motion framework. Subse-quently, the “PRIOR w/o reference gait” model is compared with the full PRIOR framework to quantify the contribution of the reference gait prior to locomotion stability and behav-ioral quality. The detailed configurations are as follows:  
+
+> •
+
+PRIOR (Ours) : The complete PRIOR framework.  
+
+> •
+
+PRIOR w/o reference gait : The PRIOR framework without the humanoid reference gait constraint.  
+
+> •
+
+PRIOR w/o ˆmt: The PRIOR framework without ex-plicit terrain estimation and elevation map supervision.  
+
+> •
+
+PRIOR w/o dH2  
+
+> t
+
+: The PRIOR framework where tempo-rally stacked depth observations are removed from the estimator input.  
+
+> •
+
+PRIOR with shorter H1 : The PRIOR framework with a reduced proprioceptive history length (H1 = 6).  
+
+> •
+
+PRIOR w/o landing state reward : The PRIOR frame-work without the designed landing state reward terms. 
+
+2) Evaluation Procedure: All six policies are trained in the Isaac Lab simulator under the same terrain curriculum setting. We evaluate the policies using the following quanti-tative metrics:  
+
+> •
+
+Curriculum capability : The mean terrain level achieved (mean level) and the maximum successfully traversed level across different terrain types (Pyramid Stairs, Inverted Stairs, Boxes, and Plane). TABLE V: ABLATION STUDY RESULTS OF THE PRIOR FRAMEWORK ON TERRAIN ADAPTABILITY                                                    
+
+> Method Mean Level Pyramid Stairs Inverted Stairs Boxes Plane Mean Reward
+> PRIOR (ours) 5.7533 1.0 1.0000 1.0000 1.0 26.3462
+> PRIOR w/o reference gait 5.7735 1.0 1.0000 1.0000 1.0 23.7233 PRIOR w/o ˆmt5.7672 1.0 0.7734 1.0000 1.0 13.1775 PRIOR w/o dH2
+> t5.4627 1.0 0.3750 0.9687 1.0 10.1463 PRIOR with H1 = 6 5.7417 1.0 1.0000 1.0000 1.0 19.3234 PRIOR w/o landing state reward 5.7403 1.0 1.0000 1.0000 1.0 22.6262 PRIOR (ours)
+> PRIOR w/o reference gait
+> PRIOR with shorter H1 PRIOR w/o 𝐀 𝐀
+> 𝐀 𝐀
+> H2
+> PRIOR w/o
+> PRIOR w/o landing state reward
+
+Fig. 5: The upper panel illustrates the training curves for mean reward, while the lower panel displays the mean terrain level achieved over training iterations.  
+
+> •
+
+Training performance : Total reward, convergence speed, and training stability. 
+
+3) Results and Discussion: As shown in Table V and Fig. 5, the ablation results demonstrate the effectiveness of each component. 
+
+Reward–stability correlation : Although the “PRIOR w/o reference gait” variant achieves a slightly higher mean cur-riculum level (5.7735), its average reward (23.7233) is ap-proximately 10% lower than that of the full framework. This suggests that traversal capability alone does not guarantee motion quality or efficiency. 
+
+Behavioral rationality : The reference gait prior con-tributes not only to performance but also to motion qual-ity. Empirically, policies without gait prior tend to exploit unstable or high-frequency oscillatory motions to maximize traversal success. With the humanoid gait constraint, the robot maintains near-perfect terrain success rates (all terrain metrics reaching 1.0) while achieving significantly smoother and more energy-efficient locomotion, as reflected by higher reward values. This property is crucial for real-world deploy-ment. 
+
+Explicit terrain estimation and supervision (PRIOR w/o ˆmt): Removing explicit terrain estimation reduces the average reward to 13.1775. Although it performs better than the variant without temporal depth information, its performance on complex terrains such as Inverted Stairs (0.7734) remains substantially lower than the full model. This indicates that explicit terrain representation and ele-vation supervision significantly enhance the policy’s under-standing of geometric structures. 
+
+Temporal depth information (PRIOR w/o dH2  
+
+> t
+
+): This variant exhibits the worst performance, with an average reward of 10.1463 and a significant drop in success rate on Inverted Stairs (0.375). Without integrating temporal depth information, the robot loses the ability to anticipate terrain variations, leading to unstable foothold planning during dynamic locomotion. 
+
+Proprioceptive history length (H1) : Reducing the pro-prioceptive history length results in an average reward of 19.3234. A longer history window (H1 = 10) enables the system to implicitly estimate physical properties such as ground friction and center-of-mass deviation, thereby im-proving robustness under unknown disturbances. 
+
+Landing state reward : As illustrated in Fig. 6, the removal of the landing state reward results in less stable foot placements, leading to a decrease in mean reward to 22.6262. This qualitative comparison reinforces that our fine-grained reward design effectively optimizes the behavior during the landing transient. V. CONCLUSIONS This paper presents PRIOR , an efficient and reproducible single-stage reinforcement learning framework developed in the Isaac Lab environment for perception-aware humanoid locomotion. The proposed method addresses the challenges of integrating perception and control for humanoid robots operating over complex terrains. PRIOR combines a GRU-based explicit terrain reconstruction state estimator with a parameterized gait generator within a unified learning pipeline. This design enables the ZERITH Z1 humanoid model to traverse diverse challenging terrains with high precision and robustness. Experimental results demonstrate that PRIOR achieves high average rewards and maintains a 100% traversal success rate across various complex terrains. Furthermore, the learned policy consistently handles terrains of relatively high difficulty, highlighting the effectiveness and generalization capability of the proposed framework. Despite these advantages, our current work still has limita-tions in real-world deployment experiments. Future research will focus on developing more generalizable dynamics adap-w/ landing state reward w/o landing state reward Fig. 6: Comparison of foot-placement behavior with and without the landing state reward. tation algorithms to enable seamless sim-to-real transfer from Isaac Lab to the physical ZERITH Z1 platform. REFERENCES [1] Z. Zhuang, S. Yao, and H. Zhao, “Humanoid parkour learning,” in 
+
+8th Annual Conference on Robot Learning , 2024. [Online]. Available: https://openreview.net/forum?id=fs7ia3FqUM [2] S. Luo, S. Li, R. Yu, Z. Wang, J. Wu, and Q. Zhu, “Pie: Parkour with implicit-explicit learning framework for legged robots,” IEEE Robotics and Automation Letters , vol. 9, no. 11, pp. 9986–9993, 2024. [3] X. B. Peng, E. Coumans, T. Zhang, T.-W. Lee, J. Tan, and S. Levine, “Learning agile robotic locomotion skills by imitating animals,” arXiv preprint arXiv:2004.00784 , 2020. [4] X. B. Peng, Y. Guo, L. Halper, S. Levine, and S. Fidler, “Ase: large-scale reusable adversarial skill embeddings for physically simulated characters,” ACM Transactions on Graphics , vol. 41, no. 4, p. 1–17, July 2022. [Online]. Available: http://dx.doi.org/10.1145/ 3528223.3530110 [5] I. M. Aswin Nahrendra, B. Yu, and H. Myung, “Dreamwaq: Learning robust quadrupedal locomotion with implicit terrain imagination via deep reinforcement learning,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) , 2023, pp. 5078–5084. [6] A. Kumar, Z. Fu, D. Pathak, and J. Malik, “RMA: Rapid Motor Adaptation for Legged Robots,” in Proceedings of Robotics: Science and Systems , Virtual, July 2021. [7] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning quadrupedal locomotion over challenging terrain,” Science Robotics , vol. 5, no. 47, Oct. 2020. [Online]. Available: http: //dx.doi.org/10.1126/scirobotics.abc5986 [8] G. Ji, J. Mun, H. Kim, and J. Hwangbo, “Concurrent training of a control policy and a state estimator for dynamic and robust legged locomotion,” IEEE Robotics and Automation Letters ,vol. 7, no. 2, p. 4630–4637, Apr. 2022. [Online]. Available: http://dx.doi.org/10.1109/LRA.2022.3151396 [9] J. Hwangbo, J. Lee, A. Dosovitskiy, D. Bellicoso, V. Tsounis, V. Koltun, and M. Hutter, “Learning agile and dynamic motor skills for legged robots,” Science Robotics , vol. 4, no. 26, Jan. 2019. [Online]. Available: http://dx.doi.org/10.1126/scirobotics.aau5872 [10] J. Wu, G. Xin, C. Qi, and Y. Xue, “Learning robust and agile legged locomotion using adversarial motion priors,” IEEE Robotics and Automation Letters , vol. 8, no. 8, pp. 4975–4982, 2023. [11] J. Wu, Y. Xue, and C. Qi, “Learning multiple gaits within latent space for quadruped robots,” arXiv preprint arXiv:2308.03014 , 2023. [12] A. Agarwal, A. Kumar, J. Malik, and D. Pathak, “Legged locomotion in challenging terrains using egocentric vision,” in 6th Annual Conference on Robot Learning , 2022. [Online]. Available: https://openreview.net/forum?id=Re3NjSwf0WF [13] X. Cheng, K. Shi, A. Agarwal, and D. Pathak, “Extreme parkour with legged robots,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) , 2024, pp. 11 443–11 450. [14] H. Wang, Z. Wang, J. Ren, Q. Ben, T. Huang, W. Zhang, and J. Pang, “Beamdojo: Learning agile humanoid locomotion on sparse footholds,” in Robotics: Science and Systems (RSS) , 2025. [15] J. He, C. Zhang, F. Jenelten, R. Grandia, M. B¨ acher, and M. Hutter, “Attention-based map encoding for learning generalized legged locomotion,” Science Robotics , vol. 10, no. 105, p. eadv3604, 2025. [Online]. Available: https://www.science.org/doi/abs/10.1126/ scirobotics.adv3604 [16] J. Sun, G. Han, P. Sun, W. Zhao, J. Cao, J. Wang, Y. Guo, and Q. Zhang, “Dpl: Depth-only perceptive humanoid locomotion via realistic depth synthesis and cross-attention terrain reconstruction,” 
+
+arXiv preprint arXiv:2510.07152 , 2025. [17] D. Wang, X. Wang, X. Liu, J. Shi, Y. Zhao, C. Bai, and X. Li, “More: Mixture of residual experts for humanoid lifelike gaits learning on complex terrains,” arXiv preprint arXiv:2506.08840 , 2025. [18] X. B. Peng, P. Abbeel, S. Levine, and M. van de Panne, “Deepmimic: example-guided deep reinforcement learning of physics-based character skills,” ACM Trans. Graph. , vol. 37, no. 4, July 2018. [Online]. Available: https://doi.org/10.1145/3197517.3201311 [19] P. Xu, X. Shang, V. Zordan, and I. Karamouzas, “Composite motion learning with task control,” ACM Trans. Graph. , vol. 42, no. 4, July 2023. [Online]. Available: https://doi.org/10.1145/3592447 [20] H. Zhang, L. Zhang, Z. Chen, L. Chen, Y. Wang, and R. Xiong, “Natural humanoid robot locomotion with generative motion prior,” in 2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2025, pp. 6622–6629. [21] A. Serifi, R. Grandia, E. Knoop, M. Gross, and M. B¨ acher, “Robot motion diffusion model: Motion generation for robotic characters,” in 
+
+SIGGRAPH Asia 2024 Conference Papers , ser. SA ’24. New York, NY, USA: Association for Computing Machinery, 2024. [Online]. Available: https://doi.org/10.1145/3680528.3687626 [22] Q. Liao, T. E. Truong, X. Huang, Y. Gao, G. Tevet, K. Sreenath, and C. K. Liu, “Beyondmimic: From motion tracking to versatile humanoid control via guided diffusion,” arXiv preprint arXiv:2508.08241 , 2025. [23] X. B. Peng, Z. Ma, P. Abbeel, S. Levine, and A. Kanazawa, “Amp: adversarial motion priors for stylized physics-based character control,” ACM Transactions on Graphics , vol. 40, no. 4, p. 1–20, July 2021. [Online]. Available: http://dx.doi.org/10.1145/3450626.3459670 [24] T. Peng, L. Bao, J. Humphreys, A. M. Delfaki, D. Kanoulas, and C. Zhou, “Learning bipedal walking on a quadruped robot via adver-sarial motion priors,” in Towards Autonomous Robotic Systems , M. N. Huda, M. Wang, and T. Kalganova, Eds. Cham: Springer Nature Switzerland, 2025, pp. 118–129. [25] J. Shi, X. Liu, D. Wang, O. Lu, S. Schwertfeger, C. Zhang, F. Sun, C. Bai, and X. Li, “Adversarial locomotion and motion imitation for humanoid policy learning,” arXiv preprint arXiv:2504.14305 , 2025. [26] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 , 2017. [27] C. Han, Y. Min, Z. Huang, A. Hong, H. Liu, Y. Cheng, and H. Liu, “Pmg: Parameterized motion generator for human-like locomotion control,” 2026. [Online]. Available: https://arxiv.org/abs/2602.12656 [28] T. He, Z. Luo, W. Xiao, C. Zhang, K. Kitani, C. Liu, and G. Shi, “Learning human-to-humanoid real-time whole-body teleoperation,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2024, pp. 8944–8951. [29] J. P. Araujo, Y. Ze, P. Xu, J. Wu, and C. K. Liu, “Retargeting matters: General motion retargeting for humanoid motion tracking,” 
+
+arXiv preprint arXiv:2510.02252 , 2025. [30] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk in minutes using massively parallel deep reinforcement learning,” in Conference on Robot Learning, 8-11 November 2021, London, UK , ser. Proceedings of Machine Learning Research, A. Faust, D. Hsu, and G. Neumann, Eds., vol. 164. PMLR, 2021, pp. 91–100. [Online]. Available: https://proceedings.mlr.press/v164/rudin22a.html

@@ -1,0 +1,541 @@
+Title: ADMM-Based Distributed MPC with Control Barrier Functions for Safe Multi-Robot Quadrupedal Locomotion
+
+URL Source: https://arxiv.org/pdf/2603.19170v1
+
+Published Time: Fri, 20 Mar 2026 01:33:12 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# ADMM-Based Distributed MPC with Control Barrier Functions for Safe Multi-Robot Quadrupedal Locomotion 
+
+Yicheng Zeng 1, Ruturaj S. Sambhus 1, Basit Muhammad Imran 1, Jeeseop Kim 2,Vittorio Pastore 1, and Kaveh Akbari Hamed 1
+
+Abstract — This paper proposes a fully decentralized model predictive control (MPC) framework with control barrier func-tion (CBF) constraints for safety-critical trajectory planning in multi-robot legged systems. The incorporation of CBF con-straints introduces explicit inter-agent coupling, which prevents direct decomposition of the resulting optimal control problems. To address this challenge, we reformulate the centralized safety-critical MPC problem using a structured distributed optimiza-tion framework based on the alternating direction method of multipliers (ADMM). By introducing a novel node–edge split-ting formulation with consensus constraints, the proposed ap-proach decomposes the global problem into independent node-local and edge-local quadratic programs that can be solved in parallel using only neighbor-to-neighbor communication. This enables fully decentralized trajectory optimization with symmetric computational load across agents while preserving safety and dynamic feasibility. The proposed framework is integrated into a hierarchical locomotion control architecture for quadrupedal robots, combining high-level distributed trajec-tory planning, mid-level nonlinear MPC enforcing single rigid body dynamics, and low-level whole-body control enforcing full-order robot dynamics. The effectiveness of the proposed approach is demonstrated through hardware experiments on two Unitree Go2 quadrupedal robots and numerical simulations involving up to four robots navigating uncertain environments with rough terrain and external disturbances. The results show that the proposed distributed formulation achieves performance comparable to centralized MPC while reducing the average per-cycle planning time by up to 51% in the four-agent case, enabling efficient real-time decentralized implementation. 
+
+I. I NTRODUCTION 
+
+Quadrupedal robots have achieved significant progress in recent years, demonstrating robust locomotion over chal-lenging terrain and enabling applications such as inspection, search and rescue, and collaborative transportation. Extend-ing quadrupedal locomotion to multi-robot teams enables improved efficiency and robustness but introduces significant challenges due to high-dimensional dynamics, hybrid contact behaviors, and inter-agent safety constraints. Model predictive control (MPC) has emerged as a power-ful framework for trajectory generation and control of legged robots, as it enables systematic handling of system dynamics and constraints while optimizing performance objectives over            
+
+> The work of R.S. Sambhus and K. Akbari Hamed is partially supported by the NSF under Grant 2423725.
+> 1Y. Zeng, R.S. Sambhus, B. Imran, V. Pastore, and K. Akbari Hamed ( Corresponding Author ) are with the Department of Mechanical Engineering, Virginia Tech, Blacksburg, VA 24061, USA,
+
+{zyicheng, ruturajsambhus, basit, vittoriopastore, kavehakbarihamed }@vt.edu  
+
+> 2J. Kim is with The University of Texas at El Paso, El Paso, TX 79968, USA,
+
+jkim16@utep.edu  
+
+> Fig. 1. Snapshot of the hardware experiment demonstrating the proposed ADMM-based CBF-DMPC framework, where two Unitree Go2 robots navigate a cluttered environment with rough terrain while maintaining safety-critical inter-agent and obstacle avoidance constraints.
+
+a prediction horizon. MPC has been successfully applied using both reduced-order and full-order dynamic models of quadrupedal robots. Reduced-order template models cap-ture the essential dynamics of locomotion while enabling computationally efficient trajectory optimization [1]. Com-mon examples include the linear inverted pendulum (LIP) model [2] and its extensions, such as the angular momentum LIP [3], spring-loaded inverted pendulum (SLIP) [4], vertical SLIP [5], and hybrid LIP [6], as well as centroidal dynamics models [7] and the single rigid body (SRB) model [8]–[13]. Alternatively, whole-body nonlinear MPC approaches lever-age full-order robot dynamics to achieve higher accuracy and dynamic performance, albeit at increased computational cost [14]–[16]. For multi-robot legged systems, distributed MPC (DMPC) provides an attractive framework by enabling each agent to compute its own trajectory while coordinating with neighbor-ing agents through local communication. This decentralized structure reduces computational burden compared to central-ized approaches, while enhancing robustness to communica-tion failures and enabling real-time implementation. Ensuring safety in multi-robot systems is critical, par-ticularly in environments with static obstacles and close-proximity interactions among agents. Control barrier func-tions (CBFs) provide a principled framework for enforcing safety constraints by ensuring forward invariance of safe sets [17], [18]. The integration of CBFs into MPC formulations enables safety-critical trajectory planning by explicitly incor-porating safety constraints into the optimal control problem, while preserving performance and feasibility. This approach has been successfully applied to both single-robot and multi-robot quadrupedal systems [19]–[21]. The incorporation of CBF constraints in MPC formu-lations for multi-robot legged systems introduces explicit inter-agent coupling, since the safety conditions depend on the states and inputs of neighboring agents. In distributed  
+
+> arXiv:2603.19170v1 [cs.RO] 19 Mar 2026 Fig. 2. Overview of the proposed layered control framework, consisting of a high-level ADMM-based CBF-DMPC for safety-critical trajectory planning, a mid-level NMPC layer enforcing the single rigid body (SRB) dynamics, and a low-level whole-body controller (WBC) enforcing full-order robot dynamics.
+
+MPC formulations with embedded CBF constraints, this coupling remains embedded within the resulting nonlinear programming problems solved locally by each agent, see, e.g., [21]. As a result, the optimization problems remain implicitly coupled and do not admit an explicit distributed optimization structure that separates node-local and edge-local computations through consensus constraints. This lack of structured decomposition limits the ability to fully exploit parallel computation and achieve decentralized implemen-tations with symmetric computational load across agents. These limitations motivate the development of distributed MPC formulations with explicit consensus-based decompo-sition that enable fully decentralized trajectory optimization. To address these limitations, the overarching goal of this paper is to develop a fully decentralized MPC framework with CBF-based safety guarantees for teams of quadrupedal robots. To achieve this goal, we reformulate the centralized safety-critical MPC problem using a structured distributed optimization approach based on the alternating direction method of multipliers (ADMM). By introducing a node–edge splitting technique with consensus constraints, the proposed formulation decomposes the global problem into independent node-local and edge-local subproblems that can be solved in parallel using only neighbor-to-neighbor communication. This enables efficient real-time trajectory optimization with symmetric computational load across agents, while preserv-ing safety and dynamic feasibility. 
+
+A. Related Work 
+
+Model predictive control MPC strategies for multi-robot systems can be broadly classified based on the level of coordination and information exchange among agents. Cen-tralized MPC computes control inputs for all agents by solving a single global optimization problem, which can achieve optimal coordination but suffers from poor scala-bility due to the rapid growth in computational complexity and communication requirements as the number of agents increases [22]. At the opposite end of the spectrum, decen-tralized MPC assigns each agent an independent controller that operates without coordination, reducing computational burden but potentially resulting in suboptimal performance when inter-agent constraints such as collision avoidance are present [23]. Distributed MPC provides an intermediate solution by enabling agents to solve local optimization problems while exchanging information with neighboring agents to account for coupling effects [24]. Depending on the coordination strategy, distributed MPC schemes may optimize a shared team-level objective through cooperative formulations [25], [26], or focus on individual agent objectives while incor-porating inter-agent constraints through local coordination mechanisms [27], [28]. These distributed approaches have been successfully applied to multi-agent coordination prob-lems, including autonomous vehicle motion planning [29], mobile robot navigation [30], and networked dynamical systems [31]. However, many distributed MPC formulations do not explicitly exploit structured distributed optimization techniques that enable parallelizable decomposition. The ADMM is a widely used algorithm for distributed optimization, combining the decomposability of dual ascent methods with the convergence properties of the method of multipliers [32]. While ADMM was originally developed for convex optimization problems, it has been extended to certain classes of nonconvex problems under appropriate assump-tions [33]. Nevertheless, extending ADMM to distributed MPC formulations with CBF constraints is not immediate, as the resulting optimization problems involve safety-critical constraints and explicit inter-agent coupling across the pre-diction horizon. These characteristics obscure the underlying separable structure and prevent direct application of standard ADMM, thereby requiring specialized reformulation tech-niques to expose a distributed optimization structure suitable for fully decentralized trajectory optimization. 
+
+B. Contributions 
+
+The main contributions of this paper are summarized as follows. We propose a novel distributed MPC framework with CBF constraints for safety-critical trajectory planning in multi-robot legged systems. Unlike prior distributed MPC formulations with CBF constraints [21], [34], where inter-agent safety conditions remain embedded within coupled nonlinear programs solved locally by each agent, the pro-posed approach explicitly reformulates the centralized safety-critical MPC problem using a structured distributed opti-mization framework based on ADMM. By introducing a node–edge splitting technique with consensus constraints, this reformulation decomposes the centralized problem into independent node-local and edge-local subproblems, thereby enabling fully decentralized trajectory optimization with symmetric computational load across agents. We derive distributed quadratic programming (QP) sub-problems that can be solved in parallel using only local communication between neighboring agents. This explicit distributed formulation enables efficient real-time implemen-tation. We integrate the proposed ADMM-based DMPC framework into a hierarchical locomotion control architecture for quadrupedal robots, consisting of high-level distributed trajectory planning, mid-level NMPC enforcing reduced-order SRB dynamics, and low-level nonlinear whole-body control enforcing full-order robot dynamics (see Fig. 2). We validate the proposed framework through hardware experiments on two Unitree Go2 robots and simulations with up to four agents navigating environments with rough terrain and disturbances (see Fig. 1). The distributed formu-lation achieves trajectory quality and safety comparable to centralized CBF-MPC, while reducing the average per-cycle planning time by approximately 51% in the four-agent case, demonstrating improved computational efficiency for real-time decentralized implementation. II. P ROBLEM FORMULATION 
+
+We consider a network of nV quadrupedal robots indexed by the set V := {1, · · · , n V }. The superscript i denotes quan-tities associated with agent i ∈ V . The multi-robot system is modeled by an undirected interaction graph G(V, E), where 
+
+E := {{ i, j } | i, j ∈ V , i ̸ = j} denotes the edge set. The discrete-time nonlinear dynamics of agent i ∈ V are given by xi(t + 1) = f i xi(t), u i(t), (1) where t ∈ Z≥0 := {0, 1, · · · } denotes the discrete-time index, xi(t) ∈ X ⊂ Rnx is the local state , ui(t) ∈ U ⊂ Rnu
+
+is the local input , and f i : X × U → X represents the nonlinear dynamics of agent i. Let g : X → R2 be a continuous mapping such that g(xi) gives the Cartesian center-of-mass (CoM) position of agent i.We consider a set of static obstacles indexed by O := 
+
+{1, · · · , n O }, where oℓ ∈ R2 denotes the Cartesian center position of obstacle ℓ ∈ O . Our objective is to design a real-time distributed MPC framework based on ADMM and CBFs to steer the agents toward their goal configurations while guaranteeing safety with respect to both inter-agent and agent-obstacle collisions. For compact notation, define the global state and input vectors as 
+
+x := col {xi}i∈V ∈ RnV nx , u := col {ui}i∈V ∈ RnV nu ,
+
+(2) where “col” is the column operator. To formally encode safety, we define the inter-agent safe set as 
+
+SV := 
+
+n
+
+x ∈ RnV nx | ∥ g(xi) − g(xj )∥ ≥ dth , ∀{ i, j } ∈ E 
+
+o
+
+,
+
+and the agent-obstacle safe set as 
+
+SO := 
+
+n
+
+x ∈ RnV nx | ∥ g(xi)−oℓ∥ ≥ dth , ∀i ∈ V , ∀ℓ ∈ O 
+
+o
+
+,
+
+where ∥ · ∥ denotes the Euclidean norm and dth > 0 is a prescribed safety margin. The global safe set is defined as 
+
+S := SV ∩ S O . (3) To establish the proposed ADMM-based DMPC algo-rithm, we briefly review the concept of discrete-time CBFs. 
+
+Definition 1 (Discrete-Time CBF [35]): The local func-tion hi is said to be a CBF for (1) if there exists class K
+
+function α satisfying α(s) < s for all s > 0 such that 
+
+∆hi  xi(t), u i(t) ≥ − α  hi(xi(t))  , ∀xi(t) ∈ X , (4) where ∆hi(xi(t), u i(t)) := hi(xi(t + 1)) − hi(xi(t)) and s
+
+is the argument of α.
+
+Theorem 1: (CBF Condition [35]): If hi is a continuous CBF, any control input ui(t) ∈ U satisfying the CBF condition (4) will render the safety set given by S := {xi :
+
+hi(xi) ≥ 0} forward invariant for agent i ∈ V .To enforce safety for the multi-robot legged system, we introduce two classes of CBFs corresponding to agent-obstacle and inter-agent collision avoidance. Specifically, for each agent i ∈ V , obstacle ℓ ∈ O , and edge {i, j } ∈ E ,define 
+
+hi,ℓ (xi) := ∥g(xi) − oℓ∥ − dth , (5) 
+
+hi,j (xi, x j ) := ∥g(xi) − g(xj )∥ − dth . (6) The corresponding CBF conditions take the form 
+
+∆hi,ℓ (xi(t), u i(t)) ≥ − α hi,ℓ (xi(t)) , (7) 
+
+∆hi,j (xi(t), x j (t), u i(t), u j (t)) ≥ − α hi,j (xi(t), x j (t)) ,
+
+(8) for all i ∈ V, ℓ ∈ O, and {i, j } ∈ E, where 
+
+∆hi,ℓ (xi(t), u i(t)) := hi,ℓ (xi(t + 1)) − hi,ℓ (xi(t)) and 
+
+∆hi,j (xi(t), x j (t), u i(t), u j (t)) := hi,j (xi(t + 1) , x j (t +1)) − hi,j (xi(t), x j (t)) .From (7), the CBF condition for obstacle avoidance can be defined solely in terms of the state and control input of the local agent. However, as observed, the CBF condition (8) couples the states and inputs of the neighboring agents i
+
+and j, which complicates the design of local MPCs for inter-agent collision avoidance. In what follows, we formulate the centralized MPC problem, which will be fully decentralized using the ADMM approach in Section III. 
+
+Centralized MPC Problem: Let us define the pre-dicted local state and input trajectories at time t over a control horizon of N for agent i ∈ V by xi(·) := 
+
+col {xit+1 |t, x it+2 |t, · · · , x it+N |t} ∈ RN n x and ui(·) := 
+
+col {uit|t, · · · , u it+N −1|t} ∈ RN n u , respectively, where xit+k|t
+
+and uit+k|t denote the predicted local state and local input at time t + k, computed at time t. The initial condition for the state prediction is taken as the actual local state, i.e., 
+
+xit|t = xi(t).By defining the state-input trajectory for agent i ∈ V as 
+
+ξi := col  xi(·), u i(·) ∈ RN (nx+nu), the centralized CBF-based MPC problem can be expressed as 
+
+min   
+
+> (ξ1,ξ 2,··· ,ξ nV)
+
+X
+
+> i∈V
+
+Ji(ξi)
+
+s.t. xit+k+1 |t = f i(xit+k|t, u it+k|t), i ∈ V 
+
+∆hi,ℓ t+k|t ≥ − α
+
+
+
+hi,ℓ t+k|t
+
+
+
+, i ∈ V , ℓ ∈ O ,
+
+∆hi,j t+k|t ≥ − α
+
+
+
+hi,j t+k|t
+
+
+
+, {i, j } ∈ E ,xit|t = xi(t), i ∈ V , (9) where 
+
+Ji(ξi) := Ji
+
+> terminal
+
+
+
+xit+N |t − xi, des  
+
+> t+N|t
+
+
+
++ 
+
+> N−1
+
+X
+
+> k=0
+
+Ji
+
+> stage
+
+
+
+xit+k|t − xi, des 
+
+> t+k|t
+
+, u it+k|t
+
+
+
+(10) is a convex cost penalizing the deviation of the state trajec-tory xi(·) from a given reference trajectory xi, des (·) using quadratic terminal and stage costs, namely, 
+
+Ji
+
+> terminal
+
+(xi) = ∥xi∥2  
+
+> Pi
+
+, Ji
+
+> stage
+
+(xi, u i) := ∥xi∥2 
+
+> Qi
+
++∥ui∥2 
+
+> Ri
+
+,
+
+where (P i, Q i, R i) are positive definite weighting matrices. 
+
+Problem Statement: We aim to design a computationally efficient, real-time distributed MPC algorithm based on the ADMM approach that computes a feasible and optimal local state-input trajectory for each agent i ∈ V , denoted by ξi,while ensuring that the local system dynamics, the local CBF conditions for obstacle collision avoidance, and the inter-agent CBF conditions for robot-robot collision avoidance are satisfied. III. ADMM-BASED DMPC WITH CBF C ONSTRAINTS 
+
+This section presents the proposed high-level ADMM-based CBF-DMPC framework for real-time trajectory plan-ning and safe locomotion of quadrupedal robots in complex environments. As discussed earlier, the dynamics (1) and the obstacle-avoidance CBF condition (7) are defined locally. Let us define the local feasible set for the trajectory ξi, compatible with the local dynamics and the obstacle-avoidance CBF condition, as 
+
+Ξi := 
+
+n
+
+ξi | Local dynamics (1) and the local CBF condition (7) are satisfied 
+
+o
+
+. (11) Then, the centralized MPC problem (9) can be rewritten as follows: 
+
+min 
+
+> {ξi}
+
+X
+
+> i∈V
+
+Ji(ξi)
+
+s.t. ξi ∈ Ξi, i ∈ V , (Local Feasibility )
+
+ψij (ξi, ξ j ) ≤ 0, {i, j } ∈ E , (Coupled Inequity )
+
+(12) where the inequality constraint ψij (ξi, ξ j ) ≤ 0 represents the inter-agent CBF condition between the trajectories of agents 
+
+i and j.In the centralized problem (12), the convex cost function is separable, subject to local feasibility constraints and coupled inequality constraints arising from the inter-agent CBF con-dition. In the original formulation of the ADMM approach [32, Chap. 3], the coupling appears in equality constraints. Hence, we introduce the set of slack variables {sij } with 
+
+{i, j } ∈ E to reformulate the coupled inequality constraints as coupled equality constraints. Specifically, the new problem is given as follows: 
+
+min  
+
+> {ξi},{sij }
+
+X
+
+> i∈V
+
+Ji(ξi) + X
+
+> {i,j }∈E
+
+φ(sij )
+
+s.t. ξi ∈ Ξi, i ∈ V , (Local Feasibility )
+
+ψij (ξi, ξ j ) + sij = 0 , {i, j } ∈ E , (Coupled Equality )
+
+sij ≥ 0, {i, j } ∈ E , (13) where φ(sij ) is a convex quadratic penalty on the slack variables to ensure that the overall cost function is positive definite with respect to the decision variables {ξi} and {sij }.
+
+A. Proposed ADMM-based DMPC with CBFs 
+
+To obtain a fully decentralized ADMM formulation, we propose a node-edge splitting technique by keeping the true decision variable ξi at node i, and creating edge-local copies 
+
+of the variables that appear in each pairwise constraint. Then, ADMM enforces consensus between the node variables and the corresponding edge copies. This removes all direct coupling from the node subproblems, and the only remaining coupling appears in small edge subproblems that involve only local i, j information. In what follows, we describe the procedure in detail. For every {i, j } ∈ E , we introduce the edge variables 
+
+zij,i ≈ ξi, zij,j ≈ ξj , sij ≥ 0, (14) and impose the consensus constraints 
+
+zij,i = ξi, zij,j = ξj , ∀{ i, j } ∈ E . (15) We also enforce the original edge feasibility locally at each edge: ψij (zij,i , z ij,j ) + sij = 0 , sij ≥ 0. (16) Then, the problem (13) becomes 
+
+min   
+
+> {ξi},{zij,i ,z ij,j ,s ij }
+
+X
+
+> i∈V
+
+ Ji(ξi) + IΞi (ξi)
+
++ X
+
+> {i,j }∈E
+
+ φ(sij ) + ICij (zij,i , z ij,j , s ij )
+
+s.t. zij,i = ξi, zij,j = ξj , (17) where 
+
+Cij := {(zij,i , z ij,j , s ij ) | ψij (zij,i , z ij,j )+ sij = 0 , s ij > 0},
+
+(18) and IΞi and ICij denote the indicator functions corresponding to the sets Ξi and Cij , respectively, i.e., 
+
+IΞi (ξi) := 
+
+(
+
+0, if ξi ∈ Ξi,
+
++∞, if ξi /∈ Ξi.
+
+This formulation is now in the standard ADMM form, consisting of a sum of node-local terms, a sum of edge-local terms, and consensus constraints. Therefore, the ADMM approach can be directly applied. 
+
+Scaled ADMM Iterations: We are now in a position to present the steps of the proposed ADMM approach. The algorithm consists of three steps: 1) local node updates at each agent i ∈ V , 2) edge updates for each edge {i, j } ∈ E ,and 3) dual variable updates. In our notation, the subscript p
+
+denotes the iteration index of the ADMM algorithm. Suppose further that λij,i and λij,j denote the scaled Lagrange (i.e., dual) variables corresponding to the equality constraints 
+
+zij,i = ξi and zij,j = ξj , respectively. 
+
+Step 1: Node update (at each agent i ∈ V , local): During iteration p + 1 , we update the local trajectory for agent i
+
+using (zij,i p , λ ij,i p ), computed at iteration p, as follows: 
+
+ξip+1 = arg min 
+
+> ξi∈Ξi
+
+
+
+Ji(ξi) + ρ
+
+2
+
+X 
+
+> j∈N (i)
+
+ξi − zij,i p + λij,i p 
+
+> 2
+
+
+
+,
+
+(19) where N (i) denotes the set of neighboring agents of agent 
+
+i and ρ > 0 is the penalty parameter. The node update optimization is performed in parallel across all agents. 
+
+Step 2: Edge update (for each {i, j } ∈ E ): After complet-ing the node updates, we solve the following optimization problem to update edge variables (zij,i p+1 , z ij,j p+1 , s ij p+1 ) using 
+
+(ξip+1 , ξ jp+1 ):
+
+
+
+zij,i p+1 
+
+zij,j p+1 
+
+sij p+1 
+
+ = arg min   
+
+> (zij,i ,z ij,j ,s ij )∈C ij
+
+
+
+φ(sij ) + ρ
+
+2 ∥zij,i − ξip+1 − λij,i p ∥2
+
++ ρ
+
+2 ∥zij,j − ξjp+1 − λij,j p ∥2
+
+.
+
+(20) This edge update requires only the current messages 
+
+(ξip+1 , λ ij,i p ) from node i and (ξjp+1 , λ ij,j p ) from node j.
+
+Step 3: Dual updates (at the endpoints): Using the up-dated values (ξip+1 , ξ jp+1 , z ij,i p+1 , z ij,j p+1 ), the dual variables are updated as 
+
+λij,i p+1 = λij,i p + ξip+1 − zij,i p+1 
+
+λij,j p+1 = λij,j p + ξjp+1 − zij,j p+1 . (21) 
+
+Communication Protocol: After each iteration, each agent 
+
+i exchanges information with each neighbor j ∈ N (i) as follows: (a) agent i sends its updated trajectory ξip+1 to agent 
+
+j, and (b) after solving the edge subproblem, the agents exchange the resulting edge variables zij,i p+1 and zij,j p+1 . In the proposed approach, all computations and communications are localized to nodes and edges. 
+
+Computational Load: At each ADMM iteration, the pro-posed decomposition of the CBF-based DMPC results in two sets of independent optimization problems. First, each agent i performs one node update by solving the local optimization problem (19) with respect to ξi, resulting in a total of nV = |V| node-local problems. Second, each edge (i, j ) ∈ E performs one edge update as in (20) to compute the corresponding auxiliary variables, resulting in 
+
+nE := |E| edge-local problems. All node and edge problems are mutually independent and can be solved in parallel using only local information exchange between neighboring agents. Consequently, each iteration consists of nV + nE decentral-ized optimization problems, and for regular graphs such as the complete graph, the computational load is distributed symmetrically across agents. 
+
+B. Reduction to Distributed QPs and Layered Control 
+
+This section provides a concise overview of the high-, mid-, and low-level layers of the proposed layered control scheme for teams of quadrupedal robots. At the high level of the layered control structure, we employ the proposed ADMM-based DMPC with CBFs on a team of agents modeled using the kinematic car model, given by 
+
+˙pix
+
+˙piy
+
+˙θi
+
+ =
+
+
+
+vi cos( θi)
+
+vi sin( θi)
+
+ωi
+
+ , (22) where xi := col (pix, p iy , θ i) ∈ R3 denotes the local state vector of agent i, with pix and piy representing the Cartesian position of robot i in the xy -plane and θi denoting the yaw angle. The local control input for agent i is defined as ui := col (vi, ω i) ∈ R2, where vi and ωi denote the linear and angular velocities, respectively. The continuous-time kinematic car model in (22) is discretized using the Euler method for the DMPC implementation. In this work, we further successively linearize the discrete-time dynamics of each agent and the CBF conditions (7) and (8) around the current operating point. This transforms the node and edge subproblems into a set of decentralized QPs that can be solved efficiently in parallel. Section IV-A provides the computational details of the proposed ADMM-based distributed QP formulation with CBF constraints. At the mid level, we employ a 50 Hz nonlinear MPC (NMPC) that enforces the reduced-order single rigid body (SRB) dynamics of each quadruped to track the high-level ADMM-based CBF-DMPC references. The NMPC incorporates the full 6-DoF SRB dynamics under ground reaction forces (GRFs) [13], [21] and optimally computes GRFs to ensure dynamic feasibility, stability, friction-cone compliance, and accurate velocity tracking. At the low level, a nonlinear whole-body controller (WBC) enforces the full-order robot dynamics to track the desired SRB states and GRFs generated by the NMPC. The WBC, adopted from [13], [36], is formulated as a 500 Hz real-time QP that respects full-body dynamics and actuation constraints. IV. E XPERIMENTS 
+
+This section presents the results of our numerical simu-lations and hardware experiments with the proposed layered control scheme. 
+
+A. Setup and Controller Synthesis 
+
+This work employs Unitree Go2 quadrupedal robots for both numerical simulations and hardware experiments. Each Go2 robot has a mass of 15 kg, a nominal height of approximately 0.28 m, and 18 degrees of freedom (DoFs), including 12 actuated leg joints (hip roll, hip pitch, and knee pitch for each leg) and 6 unactuated floating-base DoFs describing the position and orientation of the torso. Each robot is equipped with a Unitree L1 4D LiDAR sensor for environment perception and localization. The proposed layered control architecture is implemented using a multi-threaded framework on an offboard desk-top computer equipped with an Intel i9-12900K CPU and 128 GB of DDR5 RAM. The high-level ADMM-based CBF-DMPC is executed in a fully decentralized manner, where node and edge update problems are solved in parallel across Fig. 3. Hardware experiments of the proposed ADMM-based CBF-DMPC and layered control with two Unitree Go2 robots: (a) navigation among eight static obstacles (experiment 1), (b) disturbance rejection under external pushes (experiment 2), and (c) obstacle avoidance over rough terrain with ten obstacles (experiment 3). (d) Multi-agent simulation in RaiSim with four robots navigating among ten obstacles. TABLE I Statistics of QP computation times (ms). QP Type Two Agents Four Agents Avg Std Avg Std Node-update QP 0.51 0.71 0.92 8.34 Edge-update QP 0.002 0.000 0.009 0.003         
+
+> Total (ADMM) 8.06 10.66 14.58 11.95
+> Total (Centralized) 9.61 3.87 29.94 21.75
+
+independent threads at 10 Hz. In addition, separate threads execute the mid-level nonlinear MPC controllers at 50 Hz and the low-level whole-body controllers at 500 Hz. This par-allelized implementation enables real-time execution of the distributed optimization and control framework while main-taining computational efficiency. The translational motion of each robot is estimated using a kinematic state estimator. Numerical simulations are conducted in the RaiSim physics engine [37] using up to four Go2 robots, while hardware ex-periments are performed using two physical Go2 platforms. Supplementary videos demonstrating the experimental and numerical results are available with the submission. 
+
+Real-Time Computation: The weighting matrices of the ADMM-based CBF-DMPC are selected as Qi =
+
+diag {50 , 50 , 100 }, Ri = diag {50 , 10 }, and P i = 10 Qi for all agents i ∈ V with φ(s) = 5 s2. The prediction horizon of the local MPC is chosen as N = 50 , with a sampling time of Ts = 0 .1 s. The safety and ADMM hyperparameters are chosen as follows. The collision avoidance threshold distance is set to dth = 0 .5 m. The class K function used in the CBF conditions is selected as α(s) = 0 .3 s. The ADMM penalty parameter is set to ρ = 20 to balance convergence speed and numerical stability in the node and edge updates. The maximum number of ADMM iterations per control cycle is limited to 15, enabling real-time execution while ensuring convergence of the distributed optimization. We choose trotting gaits for the quadrupedal robots. For the two- and four-agent simulations, we have nV = 2 and 
+
+nV = 4 node-update QPs, respectively, in each ADMM iteration. Each of these QPs consists of (3 + 2) N = 250 
+
+decision variables corresponding to the local trajectory ξi.For the two- and four-agent simulations, we have nE = 1 
+
+and nE = 6 edge-update QPs, respectively, in each ADMM iteration. Each of these edge-update QPs consists of 2 × (3 + 2) N + 1 = 501 decision variables corresponding to the edge variables and the associated slack variable. The local QPs are solved using the OSQP solver [38] with a maximum of 200 iterations. The mid-level NMPC is solved at 50 Hz using the CasADi framework [39] with the FATROP solver [40], with a maximum of 12 iterations, similar to [13]. We evaluate the framework in a complex environment with up to nO = 10 obstacles. Table I summarizes the statistics of the QP computation times (in milliseconds) for the node-update and edge-update steps across ADMM iterations. It also reports the total per-cycle planning times for both the ADMM-based CBF-DMPC and the centralized CBF-MPC (13) for the two- and four-agent cases (see Sec. IV-C). 
+
+B. Hardware Experiments 
+
+We experimentally validate the proposed ADMM-based CBF-DMPC framework on two Go2 robots operating in an indoor laboratory environment (see Fig. 3). The experiments are designed to evaluate (i) safety-critical navigation in clut-tered environments, (ii) robustness to external disturbances, and (iii) performance over rough terrain. 
+
+Experiment 1: Cluttered Environment with Eight Obsta-cles: In the first experiment, eight static obstacles are dis-tributed within the workspace. Each robot is assigned an individual goal configuration and commanded to follow its reference trajectory while avoiding both obstacles and the neighboring robot. The distributed CBF-DMPC successfully generates collision-free trajectories in real time. Throughout the experiment, the inter-robot distance remained above the prescribed safety threshold dth , and no obstacle collisions were observed (see Fig. 3(a)). The robots autonomously adjust their trajectories through local edge updates without requiring centralized coordination. 
+
+Experiment 2: Robustness to External Disturbances: In the second experiment, a bystander physically perturbs one of the robots multiple times during locomotion to evaluate robust-ness (see Fig. 3(b)). These pushes introduce significant devia-tions from the nominal trajectory and temporary mismatches between the predicted and actual robot motion. Despite these disturbances, the proposed layered control structure maintains safety and convergence toward the assigned goals. Figure 4 illustrates the optimal state trajectory (xi, y i, θ i)
+
+generated by the high-level ADMM-based CBF-DMPC for agent 1, together with the corresponding reference trajectory toward its goal. The reference trajectory is generated using an interpolating B´ ezier polynomial connecting the current state to the goal configuration. The figure also presents the optimal velocity commands (vi, ω i) and the minimum CBF values hi, obs := min ℓ∈O hi,ℓ and hi,j , representing obstacle-avoidance and inter-agent safety margins, respectively. As observed, the CBF functions remain non-negative under nominal operation, ensuring forward invariance of the safe set. During the push intervals, temporary reductions in the CBF values occur due to disturbances that are not captured in the model. However, the proposed ADMM-based CBF-Time(s)                        
+
+> 0510 15
+> Position(m)
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> Statereferencevs.solution
+> xref
+> x$
+> Time(s)
+> 0510 15
+> Position(m)
+> -0.1
+> 0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> Disturbanceyref
+> y$
+> Time(s)
+> 0510 15
+> Orientation (rad)
+> -0.1
+> 0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> Disturbance
+> 3ref
+> 3$
+> Time(s)
+> 0510 15
+> Velocity(m/s)
+> 0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> Inputsolution
+> v$
+> Time(s)
+> 0510 15
+> Angular Velocity(rad/s)
+> -0.6
+> -0.4
+> -0.2
+> 0
+> 0.2
+> 0.4
+> Disturbance
+> !$
+> Time(s)
+> 0510 15
+> CBF (m)
+> 0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1
+> CBFconstraints
+> Disturbance
+> h1;obs
+> h1;2
+
+Fig. 4. Plot of the optimal state trajectory (x⋆,i , y ⋆,i , θ ⋆,i ) generated by the high-level ADMM-based CBF-DMPC for agent 1, together with the corresponding reference trajectory toward its goal during experiment 2. The figure also depicts the optimal velocity commands (v⋆,i , ω ⋆,i ) and the minimum CBF values, representing obstacle-avoidance and inter-agent safety margins. The shaded regions indicate push intervals. 
+
+DMPC rapidly replans the trajectories and restores the CBF values to the non-negative region, thereby recovering safety. 
+
+Experiment 3: Navigation on Rough Terrain with Ten Obstacles: In the third experiment, ten obstacles are placed in the environment, and wooden blocks are randomly dis-tributed on the laboratory floor to create rough terrain con-ditions (see Fig. 3(c)). The robots are commanded to reach their individual goals while traversing uneven surfaces and avoiding both static obstacles and each other. This scenario tests the interaction between high-level distributed planning and low-level dynamic feasibility enforcement. The proposed framework maintains safe inter-agent distances and obsta-cle avoidance while the mid-level NMPC and whole-body controller ensure stable locomotion over uneven terrain. The experimental results demonstrate that the distributed safety-critical planning layer integrates effectively with dynamic locomotion control in challenging physical conditions. 
+
+Simulation with Four Agents: While hardware validation is conducted on two physical robots, we additionally report successful numerical simulations involving four quadrupedal robots navigating in shared environments with random nO =10 obstacles (see Fig, 3(d)). In the four-agent case, the interaction graph contains nV = 4 nodes and nE = 6 edges, resulting in four node-update QPs and six edge-update QPs per ADMM iteration. These simulations confirm that the proposed structured ADMM-based CBF-DMPC formulation extends naturally beyond two agents while preserving decen-tralized computation and safety constraints. 
+
+C. Comparison Analysis 
+
+We compare the total wall-clock computation time per sampling instant for the centralized CBF-MPC (13) and the proposed ADMM-based CBF-DMPC in RaiSim for the two-and four-agent cases. Both approaches solve quadratic pro-
+
+Fig. 5. Comparison between the ADMM-based CBF-DMPC and central-ized CBF-MPC for four agents navigating among obstacles in simulation. The resulting xy trajectories demonstrate near-identical motion and safety behavior under both approaches. 
+
+grams obtained from the same successive linearization pro-cedure, using identical horizon length, cost weights, safety parameters, and solver configurations. In each control cycle, the centralized method solves a single coupled QP over the stacked decision variables of all agents, whereas the proposed approach performs node-update and edge-update QPs (19) and (20) within the ADMM framework and returns the distributed solution after 15 ADMM iterations (see Table I). Over the full simulation horizon, the ADMM-based CBF-DMPC reduces the average per-cycle planning time by approximately 16% and 51% relative to the centralized CBF-MPC in the two- and four-agent cases, respectively. More-over, the distributed solution closely matches the centralized optimal solution in terms of trajectory quality and safety margins, with negligible differences observed in the objective values and CBF constraint satisfaction (see Fig. 5). These results demonstrate that the proposed structured ADMM decomposition improves computational efficiency while pre-serving solution quality and safety, with increasing benefits as the number of agents grows. V. C ONCLUSIONS 
+
+This paper presented a fully decentralized MPC framework with CBF constraints for safety-critical trajectory planning in multi-robot quadrupedal systems. By reformulating the cen-tralized CBF-based MPC problem using a structured ADMM approach with a node–edge splitting technique and consensus constraints, the proposed method decomposes the coupled optimization problem into independent node-local and edge-local quadratic programs that can be solved in parallel using only neighbor-to-neighbor communication. This structured decomposition enables symmetric computational load across agents while preserving safety guarantees. The proposed ADMM-based CBF-DMPC was integrated into a layered locomotion control architecture and validated through hardware experiments on two Unitree Go2 robots and numerical simulations with up to four agents in complex environments with obstacles, rough terrain, and external disturbances. The results demonstrate that the distributed formulation achieves performance comparable to centralized CBF-MPC while reducing the average per-cycle planning time by approximately 16% and 51% in the two- and four-agent cases, respectively. These findings indicate increasing computational benefits as the number of agents increases from two to four. Future work will investigate the scalability of the proposed framework to larger teams of quadrupedal robots and explore fully decentralized implementations using distributed onboard computing architectures. REFERENCES [1] R. Full and D. Koditschek, “Templates and anchors: Neuromechanical hypotheses of legged locomotion on land,” Journal of Experimental Biology , vol. 202, no. 23, pp. 3325–3332, 1999. [2] S. Kajita and K. Tani, “Study of dynamic biped locomotion on rugged terrain-derivation and application of the linear inverted pendulum mode,” in IEEE International Conference on Robotics and Automation ,1991, pp. 1405–1406. [3] G. Gibson, O. Dosunmu-Ogunbi, Y. Gong, and J. Grizzle, “Terrain-adaptive, ALIP-based bipedal locomotion controller via model pre-dictive control and virtual constraints,” in IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2022, pp. 6724– 6731. [4] H. Geyer, A. Seyfarth, and R. Blickhan, “Compliant leg behavior explains basic dynamics of walking and running,” Proceedings. Bi-ological sciences / The Royal Society , vol. 273, pp. 2861–7, 08 2006. [5] Z. Li, J. Zeng, S. Chen, and K. Sreenath, “Autonomous navigation of underactuated bipedal robots in height-constrained environments,” 
+
+The International Journal of Robotics Research , vol. 42, no. 8, pp. 565–585, 2023. [6] X. Xiong and A. Ames, “3-D underactuated bipedal walking via H-LIP based gait synthesis and stepping stabilization,” IEEE Transactions on Robotics , vol. 38, no. 4, pp. 2405–2425, 2022. [7] D. E. Orin, A. Goswami, and S.-H. Lee, “Centroidal dynamics of a humanoid robot,” Autonomous robots , vol. 35, no. 2, pp. 161–176, 2013. [8] J. Di Carlo, P. M. Wensing, B. Katz, G. Bledt, and S. Kim, “Dynamic locomotion in the MIT Cheetah 3 through convex model-predictive control,” in IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , Oct 2018, pp. 1–9. [9] M. Chignoli and P. M. Wensing, “Variational-based optimal control of underactuated balancing for dynamic quadrupeds,” IEEE Access ,vol. 8, pp. 49 785–49 797, 2020. [10] Y. Ding, A. Pandala, C. Li, Y.-H. Shin, and H.-W. Park, “Representation-free model predictive control for dynamic motions in quadrupeds,” IEEE Transactions on Robotics , vol. 37, no. 4, pp. 1154–1171, 2021. [11] L. Amanzadeh, T. Chunawala, R. T. Fawcett, A. Leonessa, and K. Akbari Hamed, “Predictive control with indirect adaptive laws for payload transportation by quadrupedal robots,” IEEE Robotics and Automation Letters , vol. 9, no. 11, pp. 10 359–10 366, 2024. [12] A. Pandala, R. T. Fawcett, U. Rosolia, A. D. Ames, and K. Ak-bari Hamed, “Robust predictive control for quadrupedal locomotion: Learning to close the gap between reduced-and full-order models,” 
+
+IEEE Robotics and Automation Letters , vol. 7, no. 3, pp. 6622–6629, 2022. [13] R. S. Sambhus, K. K. Mehta, A. M. Sadeghi, B. M. Imran, J. Kim, T. Chunawala, V. Pastore, S. Vijayan, and K. Akbari Hamed, “A nonlinear MPC framework for loco-manipulation of quadrupedal robots with non-negligible manipulator dynamics,” IEEE Robotics and Automation Letters , vol. 11, no. 4, pp. 4050–4057, 2026. [14] P. M. Wensing, M. Posa, Y. Hu, A. Escande, N. Mansard, and A. D. Prete, “Optimization-based control for dynamic legged robots,” IEEE Transactions on Robotics , vol. 40, pp. 43–63, 2024. [15] C. Mastalli, R. Budhiraja, W. Merkt, G. Saurel, B. Hammoud, M. Naveau, J. Carpentier, L. Righetti, S. Vijayakumar, and N. Mansard, “Crocoddyl: An efficient and versatile framework for multi-contact optimal control,” in IEEE International Conference on Robotics and Automation (ICRA) , 2020. [16] W. Jallet, A. Bambade, E. Arlaud, S. El-Kazdadi, N. Mansard, and J. Carpentier, “ProxDDP: Proximal constrained trajectory optimiza-tion,” IEEE Transactions on Robotics , vol. 41, pp. 2605–2624, 2025. [17] L. Wang, A. D. Ames, and M. Egerstedt, “Safety barrier certificates for collisions-free multirobot systems,” IEEE Transactions on Robotics ,vol. 33, no. 3, pp. 661–674, 2017. [18] M. Cavorsi, L. Sabattini, and S. Gil, “Multirobot adversarial resilience using control barrier functions,” IEEE Transactions on Robotics ,vol. 40, pp. 797–815, 2024. [19] Q. Liao, Z. Li, A. Thirugnanam, J. Zeng, and K. Sreenath, “Walking in narrow spaces: Safety-critical locomotion control for quadrupedal robots with duality-based optimization,” in 2023 IEEE/RSJ Interna-tional Conference on Intelligent Robots and Systems (IROS) , 2023, pp. 2723–2730. [20] R. Grandia, A. J. Taylor, A. D. Ames, and M. Hutter, “Multi-layered safety for legged robots via control barrier functions and model predictive control,” in 2021 IEEE International Conference on Robotics and Automation , 2021, pp. 8352–8358. [21] B. M. Imran, J. Kim, T. Chunawala, A. Leonessa, and K. Ak-bari Hamed, “Safety-critical and distributed nonlinear predictive con-trollers for teams of quadrupedal robots,” IEEE Robotics and Automa-tion Letters , vol. 10, no. 9, pp. 9176–9183, 2025. [22] J. Kim, R. T. Fawcett, V. R. Kamidi, A. D. Ames, and K. Ak-bari Hamed, “Layered control for cooperative locomotion of two quadrupedal robots: Centralized and distributed approaches,” IEEE Transactions on Robotics , vol. 39, no. 6, pp. 4728–4748, 2023. [23] D. Siljak, Decentralized Control of Complex Systems . Dover Publi-cations, December 2011. [24] R. Scattolini, “Architectures for distributed and hierarchical model predictive control—A review,” Journal of Process Control , vol. 19, no. 5, pp. 723–731, 2009. [25] A. N. Venkat, J. B. Rawlings, and S. J. Wright, “Stability and optimality of distributed model predictive control,” in Proceedings of the IEEE Conference on Decision and Control , 2005, pp. 6680–6685. [26] J. B. Rawlings and B. T. Stewart, “Coordinating multiple optimization-based controllers: New opportunities and challenges,” Journal of process control , vol. 18, no. 9, pp. 839–845, 2008. [27] A. Richards and J. P. How, “Robust distributed model predictive control,” International Journal of control , vol. 80, no. 9, pp. 1517– 1531, 2007. [28] E. Camponogara, D. Jia, B. H. Krogh, and S. Talukdar, “Distributed model predictive control,” IEEE control systems magazine , vol. 22, no. 1, pp. 44–52, 2002. [29] M. Abdelaal and S. Sch¨ on, “Distributed nonlinear model predictive control for connected vehicles trajectory tracking and collision avoid-ance with ellipse geometry,” in Proceedings of the 32nd International Technical Meeting of the Satellite Division of The Institute of Naviga-tion (ION GNSS+ 2019) , 2019, pp. 2100–2111. [30] R. Mao and H. Dai, “Distributed non-convex model predictive control for non-cooperative collision avoidance of networked differential drive mobile robots,” IEEE Access , vol. 10, pp. 52 674–52 685, 2022. [31] M. Farina and R. Scattolini, “Distributed predictive control: A non-cooperative algorithm with neighbor-to-neighbor communication for linear systems,” Automatica , vol. 48, no. 6, pp. 1088–1096, 2012. [32] S. Boyd, N. Parikh, E. Chu, B. Peleato, and J. Eckstein, Distributed Optimization and Statistical Learning via the Alternating Direction Method of Multipliers , 2011. [33] Y. Wang, W. Yin, and J. Zeng, “Global convergence of ADMM in nonconvex nonsmooth optimization,” Journal of Scientific Computing ,vol. 78, pp. 29–63, 2018. [34] B. M. Imran, R. T. Fawcett, J. Kim, A. Leonessa, and K. Ak-bari Hamed, “A Distributed Layered Planning and Control Algorithm for Teams of Quadrupedal Robots: An Obstacle-Aware Nonlinear MPC Approach,” Journal of Dynamic Systems, Measurement, and Control , vol. 147, no. 3, 2025. [35] Y. Xiong, D.-H. Zhai, M. Tavakoli, and Y. Xia, “Discrete-time control barrier function: High-order case and adaptive case,” IEEE Transac-tions on Cybernetics , vol. 53, no. 5, pp. 3231–3239, 2023. [36] R. T. Fawcett, A. Pandala, A. D. Ames, and K. Akbari Hamed, “Robust stabilization of periodic gaits for quadrupedal locomotion via QP-based virtual constraint controllers,” IEEE Control Systems Letters ,pp. 1736–1741, 2021. [37] J. Hwangbo, J. Lee, and M. Hutter, “Per-contact iteration method for solving contact dynamics,” IEEE Robotics and Automation Letters ,vol. 3, no. 2, pp. 895–902, April 2018. [38] B. Stellato, G. Banjac, P. Goulart, A. Bemporad, and S. Boyd, “OSQP: an operator splitting solver for quadratic programs,” Mathematical Programming Computation , vol. 12, no. 4, pp. 637–672, 2020. [39] J. A. E. Andersson, J. Gillis, G. Horn, J. B. Rawlings, and M. Diehl, “CasADi – A software framework for nonlinear optimization and optimal control,” Mathematical Programming Computation , vol. 11, no. 1, pp. 1–36, 2019. [40] L. Vanroye, A. Sathya, J. De Schutter, and W. Decr´ e, “Fatrop: A fast constrained optimal control problem solver for robot trajectory optimization and control,” in IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2023, pp. 10 036–10 043.

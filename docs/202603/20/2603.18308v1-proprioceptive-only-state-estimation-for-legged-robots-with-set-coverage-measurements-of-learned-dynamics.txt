@@ -1,0 +1,1059 @@
+Title: Proprioceptive-only State Estimation for Legged Robots with Set-Coverage Measurements of Learned Dynamics
+
+URL Source: https://arxiv.org/pdf/2603.18308v1
+
+Published Time: Fri, 20 Mar 2026 00:25:57 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Proprioceptive-only State Estimation for Legged Robots with Set-Coverage Measurements of Learned Dynamics 
+
+Abhijeet M. Kulkarni 1, Ioannis Poulakakis 2 and Guoquan Huang 1
+
+Abstract — Proprioceptive-only state estimation is attractive for legged robots since it is computationally cheaper and is unaffected by perceptually degraded conditions. The history of joint-level measurements contains rich information that can be used to infer the dynamics of the system and subsequently pro-duce navigational measurements. Recent approaches produce these estimates with learned measurement models and fuse with IMU data, under a Gaussian noise assumption. However, this assumption can easily break down with limited training data and render the estimates inconsistent and potentially divergent. In this work, we propose a proprioceptive-only state estimation framework for legged robots that characterizes the measure-ment noise using set-coverage statements that do not assume any distribution. We develop a practical and computationally inexpensive method to use these set-coverage measurements with a Gaussian filter in a systematic way. We validate the approach in both simulation and two real-world quadrupedal datasets. Comparison with the Gaussian baselines shows that our proposed method remains consistent and is not prone to drift under real noise scenarios. 
+
+I. I NTRODUCTION AND RELATED WORK 
+
+Quadrupedal robots have matured into reliable field plat-forms, demonstrating impressive robustness in challeng-ing, unstructured environments. This capability makes them compelling candidates for missions of subterranean explo-ration [1], operation in natural environments [2], and indus-trial inspection [3]. In such domains, accurate state estima-tion is not merely a supporting module—it is a prerequisite for long-term autonomous operation. While exteroceptive sensors, like LiDAR, cameras, and radar, can provide highly informative measurements for accurate state estimation, they are also the most vulnerable to environmental degrada-tion [4], such as dust, smoke, darkness, specularities, vegeta-tion, and poor texture, leading to intermittent or biased per-ception and ultimately estimator failure. In contrast, propri-oceptive sensing with Inertial Measurement Unit (IMU) and joint-level measurements is unaffected by these preceptually degraded conditions and is routinely relied upon for robust, high-rate control [5]. This motivates proprioceptive-only 
+
+state estimation pipelines that can maintain reliable tracking when exteroception becomes unreliable or unavailable. Classical proprioceptive state estimation fuses IMU data with leg kinematics using either filtering methods [6], [7] or factor-graph formulations [8], [9]. These approaches can be effective when foot contacts are accurately detected and mod-eled; however, performance may deteriorate under imperfect  
+
+> 1Department of Mechanical Engineering, University of Delaware, Newark, DE, USA
+
+{amkulk, ghuang }@udel.edu  
+
+> 2Robotics Institute, Athena Research Center, Marousi, Greece; School of Mechan-ical Engineering, National Technical University of Athens, Greece; HERON–Center of Excellence in Robotics, Athens, Greece
+
+poulakas@mail.ntua.gr, i.poulakakis@athenarc.gr .0.50 0.25 0.00 0.25 0.50    
+
+> 0123
+> Fig. 1. Proposed method uses set-coverage measurements for update.
+
+contact. A key observation is that, during locomotion, the robot’s whole-body motion and contact dynamics under the action of its low-level controller imprint rich structure onto time histories of joint angles, velocities, and torques. This structure has been exploited to extract latent states for learned dynamics models used as predictive components in planning pipelines [10], [11]. Analogously, a window of proprioceptive measurements can be exploited to infer body motion. Recent learning-based approaches pursue this direction by training neural networks to extract motion-relevant patterns from pro-prioceptive histories and produce pseudo-measurements— such as body-frame velocity or relative displacement—that can be fused within a filter [12], [13], [14], [15]. In this view, the network functions as a virtual sensor, whose prediction error is modeled as measurement noise and fused with IMU information in the estimation pipeline. For computational compatibility with efficient Extended Kalman Filter (EKF) frameworks, these virtual sensors are typically modeled as corrupted by zero-mean Gaussian noise. The corresponding covariances are either fixed [14] or predicted jointly with the mean [12]. In practice, such networks are commonly trained with extensive data and adopt Gaussian Maximum Likelihood (GML) [16] to capture 
+
+aleatoric uncertainty via a predicted covariance. However, collecting large-scale, representative training data is expen-sive, and simulation-trained models often require careful domain randomization to mitigate sim-to-real mismatch. In the resulting limited-data regime, epistemic uncertainty can dominate [17], [18], yielding prediction errors that are biased or non-Gaussian and poorly characterized by the learned aleatoric covariance [19]. When such miscalibrated pseudo-measurements are fused as if they were Gaussian, the filter can become overconfident and may diverge. A number of estimators relax the Gaussian assumption, but they tend to trade off modeling fidelity against deployability. Robust Kalman filtering variants can attenuate the impact of occasional outliers [20], yet they are less effective under persistent biases or distribution shifts. Set-membership and related bounded-error methods can handle such systematic deviations [21], [22], but they typically return state sets rather than point estimates, and the set representation can grow in complexity over time. Distributionally robust formula-tions [23] provide another alternative by optimizing against 
+
+> arXiv:2603.18308v1 [cs.RO] 18 Mar 2026
+
+an ambiguity set over noise distributions, but they require specifying that ambiguity set around a nominal likelihood and are often realized via particle filtering, which can be computationally costly. In contrast, onboard state estimation demands a fast, lightweight recursive update that still returns a point estimate while remaining reliable under non-Gaussian pseudo-measurement errors whole likelihood is not known. This paper addresses the above failure mode by introduc-ing a state estimation framework that replaces the untrue Gaussian noise assumption with a set-coverage uncertainty representation for learned legged dynamics (as pseudo-measurements), see Fig. 1. Specifically, we characterize pseudo-measurement error using calibrated sets that provide probabilistic coverage—i.e., with a prescribed probability, the true error lies inside the set. Such statements can be obtained via modern Uncertainty Quantification (UQ) tools [24], including conformal prediction [25] and scenario op-timization [26], and are distribution free. We then develop a principled method to incorporate these set-coverage con-straints into a recursive filtering pipeline. In particular, the main contributions of this paper include:  
+
+> ‚
+
+We propose a novel proprioceptive-only state estimation framework that models learned dynamics-based pseudo-measurement uncertainty via calibrated set-coverage statements, without the untrue Gaussian assumption.  
+
+> ‚
+
+We develop a practical method to efficiently fuse coverage-constrained pseudo-measurements with the state estimate of a recursive filter. Our implementation is shown to be real-time (e.g., 0.07 ms per update on a laptop CPU), suitable for high-rate onboard estimation.  
+
+> ‚
+
+The proposed approach is validated extensively in Monte-Carlo simulations and on real-world quadruped experiments, showing improved robustness under non-Gaussian error behavior and preventing divergence cases observed with a Gaussian baseline (EKF) and competitive performance with proprioception baseline. II. B ACKGROUND : L EGGED STATE ESTIMATION WITH 
+
+INVARIANT FILTERING 
+
+In this section, we briefly describe the state estimation for legged robots in the Invariant Extended Kalman Filter (IEKF) framework [7], which serves as the basis for our proposed method. Specifically, we seek to continuously estimate the robot’s base frame tIu navigation state relative to a global frame tGu using IMU and joint-level proprioceptive data. This navigation state typically comprises the orientation 
+
+> GI
+
+R P SO p3q, velocity GvI P R3, and position GpI P R3.
+
+A. Preliminaries on SE 2p3q
+
+The robot’s navigation state is modeled as an element of the matrix Lie group SE 2p3q. An element χ P SE 2p3q packs the orientation, velocity, and position into a single matrix representation: 
+
+χ “
+
+„ GIR GvI GpI    
+
+> 01ˆ310
+> 01ˆ301
+
+ȷ
+
+. (1) The associated Lie algebra is se 2p3q. The hat operator p¨q ^ :
+
+R9 Ñ se 2p3q maps a vector v P R9 to the Lie algebra, with the inverse mapping provided by the vee operator 
+
+p¨q _ : se 2p3q Ñ R9. The matrix exponential map exp p¨q :
+
+se 2p3q Ñ SE 2p3q maps the algebra to the group. For small perturbations v, the exponential map admits the first-order approximation: 
+
+exp pv^q « I ` v^. (2) A right-invariant error between the estimated state sχ and the true state χ:
+
+η fi sχ χ ´1 P SE 2p3q. (3) This invariant error is parameterized in the Lie algebra as 
+
+η “ exp pξ^q , where ξ P R9 (4) 
+
+B. State Representation and IMU Propagation 
+
+We augment the navigation state with IMU biases bt P R6:
+
+Xt “ p χt, btq, bt “ “bJ 
+
+> a
+
+bJ
+
+> g
+
+‰J .
+
+Using the standard IMU model with acceleration Ia and angular rate Iω both in tIu the measurement corrupted with bias and Gaussian noises na, ng : 
+
+> I
+
+˜a “ Ia ` ba ` na, I ˜ω “ Iω ` bg ` ng ,
+
+And the continuous-time IMU kinematics is given by:  
+
+> GI
+
+9R “ GIR rI ˜ω ´ bg ´ ng sˆ, 
+
+> G
+
+9vI “ gG ` GIR pI ˜a ´ ba ´ naq, (5)  
+
+> G
+
+9pI “ GvI, 9ba “ nba , 9bg “ nbg 
+
+We collect the noise as wt “ r nJ 
+
+> a
+
+nJ 
+
+> g
+
+nJ 
+
+> ba
+
+nJ 
+
+> bg
+
+sJ P R12 ,
+
+wt „ N p0, Qq and gG is the gravity vector. Define the augmented error state δXt “ r ξJ 
+
+> t
+
+δbJ 
+
+> t
+
+sJ P
+
+R15 , where ξt parameterizes the right-invariant error in (4) and δbt “ sbt ´ bt. We relate the true and estimate with: 
+
+Xt “ ĎXt ‘ δXt fi `exp p´ ξ^ 
+
+> t
+
+q sχt, sbt ´ δbt
+
+˘ , (6) where ‘ is the compositional operator, see [7], and assume 
+
+δXt „ N p0, Σtq, i.e., 
+
+Xt „ ĎXt ‘ N p0, Σtq. (7) Linearizing the error dynamics yields 
+
+ddt δXt “ AtδXt ` N twt, (8) with At and N t as in [7]. Over ∆t, the mean is propagated by integrating the nominal dynamics (5) with zero noise and the covariance is propagated as: 
+
+Σt`∆t “ ΦΣ tΦJ ` Qd. (9) where Φ “ exp pAt∆tq and Qd « ΦN tQN J 
+
+> t
+
+ΦJ ∆t.
+
+C. Invariant Measurement Output 
+
+Following the invariant observer design, we define a right-invariant output yt with a known constant vector d:
+
+yt “ χ´1 
+
+> t
+
+d,
+
+“
+
+„ pGIRqJ ´ GIRJ GvI ´ GIRJ GpI    
+
+> 010
+> 001
+
+ȷ” 03ˆ1
+
+> ´10
+
+ı
+
+“
+
+„ IvI
+
+> ´10
+
+ȷ
+
+. (10) where GIRJ GvI “ IvI is the body-frame velocity, and the last two components are constants of the homogeneous structure of the invariant output. The measurements are assumed to be corrupted by an additive noise νt such that the complete measurement model is 
+
+yt “ χ´1 
+
+> t
+
+d ` νt (11) In the next, we discuss our approach to obtain the body-frame velocity IvI and characterization of the noise νt.III. M ODELING LEARNED LEGGED DYNAMICS 
+
+Proprioceptive signals do not directly measure naviga-tional quantities such as the body-frame velocity IvI. How-ever, legged locomotion induces strong dynamical cou-plings between joint kinematics/torques, and base motion. These couplings can be exploited to observe the system’s latent state h, allowing for the construction of pseudo-measurements of IvI from short histories of proprioceptive data. In section, we learn a dynamical observer to generate these pseudo-measurements and address how to represent their prediction uncertainty for robust recursive estimation. 
+
+A. Proprioceptive Observation Model 
+
+A typical quadrupedal robot features 12 joints across its four legs, with three joints per leg (two at the hip and one at the knee). Accordingly, the joint-level proprioceptive observation at time t is defined as ot :“ p θt, 9θt, τ tq P T12 ˆ
+
+R12 ˆ R12 , representing joint angles, velocities, and torques, respectively. Motivated by prior efforts on learning dynami-cal observers from short proprioceptive windows [10], [11], we feed a finite proprioceptive history to a learned observer that also outputs an instantaneous pseudo-measurement of the body-frame velocity. To model this observer, after evaluating a set of popular lightweight architectures (including MLP, RNN, LSTM, Bi-GRU, and TCN) on our limited training data, we employ a Gated Recurrent Unit (GRU) network as it achieved the best performance. Let ϕψ denote the learned dynamical observer with parameters ψ and latent state ht P Rh. The observer updates its latent state and outputs a pseudo-measurement of the body-frame velocity I ˜vIt P R3 as follows: 
+
+pht, I ˜vItq “ ϕψ pot, ht´∆tq (12) The prediction error is given by: 
+
+et “ I ˜vIt ´ IvIt ñ νt “ ˜yt ´ yt “
+
+” et
+
+> 00
+
+ı
+
+, (13) which is also treated as the measurement noise in the right-invariant output (11). 
+
+B. Supervised Training 
+
+We train the dynamics observer network ϕψ using super-vised trajectories with ground-truth body-frame velocities: 
+
+Dtrain “
+
+"!`opiq
+
+> k∆t
+
+, IvI
+
+> piq
+> k∆t
+
+˘)Tk“0
+
+*Ntrain 
+
+> i“1
+
+, (14) where i indexes trajectories, each of length T , and IvI 
+
+> piq
+> k∆t
+
+is obtained from motion capture or a high-accuracy reference estimator. The observer latent state is set to zero at the start of each trajectory, h0 “ 0, and parameters ψ can be learned with MSE loss or GML loss [16], that can predict covariances. We use a single GRU layer, with hidden size h “ 64 , train on sequences of length T “ 1000 at 
+
+∆t “ 10 ms, with the following two datasets: 1                
+
+> 1Note that we here intended to choose a small network primarily to avoid overfitting to the limited data. 0510 15
+> 0510 15
+> 0510 15
+> 0.50 0.25 0.00 0.25 0.50 0510
+> 0.50 0.25 0.00 0.25 0.50 0123
+> 0.50 0.25 0.00 0.25 0.50 0510
+> Training trajectory Test trajectory
+> Fig. 2. Prediction error etof the learned velocity predictor for Vision60 on the training trajectory (green) versus a test trajectory (red).
+
+1) Vision60 dataset: This is our own dataset and the ground truth is provided by a motion-capture system. From the available sequences (Tab. IV), we train on a single trajectory to keep the supervised training protocol controlled while ensuring coverage of common locomotion regimes. Specifically, we use 3CC3CCW, which contains repeated segments of straight walking as well as left and right turning (clockwise and counterclockwise loops), and thus exposes the observer to typical gait transitions within one continuous run. The sequence lasts 108 s and is « 75 m long. 
+
+2) Spot dataset: This dataset [9] has the ground-truth velocity provided by a high-precision perception-based ref-erence estimator. To mirror the Vision60 setup, we likewise train on a single representative sequence and use the remain-ing data for evaluation. Concretely, we train on the U PSTAIR 
+
+sequence, which includes sustained locomotion with direc-tion changes under the provided reference estimates. 
+
+C. Gaussianity Fails From Training to Testing 
+
+A standard modeling assumption in learned-measurement pipelines is to treat the prediction error as a zero-mean Gaussian process: et „ N p0, Rtq, which facilitates fusion with IMU data via EKF. This approximation is often valid when the error distribution is unbiased and unimodal, to achieve this performance typically a large, representative training datasets is required. As shown in Fig. 2, the Vision60 network’s error on the training data closely approximates a Gaussian distribution, where aleatoric uncertainty can be effectively captured by GML-based covariance prediction. However, in realistic field deployments where training data is limited, epistemic uncertainty becomes dominant when the model encounters out-of-training distribution data [17], [18]. In such cases, the induced error may exhibit varying multi-modality, skewness, or heavy tails—characteristics not captured by a fixed parametric noise model. Fig. 2 illustrates this phenomenon: when the network trained on a single sequence (Section III-B.1) is evaluated on a test trajectory, the prediction errors deviate significantly from Gaussianity ,especially in the forward y-direction of motion. 
+
+D. Error-State Coverage Statements 
+
+To overcome the above limitations of Gaussian noise models, we characterize the learned predictor errors using 
+
+set-coverage statements [27, Section 9.3.2], which constrain only the probability mass assigned to a calibrated set and are therefore agnostic to the unknown (or hard-to-model) 0510 15           
+
+> 0.50 0.25 0.00 0.25 0.50 0.50 0.25 0.00 0.25 0.50
+> 0123Fig. 3. A single calibrated coverage statement can remain valid for both training (green) and test (red) error distributions.
+
+true probability distribution of the errors. Concretely, for the velocity prediction error et, we assume the following bound 
+
+ϵ P R3 
+
+> ě0
+
+such that 
+
+Pp| et| ď ϵq ě γ, (15) where |¨| denotes element-wise absolute value and γ P p 0, 1q
+
+is the desired confidence level (probability). Fig. 3 illustrates an example with γ “ 0.85 , where the same coverage set remains compatible with both in-distribution (training) and shifted (test) errors. Note that the coverage bounds (15) can be obtained using distribution-free UQ procedures such as conformal prediction [28] or scenario-optimization-based calibration [26]. Because these coverage statements can be computed post-hoc , they apply to any frozen predictor [28] and avoid costly retraining when the deployment environment shifts, while capturing both aleatoric and epistemic uncertainty [29]. If the training data poorly represent calibration/deployment conditions, the resulting ϵ may become conservative. We will detail the specific calibration procedure used in our experiments in Section VI-A. 
+
+Remark 1. A coverage statement is weaker than explicit likelihood. It constrains only the probability mass assigned to a set and leaves the distribution inside and outside that set unspecified. This makes the framework flexible enough to accommodate non-Gaussian, multimodal, and heavy-tailed errors distributions. This is a core advantage and enables the use of coverage guarantees without requiring restrictive modeling assumptions on the measurement noise. 
+
+To the best of our knowledge, we are the first to utilize this flexible set-coverage statement (15) to model learned legged dynamics, rather than using an ad-hoc Gaussian model. Specifically, we express the calibrated velocity-error coverage statement directly in the augmented error state 
+
+δXt (6). Using the measurement model (11) together with 
+
+νt “ r eJ 
+
+> t
+
+0 0 sJ. We define the projection Π : “ r I3ˆ3 03ˆ2 s,so that the coverage set |et| ď ϵ is equivalently 
+
+ˇˇΠ`χ´1 
+
+> t
+
+d ´ ˜yt
+
+˘ˇ ˇ ď ϵ. (16) With the right-invariant error (3), substituting χ´1 
+
+> t
+
+“ sχ´1 
+
+> t
+
+ηt
+
+in above and using first-order approximation (2), we have 
+
+Π`χ´1 
+
+> t
+
+d ´ ˜yt
+
+˘ « Π`sχ´1 
+
+> t
+
+d ´ ˜yt
+
+˘ ` H δXt, (17) where H P R3ˆ15 is the linear map HδXt “ Π sχ´1 
+
+> t
+
+ξ^ 
+
+> t
+
+d
+
+(the bias components do not enter). Hence the coverage constraint induces the error-state feasible set: 
+
+Ct “ ␣δXt P R15 : lt ď HδXt ď ut
+
+( (18) 
+
+lt “ ´ Π `sχ´1 
+
+> t
+
+d ´ ˜yt
+
+˘ ´ ϵ (19) 
+
+ut “ ´ Π `sχ´1 
+
+> t
+
+d ´ ˜yt
+
+˘ ` ϵ (20) Clearly, (15) is equivalent to the error-state coverage state-ment (see [27, Thm. 9.2.2]): 
+
+PpδXt P Ctq ě γ. (21) In the next, we will discuss how the error-state cover-age statement is used to update the current state estimate. Once the posterior δX` 
+
+> t
+
+„ N pμ` 
+
+> t
+
+, P ` 
+
+> t
+
+q satisfying (21) is obtained, the on-manifold update is X` 
+
+> t
+
+“ ĎXt ‘ δX` 
+
+> t
+
+.IV. O UR PROPRIOCEPTIVE -ONLY STATE ESTIMATOR 
+
+In this section, we present how to rigorously incor-porate the set-coverage statement (21) into our proposed proprioceptive-only state estimator in the IEKF framework. As the IMU propagation is standard as in Section II-B, in the following we focus on the coverage measurement update and its practical efficient implementation. 
+
+A. Coverage-Constrained Update 
+
+After the IEKF propagation with IMU (see Section II-B), we have the following prior Gaussian estimate at time t:
+
+¯ptpδXq :“ N pδX; sμt, sΣtq, (22) with sμt “ 0 (kept for the generality). We seek to find the posterior distribution p`pδXq that: (i) assigns at least γ
+
+probability mass to Ct, and (ii) deviates minimally from ¯pt
+
+in Kullback-Leibler (KL) divergence, as in minimum cross-entropy [30] and posterior regularization [31] approaches: 
+
+p‹ 
+
+> t
+
+:“ arg min  
+
+> p
+
+KL pp } ¯ptq (23) s.t. 
+
+ż
+
+> Ct
+
+ppδXq dpδXq ě γ, 
+
+ż
+
+ppδXq dpδXq “ 1, ppδXq ě 0
+
+Note that the objective KL pp}¯ptq is strictly convex in p,and the constraints are linear in p, hence (23) is a convex optimization problem [31] and assumes a unique minimizer. The following result shows that enforcing the coverage constraint admits a closed-form update solution: 
+
+Theorem 1 (KL-minimal posterior with a set-mass con-straint) . Assume ¯ptpδXq ą 0 almost everywhere on its support. Let Ct be measurable, γ P p 0, 1q, and let 
+
+πt :“
+
+ż
+
+> Ct
+
+¯ptpδXq dpδXq. (24) 
+
+If πt ě γ, then the unique minimizer of (23) is p‹ 
+
+> t
+
+“ ¯pt. If 
+
+πt ă γ and 0 ă πt ă 1, then the unique minimizer is 
+
+p‹ 
+
+> t
+
+“ γπt
+
+¯pt 1Ct pδXq ` 1 ´ γ
+
+1 ´ πt
+
+¯pt 1pCtqc pδXq. (25) 
+
+Proof. See Appendix I. This result implies a simple update rule. If the prior already meets the coverage requirement ( πt ě γ), the con-straint is inactive and no modification is required: p` 
+
+> t
+
+“ ¯pt,hence μ` 
+
+> t
+
+“ sμt and Σ` 
+
+> t
+
+“ sΣt. If instead πt ă γ, the KL-minimal projection rescales the prior inside and outside 
+
+Ct so that Pp‹ 
+
+> t
+
+pδX P Ctq “ γ. Since the resulting p‹ 
+
+> t
+
+is Fig. 4. Illustration of the KL-minimal belief update with a coverage constraint. (a) Prior with πt ă γ. (b) Exact KL-optimal posterior: piece-wise rescaling of the prior inside/outside Ct. (c) Gaussian approximation obtained by moment matching. 
+
+generally non-Gaussian, we restore a Gaussian representation by moment matching for recursive Guassian estimation. 2
+
+B. Gaussian Moment Matching 
+
+Our goal is to construct a Gaussian posterior p` 
+
+> t
+
+whose first two moments match those of the optimal posterior p‹ 
+
+> t
+
+.To this end, define the prior second moment as M t :“ sΣt `
+
+sμt sμJ 
+
+> t
+
+. Then the truncated moments of the prior on Ct are: 
+
+μCt :“ 1
+
+πt
+
+ż
+
+> Ct
+
+δX ¯ptpδXq dpδXq,
+
+M Ct :“ 1
+
+πt
+
+ż
+
+> Ct
+
+δXδXJ ¯ptpδXq dpδXq. (26) The corresponding moments on the complement follow from the law of total expectation: 
+
+μCct “ sμt ´ πtμCt
+
+1 ´ πt
+
+, M Cct “ M t ´ πtM Ct
+
+1 ´ πt
+
+. (27) Finally, the moment-matched Gaussian posterior p` 
+
+> t
+
+pδXq “ 
+
+N pδX; μ` 
+
+> t
+
+, Σ` 
+
+> t
+
+q is obtained as 
+
+μ` 
+
+> t
+
+“ γμCt ` p 1 ´ γqμCct , (28) 
+
+M ` 
+
+> t
+
+“ γM Ct ` p 1 ´ γqM Cct , (29) 
+
+Σ` 
+
+> t
+
+“ M ` 
+
+> t
+
+´ μ` 
+
+> t
+
+pμ` 
+
+> t
+
+qJ. (30) Fig. 4 illustrates the update process from obtaining op-timal posterior to its moment-matched Gaussian. The main computational cost is evaluating πt in (24) and the truncated moments in (26), which require integrating a multivariate Gaussian over the set Ct in R15 (see (18)). Next we exploit the structure of Ct to reduce the integration dimension and then use numerical methods [32] to compute these integrals. 
+
+C. Reduced-Dimensional Implementation 
+
+Note that for (18), the constraint depends on δXt only through zt :“ HδXt P R3, with component-wise bounds 
+
+lt ď zt ď ut. Thus we can perform the expensive probability and truncated-moment computations in the output space R3.Under the Gaussian prior δXt „ N psμt, sΣtq, the projected prior on zt is given by: 
+
+zt „ N psμz,t , sΣz,t q “ N
+
+´
+
+H sμt, H sΣtHJ¯
+
+. (31) The coverage set becomes a axis-aligned box: 
+
+Czt :“ t z P R3 | lt ď z ď utu. (32)       
+
+> 2Moment matching is equivalent to reverse-direction KL minimization
+> q‹“arg min qPGKL pq}p‹
+> tq, where Gis the family of Gaussians.
+
+Algorithm 1 Coverage-Constrained Measurement Update 
+
+Require: Prior state ĎXt, prior error moments psμt, sΣtq,pseudo-measurement ˜yt, bounds ϵ, confidence γ
+
+Ensure: Updated state X` 
+
+> t
+
+, updated error covariance Σ` 
+
+> t
+> 1:
+
+Form lt, ut, H, and Ct via (18).  
+
+> 2:
+
+Project prior to constraint space using (31).  
+
+> 3:
+
+Compute πt “ Ppzt P Czt q and truncated moments in 
+
+z-space with [32].  
+
+> 4:
+
+if πt ě γ then  
+
+> 5:
+
+μ` 
+
+> t
+
+Ð sμt, Σ` 
+
+> t
+
+Ð sΣt, X` 
+
+> t
+
+Ð ĎXt 
+
+> 6:
+
+return X` 
+
+> t
+
+, Σ` 
+
+> t
+> 7:
+
+end if  
+
+> 8:
+
+Moment match in z-space to obtain pμ`
+
+> z,t
+
+, Σ`
+
+> z,t
+
+q via (28).  
+
+> 9:
+
+Lift to full space using (33)–(34) to get pμ` 
+
+> t
+
+, Σ` 
+
+> t
+
+q. 
+
+> 10:
+
+On-manifold update: X` 
+
+> t
+
+Ð ĎXt ‘ μ` 
+
+> t
+
+. 
+
+> 11:
+
+return X` 
+
+> t
+
+, Σ`
+
+> t
+
+We apply Theorem 1 and the moment-matching update (28) directly in z-space to obtain an updated marginal zt „
+
+N pμ`
+
+> z,t
+
+, Σ`
+
+> z,t
+
+q, where πt “ Ppzt P Czt q on the prior. To recover a Gaussian distribution over δXt P R15 , we keep the prior conditional ppδXt | ztq and replace only the marginal over zt. This preserves the prior cross-correlations between constrained and unconstrained components while updating uncertainty only in the directions informed by the coverage constraint. Then the lifted Gaussian posterior has moments: 
+
+μ` 
+
+> t
+
+“ sμt ` Ktpμ` 
+
+> z,t
+
+´ sμz,t q, (33) 
+
+Σ` 
+
+> t
+
+“ sΣt ` KtpΣ` 
+
+> z,t
+
+´ StqKJ 
+
+> t
+
+. (34) where St “ H sΣtHJ and Kt “ sΣtHJS´1 
+
+> t
+
+. Algorithm 1 summarizes the main steps of this implementation. 
+
+Remark 2. Equation (34) admits a useful interpretation. If Σ` 
+
+> z,t
+
+“ 0, then (34) reduces to the standard Kalman covariance update corresponding to an exact (noise-free) observation of zt. For Σ` 
+
+> z,t
+
+ě 0, the term KtΣ`
+
+> z,t
+
+KJ
+
+> t
+
+re-injects residual uncertainty along the output directions, reflecting that the set-coverage statement specifies a set-probability condition rather than a noise-free measurement. 
+
+V. M ONTE -C ARLO SIMULATIONS 
+
+We validate the proposed set-coverage measurement up-date in Monte Carlo simulations. The objectives are to: (i) characterize the runtime–accuracy trade-off of estimating the truncated probability mass and moments required by the update, and (ii) compare filter behavior against a standard IEKF [7] correction under both correctly specified Gaussian noise and deliberately misspecified non-Gaussian noise. Theorem 1 and the moment matching in (28) require prior inset probability mass (24) πt and truncated moments (26) under the prior zt „ N psμz,t , sΣz,t q. We approximate these integrals with a randomized (quasi-)Monte Carlo estimator for Gaussian box probabilities and moments (cf. [32]). We compare accuracy with absolute error in πt, ℓ2 error of the truncated mean, and Frobenius norm of the truncated covariance, each relative to a 10 7-sample reference. Tab. I shows the resulting runtime–accuracy trade-off on a Laptop TABLE I RUNTIME –ACCURACY FOR TRUNCATED -MOMENT COMPUTATIONS .                             
+
+> Samples Timing (ms) Prob. Error Mean Error Cov. Error
+> 100 0.0125 3.12e-4 1.03e-1 2.32e-1
+> 500 0.0372 8.07e-5 2.10e-2 6.72e-2
+> 1000 0.0664 2.00e-5 1.48e-2 3.14e-2
+> 5000 0.302 5.33e-6 3.46e-3 6.46e-3
+> 10000 0.532 1.06e-6 2.06e-3 3.20e-3 (Ref.) 1e7 818.23 000
+
+i9-13950HX CPU. We use N “ 1000 samples in all subsequent experiments, which yields sub-millisecond cost (« 0.07 ms/update) with sufficiently small errors. To set up the comparison, we simulate a rigid body following a quadrupedal base-motion trajectory and generate ideal IMU and body-frame velocity outputs consistent with (5)–(11). IMU signals are corrupted with known fixed biases and additive white noise. The body-frame velocity pseudo-measurement is corrupted by an additive error process et.We compare a standard IEKF correction that assumes 
+
+et is zero-mean Gaussian with covariance R, against the proposed set-coverage update in z-space (Section IV-C). The set-coverage update uses N “ 1000 samples to estimate πt
+
+and truncated moments, followed by the lift to the error-state space. For this update, the bounds plt, utq are formed from the calibrated elementwise radius ϵ as in (18), set from the 
+
+γ-quantiles of the noise used to generate measurements. We evaluate these methods under two specific noise regimes. In the unbiased Gaussian regime, et „ N p0, R‹q
+
+and the IEKF uses R “ R‹. This isolates the performance cost of replacing a full likelihood with a weaker set-coverage statement (Remark 1). In the misspecified non-Gaussian regime, we generate et from a Gaussian mixture with nonzero component means. For each Monte Carlo trial, we draw one mixture component and keep it fixed over the entire trajectory. The IEKF uses a single Gaussian covariance R
+
+fitted to the mixture, while the coverage bounds are set from outer quantiles. This produces persistent, trial-dependent bias relative to the IEKF’s assumed zero-mean Gaussian model. Tab. II reports position RMSE and position NEES (NEES pos “ 3 for 3D position, ideally). In the well-specified Gaussian regime, the IEKF achieves the best accuracy and near-nominal consistency, whereas the set-coverage update has higher RMSE because it only exploits mass in the set rather than the full Gaussian shape. However, in the misspecified regime, the IEKF becomes severely inconsistent with a large NEES due to overconfident corrections under an incorrect likelihood model. In contrast, the set-coverage update maintains near-nominal consistency across γ while remaining competitive in RMSE. Operationally, this benefit comes from re-injecting uncertainty along the constrained directions (Remark 2). Ultimately, the set-coverage update is most valuable when pseudo-measurement errors are misspec-ified, such as being non-Gaussian or biased over a trajectory, where it improves consistency by mitigating overconfident corrections. 
+
+Remark 3. The moment-matched Gaussian approximation does not, in general, preserve the exact set-mass constraint, so the post-approximation probability mass in the feasible set                                                                                                        
+
+> TABLE II UNBIASED /B IASED NOISE MONTE CARLO COMPARISON .
+> γRMSE (m) (unbiased/biased) NEES pos (unbiased/biased)
+> EKF update
+> –0.6133 ˘0.2546 {2.3298 ˘1.4016 3.1139 ˘2.5023 {99 .8873 ˘121 .1403
+> Set-coverage update
+> 0.70 0.9063 ˘0.3111 {2.9453 ˘1.0126 2.5220 ˘1.1528 {1.8621 ˘1.3769
+> 0.75 0.8500 ˘0.2590 {2.8397 ˘1.2102 3.5934 ˘2.4633 {3.0924 ˘3.6713
+> 0.80 0.9402 ˘0.2702 {2.6030 ˘1.3559 4.8568 ˘2.4530 {1.9772 ˘2.6391
+> 0.85 0.8600 ˘0.3257 {3.0532 ˘1.3384 4.4314 ˘4.3258 {3.7381 ˘5.5225
+> 0.90 0.9450 ˘0.2910 {2.6683 ˘1.1898 4.6952 ˘2.8569 {4.0185 ˘5.2741
+> 0.95 1.0468 ˘0.3559 {3.3612 ˘1.4733 3.8479 ˘2.4304 {3.7676 ˘4.6494
+
+need not equal γ. Empirically, we observe that the update reliably increases the feasible-set mass toward the target (typically πt ă π` 
+
+> t
+
+ď γ). While one could iterate the projection/moment-matching to approach γ more tightly, we find that at high update rates a single update per timestep is sufficient in practice. A formal analysis of this behavior is left for the future work. 
+
+VI. R EAL -W ORLD EXPERIMENTS 
+
+We further evaluate the proposed set-coverage update on two real-world quadruped datasets (Vision60 and Spot) using the learned pseudo-measurement model (see Section III). We compare our approach against two baselines: (i) a contact-aided leg kinematics-based IEKF [7], and (ii) a learned pseudo-measurement model that outputs mean and covari-ance [16] with IEKF update [14]. Additionally, for the Spot dataset we compare against a perceptive radar-based odometry baseline GaRLILEO [9]. 
+
+A. Calibration and Coverage Statements 
+
+To quantify uncertainty in the pseudo-measurements, we utilize a separate calibration dataset Ecal “ tetk uTSeq.  
+
+> k“0
+
+of measurement errors from the trained network ϕψ . Since the data-generating process is a dynamical system, samples are temporally dependent. To address this complication in practice, we assume the error process is β-mixing [33]: 
+
+Assumption 1 (β-mixing) . The error process tetutě0 is stationary and β-mixing with coefficient βpkq Ñ 0 as k Ñ 8 .
+
+Assumption 1 allows for approximately independent cal-ibration samples by subsampling at intervals of K [33]. This yields the subsampled set ESub.  
+
+> cal
+
+“ teti uNcal 
+
+> i“0
+
+, where 
+
+ti “ iK ∆t and Ncal “ TSeq. {K. We apply split-conformal prediction [28], [25] using the absolute error in each direction as the score function: sj,i “ | ej,t i | for j P t x, y, z u. To obtain a joint confidence level γ for the 3D error vector, we target the per-axis confidence ˜γ “ γ1{3, and set the corresponding significance level ˜α “ 1´˜γ. Using the standard finite-sample correction, we compute the conformal quantile level based on k “ rpNcal ` 1qp 1 ´ ˜αqs [28], [25], yielding thresholds 
+
+ϵ “ r ϵx, ϵ y , ϵ z sJ such that Pp| ej,t | ď ϵj q ě ˜γ for each j.Assuming independence across coordinates, this implies the joint coverage Pp| et| ď ϵq “ ś 
+
+> jPt x,y,z u
+
+Pp| ej,t | ď ϵj q ě 
+
+˜γ3 “ γ. The resulting constraints on et define the feasible set Ct (18) for the coverage-constrained update. 
+
+B. Estimation Performance 
+
+Both real-world datasets pose distinct challenges. Vision60 is recorded in a motion-capture room at 100 Hz using on-board IMU and joint measurements. The trajectories are 0 5 10 15 20 25 30        
+
+> 0.06
+> 0.08
+> 0.10
+> 0.12
+> 0.14
+> 0510 15 20 25 30 35
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+
+Fig. 5. β-mixing coefficients for Vision60 (a) and Spot (b) calibration data. 10 0 10 20 30              
+
+> X (meters)
+> 10
+> 5
+> 0
+> 5
+> 10
+> 15
+> 20
+> Y (meters)
+> BiCorridor - XY Trajectory Comparison
+> Ground Truth Leg IEKF Vel. IEKF Coverage Set (ours)
+> 050 100 150 200 250
+> Time (seconds)
+> 0
+> 2
+> 4
+> Z (meters)
+> BiCorridor - Z Trajectory vs Time
+> 10 010 20 30
+> X (meters)
+> 15
+> 10
+> 5
+> 0
+> 5
+> 10
+> 15
+> Y (meters)
+> Upstair - XY Trajectory Comparison
+> Ground Truth Leg IEKF Vel. IEKF Coverage Set (ours)
+> 050 100 150 200
+> Time (seconds)
+> 0
+> 4
+> 6
+> 10
+> Z (meters)
+> Upstair - Z Trajectory vs Time
+
+Fig. 6. Two of the representative trajectories of the Spot dataset and with comparison with the baselines. 
+
+short and confined to a single room, but include sharp turns and walking over slippery sheets. In contrast, the Spot dataset [9] covers diverse indoor and outdoor terrain with elevation changes. Sequences last multiple minutes and span hundreds of meters, which is particularly challenging for proprioceptive-only odometry. We set the target coverage level to γ “ 0.8, as we did not observe significant performance difference for γ P r 0.7, 0.85 s
+
+(see Tab. II). From the β-mixing decay in Fig. 5, we choose subsampling intervals K “ 20 for Vision60 and K “ 35 for Spot to approximately satisfy the conformal independence requirement with β « 0.05 . This yields calibrated cover-age bounds ϵ “ r 0.05 , 0.2, 0.05 sJ on Vision60 using the ROOM SCAN sequence and ϵ “ r 0.22 , 0.05 , 0.1sJ on Spot using the Q UAD sequence. Tables IV and III report the absolute and relative RMSE for both datasets. Overall, the proposed set-coverage 4 3 2 1 0 1 2                  
+
+> X (meters)
+> 2
+> 1
+> 0
+> 1
+> Y (meters) 2CCW2CC - XY Trajectory Comparison
+> Ground Truth Leg IEKF Vel. IEKF Coverage Set (ours)
+> 020 40 60 80 100
+> Time (seconds)
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> Z (meters) 2CCW2CC - Z Trajectory vs Time
+> 1012345
+> X (meters)
+> 2
+> 1
+> 0
+> 1
+> 2
+> Y (meters) RoomScan - XY Trajectory Comparison
+> Ground Truth Leg IEKF Vel. IEKF Coverage Set (ours) 010 20 30 40 50 60 70
+> Time (seconds)
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> Z (meters) RoomScan - Z Trajectory vs Time
+
+Fig. 7. Two of the representative trajectories of the Vision60 dataset and with comparison with the baselines. 
+
+update remains robust and accurate. On Spot dataset, proprioception-only baselines accumulate substantial drift during sharp turns and abrupt elevation changes, especially in DOWNSTAIR and O VERPASS . In these cases, our estimator remains accurate and stable. See Fig. 6 for representative trajectories. Relative to the perception-based GaRLILEO, our proprioception-only method achieves similar accuracy and even exceeds it on Q UAD sequence; GaRLILEO results are taken from [9]. Similarly, on the Vision60, the standard Leg IEKF exhibits significant vertical drift and high position RMSE (Fig. 7). While learned pseudo-measurements can correct this on flat ground, our method yields the lowest absolute position errors overall amongst the baselines. Over-all, by effectively handling non-Gaussian noise, our approach outperforms existing proprioceptive methods while maintain-ing competitiveness with perception-driven baselines. 
+
+TABLE III RESULTS ON SPOT DATASET 
+
+Sequence Method APE trans RPE trans APE rot RPE rot π ă γ
+
+[m] [m] [deg] [deg/m] [%] 
+
+Atrium GaRLILEO 0.816 0.055 1.715 0.554 –109.93 m Leg IEKF 2.267 0.108 6.457 0.908 –124.50 s Vel. IEKF 0.453 0.037 2.566 1.494 –Ours 1.094 0.055 2.075 1.746 69.7 
+
+BiCorridor GaRLILEO 1.425 0.063 5.519 0.885 –240.82 m Leg IEKF 3.251 0.141 9.130 1.413 –277.29 s Vel. IEKF 2.236 0.110 4.118 2.436 –Ours 2.526 0.074 2.658 1.955 70.0 BridgeLoop GaRLILEO 1.193 0.080 2.719 1.058 –161.17 m Leg IEKF 1.235 0.176 6.479 3.439 –187.20 s Vel. IEKF 3.782 0.151 5.027 2.742 –Ours 1.421 0.075 2.228 2.307 73.3 
+
+CorriLoop GaRLILEO 1.627 0.066 5.676 0.738 –208.68 m Leg IEKF 3.302 0.116 10.838 1.133 –229.40 s Vel. IEKF 1.198 0.082 4.402 1.986 –Ours 2.223 0.068 4.170 2.280 74.0 
+
+Downstair GaRLILEO 3.916 0.099 3.415 1.080 –233.75 m Leg IEKF 8.658 0.135 9.919 1.261 –270.90 s Vel. IEKF 45.689 0.875 3.526 2.639 –Ours 6.832 0.106 9.541 2.089 70.2 
+
+Overpass GaRLILEO 1.526 0.091 4.043 1.227 –169.17 m Leg IEKF 43.267 1.522 27.234 5.870 –213.49 s Vel. IEKF 40.923 0.846 4.870 3.367 –Ours 2.897 0.054 4.866 1.763 70.6 
+
+Quad GaRLILEO 7.347 0.080 3.356 0.838 –447.83 m Leg IEKF 27.624 0.111 22.735 0.902 –503.69 s Vel. IEKF 8.648 0.083 5.375 1.889 –Ours 3.180 0.065 4.186 1.826 70.0 
+
+SlopeStair GaRLILEO 2.359 0.061 2.805 1.051 –273.37 m Leg IEKF 13.382 0.118 20.625 1.203 –307.49 s Vel. IEKF 5.221 0.113 4.339 2.583 –Ours 3.058 0.079 4.559 2.046 73.7 
+
+Tunnel GaRLILEO 3.523 0.083 2.849 0.440 –247.94 m Leg IEKF 8.559 0.102 9.761 0.822 –277.00 s Vel. IEKF 5.193 0.081 5.105 1.712 –Ours 5.154 0.050 3.961 1.474 70.7 
+
+Upstair GaRLILEO 1.496 0.071 4.048 0.933 –197.22 m Leg IEKF 2.005 0.171 8.068 2.885 –227.89 s Vel. IEKF 2.132 0.151 3.161 2.776 –Ours 2.042 0.072 5.037 2.441 71.2 
+
+Average GaRLILEO 2.523 0.075 3.615 0.880 –Leg IEKF 11.355 0.270 12.775 1.984 –Vel. IEKF 11.551 0.244 4.052 2.362 –
+
+Ours 2.736 0.070 4.139 2.003 71.3 
+
+VII. C ONCLUSION AND FUTURE WORK 
+
+We proposed a proprioception-only state estimation frame-work for legged robots that uses a learned measurement model mapping histories of joint-level measurements to body velocity estimates. Under limited data, the error distribution TABLE IV RESULTS ON VISION 60 D ATASET                                                                                                                                                           
+
+> Sequence Method APE trans RPE trans APE rot RPE rot πăγ
+> [m] [m] [deg] [deg/m] [%]
+> 2CC2CCW Leg IEKF 1.344 1.419 1.622 0.280 –53.15 m Vel. IEKF 0.349 1.545 1.953 0.308 –76.3 s Ours 0.278 1.506 1.225 0.299 95.3
+> 2CCW2CC Leg IEKF 2.095 1.355 0.893 0.290 –51.97 m Vel. IEKF 0.244 1.486 1.483 0.316 –95.57 s Ours 0.226 1.492 1.119 0.315 95.7
+> 3CC3CCW Leg IEKF 0.756 1.375 0.940 0.282 –74.65 m Vel. IEKF 0.470 1.536 3.137 0.312 –107.96 s Ours 0.667 1.548 3.083 0.312 95.3
+> 3CCW3CC Leg IEKF 0.901 1.382 0.869 0.287 –83.42 m Vel. IEKF 0.605 1.519 5.216 0.321 –129.93 s Ours 0.363 1.520 1.987 0.315 95.1
+> RoomScan Leg IEKF 0.690 1.312 1.140 0.424 –38.96 m Vel. IEKF 0.290 1.444 1.428 0.464 –66.97 s Ours 0.300 1.428 1.356 0.465 95.3
+> Slipped Leg IEKF 0.354 1.312 0.707 0.323 –19.01 m Vel. IEKF 0.246 1.499 1.969 0.365 –43.03 s Ours 0.261 1.456 1.044 0.356 95.5
+> Stroll Leg IEKF 1.770 1.287 2.427 0.504 –99.21 m Vel. IEKF 0.760 1.505 2.793 0.525 –162.3 s Ours 0.717 1.504 2.912 0.540 94.6
+> Average Leg IEKF 1.130 1.349 1.228 0.341 –Vel. IEKF 0.424 1.503 2.568 0.373 –
+> Ours 0.402 1.493 1.818 0.372 95.26
+
+of these predictions is not Gaussian. We systematically char-acterize this arbitrary error distribution with a set-coverage statement. This set-coverage statement is then used to update the Gaussian state estimate via KL-divergence and moment matching in a computationally efficient way. We compared our method with a baseline in both simulation and a real-world quadrupedal robot dataset after obtaining calibrated set-coverage statements. Our estimator is competitive with both proprioceptive-only and perception baselines in the nominal Gaussian-noise case and remains consistent and robust in the arbitrary-noise case, whereas baselines do not. Our future work includes extending the proposed legged state estimator with exteroceptive measurements such as vision. APPENDIX IPROOF OF THEOREM 1The optimization in (23) is strictly convex in ppδXq. If 
+
+πt ě γ, the unconstrained minimizer p‹ 
+
+> t
+
+“ ¯pt (which yields a KL divergence of zero) satisfies all constraints and is therefore uniquely optimal.If πt ă γ, the coverage constraint is active. Introducing dual variables λ ą 0 for the inequality constraint and ν for the normalization constraint, the KKT conditions necessitate that the first variational derivative of the Lagrangian vanishes: 
+
+δL
+
+δp pδXq “ ln 
+
+ˆ p‹ 
+
+> t
+
+pδXq
+
+¯ptpδXq
+
+˙
+
+` 1 ´ λ1Ct pδXq ` ν “ 0
+
+Solving for p‹ 
+
+> t
+
+pδXq restricts the optimal solution to the form: 
+
+p‹ 
+
+> t
+
+pδXq “ ¯ptpδXq exp pλ1Ct pδXq ´ ν ´ 1q
+
+This indicates p‹ 
+
+> t
+
+pδXq is a piecewise scaling of the prior: 
+
+p‹ 
+
+> t
+
+pδXq “ k1 ¯ptpδXq for δX P Ct, and p‹ 
+
+> t
+
+pδXq “
+
+k2 ¯ptpδXq for δX P Cct . Enforcing the active cover-age constraint ş 
+
+> Ct
+
+p‹ 
+
+> t
+
+pδXqdδ X “ γ using (24) directly yields k1πt “ γ. Applying the normalization constraint ş p‹ 
+
+> t
+
+pδXqdδ X “ 1 requires the remaining mass to satisfy 
+
+k2p1 ´ πtq “ 1 ´ γ. Solving for the scaling factors k1, k 2
+
+recovers (25). The non-negativity constraint is inherently satisfied by the exponential form. REFERENCES [1] I. D. Miller, F. Cladera, A. Cowley, S. S. Shivakumar, E. S. Lee, L. Jarin-Lipschitz, A. Bhat, N. Rodrigues, A. Zhou, A. Cohen, A. Kulkarni, J. Laney, C. J. Taylor, and V. Kumar, “Mine tunnel exploration using multiple quadrupedal robots,” IEEE Robot. Autom. Lett. , 2020. [2] T. Miki, J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning robust perceptive locomotion for quadrupedal robots in the wild,” Sci. Robot. , 2022. [3] S. Halder, K. Afsari, E. Chiou, R. Patrick, and K. A. Hamed, “Con-struction inspection & monitoring with quadruped robots in future human-robot teaming: A preliminary study,” J. Build. Eng. , 2023. [4] W. Gong, C. He, K. Su, Q. Li, T. Wu, and Z. Jane Wang, “Didlm: A slam dataset for difficult scenarios featuring infrared, depth cameras, lidar, 4d radar, and others under adverse weather, low light conditions, and rough roads,” IEEE Trans. Intell. Transp. Syst. , 2026. [5] J. Hwangbo, J. Lee, A. Dosovitskiy, D. Bellicoso, V. Tsounis, V. Koltun, and M. Hutter, “Learning agile and dynamic motor skills for legged robots,” Sci. Robot. , 2019. [6] M. Bloesch, M. Hutter, M. Hoepflinger, S. Leutenegger, C. Gehring, C. D. Remy, and R. Siegwart, “State estimation for legged robots -consistent fusion of leg kinematics and IMU,” in Proc. Robot.: Sci. Syst. , Sydney, Australia, July 2012. [7] R. Hartley, M. Ghaffari, R. M. Eustice, and J. W. Grizzle, “Contact-aided invariant extended kalman filtering for robot state estimation,” 
+
+Int. J. Rob. Res. , Mar. 2020. [8] D. Wisth, M. Camurri, and M. F. Fallon, “Robust legged robot state estimation using factor graph optimization,” IEEE Robot. Autom. Lett. ,2019. [9] C. Noh, S. Jung, H. Kim, Y. Hu, L. Herlant, and A. Kim, “Garlileo: Gravity-aligned radar-leg-inertial enhanced odometry,” arXiv , 2025. [10] P. Roth, J. Frey, C. Cadena, and M. Hutter, “Learned perceptive for-ward dynamics model for safe and platform-aware robotic navigation,” 
+
+Robot.: Sci. Syst. (RSS 2025) , 2025. [11] A. M. Kulkarni, I. Poulakakis, and G. Huang, “Learning neural observer-predictor models for limb-level sampling-based locomotion planning,” 2025. [12] R. Buchanan, M. Camurri, F. Dellaert, and M. Fallon, “Learning inertial odometry for dynamic legged robot state estimation,” 2021. [13] J. Wasserman, A. Agarwal, R. Jangir, G. Chowdhary, D. Pathak, and A. Gupta, “Legolas: Deep leg-inertial odometry,” CoRL , 2024. [14] D. Youm, H. Oh, S. Choi, H. Kim, S. Jeon, and J. Hwangbo, “Legged robot state estimation with invariant extended kalman filter using neural measurement network,” in Proc. IEEE Int. Conf. Robot. Autom. (ICRA) , 2025. [15] S. Lee, H.-B. Kim, and K.-S. Kim, “Legged robot state estimation using invariant neural-augmented kalman filter with a neural compen-sator,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. (IROS) , 2025. [16] R. L. Russell and C. Reale, “Multivariate uncertainty in deep learning,” 
+
+IEEE Trans. Neural Netw. Learn. Syst. , Dec. 2022. [17] N. Tagasovska and D. Lopez-Paz, “Single-model uncertainties for deep learning,” Proc. 33rd Int. Conf. Neural Inf. Process. Syst. , 2019. [18] J. Gawlikowski, C. R. N. Tassi, M. Ali, J. Lee, M. Humt, J. Feng, A. M. Kruspe, R. Triebel, P. Jung, R. Roscher, M. Shahzad, W. Yang, R. Bamler, and X. Zhu, “A survey of uncertainty in deep neural networks,” Artif. Intell. Rev. , 2021. [19] S. Jim´ enez, M. J¨ urgens, and W. Waegeman, “Position: Epistemic uncertainty estimation methods are fundamentally incomplete,” 2026. [20] G. Duran-Martin, M. Altamirano, A. Shestopaloff, L. S´ anchez-Betancourt, J. Knoblauch, M. Jones, F.-X. Briol, and K. P. Mur-phy, “Outlier-robust kalman filtering through generalised Bayes,” in 
+
+Proc. 41st Int. Conf. Mach. Learn. , ser. Proc. Mach. Learn. Res., R. Salakhutdinov, Z. Kolter, K. Heller, A. Weller, N. Oliver, J. Scarlett, and F. Berkenkamp, Eds. PMLR, 21–27 Jul 2024. [21] C. Combastel, “An extended zonotopic and gaussian kalman filter (ezgkf) merging set-membership and stochastic paradigms: Toward non-linear filtering and fault detection,” Annu. Rev. Control , 2016. [22] S. Li, T. Stouraitis, M. Gienger, S. Vijayakumar, and J. A. Shah, “Set-based state estimation with probabilistic consistency guarantee under epistemic uncertainty,” IEEE Robot. Autom. Lett. , 2022. [23] S. Wang, “Distributionally robust state estimation for nonlinear sys-tems,” IEEE Trans. Signal Process. , 2022. [24] K. Wang, F. Cuzzolin, K. Shariatmadar, D. Moens, and H. Hallez, “A review of uncertainty representation and quantification in neural networks,” IEEE Trans. Pattern Anal. Mach. Intell. , 2026. [25] R. I. Oliveira, P. Orenstein, T. Ramos, and J. V. Romano, “Split conformal prediction and non-exchangeable data,” J. Mach. Learn. Res. , 2024. [26] V. Mirasierra, M. Mammarella, F. Dabbene, and T. Alamo, “Prediction error quantification through probabilistic scaling,” IEEE Control Syst. Lett. , 2021. [27] G. Casella and R. L. Berger, Statistical inference . Duxbury Pacific Grove, CA, 2002. [28] G. Shafer and V. Vovk, “A tutorial on conformal prediction,” J. Mach. Learn. Res. , 2008. [29] Y. Sale, A. Javanmardi, and E. H¨ ullermeier, “Aleatoric and epistemic uncertainty in conformal prediction,” in Proc. 14th Symp. Conformal Probabilistic Predict. Appl. , ser. Proc. Mach. Learn. Res., K. A. Nguyen, Z. Luo, H. Papadopoulos, T. L¨ ofstr¨ om, L. Carlsson, and H. Bostr¨ om, Eds. PMLR, 10–12 Sep 2025. [30] J. Shore and R. Johnson, “Properties of cross-entropy minimization,” 
+
+IEEE Trans. Inf. Theory , 1981. [31] K. Ganchev, B. Taskar, and J. Gama, “Expectation maximization and posterior constraints,” Adv. Neural Inf. Process. Syst. , 2007. [32] A. Genz and G. Trinh, “Numerical computation of multivariate normal probabilities using bivariate conditioning,” in Springer Proc. Math. Stat. , ser. Springer Proc. Math. Stat. Cham: Springer International Publishing, 2016. [33] D. J. McDonald, C. R. Shalizi, and M. Schervish, “Estimating beta-mixing coefficients via histograms,” Electron. J. Stat. , 2015.
