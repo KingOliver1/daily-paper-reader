@@ -1,0 +1,509 @@
+Title: Efficient and Versatile Quadrupedal Skating: Optimal Co-design via Reinforcement Learning and Bayesian Optimization
+
+URL Source: https://arxiv.org/pdf/2603.18408v1
+
+Published Time: Fri, 20 Mar 2026 00:33:06 GMT
+
+Number of Pages: 7
+
+Markdown Content:
+# Efficient and Versatile Quadrupedal Skating: Optimal Co-design via Reinforcement Learning and Bayesian Optimization 
+
+Hanwen Wang ∗1, Zhenlong Fang ∗1, Josiah Hanna 1, Xiaobin Xiong 1,2
+
+Abstract — In this paper, we present a hardware-control co-design approach that enables efficient and versatile roller skating on quadrupedal robots equipped with passive wheels. Passive-wheel skating reduces leg inertia and improves energy efficiency, particularly at high speeds. However, the absence of direct wheel actuation tightly couples mechanical design and control. To unlock the full potential of this modality, we formulate a bilevel optimization framework: an upper-level Bayesian Optimization searches the mechanical design space, while a lower-level Reinforcement Learning trains a motor control policy for each candidate design. The resulting design-policy pairs not only outperform human-engineered baselines, but also exhibit versatile behaviors such as hockey stop (rapid braking by turning sideways to maximize friction) and self-aligning motion (automatic reorientation to improve energy efficiency in the direction of travel), offering the first system-level study of dynamic skating motion on quadrupedal robots. 
+
+I. I NTRODUCTION 
+
+Legged robots have made rapid progress in agility and robustness, enabling increasingly capable real-world deploy-ment [1], [2], [3]. However, compared to wheeled plat-forms, legged locomotion still lags in speed and energy efficiency [4], [5]. Wheels provide smooth contact and fa-vorable energy scaling [4], but often trade off versatility on unstructured terrain. Hybrid systems such as wheeled-legged robots aim to bridge this gap [6], [7], but most existing designs rely on actively driven wheels, adding leg inertia and thus reducing energy efficiency in motions that involve significant leg movements. We explore an alternative hybrid mode— quadrupedal skating with passive wheels . Equipping each foot with a passive wheel allows a quadruped to retain the stability and maneuverability of legged locomotion while gaining the effi-ciency and speed of wheeled motion, without motorizing the feet. Figure 1 shows our implementation on a Unitree Go1 using custom 3D-printed roller supports with an adjustable wheel yaw installation angle ψ.Achieving effective skating, however, is challenging. Skat-ing dynamics couple robot posture and velocity under non-holonomic rolling constraints, requiring coordinated regu-lation of contact forces, body posture, and momentum ex-change. With passive wheels, the robot cannot directly com-mand wheel traction. Instead, skating performance depends strongly on the interaction between mechanical design and   
+
+> ∗Hanwen Wang and Zhenlong Fang contributed equally in this work.
+> 1Hanwen Wang, Zhenlong Fang, and Josiah Hanna are with the Univer-sity of Wisconsin - Madison. 2Xiaobin Xiong was with the University of Wisconsin - Madison, and now with the Shanghai Innovation Institute (SII). Corresponding to Xiaobin Xiong:
+
+xiaobin.xiong@sii.edu.cn .𝛙 
+
+> x
+> z
+> Sagittal Plane
+> xwheel
+
+Fig. 1: Quadrupedal skating setup with passive wheels. Each foot is equipped with a 3D-printed roller support that holds a passive wheel. In the default standing configuration, the wheel yaw installation angle ψ is defined as the deviation of the wheel’s x-axis, xwheel , from the x-axis of the robot’s sagittal plane. This angle is our key design parameter. the learned motor policy. This tight design-control coupling makes co-design essential: poor hardware configurations can restrict feasible behaviors, while suboptimal policies may fail to exploit an otherwise capable design. To address this coupling, we propose a bilevel co-design framework that jointly optimizes mechanical parameters and a control policy. The upper level uses Bayesian Optimization (BO) [8] to efficiently search the design space, while the lower level uses Reinforcement Learning (RL) [9], [10] to train a policy for each candidate design. This BO-RL loop discovers design-policy pairs that enable both efficient and versatile skating. Our main contributions are as follows:  
+
+> •
+
+A novel locomotion mode: We introduce quadrupedal skating with passive wheels, demonstrating its potential for combining speed, efficiency, and maneuverability.  
+
+> •
+
+A bilevel co-design framework: We present a BO-RL approach that jointly optimizes wheel installation parameters and the motor control policy.  
+
+> •
+
+Versatile locomotion demonstrations: We validate the method on a state-of-the-art quadruped and demonstrate behaviors such as hockey stop (rapid braking by turning sideways to maximize friction) and self-aligning motion (automatic reorientation to maximize energy efficiency in the moving direction).  
+
+> •
+
+A systematic study of quadrupedal skating: We provide, to the best of our knowledge, the first system-level study of dynamic skating motion on quadrupedal robots. Overall, our results suggest that co-designing hardware and control is a practical route to reliable quadrupedal skating 
+
+> arXiv:2603.18408v1 [cs.RO] 19 Mar 2026
+
+behaviors that are difficult to achieve with human-engineered configurations. II. R ELATED WORK 
+
+A. Quadrupedal Locomotion 
+
+Quadrupedal robotics has progressed rapidly, with plat-forms demonstrating dynamic mobility and robust terrain traversal. Early hydraulic systems such as BigDog estab-lished rough-terrain feasibility [1]. Subsequent robots such as MIT Cheetah [11] highlighted the effectiveness of model-based control, including whole-body dynamics and model predictive control, for agile running and jumping [3]. More recently, Reinforcement Learning (RL) has produced highly dynamic locomotion skills and controllers that can match or exceed expert-designed strategies [2], [9], [12], [13], en-abling robust deployment on systems such as ANYmal [14]. Despite these advances, pure legged locomotion is typically slower and less energy-efficient than wheeled motion, mo-tivating wheeled–legged hybrids that combine both modali-ties [15], [16], [17], [18]. However, many of such platforms use actuated wheels, which increase leg inertia and reduce energy efficiency for dynamic motions that involve high speed leg movements. 
+
+B. Robot Skating with Passive Wheels 
+
+Skating locomotion with passive wheels offers an appeal-ing way to achieve energy-efficient maneuvers on smooth terrain. Bjelonic et al. demonstrated quadrupedal skating on ANYmal using passive wheels and force control to generate glide-and-push sequences, reporting a reduced cost of trans-port relative to trotting [19]. Chen et al. drew inspiration from human skating to synthesize fast and efficient quadrupedal gaits [20]. Ziv et al. extended passive wheel skating to a bipedal robot with in-line skates [21]. Although effective, these approaches rely on heuristics for mechanical design and gait synthesis. In contrast, our paper adopts a hardware-control co-design framework to automatically discover effi-cient and versatile gaits and the wheel designs that realize them. 
+
+C. Robot Hardware and Control Policy Co-Design 
+
+Co-design of hardware and control is a powerful paradigm for unlocking new robot capabilities. Prior works can be broadly grouped into three strategies. 
+
+Universal policy methods decouple design and control optimizations by training a single policy across a distribution of designs, which can then serve as a fast evaluator. Examples include design randomization for general locomotion [22], [23], [24] and design-conditioned policies for actuator op-timization [25], [26]. These approaches can be versatile, but often require substantial initial training to cover many suboptimal designs. 
+
+Joint optimization methods embed design parameters directly into the RL loop, updating design and control simultaneously. Such approaches can discover novel de-signs [27], [28], but may suffer from instability due to the non-stationarity induced by changing body parameters and limited simulator support for online design changes. 
+
+Bilevel optimization methods treat co-design as a nested problem: an outer-loop optimizer proposes designs, and an inner-loop learner trains a specialized policy for each candidate. This paradigm has been applied to legged robots and manipulators [29], [30], producing expert policies tai-lored to individual designs. Because repeated RL training is expensive, sample efficiency in the outer loop is crucial; Bayesian Optimization (BO) is well suited for expensive black-box objectives [31], [8]. Our work adopts this bilevel BO-RL framework and applies it to quadrupedal skating with passive wheels, aiming to jointly discover wheel installation parameters and control policies that yield efficient and versatile behaviors. III. Q UADRUPEDAL SKATING VIA CO-D ESIGN 
+
+Skating with passive wheels requires both mechanical adaptation and tailored control. Neither component alone is sufficient: wheel orientation shapes which skating gaits are physically feasible, while the learned policy determines whether the robot can stably and efficiently exploit a given design. This motivates a co-design formulation in which hardware and control are optimized jointly. In this section, we formalize the BO-RL bilevel co-design problem, describe the roller support design space, and highlight how quadruped leg kinematics constrain the feasible wheel installation angle. 
+
+A. Co-Design via Bilevel Optimization 
+
+We formulate quadrupedal skating as the bilevel opti-mization problem in Fig. 2, with an inner loop for control policy learning and an outer loop for hardware design. For a fixed design d and a task set T , the inner loop seeks an optimal policy π∗ 
+
+> θ
+
+(d, T ) (parameterized by θ) that maximizes expected discounted return over trajectories induced by exe-cuting tasks sampled from T :
+
+π∗ 
+
+> θ
+
+(d, T ) = arg max 
+
+> πθ
+
+Eτ ∼p(τ |πθ ,d,T )
+
+" TX
+
+> t=0
+
+γtrt
+
+#
+
+, (1) where τ denotes trajectories generated by controlling the robot with design d using policy πθ , rt is the reward at time step t, and γ is the discount factor. We solve the inner-loop problem with RL. Compared with model-based approaches, RL is well suited to skating because the non-holonomic wheel-ground interactions are handled directly by the simulator, and complex gaits need not be manually specified. Given the optimized policy, we evaluate performance using a scalar objective J(π∗ 
+
+> θ
+
+, d, T ). The outer loop then searches for the best design within the design space D:
+
+d∗ = arg min  
+
+> d∈D
+
+J(π∗ 
+
+> θ
+
+, d, T ). (2) Because evaluating J(π∗ 
+
+> θ
+
+, d, T ) requires training a full policy and is non-differentiable due to stochastic RL and contact dynamics, the outer loop is naturally treated as black-box optimization. We therefore use BO in the outer loop, Outer Loop Design Opt (BO) 
+
+> Inner Loop Control Opt (RL)
+> Sample
+> Maximize Return
+> Actions
+> Observations
+> Fit GP Model Opt Acquisition Function
+
+Fig. 2: Bilevel co-design framework for quadrupedal skating. The outer loop uses BO to propose the next candidate design dnext . For each candidate design, the inner loop uses RL to optimize the policy πθ . The resulting performance 
+
+J(π∗ 
+
+> θ
+
+, d, T ) is fed back to BO, enabling efficient search over design-policy pairs that maximize skating performance. which iteratively fits a Gaussain Process (GP) model M to predict the mean and uncertainty of −J(π∗ 
+
+> θ
+
+, d, T ), and max-imizes an acquisition function AF (M, d) to select the next candidate dnext while balancing exploration and exploitation. This bilevel formulation enables systematic discovery of design-policy pairs that yield robust and efficient skating. 
+
+B. Mechanical Design of Roller Support 
+
+A key component of our platform is a skating foot that mounts a passive wheel at the foot tip of each leg. We replace the robot toes with lightweight 3D-printed supports that connect the legs to the wheels. Our main design parameter is the yaw angle ψ, which determines each wheel’s rolling direction (Fig. 1). A simple but naive design is the Parallel Configuration 
+
+(P configuration) illustrated in Fig. 3, where all wheels are aligned with the body x-axis ( ψ = 0 ◦). Although this appears ideal for forward skating, the leg kinematics of most state of the art quadrupedal robots–including MIT MiniCheetah [32] and Unitree Go1 [33], Go2 [34], and B2 [35]–constrains the wheel rolling direction to always align with the x-axis when 
+
+ψ = 0 ◦. As a result, the available traction force along the x direction is almost zero due to negligible rolling friction, making vx effectively uncontrollable. Consequently, at least one wheel must have a nonzero yaw angle, making the optimal design non-trivial and motivating a systematic co-design approach. IV. A LGORITHMIC IMPLEMENTATION 
+
+A. Inner Loop Control Policy Optimization via RL 
+
+RL formulation : For each candidate design, we train a control policy with RL in IsaacLab [36]. We formulate the learning problem as a Partially Observable Markov Decision Process (POMDP) defined by the tuple ( S, O, A, p, r), where 
+
+S, O, and A denote the state, observation, and action spaces, respectively, p(st+1 | st, a t) is the state transition probability, and r is the reward. Hip 
+
+> Thigh
+> Calf
+
+X
+
+Y
+
+X
+
+Y
+
+Fig. 3: Naive P configuration ( ψ = 0 ◦) on Unitree Go1 [33] yields uncontrollable forward velocity vx due to leg kine-matic constraints. Similar limitations arise on many state-of-the-art quadrupedal robots. We seek a policy πθ (at | ot) parameterized by θ that maps observations ot ∈ O to a distribution over actions at ∈ A 
+
+by maximizing the expected discounted return: 
+
+π∗ 
+
+> θ
+
+= arg max  
+
+> θ
+
+E
+
+" ∞X
+
+> t=0
+
+γtr(st, a t)
+
+#
+
+, (3) where γ ∈ (0 , 1) is the discount factor. We train πθ using Proximal Policy Optimization (PPO) [37]. The observation space, action space, and reward terms are summarized below. 
+
+Observation Space : Table I lists the observations provided to the policy: commanded and measured base linear/angular velocities, joint positions/velocities, and the previous action. The base orientation is represented by projected gravity 
+
+> B
+
+ug = RWB [0 , 0, −1] T , where RWB is the rotation of the body frame B with respect to the world frame W.A roller-skating-specific detail is how linear velocity com-mands are specified and, consequently, how they appear in the observation. (4) gives the observation of the commanded linear velocity Bvobs  
+
+> xy
+
+(always expressed in the base frame), which can originate from either a base-frame command 
+
+> B
+
+vcmd  
+
+> xy
+
+or a world-frame command W vcmd  
+
+> xy
+
+that is transformed into the base frame. These two command conventions lead to different tracking rewards. We refer to the two conventions as Base Frame Command and World Frame Command :
+
+> B
+
+vobs  
+
+> xy
+
+=
+
+ Bvcmd  
+
+> xy
+
+(Base Frame Command) 
+
+RT 
+
+> WB W
+
+vcmd  
+
+> xy
+
+(World Frame Command) . (4) We compare these two formulations in Sec. V-C. 
+
+Action Space : The policy outputs actions a, which are scaled and biased to obtain the desired joint positions qcmd  
+
+> j
+
+. These targets are tracked by a low-level joint PD controller with gains kp and kd (and zero desired joint velocity), causing the joint torques τ to be 
+
+τ = kp(qcmd  
+
+> j
+
+− qj ) − kd ˙qj . (5) 
+
+Rewards : The reward comprises (i) tracking terms for the base velocity, height, and orientation, and (ii) regularization terms that smooth actions and joint accelerations. To discour-age overstretched legs, we penalize the horizontal component of the virtual-leg vector (the vector pvirt leg from hip to wheel) via ∥pvirt leg, xy ∥22. We also penalize large collision forces f
+
+using P 1{∥ f ∥2>f 0} where 1{·} is one when {·} is true and TABLE I: Observation space.                 
+
+> Name Expression Base Velocity Bv,Bω
+> Commanded Base Velocity Bvdxy ,Bωdz
+> Projected Gravity Bug
+> Joint Position and Velocity qj,˙qj
+> Last Actions aprev
+
+TABLE II: Reward terms.                               
+
+> Name Expression Base Linear Velocity xy rvxy using (6a) or (7a) Base Angular Velocity z rωzusing (6b) or (7c) Base Height (z−zd)2
+> Base Orientation Bug,xy 22
+> Base Linear Velocity z Bv2
+> z
+> Base Angular Velocity xy Bωxy 22
+> Action Rate Minimization ∥a−aprev ∥22
+> Joint Acceleration Minimization ∥¨qj∥22
+> Vertical Virtual Leg pvirt leg, xy 22
+> Collision Avoidance P1{∥ f∥2>f 0}
+> Joint Position Limit Pqj, exceed 22
+
+zero otherwise. We also discourage joint position violations 
+
+qj, exceed by penalizing P ∥qj, exceed ∥22.Most reward terms are shared across experiments, but the velocity-tracking terms depend on whether commands are specified in the base frame or world frame. For Base Frame Command , we use the standard base frame tracking rewards 
+
+rvxy = rexp 
+
+ Bvxy − Bvcmd  
+
+> xy 2
+
+
+
+, (6a) 
+
+rωz = rexp (Bωz − Bωcmd  
+
+> z
+
+), (6b) where rexp (e) = exp( −e2/σ ) denotes an exponential track-ing reward for the scalar error e.For World Frame Command , we track linear velocity in the world frame and down-weight yaw-rate tracking when the linear velocity tracking error is large: 
+
+rvxy = rexp 
+
+ W vxy − W vcmd  
+
+> xy 2
+
+
+
+, (7a) 
+
+rωz = k r exp (Bωz − Bωcmd  
+
+> z
+
+), (7b) 
+
+k =
+
+
+
+1 (W verr  
+
+> xy
+
+≤ e0) 
+
+> e1−vxy, err
+> e1−e0
+
+(e0 < W verr  
+
+> xy
+
+≤ e1)0 (W verr  
+
+> xy
+
+> e 1)
+
+, (7c) where W verr  
+
+> xy
+
+:= W vxy − W vcmd   
+
+> xy 2
+
+is the world-frame linear velocity tracking error and e0, e 1 are small/large error thresholds. Fig. 4 illustrates this prioritization. It enables strategic body turning, which is detailed in Sec. V-C. 
+
+B. Outer Loop Design Optimization via BO 
+
+BO Formulation : Given metric evaluations J(π∗ 
+
+> θ
+
+, d, T )
+
+from previously tested designs, each outer-loop BO itera-tion performs two steps: (i) fit a Gaussian Process (GP) surrogate model M to predict the mean and uncertainty of −J(π∗ 
+
+> θ
+
+, d, T ), and (ii) maximize an acquisition function AF (M, d) to select the next candidate dnext while balancing exploration and exploitation. We use a phased acquisition schedule: we begin with Upper Confidence Bound (UCB) and a high exploration coefficient to cover the search space, W verr 
+
+> xy
+> e0e1
+> k
+> 0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1
+
+Fig. 4: Illustration of World Frame Command angular ve-locity tracking reward scaling to prioritize linear velocity tracking. anneal the exploration coefficient to focus on promising regions, and finally switch to Expected Improvement (EI) to refine the best candidates and improve convergence. 
+
+Design Space : The most general parameterization assigns an independent wheel yaw angle to each leg, d =[ψF R , ψ F L , ψ RR , ψ RL ], where FR, FL, RR, and RL denote front-right, front-left, rear-right, and rear-left, respectively. Exploiting the left–right symmetry yields ψF R = −ψF L 
+
+and ψRR = −ψRL , reducing the search to a 2D space parameterized by ψfront := ψF L and ψrear := ψRL . If the front–rear asymmetry is negligible, we further couple all legs as [ψF R , ψ F L , ψ RR , ψ RL ] = [ −ψ, ψ, ψ, −ψ], as illustrated in Fig. 5. We report 1D results in Sec. V-A–Sec. V-B and 2D results in Sec. V-D. 
+
+Design Metric : To assess a design d over commands sam-pled from T and to average the stochasticity of the RL, we define an instantaneous metric f (s, a, c ) as a function of state 
+
+s, action a and command c in a single time step. Using the rollouts generated during PPO training in IsaacLab, we estimate the design objective J(π∗ 
+
+> θ
+
+, d, T ) by Monte Carlo averaging: 
+
+J(π∗ 
+
+> θ
+
+, d, T ) = 1
+
+Nstep Nenv 
+
+> Nstep
+
+X
+
+> k=1
+> Nenv
+
+X
+
+> i=1
+
+f (si,k , a i,k , c i,k ), (8) which averages over Nenv parallel environments and Nstep 
+
+time steps. Commands are resampled from T multiple times within the Nstep -step window. The simulator time step is 
+
+0.02 s. In practice, we aggregate metrics over windows of Nstep =1000 steps ( ≈ 20 s) across Nenv = 4096 parallel environ-ments. Velocity commands are resampled every 200 steps, and environments are reset asynchronously. Although PPO updates occur every 24 steps ( ≈ 0.48 s), averaging metrics over 1000-step windows yields more stable estimates. We instantiate f as an energy-efficiency measure based on the cost of transport (CoT). CoT is computed as the squared joint torque (proportional to motor electrical power) normalized by gravitational force and the ℓ2 norm of the actual planar twist ξ = [ vx, v y , ω z ]:CoT = ∥τ ∥22
+
+mg ∥ξ∥2
+
+, (9) where τ is the joint-torque vector, m is the mass of the robot, and g is the gravitational acceleration. In the Body 𝛙 = 20deg -   
+
+> 𝛙
+> -
+> 𝛙 𝛙
+> FL FR
+> RL RR
+
+Fig. 5: Illustration of the human-engineered roller wheel angles and the resultant gait pattern. Frame Command case, ξ = [ Bvx, Bvy , Bωz ]. In the World Frame Command case, ξ = [ W vx, W vy , Bωz ].V. R ESULTS AND ANALYSIS 
+
+We present four experiments that evaluate our bilevel BO-RL framework for quadrupedal roller skating. In Sec. V-A, we establish a baseline using a human-engineered wheel de-sign and a control policy trained with Base Frame Command 
+
+tracking. In Sec. V-B, we show that hardware-control co-design is necessary to achieve energy-efficient skating. In Sec. V-C, we demonstrate transient skating behaviors enabled by a World Frame Command tracking reward. Finally, in Sec. V-D, we combine co-design (Sec. V-B) and reward engineering (Sec. V-C) to achieve low energy consumption and strong transient velocity tracking. To obtain base linear velocity and orientation estimations on hardware, we use OptiTrack [38] motion capture system for indoor experiments and OpenVINS [39] for outdoor experiments. 
+
+A. Baseline via Human-Engineered Roller Skating 
+
+This section describes the wheel yaw angles of the human-engineered design as the baseline. To address the controllability issue discussed in Sec. III-B, we introduce a minimal design modification in which all wheel angles are parameterized by a single non-zero yaw angle ψ. As shown in Fig. 5, the resulting gait is a trotting gait, where the diagonal legs alternate to contact with the ground. Intuitively, the robot couples each diagonal leg pair to act like a single roller skate. 
+
+B. Necessity of Co-Design for Energy Efficiency 
+
+We next demonstrate the importance of co-optimizing design and control. In the inner-loop RL used to train control policies, we use Base Frame Command observations and rewards, i.e., we specify the velocity command relative to the robot’s orientation. This choice enables consistent com-parisons of energy efficiency in specific command directions. In the outer-loop BO, we optimize over the minimal 1D design space defined by the yaw angle ψ of the wheels, which generates the four yaw angles of the wheels shown in Fig. 5. The BO objective is the average CoT defined in (8)–(9). Fig. 8 reports steady-state CoT in polar coordinates while tracking a body-frame linear velocity command with mag-nitude 1.5 m/s in different directions. The polar angle is the command direction α = arctan 2( Bvcmd  
+
+> x
+
+, Bvcmd  
+
+> y
+
+), and the radius is the corresponding CoT. The left subfigure shows that the 1D BO-RL co-designed solution is more energy efficient than walking in almost all directions, whereas the human-engineered design is only more efficient in the for-ward direction ( α = 0 deg). This indicates that co-optimizing design and control is critical for synthesizing energy-efficient quadrupedal roller skating behaviors. 
+
+C. Comparison between Base Frame Command and World Frame Command 
+
+We now study the effect of tracking linear velocity in the world frame rather than the base frame. With wheel installation angles fixed to the human-engineered design in Fig. 5, the robot’s forward direction is close to the wheel rolling directions. This is energy efficient, but it provides limited friction authority to change the robot’s velocity. In contrast, the sideways direction offers substantial friction for velocity tracking but is less energy efficient because the wheels can barely roll laterally. 
+
+World Frame Command allows the policy to strategically switch between these regimes to balance energy efficiency and velocity tracking. Fig. 6 illustrates a scenario in which the robot moves quickly and is suddenly commanded to stop. During steady-state motion, the policy aligns the robot’s forward direction with the velocity direction to maximize efficiency. When commanded to stop, the robot rotates to align its sideways direction with the velocity direction, producing a large lateral friction force for deceleration. The resulting behavior resembles a pivoting maneuver: the front-right wheel acts as a pivot, while the front-left and rear-right wheels continue rolling, effectively rotating the body about the pivot wheel. The robot then exploits sliding friction from all wheels to achieve a rapid stop. This maneuver is known in roller skating as the “hockey stop” and is among the quickest ways to stop. It cannot be learned with Base Frame Command because base-frame velocity tracking implicitly constrains the body’s orientation relative to the commanded velocity, preventing the policy from reorienting to exploit lateral friction for braking. With 
+
+World Frame Command , the stop time from an initial forward speed of 2 m/s is reduced by approximately 50% compared with the Base Frame Command policy. This result highlights how world-frame tracking can induce emergent strategies that select body orientation to maximize control authority. 
+
+D. Combining Reward Engineering with Co-Design 
+
+Combining World Frame Command with the 2D design parameterization in Sec. IV-B yields the design shown in Fig. 9. This design exhibits a self-aligning behavior (Fig. 7): without explicitly tracking an angular velocity target, the robot learns to align its backward direction with the com-manded linear velocity. This reduces average CoT by 14.6% relative to the 1D co-design. To understand this mechanism, we fix the 2D-optimized design and retrain the control policy with Base Frame Command to evaluate directional CoT. As shown in the right subfigure of Fig. 8, the 2D co-optimized design is Pivot Fig. 6: A rapid stopping strategy known as the “hockey stop” emerged when using World Frame Command with the human-engineered design in Fig. 5. When the robot is moving forward quickly and is suddenly commanded to stop, it rotates its body so that its lateral direction (which corresponds to the direction of maximal wheel friction) aligns with the velocity direction, thereby generating a large lateral friction force for deceleration. Command Direction 
+
+> Command Direction
+
+Fig. 7: An energy-efficient self-aligning behavior emerged when combining World Frame Command with the 2D design parameterization. For the optimal design in Fig. 9, the backward direction is the most energy-efficient. As a result, the robot learns to consistently align its backward direction with the commanded velocity direction. 0°   
+
+> 30°
+> 60°
+> 90°
+> 120°
+> 150°
+> 180°
+> 210°
+> 240°
+> 270°
+> 300°
+> 330°
+> 1
+> 1.4
+> 1.8
+> 2.2
+> 2.6
+> Walk vs Skate with Different Designs
+> 0°
+> 30°
+> 60°
+> 90°
+> 120°
+> 150°
+> 180°
+> 210°
+> 240°
+> 270°
+> 300°
+> 330°
+> 1
+> 1.4
+> 1.8
+> 2.2
+> 2.6
+> Skate Co-Designed 1D vs 2D
+> Walk Skate: Human-Engineered
+> Skate: 1D Co-Designed Skate: 2D Co-Designed
+
+Fig. 8: Directional CoT comparison. The left figure compares the CoT of walking and skating using human-engineered and 1D co-designed roller wheels. The right figure compares skating with 1D and 2D co-designed roller wheels. less efficient for sideways skating but achieves its lowest CoT in the backward direction—the orientation that the 
+
+World Frame Command policy preferentially aligns with during execution. These results suggest that, when reward engineering encourages strategic body-orientation selection, the wheel installation angles can be optimized for peak effi-ciency in a preferred direction rather than uniform efficiency across directions, yielding the most energy-efficient skating behavior in this work. VI. C ONCLUSION AND FUTURE WORK 
+
+We presented quadrupedal skating with passive wheels as a new locomotion mode that merges the efficiency of wheeled -
+
+𝛙 rear 
+
+𝛙 rear = -10deg 
+
+FL FR RL RR 
+
+𝛙 front = -37deg -
+
+𝛙 front 
+
+> Most Efficient Direction
+
+Fig. 9: 2D co-design optimal design. motion with the agility of legged robots. Through a bilevel BO-RL co-design framework, we identified design–policy pairs that enable efficient skating and emergent behaviors such as hockey stop and self-aligning motion. Future work will extend this study beyond flat terrain to outdoor and uneven environments, explore lightweight and durable wheel modules, synthesize better reward engineering, and develop more sample-efficient co-design methods. Inte-grating skating with walking and running modes is another exciting direction toward versatile and multimodal robots. REFERENCES [1] M. Raibert, K. Blankespoor, G. Nelson, and R. Playter, “Bigdog, the rough-terrain quadruped robot,” IFAC Proceedings Volumes , vol. 41, no. 2, pp. 10 822–10 825, 2008. [2] J. Hwangbo, J. Lee, A. Dosovitskiy, D. Bellicoso, V. Tsounis, V. Koltun, and M. Hutter, “Learning agile and dynamic motor skills for legged robots,” Science robotics , vol. 4, no. 26, p. eaau5872, 2019. [3] J. Di Carlo, P. M. Wensing, B. Katz, G. Bledt, and S. Kim, “Dynamic locomotion in the mit cheetah 3 through convex model-predictive control,” in 2018 IEEE/RSJ international conference on intelligent robots and systems (IROS) . IEEE, 2018, pp. 1–9. [4] S. Kim, J. E. Clark, and M. R. Cutkosky, “isprawl: Design and tuning for high-speed autonomous open-loop running,” The International Journal of Robotics Research , vol. 25, no. 9, pp. 903–912, 2006. [5] D. Wettergreen, C. Thorpe, and R. Whittaker, “Exploring mount erebus by walking robot,” Robotics and Autonomous Systems , vol. 11, no. 3-4, pp. 171–185, 1993. [6] C. D. Bellicoso, F. Jenelten, C. Gehring, and M. Hutter, “Dy-namic locomotion through online nonlinear motion optimization for quadrupedal robots,” IEEE Robotics and Automation Letters , vol. 3, no. 3, pp. 2261–2268, 2018. [7] M. Bjelonic, C. D. Bellicoso, Y. de Viragh, D. Sako, F. D. Tresoldi, F. Jenelten, and M. Hutter, “Keep rollin’—whole-body motion control and planning for wheeled quadrupedal robots,” IEEE Robotics and Automation Letters , vol. 4, no. 2, pp. 2116–2123, 2019. [8] E. Brochu, V. M. Cora, and N. De Freitas, “A tutorial on bayesian optimization of expensive cost functions, with application to active user modeling and hierarchical reinforcement learning,” arXiv preprint arXiv:1012.2599 , 2010. [9] J. Tan, T. Zhang, E. Coumans, A. Iscen, Y. Bai, D. Hafner, S. Bo-hez, and V. Vanhoucke, “Sim-to-real: Learning agile locomotion for quadruped robots,” arXiv preprint arXiv:1804.10332 , 2018. [10] X. B. Peng, G. Berseth, K. Yin, and M. Van De Panne, “Deeploco: Dynamic locomotion skills using hierarchical deep reinforcement learning,” Acm transactions on graphics (tog) , vol. 36, no. 4, pp. 1–13, 2017. [11] S. Seok, A. Wang, M. Y. Chuah, D. Otten, J. Lang, and S. Kim, “Design principles for highly efficient quadrupeds and implementation on the mit cheetah robot,” in 2013 IEEE International Conference on Robotics and Automation . IEEE, 2013, pp. 3307–3312. [12] L. Bao, J. Humphreys, T. Peng, and C. Zhou, “Deep reinforcement learning for bipedal locomotion: a brief survey (2024),” arXiv preprint arXiv:2404.17070 .[13] S. Ha, J. Lee, M. van de Panne, Z. Xie, W. Yu, and M. Khadiv, “Learning-based legged locomotion: State of the art and future per-spectives,” The International Journal of Robotics Research , vol. 44, no. 8, pp. 1396–1427, 2025. [14] M. Hutter, C. Gehring, D. Jud, A. Lauber, C. D. Bellicoso, V. Tsounis, J. Hwangbo, K. Bodie, P. Fankhauser, M. Bloesch et al. , “Anymal-a highly mobile and dynamic quadrupedal robot,” in 2016 IEEE/RSJ international conference on intelligent robots and systems (IROS) .IEEE, 2016, pp. 38–44. [15] L. Cui, S. Wang, J. Zhang, D. Zhang, J. Lai, Y. Zheng, Z. Zhang, and Z.-P. Jiang, “Learning-based balance control of wheel-legged robots,” 
+
+IEEE Robotics and Automation Letters , vol. 6, no. 4, pp. 7667–7674, 2021. [16] R. Li, H. Wang, Q. Li, Z. Han, Y. Chu, L. Ye, W. Xie, and W. Liao, “Ctbc: Contact-triggered blind climbing for wheeled bipedal robots with instruction learning and reinforcement learning,” arXiv preprint arXiv:2509.02986 , 2025. [17] K. G. Gim and J. Kim, “Ringbot: Monocycle robot with legs,” IEEE Transactions on Robotics , vol. 40, pp. 1890–1905, 2024. [18] M. Bjelonic, V. Klemm, J. Lee, and M. Hutter, “A survey of wheeled-legged robots,” in Climbing and walking robots conference . Springer, 2022, pp. 83–94. [19] M. Bjelonic, C. D. Bellicoso, M. E. Tiryaki, and M. Hutter, “Skating with a force controlled quadrupedal robot,” in 2018 IEEE/RSJ Interna-tional Conference on Intelligent Robots and Systems (IROS) . IEEE, 2018, pp. 7555–7561. [20] J. Chen, K. Xu, and X. Ding, “Roller-skating of mammalian quadrupedal robot with passive wheels inspired by human,” 
+
+IEEE/ASME Transactions on Mechatronics , vol. 26, no. 3, pp. 1624– 1634, 2020. [21] N. Ziv, Y. K. Lee, and G. Ciaravella, “Motion generation for a humanoid robot with inline-skate.” in ICINCO (2) , 2010, pp. 354– 359. [22] G. Feng, H. Zhang, Z. Li, X. B. Peng, B. Basireddy, L. Yue, Z. Song, L. Yang, Y. Liu, K. Sreenath et al. , “Genloco: Generalized locomotion controllers for quadrupedal robots,” in Conference on Robot Learning .PMLR, 2023, pp. 1893–1903. [23] J. Won and J. Lee, “Learning body shape variation in physics-based characters,” ACM Transactions on Graphics (TOG) , vol. 38, no. 6, pp. 1–12, 2019. [24] M. Liu, D. Pathak, and A. Agarwal, “Locoformer: Generalist locomo-tion via long-context adaptation,” arXiv preprint arXiv:2509.23745 ,2025. [25] F. Bjelonic, J. Lee, P. Arm, D. Sako, D. Tateo, J. Peters, and M. Hutter, “Learning-based design and control for quadrupedal robots with parallel-elastic actuators,” IEEE Robotics and Automation Letters ,vol. 8, no. 3, pp. 1611–1618, 2023. [26] ´A. Belmonte-Baeza, J. Lee, G. Valsecchi, and M. Hutter, “Meta reinforcement learning for optimal design of legged robots,” IEEE Robotics and Automation Letters , vol. 7, no. 4, pp. 12 134–12 141, 2022. [27] C. Schaff, D. Yunis, A. Chakrabarti, and M. R. Walter, “Jointly learning to construct and control agents using deep reinforcement learning,” in 2019 international conference on robotics and automation (ICRA) . IEEE, 2019, pp. 9798–9805. [28] D. Ha, “Reinforcement learning for improving agent design,” Artificial life , vol. 25, no. 4, pp. 352–365, 2019. [29] C. Chen, P. Xiang, J. Zhang, R. Xiong, Y. Wang, and H. Lu, “Deep reinforcement learning based co-optimization of morphology and gait for small-scale legged robot,” IEEE/ASME Transactions on Mechatronics , vol. 29, no. 4, pp. 2697–2708, 2023. [30] Y. Kim, Z. Pan, and K. Hauser, “Mo-bbo: Multi-objective bilevel bayesian optimization for robot and behavior co-design,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2021, pp. 9877–9883. [31] B. Shahriari, K. Swersky, Z. Wang, R. P. Adams, and N. De Freitas, “Taking the human out of the loop: A review of bayesian optimiza-tion,” Proceedings of the IEEE , vol. 104, no. 1, pp. 148–175, 2015. [32] B. Katz, J. Di Carlo, and S. Kim, “Mini cheetah: A platform for push-ing the limits of dynamic quadruped control,” in 2019 international conference on robotics and automation (ICRA) . IEEE, 2019, pp. 6295–6301. [33] Unitree Go1: https://www.unitree.com/go1 .[34] Unitree Go2: https://www.unitree.com/go2 .[35] Unitree B2: https://www.unitree.com/b2 .[36] M. Mittal, P. Roth, J. Tigue, A. Richard, O. Zhang, P. Du, A. Serrano-Munoz, X. Yao, R. Zurbr¨ ugg, N. Rudin et al. , “Isaac lab: A gpu-accelerated simulation framework for multi-modal robot learning,” 
+
+arXiv preprint arXiv:2511.04831 , 2025. [37] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 , 2017. [38] NaturalPoint Inc., “Optitrack motion capture system,” https://optitrack. com, 2026. [39] P. Geneva, K. Eckenhoff, W. Lee, Y. Yang, and G. Huang, “Openvins: A research platform for visual-inertial estimation,” in 2020 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2020, pp. 4666–4672.

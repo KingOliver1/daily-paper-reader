@@ -6,34 +6,34 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-20
-- 运行时间：2026-03-20 19:31:29 UTC
+- 最新运行日期：2026-03-21
+- 运行时间：2026-03-21 19:45:33 UTC
 - 运行状态：成功
 - 本次总论文数：4
-- 精读区：3
-- 速读区：1
+- 精读区：1
+- 速读区：3
 
 ### 今日简报（AI）
-今日聚焦人形机器人步态先验与足式机器人本体感知，深度解析 4 篇前沿论文。
-重点关注 PRIOR 框架如何通过感知学习优化人形运动，以及仅靠本体感受实现的高精度状态估计技术。
-建议深入了解步态先验对运动稳定性的提升作用，并关注事件相机在低光照导航中的应用潜力。
-- 详情：[/202603/20/README](/202603/20/README)
+今日聚焦机器人运动进化，深度解析四足滑行协同设计与社交导航中的世界模型。
+重点推荐结合强化学习与贝叶斯优化的四足滑行方案，以及能同步预测与规划的社交导航新架构。
+建议关注如何通过解析上下文偏好，提升机器人在复杂多目标环境下的交互自然度。
+- 详情：[/202603/21/README](/202603/21/README)
 
 ### 精读区论文标签
-1. [PRIOR: Perceptive Learning for Humanoid Locomotion with Reference Gait Priors](/202603/20/2603.18979v1-prior-perceptive-learning-for-humanoid-locomotion-with-reference-gait-priors)  
-   标签：评分：10.0/10、query:robot
-   evidence：基于深度图像状态估计的人形机器人感知运动控制
-2. [Proprioceptive-only State Estimation for Legged Robots with Set-Coverage Measurements of Learned Dynamics](/202603/20/2603.18308v1-proprioceptive-only-state-estimation-for-legged-robots-with-set-coverage-measurements-of-learned-dynamics)  
-   标签：评分：9.0/10、query:robot
-   evidence：基于学习动力学的足式机器人本体感知状态估计
-3. [ADMM-Based Distributed MPC with Control Barrier Functions for Safe Multi-Robot Quadrupedal Locomotion](/202603/20/2603.19170v1-admm-based-distributed-mpc-with-control-barrier-functions-for-safe-multi-robot-quadrupedal-locomotion)  
-   标签：评分：9.0/10、query:robot
-   evidence：基于 CBF 的分布式 MPC 用于多四足机器人安全轨迹规划
+1. [Efficient and Versatile Quadrupedal Skating: Optimal Co-design via Reinforcement Learning and Bayesian Optimization](/202603/21/2603.18408v1-efficient-and-versatile-quadrupedal-skating-optimal-co-design-via-reinforcement-learning-and-bayesian-optimization)  
+   标签：评分：8.0/10、query:robot
+   evidence：用于四足机器人滑行运动的强化学习
 
 ### 速读区论文标签
-1. [eNavi: Event-based Imitation Policies for Low-Light Indoor Mobile Robot Navigation](/202603/20/2603.14397v1-enavi-event-based-imitation-policies-for-low-light-indoor-mobile-robot-navigation)  
+1. [NavThinker: Action-Conditioned World Models for Coupled Prediction and Planning in Social Navigation](/202603/21/2603.15359v1-navthinker-action-conditioned-world-models-for-coupled-prediction-and-planning-in-social-navigation)  
    标签：评分：6.0/10、query:robot
-   evidence：低光照环境下移动机器人的事件相机感知与导航
+   evidence：导航中耦合预测与规划的世界模型
+2. [NavThinker: Action-Conditioned World Models for Coupled Prediction and Planning in Social Navigation](/202603/21/2603.15359v2-navthinker-action-conditioned-world-models-for-coupled-prediction-and-planning-in-social-navigation)  
+   标签：评分：6.0/10、query:robot
+   evidence：导航中耦合预测与规划的世界模型
+3. [Interpreting Context-Aware Human Preferences for Multi-Objective Robot Navigation](/202603/21/2603.17510v1-interpreting-context-aware-human-preferences-for-multi-objective-robot-navigation)  
+   标签：评分：6.0/10、query:robot
+   evidence：将高层语义推理与底层运动控制相结合
 
 
 <div class="dpr-home-promo-card">
