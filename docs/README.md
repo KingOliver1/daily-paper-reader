@@ -6,34 +6,28 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-21
-- 运行时间：2026-03-21 19:45:33 UTC
+- 最新运行日期：2026-03-22
+- 运行时间：2026-03-22 19:29:03 UTC
 - 运行状态：成功
-- 本次总论文数：4
+- 本次总论文数：2
 - 精读区：1
-- 速读区：3
+- 速读区：1
 
 ### 今日简报（AI）
-今日聚焦机器人运动进化，深度解析四足滑行协同设计与社交导航中的世界模型。
-重点推荐结合强化学习与贝叶斯优化的四足滑行方案，以及能同步预测与规划的社交导航新架构。
-建议关注如何通过解析上下文偏好，提升机器人在复杂多目标环境下的交互自然度。
-- 详情：[/202603/21/README](/202603/21/README)
+今日聚焦机器人轨迹世界模型与月球自主导航的前沿突破。
+重点推荐 WestWorld 模型，它通过知识编码实现了跨系统的轨迹预测，同时关注月球挑战赛中的全栈导航方案。
+建议深入了解世界模型如何提升机器人泛化性，并关注极端环境下的自主规划应用。
+- 详情：[/202603/22/README](/202603/22/README)
 
 ### 精读区论文标签
-1. [Efficient and Versatile Quadrupedal Skating: Optimal Co-design via Reinforcement Learning and Bayesian Optimization](/202603/21/2603.18408v1-efficient-and-versatile-quadrupedal-skating-optimal-co-design-via-reinforcement-learning-and-bayesian-optimization)  
+1. [WestWorld: A Knowledge-Encoded Scalable Trajectory World Model for Diverse Robotic Systems](/202603/22/2603.14392v1-westworld-a-knowledge-encoded-scalable-trajectory-world-model-for-diverse-robotic-systems)  
    标签：评分：8.0/10、query:robot
-   evidence：用于四足机器人滑行运动的强化学习
+   evidence：适用于多种机器人系统的轨迹世界模型
 
 ### 速读区论文标签
-1. [NavThinker: Action-Conditioned World Models for Coupled Prediction and Planning in Social Navigation](/202603/21/2603.15359v1-navthinker-action-conditioned-world-models-for-coupled-prediction-and-planning-in-social-navigation)  
-   标签：评分：6.0/10、query:robot
-   evidence：导航中耦合预测与规划的世界模型
-2. [NavThinker: Action-Conditioned World Models for Coupled Prediction and Planning in Social Navigation](/202603/21/2603.15359v2-navthinker-action-conditioned-world-models-for-coupled-prediction-and-planning-in-social-navigation)  
-   标签：评分：6.0/10、query:robot
-   evidence：导航中耦合预测与规划的世界模型
-3. [Interpreting Context-Aware Human Preferences for Multi-Objective Robot Navigation](/202603/21/2603.17510v1-interpreting-context-aware-human-preferences-for-multi-objective-robot-navigation)  
-   标签：评分：6.0/10、query:robot
-   evidence：将高层语义推理与底层运动控制相结合
+1. [Full Stack Navigation, Mapping, and Planning for the Lunar Autonomy Challenge](/202603/22/2603.17232v1-full-stack-navigation-mapping-and-planning-for-the-lunar-autonomy-challenge)  
+   标签：评分：7.0/10、query:robot
+   evidence：GNSS受限环境下的全栈导航与建图
 
 
 <div class="dpr-home-promo-card">
