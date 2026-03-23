@@ -1,0 +1,959 @@
+Title: ContractionPPO: Certified Reinforcement Learning via Differentiable Contraction Layers
+
+URL Source: https://arxiv.org/pdf/2603.19632v1
+
+Published Time: Mon, 23 Mar 2026 00:32:42 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# ContractionPPO: Certified Reinforcement Learning via Differentiable Contraction Layers 
+
+Vrushabh Zinage 1,⋆ , Narek Harutyunyan 2,⋆ , Eric Verheyden 1,⋆ , Fred Y. Hadaegh 1, Soon-Jo Chung 1
+
+Abstract — Legged locomotion in unstructured environments demands not only high-performance control policies but also formal guarantees to ensure robustness under perturbations. Control methods often require carefully designed reference trajectories, which are challenging to construct in high-dimensional, contact-rich systems such as quadruped robots. In contrast, Reinforcement Learning (RL) directly learns policies that implicitly generate motion, and uniquely benefits from access to privileged information, such as full state and dynamics during training, that is not available at deployment. We present ContractionPPO, a framework for certified robust planning and control of legged robots by augmenting Proximal Policy Optimization (PPO) RL with a state-dependent contraction metric layer. This approach enables the policy to maximize per-formance while simultaneously producing a contraction metric that certifies incremental exponential stability of the simulated closed-loop system. The metric is parameterized as a Lipschitz neural network and trained jointly with the policy, either in parallel or as an auxiliary head of the PPO backbone. While the contraction metric is not deployed during real-world execution, we derive upper bounds on the worst-case contraction rate and show that these bounds ensure the learned contraction metric generalizes from simulation to real-world deployment. Our hardware experiments on quadruped locomotion demon-strate that ContractionPPO enables robust, certifiably stable control even under strong external perturbations. Videos of experiments are available at https://contractionppo.github.io/. 
+
+I. I NTRODUCTION 
+
+The development of robust and high-performance control policies is a central challenge in legged robotics, where the nonlinear dynamics and real-world uncertainties demand both adaptability and formal guarantees such as safety or stability. Reinforcement Learning (RL), and in particular, Proximal Policy Optimization (PPO) [1], has become a popu-lar approach for training locomotion policies that can exploit the full potential of modern robot hardware. PPO or in general RL-based controllers have demonstrated impressive results on a range of quadruped platforms in simulation and the real-world, enabling agile and versatile behaviors beyond the reach of classical model-based controllers [2]– [4]. However, RL relies on access to privileged information through simulations, such as full system state or dynamics, which is unavailable at deployment time. This enables more effective reward shaping, learning signals, and auxiliary objectives during training. These advantages can be lever-aged to learn structured internal representations or certify behavior, even when the final deployed policy relies solely on partial observations. Despite these advances, a key limitation remains that RL policies, while powerful, typically lack formal guarantees on stability or robustness [5]–[9]. In this paper, we derive a method of using nonlinear stability theory in simulation-based RL training. In particular, contraction theory [11]– [13] provides necessary and sufficient conditions for incre-             
+
+> ⋆Equal contributions. 1Vrushabh Zinage, Eric Verheyden, Fred Hadaegh, and Soon-Jo Chung are with the California Institute of Technology 2Narek Harutyunyan (currently with Brown University) was aCaltech SURF researcher. This research is funded by the Defense Advanced Research Projects Agency Learning Introspective Control (DARPA LINC). ContractionPPO TumblerNet
+> RMA PPO
+
+Fig. 1: Comparison of trajectories for quadruped handstand using Contrac-tionPPO (ours), TumblerNet [10], RMA [5] and PPO [1] where robots (for all baseline algorithms) were trained with identical reward functions that encourage remaining close to their initial position. While PPO, TumblerNet and RMA leaves the region and ultimately fails to remain on platform, ContractionPPO guarantees that the robot lie inside the circle (black). 
+
+mental stability of nonlinear closed-loop systems via state-dependent contraction metrics. Unlike classical Lyapunov approaches, contraction analysis certifies that all system trajectories converge exponentially toward one another, of-fering a powerful and general stability guarantee. However, applying contraction theory in its classical form to high-dimensional nonlinear systems like legged robots is often challenging as it requires hand-designed metrics and solving matrix inequalities [13]. Traditionally, a further challenge is the need to specify desired trajectories or setpoints for the system to track. In high-dimensional, contact-rich systems like legged robots, constructing such trajectories analytically or through heuristics can be nontrivial or even infeasible. Building on these insights, we present a framework ContractionPPO, that integrates seamlessly with the PPO planning pipeline i.e., the contraction metric network layer can be trained either in parallel to the policy or as an additional network head. Consequently, this yields explicit and computable lower bounds on the worst-case contraction rate, directly in terms of the network Lipschitz constants and system dynamics. We take advantage of closed-loop simulation used for RL training by using privileged full state information to train the contraction metric, while the control policy itself remains observation based, preserving real-world deployability. The result is a certified, robust locomotion controller that offers not only strong empiri-cal performance but also formal, verifiable guarantees of stability/safety even in the presence of observation noise, modeling error, and external disturbances. To summarize, the contributions of this work are: 1) We introduce a differentiable contraction metric layer for PPO, enabling end-to-end learning of both a high-performance control policy and a stability certificate that guarantees incremental exponential stability for robust legged locomotion, taking a significant step 
+
+> arXiv:2603.19632v1 [cs.RO] 20 Mar 2026
+
+from conventional RL toward certified RL. 2) We leverage privileged state information available dur-ing training to learn the contraction metric i.e., a state-dependent, positive-definite matrix function that certifies exponential stability of state trajectories that converge toward one another. At the same time, we retain a deployable, observation-based policy. We also derive explicit bounds on the contraction rate using Lipschitz-constrained networks, ensuring the learned stability certificate remains valid from simulation to real-world deployment. 3) Without being trained under extreme perturba-tions such as strong external wind disturbances, ContractionPPO consistently preserves incremental stability at test time. We validate this through simu-lation and hardware experiments, showing certifiably robust performance and safe recovery under severe domain shifts and disturbances. The remainder of this paper is organized as follows. Sec-tion II discusses the related work followed by preliminaries and problem statement in Section III. Section IV discusses the proposed approach followed by results in Section V. Finally, concluding remarks are made in Section VI. II. R ELATED WORK 
+
+Certified locomotion control in high-dimensional systems remains a challenge due to the need to balance performance, generalization, and formal guarantees. We broadly categorize related work into: (a) classical and hybrid learning-based control methods, (b) learning-based locomotion, (c) deep RL for legged locomotion and (d) sim-to-real transfer. 
+
+1) Classical and Hybrid Learning-based Control: Tra-ditional controllers [14] offer robustness through model-based design but struggle with generalization to unstructured settings. Hybrid approaches embed control-theoretic tools like CBFs into learning [15], but often require handcrafted functions and online optimization, limiting scalability for high-DOF robots. In contrast, our approach provides atrajectory-level robustness guarantee i.e., nearby trajectories provably contract, and leads to bounded tracking error. 
+
+Learning-based locomotion without guarantees. Deep RL has enabled agile locomotion beyond the reach of hand-engineered controllers, with PPO-based policies demonstrat-ing impressive performance on quadrupeds in simulation and hardware [1]–[4], [16]–[18]. However, standard RL lacks formal guarantees; i.e., stability and robustness are not certified while performance may degrade under disturbances, sensor noise, or mismatched dynamics [5]–[9]. On the other hand, works that integrate RL based approaches with con-trol theoretic concepts often assume full state observability [19], [20]. This assumption is not practical especially for high dimensional systems. Methods that leverage privileged information for adaptation (e.g., system-identification heads or latent context) improve sim-to-real transfer but still stop short of certifying closed-loop stability. 
+
+Deep RL for Legged Locomotion : Several works have shown that deep RL can produce agile and dynamic behav-iors in quadruped robots. [21] used PPO with heavy domain randomization to train a robot to trot and bound in the real world. [22] learned torque policies that enable a robot to walk fast and recover from disturbances, outperforming hand-designed controllers. [23] extended these results to rough terrain, training policies that walk over stairs and gaps using privileged information and robust training. [24] showed that training with thousands of parallel environments in simulation can produce walking behaviors in minutes. More recently, [25] combined vision with RL to enable robots to walk over visually complex terrain. While these methods show strong performance, they do not provide any formal guarantee of stability or robustness, especially when deployed on hardware. They rely heavily on empirical robustness from randomization, and often struggle with out-of-distribution inputs. In contrast, our method augments PPO with contraction-based stability to certify stability margins directly in training, improving safety and reliability without sacrificing performance. 
+
+Sim-to-Real Transfer : Another set of works tackles sim-to-real transfer by making policies more robust to modeling errors and disturbances. Rapid Motor Adaptation (RMA) learns a latent variable from proprioception that allows online adaptation across different terrains and payloads [5]. [25] combined learned perception and terrain-aware control to handle visual uncertainty and perturbations. [24] further improved sim-to-real success using large batch sizes, short episodes, and strong domain randomization during training. These approaches improve robustness through adaptation or data augmentation, but they still lack formal guarantees for safety/stability. Their behavior under unseen conditions or large disturbances remains uncertain. Our framework addresses this limitation by embedding a differentiable contraction-based metric into PPO, certifying incremental stability even under disturbances and domain shift. Unlike prior deep RL methods that rely on empirical robustness or online constraint enforcement, our approach certifies incremental exponential stability of the closed-loop dynamics using contraction theory. This provides a trajectory-level robustness guarantee and integrates directly into PPO while retaining an observation-based policy at deployment. III. P RELIMINARIES AND PROBLEM STATEMENT 
+
+In this section, we discuss the preliminaries and the problem that we address in this paper. 
+
+A. System Dynamics 
+
+In this paper, we consider a quadruped robot, described by general nonlinear control-affine dynamics 
+
+˙x = f (x) + B(x)u + d(x, t ), x(0) = x0, (1) where x ∈ Rn, u ∈ Rm, f (x) models the drift dynamics, 
+
+B(x) is the input matrix, both assumed C1 smooth and 
+
+∥d(x, t )∥ ≤ ¯d. The agent receives observation y = h(x) ∈
+
+Rp, where h : Rn → Rp is a smooth observation map (e.g., proprioception, contacts, IMU). A parameterized stochastic policy ΠPD  
+
+> θ
+
+: Rp → Rm maps observation y to action 
+
+u = Π PD  
+
+> θ
+
+(y), yielding the closed-loop vector field: 
+
+˙x = fcl (x) := f (x) + B(x)Π PD 
+
+> θ
+
+ h(x). (2) assuming no disturbances. 
+
+B. Contraction Analysis of Nonlinear Closed-Loop Systems 
+
+Contraction theory [11], [13] reformulates Lyapunov sta-bility conditions by employing a quadratic function of differential states, defined through a Riemannian contrac-tion metric with a uniformly positive definite matrix. This framework establishes necessary and sufficient conditions for the incremental exponential convergence of trajectories in nonlinear dynamical systems. Let M (x) : Rn → Sn 
+
+> ++
+
+be a 
+
+C1 symmetric positive definite metric field, with uniform bounds 0 < mmin I ⪯ M (x) ⪯ mmax I < ∞ where 
+
+mmax > mmin > 0. Consider the quadratic differential PPO Layer         
+
+> Contraction Layer
+> Raw Observations (y)
+> PPO Policy
+> ΠPPO
+> θ(Lipschitz)
+> Joint Desired Poses
+> qppo
+> d
+> PPO & Contraction Rewards
+> Loss Ltotal (θ, ϕ )
+> Eqn. (10)
+> Contraction loss
+> Lcontr (ϕ)(9)
+> ϵα>0
+> (Lemma 1)
+> Contraction metric
+> Mϕ= Θ ⊤Θ
+> (Lipschitz)
+> Vϕ=e⊤Mϕe
+> Raw and privileged Observations ( x)
+> PD controller
+> ΠPD
+> θ
+> (200 Hz)
+> Backprop
+> Backprop Stabilization
+> Handstand
+> Stabilization
+
+Algorithm 1 ContractionPPO 1: while not converged do  
+
+> 2:
+
+Collect rollouts (yt, xt, r t) with 
+
+ut = Π PD  
+
+> θ
+
+(yt) and desired poses 
+
+qPPO  
+
+> d
+
+(7) from ΠPPO  
+
+> θ
+
+(yt) 
+
+> 3:
+
+Compute LPPO (θ) (from [1])  
+
+> 4:
+
+for all samples (y, x) do  
+
+> 5:
+
+Form xd and set e = x − xd 
+
+> 6:
+
+Compute Vϕ(x) via (8)  
+
+> 7:
+
+Compute Acl (x) from (3) and 
+
+˙Mϕ from (4)  
+
+> 8:
+
+Evaluate ˙Vϕ and Lcontr from (9) and LPD  
+
+> 9:
+
+end for  
+
+> 10:
+
+Minimize Ltotal from (10)  
+
+> 11:
+
+end while  
+
+> 12:
+
+Deploy ΠPD  
+
+> θ
+
+on the robot (learned 
+
+Mϕ is used in the simulation only) 
+
+Fig. 2: Architecture of ContractionPPO (left) and its pseudocode (right). The PPO policy ΠPPO  
+
+> θ
+
+processes raw observations y and outputs desired joint poses qppo  
+
+> d
+
+, which are executed by a low-level PD controller (6). In parallel, the contraction metric Mϕ receives privileged and raw observations 
+
+x = [ qppo (t), ˙qppo (t), p(t), v(t)] and outputs a positive definite metric Mϕ = Θ ⊤Θ. The contraction loss is evaluated using the Lyapunov condition 
+
+˙V + αV ≤ − ϵα, where α (satisfying (19)) specifies the desired contraction rate and ϵα quantifies the approximation margin between the learned value function Vϕ and the true contraction Lyapunov function V . A larger α leads to faster convergence guarantees but also requires a larger ϵα. This joint training setup ensures that the policy not only maximizes task reward but also satisfies certifiable incremental stability guarantees during locomotion. 
+
+Lyapunov function V (δx, x) = δx⊤M (x)δx where δx is an infinitesimal displacement between two trajectories. Along solutions of (2), δx evolves via the variational (differential) dynamics δ ˙x = Acl (x)δx, with 
+
+Acl (x) = ∂f ∂x (x) + 
+
+> m
+
+X
+
+> i=1
+
+ ∂B i
+
+∂x (x)
+
+
+
+ΠPD 
+
+> θ,i
+
+ h(x)
+
++ B(x)Jπ
+
+ h(x)Jh(x), (3) where Jπ (y) = ∂ΠPD  
+
+> θ
+> ∂o
+
+(y) and Jh(x) = ∂h ∂x (x). The time derivative of the metric along system trajectories (2) is 
+
+˙M (x) = 
+
+> n
+
+X
+
+> k=1
+
+∂M ϕ
+
+∂x k
+
+(x) fcl (x)
+
+> k
+
+. (4) The time derivative of V along the coupled dynamics is 
+
+˙V (δx, x) = δx⊤
+
+
+
+A⊤ 
+
+> cl
+
+M + M A cl + ˙M
+
+
+
+δx. A uniform contraction rate α > 0 is certified if 
+
+A⊤ 
+
+> cl
+
+M + M A cl + ˙M + αM ⪯ 0, ∀x ∈ Rn. (5) This matrix inequality is both necessary and sufficient for IES of the closed-loop system in the metric M (x) [11], [13]. 
+
+C. Deep Reinforcement Learning 
+
+In a standard reinforcement learning (RL) framework, the agent interacts with the robot environment in discrete time. At each step, the agent receives observation y = h(x) and selects an action u = Π PPO  
+
+> θ
+
+(y) according to a parameterized stochastic policy ΠPPO  
+
+> θ
+
+. The system then transitions accord-ing to the dynamics (1), and the agent receives a reward rt,designed to encourage agile, stable locomotion. The objective is to maximize the expected cumulative reward over episodes i.e., J(θ) = E [P∞ 
+
+> t=0
+
+γtrt] where γ ∈ (0 , 1) is a discount factor. To optimize this objective, we use Proximal Policy Optimization (PPO) [1], a popular on-policy algorithm that updates θ by maximizing a clipped surrogate objective while regularizing policy entropy and the value prediction error. PPO is known for stable and efficient training in continuous control tasks, and forms the backbone of our locomotion policy learning. The policy ΠPPO  
+
+> θ
+
+is implemented as a neural network that maps proprioceptive observations to low-level joint commands. 
+
+D. Problem Statement 
+
+We consider not only performance but also formal guar-antees of stability/safety for any learned controller for loco-motion. We formalize this as follows: 
+
+Problem 1. Given a quadruped with dynamics (1) and obser-vation model y = h(x), learn a feedback policy ΠPPO  
+
+> θ
+
+and contraction metric Mϕ(x) such that: (i) the expected PPO reward is maximized, and (ii) the closed-loop contraction condition (5) holds with rate α > 0.The main challenge is to provide provable guarantees that the learned policy not only achieves task reward, but is certi-fied to be exponentially stable, even under high-dimensional nonlinear feedback typical in deep RL for robotics. IV. P ROPOSED APPROACH 
+
+In this section, we divide the proposed approach into two steps. First, we discuss the algorithmic details of our pro-posed approach ContractionPPO. Second, we discuss about the theoretical guarantees that ContractionPPO provides. 
+
+A. ContractionPPO Algorithm 
+
+Our ContractionPPO method augments PPO with a learned contraction metric for formal closed-loop certification in agile legged locomotion. The core idea is to train two parallel neural networks i.e., a standard PPO policy ΠPPO  
+
+> θ
+
+and a contraction metric Mϕ (parameterized by ϕ) both of which are Lipschitz-constrained. These are jointly optimized via a composite loss that combines task performance with a Lyapunov based contraction regularizer, leveraging both raw and privileged information during training. Let y = q denotes the observable joint configuration, where each joint angle is represented using a quaternion-based parameterization and concatenated into a single vector. In joint space with (q, ˙q), the commanded low-level torques are given by 
+
+ΠPD  
+
+> θ
+
+= Kp
+
+ qppo  
+
+> d
+
+− q + Kd
+
+  ˙qppo  
+
+> d
+
+− ˙q (6) with gains Kp, K d. To clarify the role of the learned policy 
+
+ΠPPO  
+
+> θ
+
+(y), we decompose 
+
+qppo  
+
+> d
+
+= qd + ∆ qθ (y), (7) where ∆qθ (y) is a learned nonlinear feedback term produced by the policy ΠPPO  
+
+> θ
+
+(y) from sensor observations y. One of the innovation lies in learning ∆qθ as an additional nonlinear feedback term, while the contraction metric certi-fies incremental exponential stability of the resulting closed loop. The desired trajectory xd(t) is given by xd(t) = [qppo  
+
+> d
+
+(t), ˙qppo  
+
+> d
+
+(t), pd(t), vd(t)] where pd(t) and vd(t) are desired position and velocity of center of mass (COM) of the robot. The overall architecture is illustrated in Fig. 2. The PPO policy network receives raw sensor observations y as input and outputs a vector of target joint poses (denoted by qppo  
+
+> d
+
+). Consequently, the PD controller (6) is leveraged to actuate the robot in a feedback manner. Parallel to the policy, the contraction metric is fed with a richer state vector x =[qppo (t), ˙qppo (t), p(t), v(t)] that concatenates the raw policy outputs qppo and additional privileged information such as p(t) and v(t) state variables that are available only in simulation. This privileged information is only used to guide training, not deployed at test time. The contraction metric Mϕ(x, t ) (parameterized via a matrix-valued MLP (multi-layer perceptron) function Θ( x, t )
+
+with parameters ϕ) outputs a vectorized representation of a lower-triangular matrix Θ( x, t ), which is reshaped and multiplied by its transpose to produce a symmetric positive definite matrix Mϕ(x, t ) = Θ( x)⊤Θ( x). This parameter-ization ensures Mϕ(x, t ) ≻ 0 by construction, which is critical for certifying contraction. Let e(t) := x(t) − xd(t)
+
+and define the smooth parameterized path x(μ, t ) as x(μ =0, t ) := x(t) and x(μ = 1 , t ) = xd (one particular choice is 
+
+x(μ, t ) = xd + μe). Define the geodesic distance [13] as 
+
+Vϕ(x, t ) := e⊤Mϕ(x)e (8) For the system to be contracting with rate α > 0, the inequality ˙Vϕ(x, t ) + αV ϕ(x, t ) ≤ − ϵα (Theorem 2.3 in [13]) must hold for some margin ϵα > 0. Allowing Mϕ to vary with state enables stronger, more adaptive contraction behavior than a fixed metric (see Table II). Note that as 
+
+Vϕ ≤ Vℓ := R 10
+
+ ∂x
+
+> ∂μ
+
+⊤
+
+Mϕ
+
+ x(μ, t ), t   ∂x
+
+> ∂μ
+
+
+
+dμ/m min [13], ensuring contraction of the metric Vℓ also implies that ∥e∥
+
+decays exponentially i.e., all trajectories converge towards 
+
+xd exponentially. To enforce the contraction property during learning, we define a hinge loss that penalizes any violation of the target inequality: 
+
+Lcontr = ReLU ˙Vϕ(x, t ) + αV ϕ(x, t )
+
+Vϕ(x, t ) + ϵα
+
+!
+
+. (9) where the parameter ϵα = ϵα/V ϕ(x, t ) and ϵα reflects the approximation gap between the learned Vϕ (approximate) and the actual Lyapunov function V (unknown). Its lower bound is defined in Lemma 1, while the minimum required value of α is given in (19). As α increases, the value of 
+
+ϵα must also increase accordingly. This creates a trade off i.e., although a larger α implies a faster rate of convergence, it simultaneously complicates the learning process. This is because the contraction condition forces the learned value function to satisfy a stricter upper bound, making optimiza-tion more challenging as α increases. The full training loss aggregates the PPO objective (including value and entropy terms), the contraction loss, and additional soft penalties to ensure Mϕ(x, t ) remains well conditioned: 
+
+Ltotal (θ, ϕ ) = LPPO (θ) + wcontr Lcontr (ϕ) + wPD LPD (ϕ).
+
+(10) 
+
+˙Vϕ + αV ϕ ≤ − ϵα =⇒ ˙V + αV ≤ 0
+
+Simulation Real              
+
+> Fig. 3: Enforcing a simulation based margin ϵαon ˙Vϕ+αV ϕover sampled points yields a uniform certificate ˙V+αV ≤0at deployment (Theorem 1) over the compact state space K, which represents the region of the state space explored during training.
+
+where LPPO is given in [1], LPD penalizes Mϕ(x, t ) if its smallest eigenvalue falls below a set threshold or if its largest eigenvalue exceeds an upper bound, thus en-forcing the metric bounds required for contraction theory. Mathematically, LPD (ϕ) = ReLU( mmin − λmin (Mϕ(x))) + ReLU( λmax (Mϕ(x)) − mmax ) . Note that if ϵα is chosen satisfying the conditions in Lemma 1, then minimizing (10) would guarantee that the contraction condition is satisfied for the compact state and action domain space. The pseudocode for ContractionPPO is given in Algorithm 1. 
+
+B. Theoretical Guarantees 
+
+At each training step, ContractionPPO rolls out the closed-loop (2) with inputs u = Π PD  
+
+> θ
+
+(y) and observations y =
+
+h(x), computes the variational matrix Acl (x) in (3) (com-puted via autograd ), and evaluates the differential Lya-punov function (8) and its derivative ˙Vϕ (with ˙Mϕ computed via autograd ). To make the certified margin explicit, the algorithm enforces Lipschitz constraints on the networks (∥Jπ ∥ ≤ Lπ , ∥∇ Mϕ∥ ≤ LM ) and uses dynamics, which feed Theorem 1 and Corollary 1 to compute an explicit upper bound for the contraction rate α. The tolerance ϵα
+
+in the loss (9) quantifies approximation between the learned 
+
+Vϕ and the true V . Lemma 1 provides a state proportional lower bound for ϵα and clarifies its trade off with α. Finally, with disturbances d in (1), Theorem 2 lifts the certificate to the input to state incremental bound (21). Defining the contraction residual r(x, e) = e⊤R(x)e where R(x) = 
+
+A⊤ 
+
+> cl
+
+Mϕ + MϕAcl + ˙Mϕ + αM ϕ
+
+
+
+. Define ˆe and normalized residual operator ˆR(x) as 
+
+ˆe = Mϕ(x) −12 e
+
+∥Mϕ(x) −12 e∥ , ˆR(x) = Mϕ(x) −12 R(x)Mϕ(x) −12
+
+(11) The Rayleigh quotient identity gives r(x,e) 
+
+> Vϕ(x)
+
+= e⊤R(x)ee⊤Mϕ(x)e =ˆe⊤ ˆR(x)ˆ e. Consequently, sup  
+
+> e̸=0
+> r(x,e)
+> Vϕ(x,e)
+
+= λmax ( ˆR(x)) 
+
+Assumption 1 (Lipschitz constraints and bounds) . There exist finite constants Lπ , L M , ¯f , ¯B, ¯u, ¯Jh such that 
+
+∥Jπ (y)∥2 ≤ Lπ , ∥∇ Mϕ(x)∥F ≤ LM , ∥f (x)∥2 ≤ ¯f , 
+
+∥B(x)∥2 ≤ ¯B, ΠPD  
+
+> θ
+
+(y) 2 ≤ ¯u, ∥Jh(x)∥2 ≤ ¯Jh,
+
+To translate the architectural constraints of ContractionPPO into verifiable stability guarantees, in the following theorem, we derive an explicit lower bound for the contraction rate α in terms of the Lipschitz constants of the policy and metric networks, combined with bounded Contraction PPO TumblerNet  ContractionPPO TumblerNet 
+
+t = 1s t = 5s t = 7s t = 10s t = 15s 
+
+t = 1s t = 2s t = 3s t = 4s t = 5s Fig. 4: Comparison of handstand using ours ContractionPPO (top) and TumblerNet [10] (bottom). TumblerNet struggles to maintain static balance, while ContractionPPO enforces contraction based stability, resulting in more consistent and robust gait control. 
+
+envelopes on robot dynamics and the observation Jacobian. This analysis also accounts for simulation-to-reality approximation errors, ensuring that the certified contraction property remains valid when transitioning from privileged training environments to real-world deployment. Define the constants 
+
+Cf = sup 
+
+> x∈K
+
+sym  M −12 
+
+> ϕ
+
+( ∂f ∂x 
+
+> ⊤
+
+Mϕ + Mϕ ∂f ∂x )M −12
+
+> ϕ
+
+
+
+> 2
+
+,CB∂B = sup 
+
+> x∈K
+
+sym 
+
+
+
+M −12
+
+> ϕ
+
+  mX
+
+> i=1
+
+ΠPD  
+
+> θ,i
+
+(h)( ∂B i 
+
+> ∂x
+
+)⊤Mϕ+
+
+MϕmX
+
+> i=1
+
+ΠPD  
+
+> θ,i
+
+(h) ∂B i
+
+> ∂x
+
+M −12
+
+> ϕ
+
+
+
+> 2
+
+, (12) 
+
+CBJ = 2 sup 
+
+> x∈K
+
+M 1/2 
+
+> ϕ
+
+B(x)M −12 
+
+> ϕ2
+
+.
+
+Theorem 1 (Sim-to-Real Generalization Guarantee) . Under Assumption 1, if the right-hand side of the following bound is negative, then for all x ∈ K , the closed-loop system is incrementally exponentially stable 
+
+λmax 
+
+  sym( ˆR(x))  (13) 
+
+≤ Cf + CB∂B + CBJ Lπ ¯Jh + LM
+
+√mmin 
+
+  ¯f + ¯B ¯u − α. 
+
+Proof. Recall the normalized residual operator R(x) in (11) where Acl from (3) is given by, 
+
+Acl = ∂f ∂x 
+
+|{z}  
+
+> f-part
+
++
+
+> m
+
+X
+
+> i=1
+
+ ∂B i
+
+> ∂x
+
+
+
+ΠPD  
+
+> θ,i
+
+(h(x)) 
+
+| {z }
+
+> ∂B -part
+
++ BJ π (h(x)) Jh(x)
+
+| {z }
+
+> BJ -part
+
+,
+
+we split 
+
+sym( ˆR) = sym( Rf )+sym( R∂B )+sym( RBJ )+ R ˙M +αI, 
+
+where each symbol denotes the normalization by 
+
+M −12 
+
+> ϕ
+
+(·)M −12 
+
+> ϕ
+
+as in (11) applied to the corresponding term, and R ˙M := M −12 
+
+> ϕ
+
+˙MϕM −12 
+
+> ϕ
+
+.
+
+(i) f and ∂B parts. By definition of the constants in the theorem, 
+
+sym( Rf ) 2 ≤ Cf , sym( R∂B ) 2 ≤ CB∂B . (14) This is tautological once Cf and CB∂B are defined as the suprema of the corresponding spectral norms over x.
+
+(ii) Policy geometry (BJ ) part. Let Y := 
+
+M 1/2 
+
+> ϕ
+
+BJ π JhM −12 
+
+> ϕ
+
+. Then 
+
+sym( RBJ ) = 12
+
+
+
+M −12 
+
+> ϕ
+
+(BJ π Jh)⊤MϕM −12 
+
+> ϕ
+
+(15) 
+
++M −12 
+
+> ϕ
+
+Mϕ(BJ π Jh)M −12
+
+> ϕ
+
+
+
+= sym( Y )
+
+Hence, by the triangle inequality and invariance of the spectral norm under transpose, 
+
+sym( RBJ ) 2 = sym( Y ) 2 ≤ 12
+
+ ∥Y ⊤∥2 +∥Y ∥2
+
+ = ∥Y ∥2.
+
+Submultiplicativity for the spectral norm gives 
+
+∥Y ∥2 ≤ M 1/2 
+
+> ϕ
+
+BM −12 
+
+> ϕ2
+
+∥Jπ ∥2∥Jh∥2. (16) Taking the supremum in x and inserting the constraints 
+
+∥Jπ ∥2 ≤ Lπ , ∥Jh∥2 ≤ ¯Jh, we obtain 
+
+sym( RBJ ) 2 ≤
+
+
+
+2 sup 
+
+> x
+
+∥M 1/2 
+
+> ϕ
+
+BM −12 
+
+> ϕ
+
+∥2
+
+Lπ ¯Jh
+
+2 = CBJ Lπ ¯Jh,
+
+where CBJ := 2 sup x ∥M 1/2 
+
+> ϕ
+
+BM −12 
+
+> ϕ
+
+∥2.
+
+(iii) Metric time derivative part. Using submultiplicativity and ∥M −12 
+
+> ϕ
+
+∥2 = 1 /pλmin (Mϕ) ≤ 1/√mmin ,
+
+M −12 
+
+> ϕ
+
+˙MϕM −12 
+
+> ϕ2
+
+≤ ∥ M −12 
+
+> ϕ
+
+∥22∥ ˙Mϕ∥2 ≤ 1
+
+mmin 
+
+∥ ˙Mϕ∥2.
+
+Now apply the Frobenius spectral inequality and Cauchy Schwarz for tensors: 
+
+∥ ˙Mϕ∥2 ≤ ∥ ˙Mϕ∥F = X
+
+> k
+
+∂M ϕ
+
+∂x k
+
+(fcl )k
+
+> F
+
+≤ ∇Mϕ F
+
+∥fcl ∥2
+
+By Assumption 1, ∥∇ Mϕ∥F ≤ LM and ∥fcl ∥ ≤ ∥ f ∥ +
+
+∥B∥∥ ΠPD  
+
+> θ
+
+∥ ≤ ¯f + ¯B ¯u. Together, 
+
+R ˙M 2 = M −12 
+
+> ϕ
+
+˙MϕM −12 
+
+> ϕ2
+
+≤ LM
+
+mmin 
+
+  ¯f + ¯B ¯u. (17) By the triangle inequality for the spectral norm, 
+
+sym( ˆR(x)) 2≤ Cf +CB∂B +CBJ Lπ ¯Jh + LM
+
+mmin 
+
+( ¯f + ¯B ¯u)−α
+
+Since λmax (sym( ˆR)) = ∥ sym( ˆR)∥2, this yields the de-sired upper bound. A negative right-hand side implies 
+
+λmax (sym( R(x))) < 0 for all x, hence the contraction inequality holds. RMA PPO 
+
+t = 1s t = 4s t = 5s t = 7s t = 10s 
+
+t = 1s t = 2s t = 3s t = 4s t = 5s Fig. 5: Comparison of handstand control using RMA [5] (top) and PPO [1] (bottom). The robot using PPO and RMA struggles to maintain balance and falls off the platform. 
+
+Remark 1. If one prefers to avoid the factor m−1min , define the normalized metric gradient budget 
+
+bLM := sup 
+
+> x
+
+Mϕ(x) −12 (∇Mϕ(x)) Mϕ(x) −12 
+
+> F
+
+. (18) Then the same argument gives ∥M −12 
+
+> ϕ
+
+˙MϕM −12 
+
+> ϕ
+
+∥2 ≤
+
+bLM ∥fcl ∥ ≤ bLM ( ¯f + ¯B ¯u), so the ˙M contribution appears as bLM ( ¯f + ¯B ¯u).
+
+Corollary 1 (Lower bound for α). If ∥Jπ (y)∥2 ≤ Lπ and 
+
+∥∇ Mϕ(x)∥F ≤ LM with 
+
+Cf + CB∂B + CBJ Lπ ¯Jh + LM
+
+√mmin 
+
+( ¯f + ¯B ¯u) < α, (19) 
+
+then (5) holds. The residual bound (13) shows how tighten-ing network Lipschitz constraints improves the contraction margin. Remark 2. The bound in Theorem 1 certifies contraction on the compact set K covered during training (and assumed forward-invariant). If the closed-loop trajectory leaves K at test time, the formal guarantee is not ensured. However, in practice, K can be enlarged to ensure broader feasibility. 
+
+Lemma 1 (Lower bound on ϵα). Let Vϕ(x, t ) = e⊤Mϕ(x)e
+
+with mmin I ⪯ Mϕ(x) ⪯ mmax I, and define R(x) as in 
+
+(11) . Assume the Lipschitz bounds of Assumption 1 hold, so that (13) holds. Then for all x, e,
+
+˙Vϕ(x, t ) + αV ϕ(x, t ) ≤ ΞVϕ(x, t ). (20) 
+
+In particular, no state independent constant ϵα > 0 can be guaranteed to satisfy ˙V +αV ≤ − ϵα for all e̸ = 0 . However, if ϵα is chosen state-dependent as ϵα(x, e) = ϵαVϕ(x, t ),then any ϵα ∈ (0 , α − Ξ] guarantees ˙V + αV ≤ − ϵα(x, e)
+
+for all x, e.Proof. In particular, no state independent constant ϵα > 0
+
+can be guaranteed to satisfy ˙V + αV ≤ − ϵα for all e̸ =0. However, if ϵα is chosen state-dependent as ϵα(x, e) = 
+
+ϵαVϕ(x, t ), then any ϵα ∈ (0 , α − Ξ] guarantees ˙V + αV ≤−ϵα(x, e) for all x, e.
+
+Theorem 2 (Robustness) . Consider the dynamics (1) with the learned contraction metric Mϕ satisfying the conditions in Theorem 1. Under Assumption 1, if e⊤R(x)e ≤ 0 on K,then for any two solutions x, xd driven by disturbance d
+
+with ∥d∥ ≤ ¯d, we have 
+
+∥e(t)∥ ≤ V (x, 0) 
+
+√mmin 
+
+e−αt + ¯dα
+
+√χ  1 − e−αt  (21) 
+
+where e(t) = x(t) − xd(t) and χ = mmax /m min .Proof. Please see the proof of Theorem 3.1 in [13]. 
+
+Remark 3. If Acl (x) or ˙Mϕ(x) are computed approximately, the resulting error acts as an additional bounded residual in the contraction condition. This mainly reduces the certified margin (e.g., smaller α or larger ϵα) and degrades gracefully under bounded mismatch, consistent with Theorem 2. To summarize, Theorem 1 ensures that contraction-based stability verified in simulation extends to real-world de-ployments, even in the presence of modeling errors or sim-to-real gaps. Theorem 2 complements this by proving that once contraction holds, the system retains incremental exponential stability under bounded external disturbances. Together, these results establish strong theoretical guarantees for certified RL policies that are both robust to real-world uncertainty and external perturbations. V. R ESULTS 
+
+In this section, we benchmark our ContractionPPO con-troller against recent baselines [1], [5], [10] in both simu-lation and hardware and structure the discussion around the following questions (i) how does its locomotion performance (eg. tracking error) compare with a PPO [1] and recent baseline algorithms [5], [10] on a moving platform, (ii )
+
+how robust is ContractionPPO to external disturbances, i.e., pushes, impulsive forces or platform vibrations, compared to other baseline algorithms [1], [5], [10]. To access the performance of ContractionPPO, we conducted all training in simulation using the IsaacLab framework with the Unitree Go1 quadruped and real-world experiments on a moving platform in the CAST Arena at Caltech. Reflective markers were fixed to the quadruped, and an OptiTrack motion cap-ture system was utilized to record the robot’s planar position (x and y) throughout the hardware experiments. Experiments were run on a desktop equipped with an Intel Core i7-13700F CPU, 32 GB RAM, and an NVIDIA RTX 3080 GPU. Leveraging 4,096 agents in parallel, our algorithm completed full training within approximately two hours of wall-clock time. For the PD controller that ran at 200 Hz, the Kp and Kd gains were set to 30 and 0.8, respectively. We adopt the RSL-RL implementation of PPO [24] for the reinforcement learning layer (i.e., the PPO layer in Fig. 2) of our approach. The contraction layer (green region in Fig. 2) is parameterized using MLPs with two hidden layers. To ensure Lipschitz continuity, we apply spectral normalization to the weights of the contraction layer MLPs as well as the PPO policy. The training of both these networks is performed using the Adam optimizer. Table I reports all PPO, and contraction hyperparameters. −1    
+
+> 0
+> 1−1−0.500.51
+> −0.5
+> 0
+> 0.5
+> x
+> y
+> z
+
+(a) Wind speed 4.8 m/s     
+
+> −1
+> 0
+> 1−1−0.500.51
+> −0.5
+> 0
+> 0.5
+> x
+> y
+> z
+
+(b) Wind speed 6.4 m/s     
+
+> −1
+> 0
+> 1−1−0.500.51
+> −0.5
+> 0
+> 0.5
+> x
+> y
+> z
+
+(c) Wind speed 8.0 m/s     
+
+> −1
+> 0
+> 1−1−0.500.51
+> −0.5
+> 0
+> 0.5
+> x
+> y
+> z
+
+(d) Wind speed 9.6 m/s 
+
+Fig. 6: Trajectories of the quadruped performing a handstand under wind disturbances of increasing magnitude. Even though ContractionPPO was never trained on these severe wind disturbances, it preserves boundedness and maintains steady posture after each perturbation (wind speeds).       
+
+> −1−0.500.51
+> −1
+> −0.5
+> 0
+> 0.5
+> 1
+> x
+> y
+> ContractionPPO TumblerNet [10]
+> RMA [5] PPO [1]
+
+Fig. 7: Tracking error (in m) of the quadruped handstand for Contrac-tionPPO, TumblerNet [10], RMA [5], and PPO [1] on a moving platform (marked in light brown). While all baselines exhibit drift outside the feasible region, ContractionPPO maintains bounded trajectories with consistently lower RMS tracking error, demonstrating certified incremental stability. Wind speed 4.8m/s Wind speed 6.4m/s    
+
+> Wind speed 8.0m/s Wind speed 9.6m/s
+
+Fig. 8: Quadruped trajectories during handstand under wind disturbances of varying magnitudes. As the disturbance intensity increases, transient deviations from the initial position become more evident. Note that ContractionPPO was never trained on external disturbances. Despite this, ContractionPPO policy ensures bounded trajectories and lies inside the circle marked by the black curve. 
+
+TABLE I: Key hyperparameters 
+
+Parameter Value 
+
+Actor/Critic Net. MLP (512, 256, 128) Learning Rate and activation 1 × 10 −3 and ELU Epochs per update 5Max. iterations 15000 Rollout Length and γ 24 steps and 0.99 Mini-batches per epoch 4
+
+Mϕ and wcontr (128, 64) and 0.01 Parallel Environments 4096 
+
+Fig. 9: Stabilization of Booster T1 on moving platform using ContractionPPO . 
+
+A. Locomotion Performance 
+
+We evaluate the performance by initializing the quadruped at the center of a circle of radius 0.8m while com-manding a handstand while remaining within that region. ContractionPPO consistently keeps the quadruped within the circle. However, PPO [1] and TumblerNet [10] drift outside this boundary (see Fig. 7), and RMA, while stronger than other baselines, ultimately fails to remain inside. The qualitative difference is most evident in long rollouts i.e., ContractionPPO maintains bounded trajectories that do not go out of the circular region, while the baselines exhibit slow drift followed by loss of balance once the boundary is crossed (see Fig. 5). Beyond the quadruped handstand benchmark, we also evaluate ContractionPPO on a Booster T1 humanoid stabilization task on a moving platform (see Fig. 9). This experiment demonstrates that our approach extends to a different robot morphology, while retaining robust stabilization performance. Table II reports failure rates across increasing control points and combined episodes. The control points define the trajectory used to generate B-spline motions for the platform. Increasing the number of control points results in faster and more aggressive movements, whereas fewer points yield slower motions but sustain steeper angles for longer durations, thereby increasing task difficulty. ContractionPPO significantly outperforms all baselines, maintaining a very low average failure rate of 10%, with only a gradual increase as the number of control points grows. In stark contrast, TumblerNet [10] fails consistently (100%) across all settings, indicating poor generalization or lack of robustness. RMA [5] shows moderate performance (38%), while PPO [1] performs poorly (89%), likely due to the absence of formal stability enforcement. These results underscore the effectiveness of incorporating contraction-based certification during training, yielding robust and certifiably stable behavior even as control TABLE II: Comparison of methods across control points and violations. Numbers represent failure ratio over all episodes. Combined is 2500 
+
+episodes, and each control point is 500 . Lower is better. Method Control Points Combined 10 20 30 40 50 ContractionPPO 0.00 0.00 0.00 0.00 0.00 0.00 
+
+TumblerNet [10] 1.00 1.00 1.00 1.00 1.00 1.00 RMA [5] 0.23 0.23 0.19 0.19 0.16 0.20 PPO [1] 0.98 0.98 0.98 0.99 0.99 0.99 
+
+Mϕ = I 1.00 1.00 1.00 1.00 1.00 1.00 
+
+complexity increases. In addition, the learned Mϕ increases the span over which certified feedback controllers can be applied. In contrast, as seen from Table II a fixed contraction such as Mϕ results in poor performance. ContractionPPO consistently outperforms baselines such as PPO [1], RMA [5], and TumblerNet [10] due to its explicit enforcement of incremental stability via contraction theory during training. While standard RL policies [1] may overfit to reward signals without ensuring safe or bounded behavior under perturbations, ContractionPPO introduces a learned contraction metric that certifies exponential convergence of trajectories. This not only guarantees recovery after external disturbances but also ensures stability under model mismatch and noisy observations. In contrast to approaches like RMA [5] or TumblerNet [10], which lack formal guarantees or re-quire separate adaptation mechanisms, our method integrates stability directly into the learning process. The contraction metric acts as an implicit regularizer, shaping the policy space toward robust and stable solutions. Importantly, our framework also accounts for the approximation error between the value function in simulation and the one experienced at deployment through the inclusion of a conservative stabil-ity margin ϵα. This ensures that the contraction condition continues to hold even in the presence of sim-to-real gaps. 
+
+B. Robustness 
+
+To prove robustness, we apply wind disturbances using the wind tunnel and repeat the handstand experiments using ContractionPPO at speeds of 4.8, 6.4, 8.0, and 9.6 m/s .Notably, ContractionPPO was never trained under such high-magnitude perturbations. Despite this, it maintains the hand-stand within the 0.8m circle, with transient deviations that quickly converge within the circle. The trajectory plots in Fig. 6 show that ContractionPPO preserves boundedness and returns to steady posture after impulses, consistent with the incremental stability guarantee (Theorem 2). These results underscore that enforcing contraction conditions during end-to-end training leads to controllers that not only perform well under nominal conditions but also maintain strong stability margins under substantial disturbances. VI. C ONCLUSIONS 
+
+We present ContractionPPO, a framework that augments PPO with a differentiable contraction metric layer to certify incremental stability in quadruped locomotion. By training the contraction metric using privileged state while keeping the policy observation-based, our method ensures deployable guarantees. Despite not being trained under strong distur-bances like wind, ContractionPPO maintains stability at test time, highlighting a shift from high performing RL to certi-fied RL. Hardware experiments confirm that ContractionPPO achieves robust, provably stable control under both nominal and perturbed conditions. Future work includes integrating this framework with fault tolerant systems. REFERENCES [1] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 , 2017. [2] B. Katz, J. Di Carlo, and S. Kim, “Mini cheetah: A platform for pushing the limits of dynamic quadruped control,” in IEEE Int. Conf. Robot. Autom. , 2019, pp. 6295–6301. [3] M. Hutter, C. Gehring, D. Jud, A. Lauber, C. D. Bellicoso, V. Tsounis, J. Hwangbo, K. Bodie, P. Fankhauser, M. Bloesch et al. , “Anymal-a highly mobile and dynamic quadrupedal robot,” in IEEE/RSJ Int. Conf. Intel. Robot. Syst. , 2016, pp. 38–44. [4] A. Jacoff, J. Jeon, O. Huke, D. Kanoulas, S. Ha, D. Kim, and H. Moon, “Taking the first step toward autonomous quadruped robots: The quadruped robot challenge at icra 2023 in london [competitions],” 
+
+IEEE Robot. Autom. Mag. , vol. 30, no. 3, pp. 154–158, 2023. [5] A. Kumar, Z. Li, J. Zeng, D. Pathak, K. Sreenath, and J. Malik, “Adapting rapid motor adaptation for bipedal robots,” in IEEE/RSJ Int. Conf. Intel. Robot. Syst. , 2022, pp. 1161–1168. [6] S. Choi, G. Ji, J. Park, H. Kim, J. Mun, J. H. Lee, and J. Hwangbo, “Learning quadrupedal locomotion on deformable terrain,” Science Robotics , vol. 8, no. 74, p. eade2256, 2023. [7] Z. Luo, Y. Dong, X. Li, R. Huang, Z. Shu, E. Xiao, and P. Lu, “Moral: Learning morphologically adaptive locomotion controller for quadrupedal robots on challenging terrains,” IEEE Robot. Autom. Lett. ,vol. 9, no. 5, pp. 4019–4026, 2024. [8] Z. Fu, X. Cheng, and D. Pathak, “Deep whole-body control: learning a unified policy for manipulation and locomotion,” in Conf. Robot Learning . PMLR, 2023, pp. 138–149. [9] M. Yoon, H. Shin, J. Jeong, and S.-E. Yoon, “Learning-based adaptive control of quadruped robots for active stabilization on moving plat-forms,” in IEEE/RSJ Int. Conf. Intel. Robot. Syst. , 2024, pp. 701–708. [10] E. Xiao, Y. Dong, J. Lam, and P. Lu, “Learning stable bipedal locomotion skills for quadrupedal robots on challenging terrains with automatic fall recovery,” npj Robotics , vol. 3, no. 1, p. 22, 2025. [11] W. Lohmiller and J.-J. E. Slotine, “On contraction analysis for non-linear systems,” Automatica , vol. 34, no. 6, pp. 683–696, 1998. [12] H. Tsukamoto and S.-J. Chung, “Neural contraction metrics for robust estimation and control: A convex optimization approach,” IEEE Control Syst. Lett. , vol. 5, no. 1, pp. 211–216, 2020. [13] H. Tsukamoto, S.-J. Chung, and J.-J. E. Slotine, “Contraction theory for nonlinear stability analysis and learning-based control: A tutorial overview,” Annual Reviews in Control , vol. 52, pp. 135–169, 2021. [14] T. Akbas, S. E. Eskimez, S. Ozel, O. K. Adak, K. C. Fidan, and K. Erbatur, “Zero moment point based pace reference generation for quadruped robots via preview control,” in IEEE Int Workshop Adv. Motion Control , 2012, pp. 1–7. [15] J. Choi, F. Castaneda, C. J. Tomlin, and K. Sreenath, “Reinforcement learning for safety-critical control under model uncertainty, using con-trol lyapunov functions and control barrier functions,” arXiv preprint arXiv:2004.07584 , 2020. [16] I. Radosavovic, T. Xiao, B. Zhang, T. Darrell, J. Malik, and K. Sreenath, “Real-world humanoid locomotion with reinforcement learning,” Science Robotics , vol. 9, no. 89, p. eadi9579, 2024. [17] V. Tsounis, M. Alge, J. Lee, F. Farshidian, and M. Hutter, “Deepgait: Planning and control of quadrupedal gaits using deep reinforcement learning,” IEEE Robot. Autom. Lett. , vol. 5, no. 2, pp. 3699–3706, 2020. [18] G. Bellegarda, C. Nguyen, and Q. Nguyen, “Robust quadruped jump-ing via deep reinforcement learning,” Robot. Auton. Syst. , vol. 182, p. 104799, 2024. [19] M. Han, L. Zhang, J. Wang, and W. Pan, “Actor-critic reinforcement learning for control with stability guarantee,” IEEE Robot. Autom. Lett. , vol. 5, no. 4, pp. 6217–6224, 2020. [20] D. Pavlichenko and S. Behnke, “Real-robot deep reinforcement learn-ing: Improving trajectory tracking of flexible-joint manipulator with reference correction,” in IEEE Int. Conf. Robot. Autom. , 2022, pp. 2671–2677. [21] J. Tan, T. Zhang, E. Coumans, A. Iscen, Y. Bai, D. Hafner, S. Bo-hez, and V. Vanhoucke, “Sim-to-real: Learning agile locomotion for quadruped robots,” arXiv preprint arXiv:1804.10332 , 2018. [22] J. Hwangbo, J. Lee, A. Dosovitskiy, D. Bellicoso, V. Tsounis, V. Koltun, and M. Hutter, “Learning agile and dynamic motor skills for legged robots,” Science Robotics , vol. 4, no. 26, p. eaau5872, 2019. [23] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning quadrupedal locomotion over challenging terrain,” Science Robotics , vol. 5, no. 47, p. eabc5986, 2020. [24] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk in minutes using massively parallel deep reinforcement learning,” in 
+
+Conf. Robot Learning . PMLR, 2022, pp. 91–100. [25] T. Miki, J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning robust perceptive locomotion for quadrupedal robots in the wild,” Science Robotics , vol. 7, no. 62, p. eabk2822, 2022.

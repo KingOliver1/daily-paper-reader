@@ -6,28 +6,39 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-22
-- 运行时间：2026-03-22 19:29:03 UTC
+- 最新运行日期：2026-03-23
+- 运行时间：2026-03-23 19:44:30 UTC
 - 运行状态：成功
-- 本次总论文数：2
-- 精读区：1
-- 速读区：1
+- 本次总论文数：6
+- 精读区：3
+- 速读区：3
 
 ### 今日简报（AI）
-今日聚焦机器人轨迹世界模型与月球自主导航的前沿突破。
-重点推荐 WestWorld 模型，它通过知识编码实现了跨系统的轨迹预测，同时关注月球挑战赛中的全栈导航方案。
-建议深入了解世界模型如何提升机器人泛化性，并关注极端环境下的自主规划应用。
-- 详情：[/202603/22/README](/202603/22/README)
+今日聚焦人形机器人柔顺控制与强化学习稳定性认证，两篇满分论文引领具身智能向高可靠性迈进。
+核心
+- 详情：[/202603/23/README](/202603/23/README)
 
 ### 精读区论文标签
-1. [WestWorld: A Knowledge-Encoded Scalable Trajectory World Model for Diverse Robotic Systems](/202603/22/2603.14392v1-westworld-a-knowledge-encoded-scalable-trajectory-world-model-for-diverse-robotic-systems)  
-   标签：评分：8.0/10、query:robot
-   evidence：适用于多种机器人系统的轨迹世界模型
+1. [Task-Specified Compliance Bounds for Humanoids via Lipschitz-Constrained Policies](/202603/23/2603.16180v2-task-specified-compliance-bounds-for-humanoids-via-lipschitz-constrained-policies)  
+   标签：评分：10.0/10、query:robot
+   evidence：用于类人机器人双足行走和柔顺控制的Lipschitz约束强化学习
+2. [ContractionPPO: Certified Reinforcement Learning via Differentiable Contraction Layers](/202603/23/2603.19632v1-contractionppo-certified-reinforcement-learning-via-differentiable-contraction-layers)  
+   标签：评分：10.0/10、query:robot
+   evidence：非结构化环境下足式机器人运动的认证强化学习
+3. [AGILE: A Comprehensive Workflow for Humanoid Loco-Manipulation Learning](/202603/23/2603.20147v1-agile-a-comprehensive-workflow-for-humanoid-loco-manipulation-learning)  
+   标签：评分：9.0/10、query:robot
+   evidence：人形机器人运动操作学习的强化学习工作流
 
 ### 速读区论文标签
-1. [Full Stack Navigation, Mapping, and Planning for the Lunar Autonomy Challenge](/202603/22/2603.17232v1-full-stack-navigation-mapping-and-planning-for-the-lunar-autonomy-challenge)  
+1. [CeRLP: A Cross-embodiment Robot Local Planning Framework for Visual Navigation](/202603/23/2603.19602v1-cerlp-a-cross-embodiment-robot-local-planning-framework-for-visual-navigation)  
    标签：评分：7.0/10、query:robot
-   evidence：GNSS受限环境下的全栈导航与建图
+   evidence：跨具身机器人的视觉导航局部规划框架
+2. [HortiMulti: A Multi-Sensor Dataset for Localisation and Mapping in Horticultural Polytunnels](/202603/23/2603.20150v1-hortimulti-a-multi-sensor-dataset-for-localisation-and-mapping-in-horticultural-polytunnels)  
+   标签：评分：7.0/10、query:robot
+   evidence：复杂环境下的定位与建图多传感器数据集
+3. [IndoorR2X: Indoor Robot-to-Everything Coordination with LLM-Driven Planning](/202603/23/2603.20182v1-indoorr2x-indoor-robot-to-everything-coordination-with-llm-driven-planning)  
+   标签：评分：6.0/10、query:robot
+   evidence：室内环境下的多机器人任务规划与感知
 
 
 <div class="dpr-home-promo-card">

@@ -1,0 +1,275 @@
+Title: IndoorR2X: Indoor Robot-to-Everything Coordination with LLM-Driven Planning
+
+URL Source: https://arxiv.org/pdf/2603.20182v1
+
+Published Time: Mon, 23 Mar 2026 01:14:11 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# IndoorR2X: Indoor Robot-to-Everything Coordination with LLM-Driven Planning 
+
+Fan Yang 1, Soumya Teotia 2, Shaunak A. Mehta 1, Prajit KrisshnaKumar 1, Quanting Xie 2,Jun Liu 2, Yueqi Song 2, Wenkai Li 2, Atsunori Moteki 1, Kanji Uchino 1, and Yonatan Bisk 2
+
+Abstract — Although robot-to-robot (R2R) communication improves indoor scene understanding beyond what a single robot can achieve, R2R alone cannot overcome partial ob-servability without substantial exploration overhead or scaling team size. In contrast, many indoor environments already include low-cost Internet of Things (IoT) sensors (e.g., cam-eras) that provide persistent, building-wide context beyond onboard perception. We therefore introduce IndoorR2X, the first benchmark and simulation framework for Large Language Model (LLM)-driven multi-robot task planning with Robot-to-Everything (R2X) perception and communication in indoor environments. IndoorR2X integrates observations from mobile robots and static IoT devices to construct a global semantic state that supports scalable scene understanding, reduces redundant exploration, and enables high-level coordination through LLM-based planning. IndoorR2X provides configurable simulation environments, sensor layouts, robot teams, and task suites to systematically evaluate semantic-level coordination strategies. Extensive experiments across diverse settings demonstrate that IoT-augmented world modeling improves multi-robot efficiency and reliability, and we highlight key insights and failure modes for advancing LLM-based collaboration between robot teams and indoor IoT sensors. 
+
+I. INTRODUCTION Indoor service robots are transitioning from single-agent demos to teams that must jointly carry out long-horizon tasks such as cleaning, cooking assistance, object fetch-ing, and device operation [1]–[4]. In realistic homes and offices, however, multi-robot coordination is fundamentally constrained by partial observability : each robot only sees what lies in its current field of view and what it has already explored. Under these constraints, teams frequently waste ef-fort through redundant exploration, inconsistent beliefs about object locations or device states, and brittle task allocation when plans must be revised online. At the same time, indoor environments are increasingly in-strumented with ambient IoT sensors, which can provide per-sistent, wide-coverage observations unavailable to any single robot [5]–[8]. Despite this opportunity, most existing LLM-driven multi-robot frameworks either (i) implicitly assume oracle-level access to global scene state in simulation or (ii) focus primarily on robot-to-robot communication without systematically modeling how heterogeneous IoT sensing can be fused into a shared state representation for planning. This leaves an open question: How can an indoor robot fleet leverage LLM-based reasoning to coordinate reliably under 
+
+> 1
+
+Fujitsu Research 
+
+> 2
+
+Carnegie Mellon University 
+
+partial observability, while exploiting existing IoT sensing to minimize redundant exploration and reduce planning cost? Problem: Multi-robot coordination under partial observability        
+
+> •Local scene perception
+> •Limited spatiotemporal context
+> Proposal: IndoorR2X (IoT + robots) with LLM-driven global coordination
+> •Global scene perception
+> •Rich spatiotemporal context
+> Thermo Cam Cam Audio Sensor Light Sensor
+> With target known, execute the coordinated plan
+> Target position unknown, move to locate it first.
+> LLM (Robots + IoT Coordination)
+> Target Target
+
+Fig. 1: Motivation for IndoorR2X. Augmenting robot perception with global IoT context via LLMs for efficient coordination. 
+
+We argue that addressing this question requires two in-gredients: (1) a benchmark that explicitly enforces realistic perception limits so that no agent is omniscient, and (2) a framework that can integrate heterogeneous observations into a unified representation that supports online multi-agent planning. To this end, we introduce IndoorR2X , the first benchmark and simulation framework for evaluating LLM-powered multi-robot task planning and execution in indoor Robot-to-Everything (R2X) settings. IndoorR2X consists of 85 multi-room environments that provide the scale necessary to support complex household tasks involving joint navi-gation and manipulation, as well as navigation-only tasks. We enforce realistic partial observability by restricting each robot’s knowledge to its immediate field of view and visited areas. This constraint renders global coordination non-trivial, directly motivating the use of IoT sensors as a critical supplementary information source. 
+
+IndoorR2X is paired with a coordination framework cen-tered around a coordination hub that maintains a global semantic state by aggregating observations from both mo-bile robots and static IoT devices (the “X” in R2X). An LLM operates as an online planner over this shared state, producing a parallelizable plan represented as a dependency graph, while a system orchestrator executes actions, monitors outcomes, updates the world model, and triggers replanning upon failures. This design enables dynamic coordination under evolving, incomplete information. Our experiments systematically isolate the roles of in-formation sharing and IoT sensing in multi-robot coordina-tion. Comparing isolated robots (IR), robot-to-robot sharing 1                           
+
+> arXiv:2603.20182v1 [cs.RO] 20 Mar 2026 TABLE I: Comparison of IndoorR2X to representative benchmark families. “X” denotes the external sensing augmentation beyond multi-agent on-board sensing. “LLM Coord.” indicates whether LLMs are used for multi-agent coordination.
+> Benchmark Family Scene Multi-Agent X (IoT sensors) LLM Coord. (A) V2X-SIM [9], V2X-REAL [10] Outdoor ✓✓✗
+> (B) V2X-LLM [11], AccidentGPT [12] Outdoor ✓✓✓
+> (C) TWOSTEP [13], SMART-LLM [2], HeterCol [14], EMOS [15] Indoor ✓✗✓
+> IndoorR2X (ours) Indoor ✓✓✓
+
+(R2R), and full robot-to-everything integration (R2X), we find that inter-robot communication is critical for success un-der partial observability, while IoT-augmented world model-ing further reduces action steps, path length, and LLM token cost without sacrificing success. We additionally show that coordination quality depends strongly on LLM capability, scales with increasing overhead as team size grows, and is robust to missing IoT signals but more sensitive to semantic misinformation (e.g., incorrect device states). Our contributions are threefold:  
+
+> •
+
+Novel R2X Benchmark: We introduce IndoorR2X , the first indoor multi-robot benchmark that strictly enforces partial observability and integrates configurable IoT sensors to evaluate realistic team coordination.  
+
+> •
+
+LLM-Driven Semantic Fusion: We propose a central-ized framework that fuses onboard robot perception with ambient IoT signals into a shared global semantic state, enabling LLMs to plan parallel tasks without exhaustive physical exploration.  
+
+> •
+
+Empirical & Real-World Validation: Extensive sim-ulations and physical deployments demonstrate our framework significantly reduces path length, action steps, and LLM token costs, while exhibiting high resilience to missing sensor data. II. RELATED WORK Table I positions IndoorR2X relative to four representative benchmark families. We focus this section on the two techni-cal gaps that motivate our benchmark and framework: (i) how to exploit infrastructure/IoT sensing for indoor embodied coordination, and (ii) how to evaluate LLM-based multi-robot planning under realistic partial observability. 
+
+A. IoT-Augmented Perception 
+
+Cooperative perception with infrastructure support has been extensively studied in autonomous driving under the Vehicle-to-Everything (V2X) umbrella [16], [17]. Bench-marks such as V2X-SIM [9] and V2X-REAL [10] formalize how roadside sensing can be shared to improve detection and tracking beyond a single vehicle’s view. Recent work also explores integrating large models into V2X pipelines for higher-level understanding and analysis [11], [12], [18]. However, these outdoor settings primarily model vehi-cle kinematics and traffic scenes, whereas indoor service robotics requires fine-grained object-centric reasoning (e.g., appliances, containers, manipulable items), multi-room nav-igation, and long-horizon task execution. In indoor contexts, prior work has explored robot–IoT communication for sensor fusion, system integration, and security [7], [8], [19]–[21]. Yet these systems typically do not study (1) how hetero-geneous IoT observations should be fused into a shared semantic memory for downstream planning, nor (2) how such infrastructure signals change multi-robot coordination behavior beyond basic R2R sharing. IndoorR2X addresses this gap by introducing configurable indoor “X” sources (e.g., CCTV-derived object/location priors and device status reports) and evaluating how they affect coordination effi-ciency and reliability. 
+
+B. LLM-Driven Planning and Coordination for Multi-Robot Systems 
+
+LLMs are increasingly used to translate natural-language goals into structured plans, allocate sub-tasks across robots, and mediate multi-agent communication [3], [22]–[24]. Sev-eral recent indoor or manipulation-centric systems use LLMs as operating-system-like coordinators or planners, combining perception, memory, and tool execution [15], [25]–[27], and others explicitly compile LLM outputs into classical representations such as PDDL or behavior trees [2], [13]. A recurring limitation is that most LLM-based multi-robot frameworks assume that the “information bottleneck” is primarily robot-to-robot communication: the planner is fed only robots’ onboard observations (sometimes with simpli-fied global state in simulation), and belief updates largely come from physical exploration and dialogue [28]–[30]. In contrast, IndoorR2X explicitly models an R2X information channel by fusing robot observations with ambient IoT sens-ing into a global semantic state maintained by a coordination hub, allowing the LLM planner to reason over shared, time-stamped, cross-source state. 
+
+C. Benchmarks Under Partial Observability and Multi-Robot Exploration 
+
+Partial observability is central to embodied decision mak-ing and is commonly formalized through POMDP-style for-mulations [31]. In multi-robot settings, limited fields of view and incomplete maps make coordination challenging and of-ten lead to redundant exploration, motivating classical work on coordinated exploration and frontier-based search [32], [33]. Many embodied AI benchmarks, however, either expose near-global simulator state (implicitly giving planners oracle access) or focus on single-agent instruction following, mak-ing coordination effects difficult to measure [1]. More recent LLM-centric benchmarks and systems do study multi-agent collaboration, but typically vary coordination protocols or 2Cameras Other IoT (TV, Light, Microwave, etc.) Laptop 
+
+> Desktop Robot Perception House Floorplan Robot 1 Robot 2 Robot 3 LLM-based Online Planner
+> World Model State Updating w/ Heterogeneous Observations
+> Coordination Hub X (w/ Text-format Event Logs) Get Current State Assign Parallel Executable Actions Racket Interact with the Environment Tasks: 1. Discard foods on CounterTop 2. Switch off all PCs 3. Bring the Racket and the Laptop to the FamilyRoom 4. … 1. Racket & Laptop @BedRoom [CCTV] 2. Desktop is On @ FamilyRoom [TV] Cam 1 Cam 2 Cam 3 FamilyRoom BedRoom
+> VLM
+> (Video2Text)
+> 85 scenes 850 tasks
+
+Fig. 2: Our IndoorR2X framework. CCTV observations and other IoT device signals are collected to augment the world model beyond the perception range of the robots’ ego cameras. These heterogeneous observations are synchronized through a coordination hub, where an LLM-based online planner generates parallel actions for each robot and executes them to perform their respective tasks. As an example scenario, robots are assigned to perform household tasks in the morning. After potential overnight changes to object locations or device statuses (e.g., TVs), robots first update their indoor world model by leveraging the “X” observations. 
+
+planning abstractions without systematically evaluating IoT sensing as an external information source [14], [34], [35]. 
+
+IndoorR2X complements these efforts by (i) enforcing re-alistic partial observability (each robot only knows its current view and visited areas) and (ii) providing configurable “X” sensing layouts, enabling controlled studies of how IoT-derived global context reduces redundant exploration and replanning cost. III. I NDOOR R2X B ENCHMARK DESIGN 
+
+To rigorously evaluate multi-robot coordination in realistic indoor settings, we designed a benchmark featuring challeng-ing scenarios that highlight the benefits of the R2X paradigm, where IoT sensors augment the capabilities of a robot fleet operating under practical perception constraints. Our benchmark builds on the AI2-THOR engine [36], leveraging 10 artist-curated homes from ArchitecTHOR [37] and 75 modular apartments (multi-cabins) from RoboTHOR [38]. Together, these 85 multi-room environments provide the scale required for complex household tasks involving joint navigation and manipulation (ArchitecTHOR) as well as navigation-only tasks (RoboTHOR). As such, they constitute a robust testbed for evaluating high-level coordination and cooperative behaviors. A key differentiator of our benchmark compared to prior LLM-driven multi-robot frameworks [2], [13], [15] is its explicit modeling of realistic sensor limitations. We depart from the common assumption of an omniscient simulation with oracle-level scene knowledge. Instead, each robot’s environmental knowledge is strictly limited to its previously visited areas and current field of view. This constraint makes it impossible for any single agent to possess complete global knowledge on its own, which offers an ideal testbed for our R2X hypothesis: integrating information from static IoT sensors can drastically reduce the need for exhaustive explo-ration, enabling more efficient task planning and execution. This is where the “X” in R2X becomes critical. Our bench-mark integrates IoT devices that naturally and efficiently expand the global knowledge base available to the robots. Specifically, we simulate indoor CCTV systems by deploy-ing static, third-party cameras throughout the environment. We randomly configure the layout such that approximately 50% of the house area is covered by CCTV, leaving the remaining space for the robots’ autonomous exploration. The video feeds from these cameras are processed by a vision-language model (VLM) (e.g., Qwen-VL [39]) to produce time-stamped, text-based event logs. These logs are con-tinuously streamed to a central coordination hub, where they are fused with the robots’ onboard observations to maintain a global, real-time belief state. With this enriched global state, an LLM-based online planner can dynamically synthesize executable, parallel task plans for the multi-robot team, which are then executed by embodied agents within the virtual environment. IV. T HE INDOOR R2X F RAMEWORK 
+
+The IndoorR2X framework enables autonomous, multi-agent coordination through a continuous, online cycle of perception, planning, and action. A centralized coordination hub maintains a global semantic state and mediates execution via an LLM-based planner and a parallel action orchestrator. 
+
+A. Global Semantic State and R2X Data Fusion 
+
+At the core of our framework is the coordination hub ,which maintains a global semantic state Wt at time t as a 3Algorithm 1: IndoorR2X Coordination Framework                                                                                                                                                 
+
+> Input: Task T, Goal G, Fleet R, IoT DW ← InitState (R,D),Π← ∅ ,replan ←true ,fails ←0
+> while ¬GoalSatisfied (W,G)∧fails <MAX_FAILS do
+> /* 1. Online R2X Fusion (Eq. 5) */
+> W ← F (W,Observe (R ∪ D ))
+> /* 2. LLM-driven Planning (Eq. 6) */
+> if replan ∨NeedsReplan (Π ,W)then
+> HaltActiveRobots (R) Π ←fLLM (P(T,W))
+> if ¬IsValid (Π ,R)then fails++ ,continue
+> replan ←false /* 3. Parallel Action Dispatch (Eq. 2) */
+> Vrdy ← { v∈Π|status (v) = PENDING ∧DepsDone (v)}
+> Ridle ← { r∈ R | Sr.σ =IDLE }
+> for v∈Vrdy do if Ridle =∅then break
+> r∗←MatchRobot (v, R idle ,W)
+> if r∗̸=None then
+> Dispatch (r∗, v )
+> Sr∗.σ ←EXECUTING ,status (v)←RUNNING
+> Ridle ←Ridle \ { r∗}
+> /* 4. Asynchronous Event Monitoring */
+> Evt ←Wait (R ∪ D ,∆t)
+> if Evt =Timeout then
+> replan ←replan ∨DetectStall (Π ,R)
+> else if Evt =IoTUpdate then if Relevant (Evt, Π) then replan ←true
+> else if Evt =ActionDone then
+> v←Evt. act , S Evt. src .σ ←IDLE
+> if Evt. res =SUCCESS then
+> status (v)←DONE ,W ← ApplyEffects (W, v )
+> fails ←0
+> else
+> status (v)←FAILED
+> replan ←true ,fails++
+
+tuple of entity sets: 
+
+Wt = ( SRt , SOt , SAt ), (1) where SRt , SOt , and SAt denote the sets of robot, object, and area (room) states, respectively. For each robot ri in the fleet R = {r1, . . . , r N }, its state 
+
+Sri ∈ SRt is: 
+
+Sri = ( id i, pi, θ i, σ i, inv i, skills i), (2) where id i is a unique identifier; pi ∈ R3
+
+is position; θi ∈ [0 , 360) is yaw; σi ∈{IDLE , EXECUTING , CANCELING , . . . } is status; inv i is the payload identifier (or None ); and skills i is the set of action capabilities. For each discovered object oj , its state Soj ∈ SOt is: 
+
+Soj = ( id j , type j , pj , rec j , πj , room j , src j , τ j ), (3) where id j is a unique identifier; type j is the class (e.g., 
+
+Microwave , Apple ); pj ∈ R3 is the last known position; 
+
+rec j is the identifier of the parent receptacle containing the object (or None if uncontained), which governs visibility and reachability constraints; and πj ∈ { 0, 1}D is a binary vector encoding D dynamic properties. This topological addition ensures the planner understands that an object’s spatial coordinates ( pj ) are inaccessible if its parent receptacle is closed. Let Pprops be the property set with D = |P props |:
+
+Pprops = {isOpen , isToggled , isBroken , · · · } . (4) Thus, πj, isOpen = 1 indicates object oj is open. Finally, room j denotes the containing room, src j is the source (Robot ID or IoT Device ID), and τj is the timestamp of the last update. A key innovation of our R2X approach is fusing hetero-geneous observations from mobile robots and stationary IoT devices. The world model evolves via a transition function 
+
+F that processes update messages ut from all agents (robots 
+
+R and IoT devices D = {d1, . . . , d M }): 
+
+Wt+1 = F(Wt, u t), ut ∈ { observations from R ∪ D} .
+
+(5) Specifically, the transition function F updates the topological hierarchy of Wt during object manipulation. When a robot 
+
+ri successfully executes a Pickup on object oj , F updates the robot’s payload ( Sri .inv i ← id j ) and assigns the robot as the object’s new parent container ( Soj .rec j ← id i). Conversely, a Put action targeting receptacle ok clears the robot’s payload and updates the object’s parent to the target (Soj .rec j ← id k). This rigorous bookkeeping ensures that the LLM planner’s subsequent queries reflect the true nested state of the environment. 
+
+B. Online R2X Planning and Execution 
+
+Given a high-level task T with goal condition G, the system repeats a sense–plan–act loop until G is satisfied or no feasible progress remains. The online planner queries an LLM to produce a multi-agent plan represented as a dependency graph (DAG) 
+
+Π = ( V, E) ← fLLM (P(T , Wt)) , (6) where V is a set of action steps (nodes) and E encodes dependencies (edges). Each action node v ∈ V specifies an action type and parameters, plus execution constraints: 
+
+v = ( a, params , req_skills , r pref ), (7) where req_skills denotes mandatory capabilities (e.g., manip-ulation vs. pure navigation), and rpref is an optional targeted robot. During the parallel dispatch phase, the orchestrator dynamically assigns nodes with satisfied dependencies to available, idle robots. This runtime matching relies on state-aware heuristics—evaluating spatial proximity, current inven-tory status, and required camera horizon ( ϕ) adjustments—to maximize parallel execution across the fleet. Finally, an asyn-chronous execution monitor handles the unpredictability of embodied multi-agent operation. It actively polls for physical event resolutions (e.g., ActionDone , simulator collisions) and dynamic IoTUpdate broadcasts. Upon detecting task failures, insurmountable simulator stalls, or relevant envi-ronmental shifts, the monitor explicitly halts active robots to prevent orphaned behaviors before instantly triggering a state-grounded replan. 4TABLE II: Overall Performance Evaluation. Results with GPT-4.1 as the LLM planner in a three-robot setting.                             
+
+> Configuration Success Rate ↑Avg. Action Steps/Scene ↓Avg. Path Length/Scene ↓Avg. LLM Tokens/Scene ↓
+> Comparison to prior works (adapted to our setting in Sec. III, e.g., target positions are unknown before exploration.) SMART-LLM (Adapted) [2] (IROS 2024) 88% 124 119 m 43,397 EMOS (Adapted) [15] (ICLR 2025) 88% 135 122 m 51,394 Our method (w/ ablations), which compares three communication configurations. IR (w/o X & Inter-robot Comm.) 66% 186 137 m 54,572 R2R (w/o X Comm.) 92% 116 99 m 47,875
+> R2X 92% 108 88 m 42,438
+
+TABLE III: Performance comparison across different sizes of LLMs. Using R2X configuration, with three robots.                      
+
+> Model Success Rate ↑Avg. Action Steps/Scene ↓Avg. Path Length/Scene ↓Avg. LLM Tokens/Scene ↓
+> Llama-3.1-8b-instruct (8 billion parameters) 6% 47 55 m 50,512 Gemma-3-27b-it (27 billion parameters) 64% 113 94 m 26,753 GPT-4.1 (estimated ∼1.8 trillion parameters) 92% 108 88 m 42,438
+
+C. Action Execution 
+
+Abstract plan steps are realized by low-level executors that embed procedural knowledge to handle common failure modes. For example, executing slice_object is a state-aware subroutine that checks inventory constraints, drops objects if needed, navigates to an appropriate workspace, and performs slicing with retries as applicable. All simulator or hardware interactions are routed through a fault-tolerant interface that sandboxes calls to prevent single-component failures from crashing the entire system. V. EXPERIMENTS AND RESULTS We evaluate IndoorR2X through a series of controlled ablation studies to isolate the impact of (i) information sharing mechanisms, (ii) LLM planner capability, and (iii) the reliability of the R2X channel. Unless otherwise stated, all experiments involve a team of three robots performing tasks from the suite described in Sec. III, utilizing the framework detailed in Sec. IV. 
+
+A. Experimental Setup 
+
+We evaluate IndoorR2X on the 85 virtual scenes and task suites detailed in Sec. III. To isolate the effects of information sharing, we compare three protocols: IR (Isolated) , where robots rely solely on local perception; R2R , where robots share a merged map; and R2X (Ours) , which augments R2R with real-time IoT updates (e.g., CCTV priors). To assess the system’s sensitivity to reasoning capabilities, we evaluate three different LLMs as the central planner, keeping the per-ception and execution modules fixed. To test the robustness of the R2X integration, we systematically introduce artificial constraints during our ablations. These include varying the IoT communication latency ( tdelay ), scaling the robot team size ( N = 2 to 6), and injecting perception failures (omission and corruption) into the infrastructure data stream. 
+
+B. Evaluation Metrics 
+
+We report Success Rate (SR) (percentage of fully com-pleted episodes) and three efficiency metrics where lower values indicate better performance: Avg. Action Steps (cu-mulative low-level navigation and manipulation actions), 
+
+Avg. Path Length (total meters traveled by the fleet), and 
+
+Avg. LLM Tokens (proxy for planning cost). 
+
+C. Impact of Communication Configuration 
+
+Table II demonstrates the superiority of our approach against SOTA baselines and highlights the critical role of information sharing under partial observability. Compared to prior works that rely solely on R2R configurations, such as SMART-LLM and EMOS, which both plateau at an 88% suc-cess rate, our proposed R2R and R2X configurations improve overall task success by 4%. Notably, our full R2X method is significantly more efficient than both baselines, reducing average path length by over 26% compared to SMART-LLM and yielding the most token-efficient performance among all evaluated methods. Within our ablations, the independent IR baseline strug-gles with a low success rate due to redundant exploration and uncoordinated actions. Enabling R2R communication boosts this success rate by nearly 40% (relative) and reduces path length by ∼28%. Incorporating IoT infrastructure data ( R2X )maintains this high success rate while further optimizing execution efficiency: it reduces the average action steps by 
+
+∼7% and path length by an additional ∼11% compared to the R2R configuration. This confirms that while inter-robot sharing ensures task feasibility, infrastructure sensing acts as a powerful heuristic to minimize exploration cost. Furthermore, these spatial priors significantly reduce the cognitive load on the planner: R2X decreases average LLM token usage by over 11% compared to R2R, translating directly to faster inference times and lower operational costs. 
+
+D. Impact of LLM Scale 
+
+Table III analyzes the impact of the planner’s model size. GPT-4.1 [40] achieves the highest reliability (92% SR). Gemma-3-27b [41] shows promise as a cost-effective alternative, achieving lower token footprint and respectable efficiency metrics, but suffering a drop in success rate (64%). The smaller Llama-3.1-8b [42] fails in most episodes (6% SR); note that its low action count is an artifact of early failure rather than efficiency. These results suggest a trade-off where smaller models may suffice for simpler sub-5Fig. 3: Scalability analysis. Success rate (left) and efficiency metrics (center/right) as a function of team size ( N = 2 to 6). While success remains stable up to N = 5 , the coordination overhead (total distance traveled) increases with fleet size.                            
+
+> Fig. 4: Robustness to “X” failures. The system is resilient to missing detections (left), maintaining a constant success rate at the cost of increased travel. However, incorrect semantic status reports (right) significantly impact success, as false positives can lead to unrecoverable planning errors. TABLE IV: Effect of IoT latency on R2X performance. Using GPT-4.1 as the LLM planner with R2X configuration, with three robots.
+> IoT Latency Success Rate ↑Avg. Action Steps/Scene ↓Avg. Path Length/Scene (m) ↓Avg. LLM Tokens/Scene ↓
+> tdelay = 0 (no delay) 92% 108 88 m 42,438
+> tdelay = 5 90% 111 95 m 48,583
+> tdelay = 10 87% 116 101 m 49,374
+
+tasks, but capable frontier models are required for high-level coordination. 
+
+E. Impact of IoT Latency 
+
+We introduce artificial delays of tdelay steps to the IoT data stream before fusion (Table IV). As expected, increased la-tency correlates with performance degradation. With tdelay =10 , success rate drops to 87% and path length increases by 
+
+∼15%. This degradation occurs because the planner may generate allocations based on stale state (e.g., assigning a robot to an object that has already moved), necessitating replanning and additional travel when the discrepancy is discovered. 
+
+F. Scalability and Team Size 
+
+We vary the robot team size from two to six agents (Fig. 3). The success rate remains robust ( >90%) for teams of up to five robots, indicating effective conflict resolu-tion. However, we observe that aggregate path length and action steps scale with team size. This trend reflects the inherent overhead of coordination: as more agents share the workspace, path planning becomes more constrained, and task allocation becomes more complex, leading to increased total fleet movement even if individual makespan decreases. 
+
+G. Robustness to “X” Failures 
+
+We evaluate system resilience against two types of IoT failures: omission (missing detections) and corruption (incor-rect status). As shown in Fig. 4, the system is highly robust to omission: even with 100% of CCTV object detections missing, the success rate remains constant (92%), though path length increases as robots are forced to actively explore. In contrast, semantic corruption (e.g., reporting a device is “OFF” when it is “ON”) is more detrimental, linearly re-ducing success rate. This asymmetry arises because missing information merely delays the plan (triggering exploration), whereas false information can trick the planner into skipping necessary preconditions. This finding highlights the need for verification mechanisms when integrating untrusted IoT signals. 
+
+H. Qualitative Analysis 
+
+Fig. 5 visualizes a representative rollout involving three robots. The R2X integration allows the system to instan-taneously populate the global semantic state with object locations (e.g., of the tennis racket and laptop) detected by CCTV. Consequently, Robot 3 navigates directly to the tennis racket without a search phase, while Robot 2, upon finishing its task at the desktop, seamlessly transitions to assist Robot 3 with the laptop transport. The paths (shown in the top-down view) exhibit minimal overlap, demonstrating that the shared global context enables efficient spatial distribution of the fleet. This behavior qualitatively confirms our quantitative findings: R2X reduces the “entropy” of the search process, converting an exploration problem into a more efficient routing problem. 
+
+I. Real-World Experiment 
+
+To validate our framework beyond simulation, we deploy 
+
+IndoorR2X in a physical environment. This real-world study utilizes Stretch robots [43] and external web cameras, closely mirroring the sensing and embodiment configurations of our virtual trials. As illustrated in Fig. 6, the setup features a three-room environment. Two mobile Stretch robots are initialized in a room without line-of-sight to either of their targets: the blue shopping bag or the third, stationary Stretch robot positioned next to a dog robot. Traditional multi-robot coordination methods would require the mobile robots to exhaustively explore all rooms to locate these targets. By contrast, our approach broadens the global perception field using two web cameras. The previously unknown target locations are rapidly detected (via Qwen-VL) and localized within the mobile robots’ global map. Consequently, the 
+
+IndoorR2X framework enables the two mobile Stretch robots 6Robot 1 
+
+Tasks: 1. Discard foods on CounterTop 2. Switch off all PCs 3. Bring the Racket and the Laptop to the FamilyRoom Robot 2 
+
+Robot 3 
+
+Top-Down Global View 
+
+> #R2 & R3 Coordination R2 Will help R3 to move Laptop# GoToRoom FamilyRoom GoToObject Desktop SwitchOff Desktop GoToRoom BedRoom GoToObject LapTop PickupObject LapTop GoToRoom FamilyRoom PickupObject LapTop GoToRoom FamilyRoom GoToRoom BedRoom GoToObject TennisRacket PickupObject TennisRacket GoToRoom FamilyRoom
+
+Task 2 Task 3 Task 1 
+
+> GoToObject SideTable PutObject TennisRacket X Info #Laptop: Status is off CCTV: TennisRacket & Laptop are at BedRoom# X Info #Desktop: Status is on CCTV: Desktop is at FamilyRoom#
+> No action. Observe Robot2 brings the laptop into the Family Room. GoToObject CounterTop GoToObject Lettuce PickupObject Lettuce GoToObject GarbageCan PutObject Lettuce GoToObject Potato PickupObject Potato GoToObject GarbageCan PutObject Potato GoToObject Tomato PickupObject Tomato GoToObject GarbageCan PutObject Tomato
+
+X (Everything) 
+
+Desktop Laptop CCTV Cam 
+
+> #Lettuce, Potato, and Tomato are on the CounterTop# #Let R3 go first#
+
+Object Locations On/Off Status Fig. 5: Qualitative demonstration of IndoorR2X (simulation environment). Three robots and IoT sensors coordinate to efficiently dispose of perishables, power down devices, and consolidate items in the family room. Place the yellow mustard bottle into a blue shopping bag, then bring the black USB cable from the desk to a stretch robot next to a dog robot. 
+
+Target (visible to cam 1, invisible to robot 1 at its start point) Target (visible to robot 1 at its start point) Target (visible to cam 2, invisible to robot 2 at its start point) Target (visible to robot 2 at its start point) 
+
+Cam 1 Cam 2 Robot 1 Robot 2 trajectory trajectory With camera information, coordinate two robots’ tasks without exploration 
+
+Fig. 6: Illustration of our real-world experiment. Two mobile Stretch robots jointly perform tasks in a three-room environment, utilizing two web cameras for out-of-sight visibility. A third Stretch robot stands stationary by a robot dog as a target. 
+
+to bypass the exploration phase entirely, directly navigating to the targets for manipulation and delivery. This drastically reduces execution time and streamlines overall task comple-tion. VI. CONCLUSION We presented IndoorR2X , the first benchmark and frame-work extending V2X principles to indoor multi-robot coor-dination (R2X). By fusing onboard robot perception with ambient IoT sensors (e.g., CCTV), IndoorR2X constructs a shared global semantic state that overcomes the inherent lim-itations of partial observability. Our systematic evaluations across virtual simulations and initial physical deployments demonstrate that this integration does more than just reduce redundant physical exploration; it significantly decreases the cognitive load and token cost of LLM-based planners while substantially improving task efficiency. Furthermore, our robustness analysis reveals that while the system is highly resilient to missing sensor data, it requires stringent verification against semantic corruption, highlighting critical 7design constraints for global perception-aware fleets in smart indoor spaces. REFERENCES [1] Y. Kant, A. Ramachandran, S. Yenamandra, I. Gilitschenski, D. Batra, A. Szot, and H. Agrawal, “Housekeep: Tidying virtual households using commonsense reasoning,” in European Conference on Computer Vision . Springer, 2022, pp. 355–373. [2] S. S. Kannan, V. L. Venkatesh, and B.-C. Min, “Smart-llm: Smart multi-agent robot task planning using large language models,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2024, pp. 12 140–12 147. [3] X. Zhang, H. Qin, F. Wang, Y. Dong, and J. Li, “Lamma-p: Gen-eralizable multi-agent long-horizon task allocation and planning with lm-driven pddl planner,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025, pp. 10 221–10 221. [4] W. Gosrich, S. Agarwal, K. Garg, S. Mayya, M. Malencia, M. Yim, and V. Kumar, “Online multi-robot coordination and cooperation with task precedence relationships,” IEEE Transactions on robotics , 2025. [5] L. Sabri, S. Bouznad, S. Rama Fiorini, A. Chibani, E. Prestes, and Y. Amirat, “An integrated semantic framework for designing context-aware internet of robotic things systems,” Integrated Computer-Aided Engineering , vol. 25, no. 2, pp. 137–156, 2018. [6] G. Wilson, C. Pereyda, N. Raghunath, G. De La Cruz, S. Goel, S. Nesaei, B. Minor, M. Schmitter-Edgecombe, M. E. Taylor, and D. J. Cook, “Robot-enabled support of daily activities in smart home environments,” Cognitive systems research , vol. 54, pp. 258–272, 2019. [7] L. Romeo, A. Petitti, R. Marani, and A. Milella, “Internet of robotic things in smart domains: Applications and challenges,” Sensors ,vol. 20, no. 12, p. 3355, 2020. [8] V. V. Aroulanandam, P. Sherubha, K. Lalitha, J. Hymavathi, R. Thia-garajan, et al. , “Sensor data fusion for optimal robotic navigation using regression based on an iot system,” Measurement: Sensors , vol. 24, p. 100598, 2022. [9] Y. Li, D. Ma, Z. An, Z. Wang, Y. Zhong, S. Chen, and C. Feng, “V2x-sim: Multi-agent collaborative perception dataset and benchmark for autonomous driving,” IEEE Robotics and Automation Letters , vol. 7, no. 4, pp. 10 914–10 921, 2022. [10] H. Xiang, Z. Zheng, X. Xia, R. Xu, L. Gao, Z. Zhou, X. Han, X. Ji, M. Li, Z. Meng, et al. , “V2x-real: a largs-scale dataset for vehicle-to-everything cooperative perception,” in European Conference on Computer Vision . Springer, 2024, pp. 455–470. [11] K. Wu, P. Li, Y. Zhou, R. Gan, J. You, Y. Cheng, J. Zhu, S. T. Parker, B. Ran, D. A. Noyce, et al. , “V2x-llm: Enhancing v2x integration and understanding in connected vehicle corridors,” arXiv preprint arXiv:2503.02239 , 2025. [12] L. Wang, Y. Ren, H. Jiang, P. Cai, D. Fu, T. Wang, Z. Cui, H. Yu, X. Wang, H. Zhou, et al. , “Accidentgpt: Accident analysis and prevention from v2x environmental perception with multi-modal large model,” arXiv preprint arXiv:2312.13156 , 2023. [13] D. Bai, I. Singh, D. Traum, and J. Thomason, “Twostep: Multi-agent task planning using classical planners and large language models,” 
+
+arXiv preprint arXiv:2403.17246 , 2024. [14] X. Liu, D. Guo, X. Zhang, and H. Liu, “Heterogeneous embodied multi-agent collaboration,” IEEE Robotics and Automation Letters ,vol. 9, no. 6, pp. 5377–5384, 2024. [15] J. Chen, C. Yu, X. Zhou, T. Xu, Y. Mu, M. Hu, W. Shao, Y. Wang, G. Li, and L. Shao, “EMOS: Embodiment-aware heterogeneous multi-robot operating system with LLM agents,” in The Thirteenth International Conference on Learning Representations , 2025. [Online]. Available: https://openreview.net/forum?id=Ey8KcabBpB [16] S. A. Yusuf, A. Khan, and R. Souissi, “Vehicle-to-everything (v2x) in the autonomous vehicles domain–a technical review of communica-tion, sensor, and ai technologies for road user safety,” Transportation Research Interdisciplinary Perspectives , vol. 23, p. 100980, 2024. [17] Y. Yang, H. Yu, X. Fu, Y. Ren, Y. Zhao, and Y. Shi, “A dynamic priority-based batch verification scheme for v2x communication in vehicular networks*,” in 2025 IEEE Intelligent Vehicles Symposium (IV) , 2025, pp. 781–786. [18] D. Mahmud, H. Hajmohamed, S. Almentheri, S. Alqaydi, L. Aldha-heri, R. A. Khalil, and N. Saeed, “Integrating llms with its: Recent advances, potentials, challenges, and future directions,” IEEE Trans-actions on Intelligent Transportation Systems , 2025. [19] T. Farnham, S. Jones, A. Aijaz, Y. Jin, I. Mavromatis, U. Raza, A. Portelli, A. Stanoev, and M. Sooriyabandara, “Umbrella collab-orative robotics testbed and iot platform,” in 2021 IEEE 18th An-nual Consumer Communications & Networking Conference (CCNC) .IEEE, 2021, pp. 1–7. [20] Y. Tashtoush, I. Haj-Mahmoud, O. Darwish, M. Maabreh, B. Als-inglawi, M. Elkhodr, and N. Alsaedi, “Enhancing robots navigation in internet of things indoor systems,” Computers , vol. 10, no. 11, p. 153, 2021. [21] K. Krzykowska-Piotrowska, E. Dudek, M. Siergiejczyk, A. Rosi´ nski, and W. Wawrzy´ nski, “Is secure communication in the r2i (robot-to-infrastructure) model possible? identification of threats,” Energies ,vol. 14, no. 15, p. 4702, 2021. [22] P. Li, Z. An, S. Abrar, and L. Zhou, “Large language models for multi-robot systems: A survey,” arXiv preprint arXiv:2502.03814 , 2025. [23] A. Lykov, M. Dronova, N. Naglov, M. Litvinov, S. Satsevich, A. Bazhenov, V. Berman, A. Shcherbak, and D. Tsetserukou, “Llm-mars: Large language model for behavior tree generation and nlp-enhanced dialogue in multi-agent robot systems,” arXiv preprint arXiv:2312.09348 , 2023. [24] Z. Mandi, S. Jain, and S. Song, “Roco: Dialectic multi-robot col-laboration with large language models,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 286–299. [25] K. Liu, Z. Tang, D. Wang, Z. Wang, X. Li, and B. Zhao, “Coherent: Collaboration of heterogeneous multi-robot system with large language models,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025, pp. 10 208–10 214. [26] K. Song, S. Ma, G. Chen, N. Jin, G. Zhao, M. Ding, Z. Xiong, and J. Pan, “Collabot: Vision-language guided simultaneous collaborative manipulation,” arXiv preprint arXiv:2508.03526 , 2025. [27] Y. Zhu, J. Chen, X. Zhang, M. Guo, and Z. Li, “Dexter-llm: Dynamic and explainable coordination of multi-robot systems in unknown envi-ronments via large language models,” in 2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2025, pp. 10 182–10 189. [28] M. Ahn, M. G. Arenas, M. Bennice, N. Brown, C. Chan, B. David, A. Francis, G. Gonzalez, R. Hessmer, T. Jackson, et al. , “Vader: Visual affordance detection and error recovery for multi robot human collaboration,” arXiv preprint arXiv:2405.16021 , 2024. [29] S. Ling, Y. Wang, C. Fan, T. L. Lam, and J. Hu, “Elhplan: Effi-cient long-horizon task planning for multi-agent collaboration,” arXiv preprint arXiv:2509.24230 , 2025. [30] S. Nayak, A. Morrison Orozco, M. Have, J. Zhang, V. Thirumalai, D. Chen, A. Kapoor, E. Robinson, K. Gopalakrishnan, J. Harrison, 
+
+et al. , “Long-horizon planning for multi-agent robots in partially observable environments,” Advances in Neural Information Processing Systems , vol. 37, pp. 67 929–67 967, 2024. [31] L. P. Kaelbling, M. L. Littman, and A. R. Cassandra, “Planning and acting in partially observable stochastic domains,” Artificial Intelli-gence , vol. 101, no. 1–2, pp. 99–134, 1998. [32] W. Burgard, M. Moors, C. Stachniss, and F. E. Schneider, “Coor-dinated multi-robot exploration,” in IEEE Transactions on Robotics ,vol. 21, no. 3. IEEE, 2005, pp. 376–386. [33] B. Yamauchi, “Frontier-based exploration using multiple robots,” in 
+
+Proceedings of the Second International Conference on Autonomous Agents , 1998, pp. 47–53. [34] Z. Huang, G. Shi, Y. Wu, V. Kumar, and G. S. Sukhatme, “Composi-tional coordination for multi-robot teams with large language models,” 
+
+arXiv preprint arXiv:2507.16068 , 2025. [35] J. Lim and I. Kovalenko, “Dynamic task adaptation for multi-robot manufacturing systems with large language models,” arXiv preprint arXiv:2505.22804 , 2025. [36] E. Kolve, R. Mottaghi, W. Han, E. VanderBilt, L. Weihs, A. Herrasti, D. Gordon, Y. Zhu, A. Gupta, and A. Farhadi, “AI2-THOR: An Interactive 3D Environment for Visual AI,” arXiv , 2017. [37] M. Deitke, E. VanderBilt, A. Herrasti, L. Weihs, J. Salvador, K. Ehsani, W. Han, E. Kolve, A. Farhadi, A. Kembhavi, and R. Mottaghi, “ProcTHOR: Large-Scale Embodied AI Using Procedural Generation,” in NeurIPS , 2022, outstanding Paper Award. [38] M. Deitke, W. Han, A. Herrasti, A. Kembhavi, E. Kolve, R. Mottaghi, J. Salvador, D. Schwenk, E. VanderBilt, M. Wallingford, et al. ,“Robothor: An open simulation-to-real embodied ai platform,” in 
+
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2020, pp. 3164–3174. 
+
+8[39] J. Bai, S. Bai, S. Yang, S. Wang, S. Tan, P. Wang, J. Lin, C. Zhou, and J. Zhou, “Qwen-vl: A versatile vision-language model for un-derstanding, localization, text reading, and beyond,” arXiv preprint arXiv:2308.12966 , 2023. [40] J. Achiam, S. Adler, S. Agarwal, L. Ahmad, I. Akkaya, F. L. Aleman, D. Almeida, J. Altenschmidt, S. Altman, S. Anadkat, et al. , “Gpt-4 technical report,” arXiv preprint arXiv:2303.08774 , 2023. [41] G. Team, A. Kamath, J. Ferret, S. Pathak, N. Vieillard, R. Merhej, S. Perrin, T. Matejovicova, A. Ramé, M. Rivière, et al. , “Gemma 3 technical report,” arXiv preprint arXiv:2503.19786 , 2025. [42] A. Dubey, A. Jauhri, A. Pandey, A. Kadian, A. Al-Dahle, A. Letman, A. Mathur, A. Schelten, A. Yang, A. Fan, et al. , “The llama 3 herd of models,” arXiv e-prints , pp. arXiv–2407, 2024. [43] C. C. Kemp, A. Edsinger, H. M. Clever, and B. Matulevich, “The design of stretch: A compact, lightweight mobile manipulator for indoor human environments,” in 2022 International Conference on Robotics and Automation (ICRA) . IEEE, 2022, pp. 3150–3157. 
+
+9

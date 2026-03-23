@@ -1,0 +1,639 @@
+Title: CeRLP: A Cross-embodiment Robot Local Planning Framework for Visual Navigation
+
+URL Source: https://arxiv.org/pdf/2603.19602v1
+
+Published Time: Mon, 23 Mar 2026 00:28:15 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+> 1
+
+# CeRLP: A Cross-embodiment Robot Local Planning Framework for Visual Navigation 
+
+Haoyu Xi 1,2, Mingao Tan 1,2, Xinming Zhang 2, Siwei Cheng 2, Shanze Wang 2, Yin Gu 2, Xiaoyu Shen 2, Wei Zhang 2∗
+
+Abstract—Visual navigation for cross-embodiment robots is challenging due to variations in robot and camera configura-tions, which can lead to the failure of navigation tasks. Previous approaches typically rely on collecting massive datasets across different robots, which is highly data-intensive, or fine-tuning models, which is time-consuming. Furthermore, both methods often lack explicit consideration of robot geometry. In this paper, we propose a Cross-embodiment Robot Local Planning (CeRLP) framework for general visual navigation, which ab-stracts visual information into a unified geometric formulation and applies to heterogeneous robots with varying physical dimensions, camera parameters, and camera types. CeRLP introduces a depth estimation scale correction method that utilizes offline pre-calibration to resolve the scale ambiguity of monocular depth estimation, thereby recovering precise metric depth images. Furthermore, CeRLP designs a visual-to-scan abstraction module that projects varying visual inputs into height-adaptive laser scans, making the policy robust to heterogeneous robots. Experiments in simulation environments demonstrate that CeRLP outperforms comparative methods, validating its robust obstacle avoidance capabilities as a local planner. Additionally, extensive real-world experiments verify the effectiveness of CeRLP in tasks such as point-to-point navigation and vision-language navigation, demonstrating its generalization across varying robot and camera configurations. Index Terms—Visual Navigation, Cross-embodiment, Local Planning. 
+
+I. Introduction 
+
+# MOBILE robot navigation aims to identify a feasible path to a destination within cluttered environments while ensuring platform safety. This fundamental capabil-ity holds immense value for diverse applications, ranging from autonomous logistics to search and rescue operations. While traditional approaches like the Dynamic Window Approach (DWA) [1] and Timed Elastic Band (TEB) [2]–[4] have proven effective, they rely on precise, pre-built maps for path planning and obstacle avoidance. Deep Reinforcement Learning (DRL) approaches directly process raw sensor observations from cameras or LiDARs and predict future actions. This paradigm enables robots to learn policies through interaction with the environment without explicit map dependence. LiDAR provides reliable and accurate ranging informa-tion of the surrounding environment [5]. Prior works [6]– [9] utilize LiDAR to ensure the safety of robot naviga-       
+
+> 1School of Computer Science, Shanghai Jiao Tong University, Shanghai, P. R. China
+> 2College of Information Science and Technology, Eastern Institute of Technology, Ningbo, P. R. China *Corresponding author. Email: zhw@eitech.edu.cn.
+
+tion. Additionally, DRL-DCLP [9] has demonstrated that geometric information from laser scans facilitates robust navigation policies transferable across robots with varying physical dimensions. Different from LiDARs, cameras offer high frame rates and rich texture information [10] while typically being cheaper [11]. Visual navigation has thus seen rapid development, particularly in tasks requiring semantic understanding [12]–[14]. However, achieving ro-bust generalization across heterogeneous robots remains a challenge in visual navigation, especially for monocular systems. Unlike laser scans which provide normalized metric measurements, raw visual observations suffer from scale ambiguity problem: scale cannot be captured in a single image, as scale information is lost in the process of projecting from a 3D scene to a 2D image. Consequently, a policy learned on one dataset often experiences a domain shift when deployed on another dataset with a different camera setup [15]. Even minor alterations in camera mounting height or pitch can lead to a degradation in navigation accuracy, as the agent may misinterpret the distance to obstacles due to the lack of explicit scale cues. This generalization gap becomes challenging when integrating navigation with high-level cognitive tasks, such as Vision-Language Navigation (VLN) [16]. Existing VLN methods primarily focus on grounding language instruc-tions to visual topological graphs, often overlooking the performance of local planning in the physical world. Most VLN agents treat the robot as a simplified point mass, ignoring the risk of obstacle collision in local planning. To address these challenges, recent learning-based visual navigation approaches have focused on large-scale data or fine-tuning. ExAug [17], GNM [18], ViNT [19], RING [20] utilize massive, diverse datasets to learn generalizable visual representations. Alternatively, adaptation-based methods such as SplitNet [21], FastRLAP [22], OVRL [23] employ fine-tuning to adapt agents to new environments or embodiments. However, none of these methods explicitly incorporate the robot’s geometric information, thereby introducing potential safety risks. Distinguishing our work from these approaches, we introduce a novel perspective by abstracting visual information into a unified geometric formulation, thereby avoiding the need to directly learn camera-specific pixel distributions. By representing differ-ent visual observations into a standardized virtual laser scan and modeling the robot as a generalized cuboid, we effectively decouple the navigation policy from specific sen-sor hardware and robot platform. Under this formulation, visual navigation becomes agnostic to robot morphology. 
+
+> arXiv:2603.19602v1 [cs.RO] 20 Mar 2026 2Different views and robot sizes
+
+Heterogeneous robots 
+
+> Unified Representations
+
+CeRLP  
+
+> Scale Correction for Depth Estimation
+> Visual-To-Scan Abstraction
+> Scale recovery
+> Local Planning
+> Navigation in Unseen Environments
+> Fig. 1. CeRLP addresses the challenge of visual navigation across heterogeneous robots with varying physical dimensions and camera configurations. By transforming diverse visual inputs into a unified virtual laser scan and modeling the robot as a generalized cuboid, the framework effectively achieves obstacle avoidance in unseen environments without any fine-tuning.
+
+Wheeled robots, quadrupeds, and other platforms can be uniformly represented as cuboids with varying lengths and widths, equipped with cameras following a consistent scaling convention. Therefore, this paper proposes CeRLP, a Cross-embodiment Robot Local Planning framework for general visual navigation, as shown in Fig. 1. To the best of our knowledge, CeRLP is the first visual-based local planning framework that enables cross-embodiment deployment across diverse robots without requiring large-scale multi-robot datasets, fine-tuning, or retraining. CeRLP applies to varying types of cameras as well as cameras with different intrinsic and extrinsic parameters without any fine-tuning. Meanwhile, CeRLP does not require large and various datasets and is trained only in simulation environments, enabling direct zero-shot transfer to the real world and navigation in unseen environments. Instead of processing raw RGB images directly, CeRLP utilizes a depth estimation module to obtain relative depth images, which are utilized to recover metric scale and geometric structure. To handle the scale ambiguity of monocular and camera perspective shifts, CeRLP introduces a scale correction method and a visual-to-scan abstraction mod-ule, which transforms relative depth images into metric depth images and obtains the height-adaptive laser scan, effectively eliminating the impact of camera variations. In summary, the main contributions of this paper are:  
+
+> •
+
+We propose a Cross-embodiment Robot Local Plan-ning (CeRLP) framework for general visual naviga-tion that achieves zero-shot transfer across heteroge-neous robots with varying physical dimensions and camera configurations.  
+
+> •
+
+We introduce the scale correction method for monoc-ular depth estimation that utilizes the offline scale calibration to achieve scale recovery, addressing the gap between relative depth images and metric depth images.  
+
+> •
+
+We design the visual-to-scan abstraction method that converts depth information into a virtual laser scan with adaptive height adjustment, making the policy robust to heterogeneous robots.  
+
+> •
+
+We conduct extensive real-world experiments on mul-tiple robot platforms with different camera setups, demonstrating that our method outperforms baseline approaches in terms of success rate and generalization capability. II. Related Work A. Learning-based Visual Navigation Learning-based visual navigation has achieved promis-ing progress in recent years. HALO [24] uses an offline reward-learning pipeline for egocentric RGB navigation, and generalizes to unseen environments and hardware setups not present in the training data. FastRLAP [22] takes RGB images as input and trains in the real world without requiring human intervention. However, these ap-proaches typically lack specific designs for heterogeneous cameras and face inflexibility when robot configurations change. Different from these, some works have focused on general navigation models that aim to control diverse robots with a single model. GNM [18], ViNT [19], and NoMaD [25] leverage large-scale heterogeneous datasets collected from different robots to learn a goal-conditioned policy, which can be deployed on various robots and in different environments. Nevertheless, these data-driven approaches learn robot capabilities from trajectories rather 3
+
+than explicitly modeling the robot’s physical dimensions. Consequently, they cannot guarantee safety in narrow en-vironments when deployed on unseen robots with different footprints. Unlike these data-driven methods, our frame-work explicitly integrates robot dimension configurations into the visual navigation pipeline, enabling zero-shot transfer to new embodiments without requiring massive heterogeneous datasets. B. Monocular Depth Estimation and Scale Recovery Monocular depth estimation estimates depth from a single RGB image [26], which is a fundamental component for obstacle avoidance in low-cost robots. Recent founda-tion models [27], [28] have demonstrated strong zero-shot generalization capabilities across diverse scenes. However, these models typically predict relative depth, which suffers from scale ambiguity, making it unsuitable for direct metric navigation and collision avoidance. To recover metric scale, several approaches have been proposed. Louw et al. [29] manually set the scale factor applied to specific cameras, but this method lacks generalizability. RSA [15] utilizes language descriptions to align relative predictions with metric scales, while HybridDepth [30] leverages focal stack information to provide reliable metric depth for scale prior calculation. Metric3D [31] proposes resolving scale ambiguity by transforming input images into a canonical camera space. UniDepth [32] explicitly estimates camera intrinsics to recover metric scale. VGGT [33] introduces a visual geometry grounded transformer that jointly infers camera parameters and 3D structure in a feed-forward manner. However, these methods still have errors when deployed on specific camera setups, directly affecting safety in obstacle avoidance tasks. In continuous naviga-tion tasks, pure geometric recovery methods often face numerical instability, leading to ill-conditioned matrices when object depths are uniform. This paper addresses the scale ambiguity problem by proposing a scale correction module. Instead of retraining depth models, we formulate scale recovery as an optimization problem constrained by ground-plane geometry, ensuring robust metric depth estimation for safe navigation. C. Cross-Embodiment and Dimension-Configurable Plan-ning Adapting navigation policies to different robot mor-phologies is a critical challenge. Traditional approaches often rely on manual parameter tuning for planners like DWA [1] or TEB [2]–[4]. Recent learning-based works attempt to automate this; for instance, Lu et al. [34] use demonstration trajectories to guide parameter tuning for RL. However, visual navigation faces the additional chal-lenge of sensor variation. Changes in camera height, pitch, or field of view (FOV) cause severe distribution shifts in observations. ExAug [17] addresses this by training with a view augmentation module that projects observations from different platforms into a unified synthetic view. However, this method still requires large datasets for training and assumes the robot shape is cylindrical. X-Nav [35] takes depth image as input and uses knowledge distillation to train a general navigation policy for a variety of wheeled and quadrupedal robots. For LiDAR-based navigation, DRL-DCLP [9] successfully achieves zero-shot adaptation to rectangular differential-drive robots with varying sizes. However, a counterpart for visual navigation that simultaneously handles visual sensor variations and physical body variations is still lacking. Our work bridges this gap by proposing a unified, dimension-configurable visual navigation framework. Our method handles diverse sensor positions and robot dimensions in a zero-shot man-ner, eliminating the need for post-fine-tuning or platform-specific data collection. III. Preliminaries In this section, we first define the coordinate systems, formulate the cross-embodiment visual navigation prob-lem, and analyze the scale ambiguity in monocular depth estimation. Finally, we briefly review the baseline local planning method. A. Coordinate Systems Firstly, we define three coordinate systems essential for our framework:  
+
+> •
+
+World Frame ( W): The global frame where the robot navigation task is defined.  
+
+> •
+
+Robot Frame ( R): The local frame attached to the robot base, with the y-axis pointing forward and the x-axis pointing right. The robot is modeled as a cuboid with dimensions body = [ Lfront , L rear , W ]. Lfront and 
+
+Lrear represent the distances from the drive center to the front and rear, respectively. W is the width of the robot.  
+
+> •
+
+Camera Frame ( C): The sensor frame attached to the camera. The transformation from C to R is defined by extrinsic parameters Text = [ Rext |text ],where text includes the mounting height, and Rext 
+
+accounts for the pitch angle. The camera is fixed relative to the robot, where xcam and ycam indicate the relative distance to the robot’s drive center, and 
+
+zcam represents the camera’s height above the ground. B. Problem Formulation We define the cross-embodiment visual navigation task as a continuous control problem where a robot must navi-gate to a target position within an unknown environment without collision. 1) Embodiment Representation: To handle diverse robot platforms, we explicitly model the physical prop-erties of the agent. An embodiment e ∈ E is characterized by the tuple e = ( body , K, Text , Ldyn ). Here, body =[Lfront , L rear , W ] represents the physical dimensions, K
+
+and Text denote the camera intrinsic and extrinsic pa-rameters, and Ldyn defines the velocity and acceleration limits. 4
+
+2) Observation and Action Space: At each time step t,the robot receives a raw visual observation It ∈ RH×W ×3
+
+from the onboard camera and a relative goal position gt ∈
+
+R2. The objective is to compute a continuous velocity command ut = ( vt, ω t) to drive the robot towards the goal. 3) Unified Geometric Representation: A fundamental challenge in this setting is the coupling between the raw visual observation It and the embodiment-specific camera parameters (K, Text ). Direct learning from It
+
+often leads to poor generalization across different cameras. To address this, we propose a mapping function Φ :(It, K, Text ) → xr t, which transforms the heterogeneous visual inputs into a unified geometric representation xr t.In this work, xr t takes the form of a unified virtual laser scan. This representation is invariant to specific camera configurations, providing a consistent state space for the planner. C. Scale Ambiguity in Monocular Depth Estimation Monocular depth estimation aims to map a single RGB image I to a depth image D. However, strictly recovering absolute metric depth from a single image is ill-posed due to the projective nature of cameras. The ambiguity arises from two primary sources: scale ambiguity and shift ambiguity. Deep learning-based monocular depth estimation models [27], [28], [36], [37] are typically trained on datasets mixing various sources. To ensure robust convergence across diverse datasets with conflicting scales, these models are trained in a scale-invariant or affine-invariant space. Specifically, the prediction is often aligned to zero translation and unit scale during training. Conse-quently, the raw output dpred is the inverse relative depth 
+
+dgt = 1 /Z gt .Based on the perspective in [15], [37], the relationship between the ground-truth inverse depth dgt and the model prediction dpred can be formulated as a linear transformation in the disparity domain: 
+
+dgt = s1 · dpred + s2, (1) where s1 ∈ R+ represents the global scale factor, and 
+
+s2 ∈ R represents the disparity shift. The s1 accounts for the unknown physical baseline in the single image, while the s2 compensates for the difference in the definition of the depth range. Therefore, to deploy a generic monocular depth model for robotic navigation, it is necessary to identify the optimal parameters (s1, s 2) that project the relative depth into the metric depth. D. Dimension-Configurable Planning The CeRLP local planning module, built on DRL-DCLP [9], addresses local navigation as a deep reinforcement learning (DRL) problem. It generates real-time velocity commands ut = (vt, ω t) for target-oriented obstacle avoidance using only local observations. To achieve gen-eralization across diverse robotic platforms, the method integrates a dimension-configurable policy network with a curriculum learning framework. At each time step t, the policy input ot aggregates the unified geometric representation and the robot state: 
+
+ot = {xr t, gt, vt, Ldyn }, (2) where vt = (vt, ω t) denotes the current velocity, and 
+
+Ldyn includes velocity limits (vmax , ω max ) and acceleration limits ( av, max , a ω, max ). Crucially, the unified geometric representation xr t is processed as a set of points xr t = {pt,i}ni=1 . To explicitly incorporate the robot’s geometry into the decision-making process, each point is encoded with dimension-aware features: 
+
+pt,i =
+
+(
+
+sin ϕt,i, cos ϕt,i, 1
+
+dt,i − β , L front , L rear , W
+
+2
+
+)
+
+,
+
+(3) where dt,i and ϕt,i are the distance and angle of the i-th scan point, and β is a trainable scaling parameter [38]. This formulation directly embeds the robot’s physical dimensions body = [ Lfront , L rear , W ] into the perception features. The point set is processed by a PointNet encoder [39] to extract a global geometric feature information, which is then concatenated with the goal and state information. The final action is generated by a Soft Actor-Critic (SAC) [40] network. We employ a curriculum learning strategy in ROS Stage simulation [41] to train the policy over a continuous space of robot configurations. By progressively increasing the complexity of the environment and the diversity of the sampled physical dimensions parameters body , the policy learns to adapt its obstacle avoidance behavior to the specific physical constraints of the robot. IV. Methods A. Overall framework of CeRLP The proposed CeRLP framework aims to bridge the gap between visual perception and geometric navigation constraints. As illustrated in Fig. 2, the pipeline consists of three core modules: (1) Scale Correction for Depth Estimation, which recovers metric scale from monocular images using a calibration-based rectification; (2) Visual-to-Scan Abstraction, which transforms the metric depth into a unified virtual laser scan, explicitly handling cam-era extrinsic variations; and (3) Dimension-Configurable Planning, which generates velocity commands based on the homogenized observation and robot dimensions. B. Scale Correction for Depth Estimation 1) Scale-Aware Depth Estimation: Recent advance-ments in foundational vision models, such as Depth Anything [27], [28] and MiDaS [37], have demonstrated exceptional zero-shot generalization capabilities across diverse scenarios. In this work, we employ a pre-trained depth estimation model, denoted as F, as the backbone to extract geometric features from RGB images. Given an input image I, the model predicts a relative depth image 5near far        
+
+> ݏଵ
+> ݏଶ= ( ܣ்ܣ+ܫߣ )ܣ்ܾ
+> Depth Anything V2
+> Image ܫPredicted depth ܦ୰ୣ୪
+
+۩ 
+
+> Corrected depth ܦ௠௘௧௥௜௖
+> Laser scan ࣦ
+> 1 × ܰ
+
+Heterogeneous robots    
+
+> Observation ࢕࢚
+> SAC Policy MLP
+> Low-level commands
+> (࢜,࣓)
+> Input Output
+
+Offline Scale Calibration Monocular depth estimation Scale Correction Dimension-Configurable Planning                             
+
+> ܦ୫ୣ୲୰୧ୡ = ( ݏଵܦ כ ୰ୣ୪ +ݏଶ)ିଵ
+> Image processing
+> Visual-to-scan
+> Frozen
+> Optional
+> ܫଶ,۹૛,܂ܜܠ܍ ,૛,ܡ܌ܗ܊ ૛
+> ܫଷ,۹૜,܂ܜܠ܍ ,૜,ܡ܌ܗ܊ ૜
+> ܫଵ,۹ଵ,܂ܜܠ܍ ,૚,ܡ܌ܗ܊ ૚
+> Obstacle filtering
+> r = ݔ୰୭ୠ ଶ+ݕ୰୭ୠ ଶ
+> Ʌ=ʹ (ݕ୰୭ୠ ,ݔ୰୭ୠ )
+> ۹,܂ܜܠ܍
+> ܡ܌ܗ܊
+> Goal Robot state
+> ܫସ,۹૝,܂ܜܠ܍ ,૝,ܡ܌ܗ܊ ૝
+> ܫଵଵ
+> VLN
+
+Fig. 2. The overall framework of CeRLP. The system abstracts visual observations from heterogeneous robots into a unified geometric representation. Heterogeneous robots with differing intrinsic parameters, extrinsic parameters, and physical dimensions capture RGB images from cameras. Scale calibration is an offline process utilizing distant and nearby ArUco markers to calculate the scale factor and disparity shift, thereby achieving scale recovery. Depth estimation employs pre-trained Depth Anything V2 to predict relative depth images. Scale Correction rectifies the relative depth image into a metric depth image during inference, subsequently transforming this metric depth image into a height-adaptive virtual laser scan. The dimension-configurable policy utilises this unified laser scan, goal position gt, and robot state information to generate safe control commands, achieving zero-shot transfer across embodiments. The robot state information contains physical dimensions body , current velocity vt, and velocity and acceleration limits Ldyn . Furthermore, this module can receive high-level commands, functioning as the lower-level obstacle avoidance planner for VLN. 
+
+Drel = F(I). Before being input to the depth estimation model, the original image is processed by normalizing and standardizing using ImageNet statistics [42]. However, these models are typically trained with scale-invariant losses to ensure adaptability to diverse datasets. Consequently, the output Drel is defined up to an unknown affine transformation relative to the true metric inverse depth. Although it is sufficient for topological scene under-standing, this lack of metric scale renders Drel inadequate for direct collision checking and path planning in physical environments. 2) Offline Scale Calibration: To address the scale ambi-guity across different cameras, we first propose an offline scale calibration method. This process utilizes the camera intrinsic matrix and distortion coefficients as inputs. By detecting ArUco markers of known physical sizes, we leverage geometric constraints to estimate the specific scale and shift parameters for the depth image. The problem is formulated as a least-squares optimization, outputting a scale factor and a shift value. The overall pipeline describes the following mapping: 
+
+f : ( I, D rel ) 7 → (Dmetric , s 1, s 2), (4) where Dmetric denotes the corrected metric depth image, 
+
+Drel is the predicted relative depth image by depth esti-mation model, and s1 and s2 are the estimated calibration parameters. Our approach establishes an affine transformation be-tween relative and absolute depth, solving for the pa-rameters using known geometric priors to achieve metric recovery. First, the input RGB image is converted to grayscale to detect ArUco markers from a predefined dictionary. For each detected marker i, we extract the pixel coordinates of its four corners, ci = [ uk, v k]T , k ∈ { 1, 2, 3, 4}. Given the known physical size s′ of the marker, the coordinates of the corners in the object coordinate system, Pobj , are defined as: 
+
+Pobj =
+
+
+
+−s′/2 s′/2 0
+
+s′/2 s′/2 0
+
+s′/2 −s′/2 0
+
+−s′/2 −s′/2 0
+
+
+
+> T
+
+. (5) We employ the Perspective-n-Point (PnP) algorithm to estimate the 6-DoF pose of the marker relative to the camera. Using the camera intrinsic matrix K and distortion coefficients d, we solve for the rotation vector 
+
+rvec and translation vector tvec :
+
+(rvec , tvec ) = solvePnP (Pobj , c, K, d). (6) Subsequently, the spatial coordinates of the marker cor-ners in the camera coordinate system, Pcam , are computed using the Rodrigues transformation: 
+
+R = Rodrigues (rvec ),
+
+P(k) 
+
+> cam
+
+= R · P(k) 
+
+> obj
+
++ tvec . (7) The ground truth metric depth z(k) 
+
+> real
+
+for each corner corresponds to the Z-component of P(k)
+
+> cam
+
+:
+
+z(k) 
+
+> real
+
+= [ P(k)
+
+> cam
+
+]z. (8) With the ground truth depth zreal obtained from ArUco geometry calculation and the predicted relative values 6
+
+Drel (up, v p) sampled from the depth model at correspond-ing pixel coordinates, we construct a linear system Ax = b
+
+to solve for the parameters: 
+
+A =
+
+
+
+Drel (up,1 , v p,1 ) 1
+
+Drel (up,2 , v p,2 ) 1
+
+... ...
+
+Drel (up,n , v p,n ) 1
+
+ , b =
+
+
+
+z(1)
+
+> real
+> −1
+
+z(2)
+
+> real
+> −1
+
+...
+
+z(n)
+
+> real
+> −1
+
+
+
+, x =
+
+[s1
+
+s2
+
+]
+
+,
+
+(9) where n is the total number of corners from detected markers. To ensure the robustness of the solution, we utilize markers placed at varying distances to capture sufficient geometric information. Specifically, since the linear system can be ill-conditioned when points are spatially clustered, we employ Ridge Regression [43] to stabilize the estima-tion. Furthermore, we require calibration data from at least a near and a far distances to constrain the affine transformation effectively and prevent overfitting to asingle depth plane. The parameters are obtained by minimizing the regu-larized least squares objective: 
+
+min 
+
+> x
+
+(‖Ax − b‖22 + λ‖x‖22
+
+) . (10) Consequently, the analytical closed-form solution is given by: 
+
+x = ( AT A + λI)−1AT b, (11) where λ is the regularization parameter and I denotes the identity matrix. The whole process of offline scale calibration is shown in Algorithm 1. 3) Online Scale Correction: During real-time naviga-tion, the pre-calculated parameters s1 and s2 are applied to the depth estimation model output for inference. For each RGB image I, the metric depth image Dmetric is generated element-wise: 
+
+Dmetric = 1
+
+s1 · F (I) + s2
+
+. (12) This rectified depth image Dmetric serves as the input for the subsequent Visual-to-Scan abstraction module. C. Visual-to-Scan Abstraction To achieve robust navigation across diverse robot em-bodiments and camera setups, we introduce the Visual-to-Scan Abstraction module, which converts corrected depth images into a unified 2D laser scan. This process involves reconstructing the 3D world from images and then slicing it horizontally based on the robot’s physical size. Due to variations in camera positions, extracting LiDAR data from depth images requires avoiding the low merging intervals, which is sensitive to camera pitch and mounting height. Our approach leverages 3D geometric information, which ensures that the generated laserscan scan strictly adheres to the physical passability constraints of the specific robot. Algorithm 1: Offline Scale Calibration Input: Calibration Images I ∈ Icalib , Marker Size s,Intrinsic K, Distortion d, Depth Model F
+
+Output: Calibration Parameters x = [ s1, s 2]T 
+
+> 1
+
+Initialize linear system matrices A ← ∅ , b ← ∅  
+
+> 2
+
+for each image I do // covering near and far distances  
+
+> 3
+
+Predict relative depth image: Drel ← F (I) 
+
+> 4
+
+Detect ArUco corners c in I 
+
+> 5
+
+Estimate marker pose (rvec , tvec ) via PnP using 
+
+K, d 
+
+> 6
+
+for detected corner j do  
+
+> 7
+
+Compute ground truth depth z(j) 
+
+> real
+
+from pose transformation  
+
+> 8
+
+Sample predicted depth d(j) 
+
+> pred
+
+at corner pixel (up, j , v p, j ) 
+
+> 9
+
+Append row [d(j)
+
+> pred
+
+, 1] to A 
+
+> 10
+
+Append value z(j)
+
+> real
+> −1
+
+to b 
+
+> 11
+
+end  
+
+> 12
+
+end  
+
+> 13
+
+Solve optimization problem: 
+
+min x(‖Ax − b‖22 + λ‖x‖22) 
+
+> 14
+
+Compute closed-form solution: 
+
+x ← (AT A + λI)−1AT b 
+
+> 15
+
+return x
+
+1) 3D Back-projection and Transformation: Given the metric depth image Dmetric and the camera intrinsic parameters K = {fx, f y, c x, c y}, we first back-project each valid pixel (up, v p) with depth Z(up, v p) into the 3D camera coordinate frame, obtaining 3D Point Cloud in the Robot Coordinate Frame Prob . The point pcam =[Xc, Y c, Z c]T is computed as: 
+
+Xc = (up − cx)Z(up, v p)
+
+fx
+
+,Yc = (vp) − cy)Z(up, v p)
+
+fy
+
+,Zc = Z(up, v p).
+
+(13) To account for varying sensor placements, we transform these points from the camera frame C to the robot frame R.Let the camera extrinsic parameters be Text = [ Rext |text ],where text includes the mounting height, and Rext ac-counts for the pitch angle. The point in the robot frame 
+
+prob = [ xrob , y rob , z rob ]T is obtained by: 
+
+prob = Rext pcam + text . (14) This transformation effectively neutralizes the perspec-tive distortion caused by camera tilt, aligning the ground plane in a unified coordinate system. 2) Height-Adaptive Obstacle Filtering: In the robot frame R, we apply a height-based filter tailored to the specific robot’s dimensions. This step decides which points are actual obstacles. It removes the ground and ignores objects hanging much higher than the robot in 3D Point 7
+
+Cloud Prob , ensuring the robot only reacts to things it might hit. We define a valid obstacle height range 
+
+[hmin , h max ], where hmin is a threshold slightly above the ground to filter out floor noise, and hmax corresponds to the robot’s physical height. The output is filtered obstacle point cloud Pobs .We generate a set of effective obstacle points Pobs by retaining only those points within the collision-relevant vertical space: 
+
+Pobs = {prob | hmin < z rob < h max }. (15) This step enables zero-shot transferability: a tall robot will detect overhanging obstacles defined by a larger 
+
+hmax , while a low-profile robot will ignore them, naturally adapting the safety logic to the embodiment. 3) Virtual Scan Projection: Finally, we project the filtered 3D obstacle points onto the navigation plane to synthesize the 2D laser scan L. For each point in Pobs ,we calculate its polar coordinates relative to the robot center. The distance is r =
+
+√
+
+x2rob + y2rob and the angle is 
+
+θ = arctan 2( yrob , x rob ).The field of view is discretized into angular bins (sectors) corresponding to the desired scan resolution. For each bin 
+
+k, the scan range L[k] is determined by the minimum distance of all points falling within that sector: 
+
+L[k] = min {r | (r, θ ) ∈ P obs , θ ∈ [θk, θ k+1)}. (16) If no points fall into a bin, the value is set to the sensor’s maximum range. The complete online inference pipeline is summarized in Algorithm 2. D. Planning Following the abstraction of visual data into a unified laser scan, we employ the dimension-configurable policy built on DRL-DCLP [9] as the CeRLP local planner. The details of DRL-DCLP are described in Sec. III-D. The inputs of CeRLP local planner contain laser scan 
+
+L generated by visual-to-scan abstraction and the robot state information including physical dimensions body ,relative goal position gt, current velocity vt, and velocity and acceleration limits Ldyn .Besides point-to-point tasks, Vision-Language Naviga-tion (VLN) module is optional to serve as a high-level planner for CeRLP. We employ a brief VLN framework and our key objective is to validate CeRLP as a lower-level planner to enhance obstacle avoidance capabilities for VLN. CLIP [44] is used to provide high-level navigation commands by processing input RGB images. The camera image is divided into three regions: left, center, and right. We use CLIP to compute the similarity confidence between each image region and the input language instruction. For each region, we utilize CLIP to compute a confidence score, representing the probability that the target object appears in that direction. We identify the optimal direction re ∗
+
+with the maximum confidence Smax . Based on these confidence scores, the VLN module generates high-level commands in the form of (dcmd , θ cmd ) pairs, where dcmd 
+
+Algorithm 2: Online Scale Correction and Visual-to-Scan Abstraction Input: RGB Image I, Calib Params [s1, s 2],Intrinsic K, Extrinsic Text , Height Limits 
+
+[hmin , h max ]
+
+Output: Virtual Laser Scan L
+
+// Step 1: Scale-Aware Depth Recovery  
+
+> 1
+
+Predict relative depth: Drel ← F (I) 
+
+> 2
+
+Recover metric depth: Dmetric ← (s1 · Drel + s2)−1
+
+// Step 2: Height-Adaptive Point Cloud Generation  
+
+> 3
+
+Initialize obstacle set Pobs ← ∅  
+
+> 4
+
+for valid pixel (u p, vp) in Dmetric do  
+
+> 5
+
+Z ← Dmetric (up, v p) 
+
+> 6
+
+pcam ← [ (up−cx)Zfx , (vp−cy)Zfy , Z ]T 
+
+> 7
+
+prob ← Rext pcam + text 8 if hmin < prob (z) < h max then  
+
+> 9
+
+Add prob to Pobs 10 end  
+
+> 11
+
+end // Step 3: Virtual Scan Projection  
+
+> 12
+
+Initialize scan array L with max sensor range  
+
+> 13
+
+for point (x rob , yrob , zrob ) in Pobs do  
+
+> 14
+
+Convert to polar coords: 
+
+r ← √xrob 2 + yrob 2, θ ← arctan 2( yrob , x rob ) 
+
+> 15
+
+Determine angular bin index k for θ 
+
+> 16
+
+Update bin with minimum distance: 
+
+L[k] ← min( L[k], r ) 
+
+> 17
+
+end  
+
+> 18
+
+return L
+
+is the forward distance, and the heading angle θcmd 
+
+corresponds to the direction of the region with the highest confidence. The navigation command is derived directly from Smax and the optimal angle ϕre ∗ using a piecewise function that prioritizes exploration when confidence is low and accelerates approach when confidence is high: 
+
+θcmd =
+
+{
+
+ϕre ∗ if Smax > 0.65 0 otherwise , (17) 
+
+dcmd =
+
+
+
+1.0 + 0 .3 · Smax if Smax > 0.80 2.0 + 0 .5 · Smax if 0.65 < S max ≤ 0.80 3.0 otherwise 
+
+. (18) Finally, these high-level commands are transformed into the world frame for the lower-level planner, which avoids obstacles and ensures safe execution of high-level instructions. If the optimal direction is center for several consecutive frames and exceeds the threshold, the desti-nation is then considered reached. V. Experiments in Simulation To validate the effectiveness of the proposed method, we conducted extensive experiments in simulated environ-ments and evaluated the model’s performance. Addition-8 
+
+> Fig. 3. Example of test environment in simulation.
+
+ally, we performed comparative experiments to verify the effectiveness of CeRLP with compared methods. A. Experiment Setup The model is tested in the Gazebo simulation environ-ment with communication handled through the Robot Op-erating System (ROS) [45]. Key experimental parameters are as follows: velocity ωmax = π/ 2 rad/s, acceleration 
+
+av, max = 3 m/s 2, aω, max = 3 rad/s 2. Lfront = 0 .21 m, 
+
+Lrear = 0 .21 m, W = 0 .5 m. To evaluate the navigation performance of our model, we tested our method on the Benchmark for Autonomous Robot Navigation (BARN) dataset [46] in Gazebo simu-lation. We randomly selected 100 different environments, with each environment tested twice. In the experimental scenario, the robot started at a fixed starting point and ended at a fixed goal. The Gazebo scene included randomly placed dense cylindrical obstacles. An example of a test environment is shown in Fig. 3. We tested our approach with various compared methods to measure effectiveness: Dynamic Window Approach (DWA) [1], Fast Dynamic Window Approach (Fast-DWA) [47], Elastic Bands (E-Band) [48], and End-to-End (E2E) [49]. We also compared CeRLP with the baseline method DRL-DCLP [9]. E2E was trained using the test environ-ments. In the simulation environment, all comparative methods took 2D LiDAR as input, whereas our method used a combination of laserscans generated from the front camera and the 2D LiDAR. Specifically, the camera generated laserscans covering a 75-degree range in front of the robot, while the LiDAR provided laserscans covering a 285-degree range on the left, right, and rear of the robot. The experimental platform was a Jackal four-wheeled differential-drive robot. The camera was a Flea3 camera, and the 2D LiDAR was a HOKUYO UST 10. To better compare different methods, we adopted the following evaluation metrics: Metric: Following the BARN Challenge [47], this metric comprehensively considers task completion status and time efficiency: Metric = 1
+
+N
+
+> N
+
+∑
+
+> i=1
+
+Si · Topt ,i
+
+clip (Tact ,i, 2Topt ,i, 8Topt ,i) , (19) where Si ∈ {0, 1} indicates whether the i-th test is successful, Topt represents the optimal path time, and Tact 
+
+denotes the actual execution time. The optimal time is calculated from the path length and maximum velocity vmax ,i in the i-th test, where Lpath ,i is provided by the BARN dataset based on Dijkstra’s search from the given start to goal position: 
+
+Topt ,i = Lpath ,i
+
+vmax ,i
+
+. (20) Success Rate (SR): This metric measures the percentage of tasks successfully completed across all test environ-ments: SR = 1
+
+N
+
+> N
+
+∑
+
+> i=1
+
+Si, (21) where Si ∈ {0, 1} indicates whether the i-th test is successful. Collision Rate (CR): This metric evaluates the collision behavior of the robot: CR = 1
+
+N
+
+> N
+
+∑
+
+> i=1
+
+Ci, (22) where Ci ∈ { 0, 1} indicates whether a collision occurs in the i-th test. Timeout Rate (TR): This metric indicates whether the robot exceeds the time limit: TR = 1
+
+N
+
+> N
+
+∑
+
+> i=1
+
+Oi, (23) where Oi ∈ { 0, 1} indicates whether the i-th test times out, measuring the algorithm’s time efficiency. B. Experiment Result Analysis We evaluated the navigation performance under two maximum velocity settings: 0.5 m /s and 1.0 m /s. The results demonstrated that our proposed CeRLP achieved superior performance compared to traditional methods and other learning-based baselines, exhibiting robustness comparable to the baseline method DRL-DCLP. Quantitative Comparison: The quantitative results of the comparative experiments in the BARN simulation environments are shown in Table I. CeRLP outperforms DWA, Fast-DWA, E-Band, and E2E across both velocity settings. Specifically, at a velocity of 0.5 m /s, CeRLP achieves a SR of 78 .0% , surpassing the best-performing traditional planner E-Band by 13 .0% . In terms of the comprehensive navigation metric, CeRLP scores 0.3790 ,demonstrating its efficiency advantage. When the dif-ficulty increases with a maximum velocity of 1.0 m /s,CeRLP continues to outperform most of the compared methods. While the SR of DWA and Fast-DWA drops to below 45% , CeRLP maintains a robust SR of 70 .0% .Notably, CeRLP achieves the lowest TO among all meth-ods, with only 3.0% at 0.5 m /s and 0.0% at 1.0 m /s.This indicates that our method efficiently finds feasible paths in dense clutter without getting stuck, whereas traditional methods often fail to escape local minima, leading to high timeout rates. The visualizations of sim-ulation experiments are shown in Fig. 4. In the figure, the starting point is marked with a red ”S,” and the goal is marked with a red ”G.” This demonstrates the 9                                                                           
+
+> TABLE I Comparison of Different Methods using BARN Dataset under Two Velocity Settings Method
+> vmax : 0.5 m/s vmax : 1.0 m/s DRL-based Use Global Path Input Modality Metric ( ↑)SR ( ↑)CR ( ↓)TO ( ↓)Metric ( ↑)SR ( ↑)CR( ↓)TO ( ↓)DWA 0.2354 55.0% 9.0% 36.0% 0.207 43.0% 26.0% 31.0% No Yes LiDAR Fast-DWA 0.2471 55.6% 11.1% 33.3% 0.2095 44.0% 23.0% 33.0% No Yes LiDAR E-Band 0.3244 65.0% 8.0% 27.0% 0.2250 45.0% 7.0% 48.0% No Yes LiDAR E2E 0.2520 53.0% 42.0% 5.0% 0.3439 69.0% 27.0% 4.0% Yes No LiDAR DRL-DCLP 0.4067 83.0% 9.0% 8.0% 0.3561 73.0% 13.0% 14.0% Yes No LiDAR Ours 0.3790 78.0% 19.0% 3.0% 0.3544 70.0% 30.0% 0.0% Yes No RGB The Best Result is in Bold, and the Second Best is Underlined.
+
+(a) (b) (c)             
+
+> Fig. 4. The visualization of CeRLP trajectories in test BARN environments. In (a) and (b), the maximum linear velocity was
+> 0.5m/s. In (c), the maximum linear velocity was 1m/s.
+
+navigation and obstacle avoidance capabilities of our RL-based policy, which navigates through randomly placed dense cylindrical obstacles. Although CeRLP outperforms all compared methods, it is second to DRL-DCLP. This is an expected result, as DRL-DCLP utilizes ground-truth 2D LiDAR data with a 
+
+360 ◦ FOV and precise distance measurements. In contrast, CeRLP relies on a monocular camera for forward obstacle perception with a limited FOV and inherent depth esti-mation noise. The performance gap can be attributed to the errors introduced during the visual-to-scan conversion process. The depth estimation noise and the resolution loss during projection create a modality gap between the virtual scan and the real LiDAR scan. We analyze the specific impact of these visual errors in Section VI-B. Nevertheless, despite these sensory limitations, CeRLP still demonstrates navigation capabilities that are no less effective than those of the compared methods. VI. Experiments in the Real World In this section, we first introduced the robot config-urations and experiment setups for the real-world ex-periments. Next, we compared and analyzed the results of the Depth Estimation Scale Correction. Subsequently, we conducted real-world ablation studies to validate the effectiveness of our proposed method across varying phys-ical dimensions, and camera types, camera positions, and dynamic obstacles. Finally, we evaluated the performance of VLN with different robot sizes. A. Experiment Setup In the real-world experiments, we employed hetero-geneous robotic platforms, including differential-drive wheeled robots and quadruped robots, to validate the zero-shot generalization capability of CeRLP. We designed seven distinct differential-drive mobile robots (DMR1-DMR7) to cover a wide range of physical dimensions and sensor setups. The robot body dimensions were divided by the axis of the drive center, where the length of the front section was Lfront , the length of the rear section was 
+
+Lrear , and the width was W . The camera position was defined by the mounting height zcam and the longitudinal offset xcam relative to the drive center. xcam was positive towards the front and negative towards the rear. zcam was the camera’s height above the ground. The experimental platforms were detailed in Table II. The pictures of all tested platforms are shown in Fig. 5.  
+
+> •
+
+Wheeled Platforms (DMR1-DMR6): These configu-rations were built on the Kobuki base TurtleBot 2. To achieve a comprehensive FOV, DMR1 through DMR5 were equipped with three WHEELTEC C100 cameras, which were combined to form a 360 ◦ field of view. DMR6 deployed a single Orbbec Femto Bolt RGB-D camera to test performance under a narrow FOV constraint and utilized only the RGB image from the Orbbec Femto Bolt in the test. In DMR1-DMR6, all algorithms were executed on a laptop equipped with an NVIDIA RTX 4060 GPU.  
+
+> •
+
+Quadruped Platform (DMR7): We utilized a Unitree Go2 robot equipped with a single WHEELTEC C100 camera. DMR7 was equipped with an NVIDIA Jetson Xavier NX for onboard computing. A statically placed Ultra Wide Band (UWB) device serves as the goal destination. All algorithms used the Robot Operating System (ROS) [45] for communication. The planning frequency is 10 Hz. In the real-world experiments, the robot employs odometry and IMU fusion for localization. When the 10 
+
+TABLE II Robot Configurations for Real-world Cross-Embodiment Experiments Config ID Platform Type Physical Dimensions (m) Camera Positions (m) Camera Setup vmax (m/s) 
+
+Lfront Lrear W Height ( zcam ) Offset ( xcam )DMR1 (Base) Diff-Drive 0.20 0.20 0.40 0.42 +0.03 3 × WHEELTEC C100 0.5 DMR2 (Long) Diff-Drive 0.15 0.45 0.40 0.42 +0.03 3 × WHEELTEC C100 0.5 DMR3 (Long) Diff-Drive 0.40 0.20 0.40 0.42 +0.03 3 × WHEELTEC C100 0.5 DMR4 (Wide) Diff-Drive 0.20 0.20 1.00 0.42 +0.03 3 × WHEELTEC C100 0.5 DMR5 (High) Diff-Drive 0.18 0.20 0.40 0.52 -0.13 3 × WHEELTEC C100 0.5 DMR6 (Low) Diff-Drive 0.20 0.20 0.40 0.20 +0.15 1 × Orbbec Femto Bolt 0.5 DMR7 (Quad) Quadruped 0.35 0.35 0.30 0.60 +0.00 1 × WHEELTEC C100 0.6 DMR1 DMR2 DMR3 DMR4 DM  
+
+> DMR5 DMR6 DMR7
+
+Fig. 5. Differential-Drive Mobile Robots (DMR). DMR1-DMR6 were wheeled robots based on the TurtleBot 2 chassis, varying in physical dimension, camera type, and camera position. DMR7 was a Unitree Go2 quadruped robot equipped with a WHEELTEC C100 camera. 
+
+Fig. 6. Examples of test environments. From left to right: Env1, Env2, and Env3. 
+
+robot is within 2 meters of the destination point, it is deemed to have reached the destination. Key experimental parameters are as follows: velocity ωmax = π/ 4 rad/s, acceleration av, max = 1 m/s 2, aω, max = π rad/s 2.We conducted tests in three types of environments: (1) Env1: Featuring arbitrary obstacles such as roadblocks, sofas, and flower pots. (2) Env2: Containing structured obstacles like chairs and narrow passages formed by cardboard boxes. (3) Env3: Including densely packed cardboard boxes as obstacles, varying in shape, size, and color. The real-world environments are shown in Fig. 6. B. Results for Depth Estimation Scale Correction We evaluated the proposed depth estimation scale cor-rection method by comparing the estimated depth results produced by different methods. The compared methods were: (1) our depth estimation scale correction using relative depth from Depth Anything V2 [28] (abbreviated as Ours+DAS, Ours+DAB, and Ours+DAL for the Small, Base, and Large versions respectively), and (2) metric depth estimation baselines, including VGGT-1B [33] and Depth Anything V2 Small for metric depth estimation (DAS-Outdoor and DAS-Indoor). 11 
+
+(a) DMR1 (b) DMR2 (c) DMR3 (d) DMR4                       
+
+> Fig. 7. Real-world experiments for different physical dimensions. TABLE III Quantitative comparison of depth estimation methods Method MAE (m) RMSE (m) Time (ms) VGGT-1B [33] 1.1459 1.2507 173 .68
+> DAS-Outdoor [28] 3.0189 3.8202 27 .90
+> DAS-Indoor [28] 4.1895 5.9287 26.85 Ours+DAS 0.6947 1.2134 28 .33
+> Ours+DAB 0.6038 1.1665 58 .58
+> Ours+DAL 0.5866 1.1214 162 .04
+
+In order to evaluate the results, we captured a real-world depth test dataset using a depth camera mounted on a TurtleBot2. A human operator teleoperated the robot through the test scenes while the camera recorded synchronized RGB images and ground-truth depth images. The depth camera ran at 25 Hz. After recording, we sampled the recorded stream at 1 Hz to form the final image dataset. The resulting depth test dataset contained 1000 RGB–depth image pairs. This depth test dataset was used only for evaluation, and there was no fine-tuning or training for all tested models. All models were evaluated on a laptop with an RTX 4060 GPU. To meet real-time constraints for mobile deployment, every method was quantized to FP16 using TensorRT. All methods took an RGB image as input and produced a metric depth image as output. Table III shows the Mean Absolute Error (MAE) and Root Mean Square Error (RMSE) between predicted and ground-truth depth images, and the average processing time to get a depth image for each method. Our depth esti-mation scale correction methods and the Depth Anything variants achieve lower MAE and RMSE values. Among them, Ours+DAL achieves the lowest depth estimation error, while Ours+DAS maintains low depth estimation error with low processing time. In terms of processing time, all methods based on Depth Anything V2 Small (DAS) achieve real-time performance, with DAS-Outdoor, DAS-Indoor, and Ours+DAS exhibiting similar inference speeds. However, although DAS-Outdoor and DAS-Indoor can predict metric depth directly, they still exhibit errors in our experiments due to variations in camera type and camera positions. VGGT-1B produces metric depth with relatively low error but requires the longest processing time. C. Cross-Embodiment Navigation In this subsection, we conducted ablation studies to verify the navigation performance of our method across different physical dimensions, camera types, and camera positions. In the following figures, the starting point was marked with a red ”S”, and the goal was marked with a red ”G”. Robustness to Physical Dimensions: We first evaluated the adaptability of CeRLP to changes in the robot’s phys-ical footprint using the 360 ◦ camera setup. We compared four configurations: (a) Standard Size (DMR1): A base footprint ( Lfront =0.20 m, Lrear = 0 .20 m). (b) Long Rear (DMR2): An asymmetric configuration with an extended rear length ( Lfront = 0 .15 m, Lrear = 0 .45 m), testing the ability to avoid collisions during turns. (c) Long Front (DMR3): An asymmetric configuration with an extended front length ( Lfront = 0 .40 m, Lrear =0.20 m), testing the ability to avoid collisions during turns. (d) Extra Wide (DMR4): A configuration with a width of 1.0m, testing the navigation performance of the robot when loaded with wide objects. The experimental trajectories are shown in Fig. 7. CeRLP successfully generated collision-free paths for all configurations. Notably, for the wide robot (DMR4), the planner correctly navigated across gaps between obstacles. Robustness to Camera Positions: Then, we investigated the impact of camera positions, which drastically altered the visual perspective and ground plane projection. We compared: (a) Standard Position (DMR1): Camera at zcam = 0 .42 m. (b) High & Back Position (DMR5): Camera mounted higher ( 0.52 m) and shifted backward ( −0.13 m), creating a higher perspective near the robot front. (c) High & Back Position (DMR5) with pedestrians. (d) Low & Front Position (DMR6): Camera mounted lower (0.20 m) and shifted forward ( +0 .15 m), making the ground plane appear larger in the image. The results in Fig. 8 indicated that our height-adaptive projection successfully mitigated the perspective distor-tion. Specifically, in the low-mount scenario (DMR6), the system correctly filtered out the ground texture that baseline methods often misclassified as obstacles, ensuring safe navigation across varying extrinsic configurations. Navigation with Pedestrians: Finally, we conducted navigation experiments to evaluate safety in dynamic environments. In these scenarios, in addition to static 12 
+
+(a) DMR1 (b) DMR5 (c) DMR5 with pedestrians (d) DMR6  
+
+> Fig. 8. Real-world experiments for different camera positions.
+
+(a) DMR1 with pedestrians (b) DMR2 with pedestrians (c) DMR3 with pedestrians (d) DMR7 with pedestrians  
+
+> Fig. 9. Real-world experiments for different physical dimensions with pedestrians.
+
+(a) DMR1 (b) DMR6 (c) DMR7  
+
+> Fig. 10. Real-world experiments for different camera types.
+
+obstacles, pedestrians suddenly intruded into the robot’s path, requiring the CeRLP to perform real-time reactive avoidance. We compared: (a) Standard Size (DMR1): The baseline symmetric foot-print ( Lfront = 0 .20 m, L rear = 0 .20 m) on the wheeled chassis. (b) Long Rear (DMR2): An asymmetric configuration with an extended rear ( Lfront = 0 .15 m, L rear = 0 .45 m). This tested the ability to account for tail swing collision risks during sudden evasive maneuvers. (c) Long Front (DMR3): An asymmetric configuration with an extended front ( Lfront = 0 .40 m, L rear = 0 .20 m). This tested the ability to maintain safety margins for protruding frontal parts. (d) Quadruped Robot (DMR7): A quadruped robot con-figuration ( Lfront = 0 .35 m, L rear = 0 .35 m). This verified the model’s obstacle avoidance capability on a completely different locomotion substrate. The qualitative results are presented in Fig. 9. It could be observed that CeRLP successfully generated safe trajectories for all configurations. Regardless of the robot size, camera height, or platform type, CeRLP correctly perceived the dynamic pedestrian as a high-risk obstacle and executed timely avoidance actions without colliding with surrounding static obstacles. Robustness to Camera Types: Next, we evaluated the system’s robustness across different sensor types and FOV constraints. We compared: (a) Wide View (DMR1): Using three synchronized C100 cameras to form a 360 ◦ field of view. (b) Narrow View (DMR6): Using a single Orbbec camera with a limited forward-facing FOV. (c) Quadruped Robot (DMR7): Using the single C100 camera of the Unitree Go2, which introduced the camera shake. As shown in Fig. 10, while the DMR1 allowed for smoother movement, the single-camera setups also success-fully completed the navigation tasks. This demonstrated that our Visual-to-Scan module could effectively aggregate partial observations into a unified description, even with limited FOV or unstable camera motion. D. VLN Experiments with Different Robot Sizes We conducted Vision-Language Navigation (VLN) ex-periments to evaluate the obstacle avoidance capability of CeRLP in VLN tasks. We tested two different physical 13 time 
+
+# : “Find a chair.” 
+
+First-person View Third-person View 
+
+Avoid obstacle Avoid pedestrian Find time 
+
+# : “Find a chair.” 
+
+First-person View Third-person View 
+
+Avoid obstacle Avoid pedestrian Find  
+
+> Fig. 11. Obstacle avoidance performance in VLN experiments. The images include both first-person and third-person views as time progresses. Test configurations are DMR2 and DMR3. The robot must find targets according to language instructions, with the VLN providing high-level commands. Concurrently, the robot should avoid obstacles within the scene and pedestrians who suddenly appear. The test language instruction is ”Find a chair”.
+
+dimensions, DMR2 and DMR3. The test environments contained various static obstacles, including traffic cones and flowerpots, as well as a suddenly appearing pedestrian. In these VLN tasks, the robot had to successfully avoid obstacles while navigating toward the specified language target object. As shown in Fig. 11, CeRLP successfully avoided obstacles and found the target across different robot size configurations. This demonstrated that CeRLP had the ability to enhance the safety of robots as the lower-level planner for VLN. In our experiments, we achieved performance comparable to LiDAR sensors using only RGB cameras. This approach was more cost-effective for real-world applications compared to systems relying on LiDAR or depth cameras. VII. Conclusion In this paper, we propose CeRLP, a general framework for visual navigation designed to effectively achieve cross-embodiment navigation across heterogeneous robots and camera configurations. We first introduce an offline scale calibration method to recover metric scale information from monocular depth estimation, enabling precise scale correction. Subsequently, we propose the Visual-to-Scan Abstraction module, which aggregates the corrected depth images into a unified virtual 2D laser scan. To address the variations in scan generation caused by diverse camera positions, we employ Height-Adaptive Obstacle Filtering to adaptively filter ground points and select optimal projec-tion heights. We conduct extensive experiments in simula-tion, demonstrating that CeRLP outperforms comparative methods across various performance metrics. Furthermore, extensive real-world experiments verify the effectiveness of CeRLP in physical scenarios, while ablation studies confirm the contribution of individual modules and the robustness of the system under different configurations. 14 
+
+In future research, we plan to further explore the universality of CeRLP as a foundational baseline, in-cluding its integration with other dimension-configurable planners to validate safety across different strategies and the adaptability of CeRLP. Additionally, as this work demonstrates CeRLP’s capability to execute high-level Vision-Language Navigation (VLN) commands and en-hance obstacle avoidance, we intend to further leverage CeRLP to improve the safety and robustness of VLN agents in complex environments. References 
+
+[1] D. Fox, W. Burgard, and S. Thrun, “The dynamic window approach to collision avoidance,” IEEE Robotics & Automation Magazine, vol. 4, no. 1, pp. 23–33, 1997. [2] C. Rösmann, W. Feiten, T. Woesch, F. Hoffmann, and T. Bertram, “Trajectory modification considering dynamic con-straints of autonomous robots,” in ROBOTIK 2012; 7th German Conference on Robotics, 2012, pp. 1–6. [3] C. Rösmann, F. Hoffmann, and T. Bertram, “Kinodynamic trajectory optimization and control for car-like robots,” in 2017 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), 2017, pp. 5681–5686. [4] H. Xi, W. Li, F. Zhao, L. Chen, and Y. Hu, “A safe and efficient timed-elastic-band planner for unstructured environments,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), 2024, pp. 3092–3099. [5] L. Zhu, “Analyze the advantages and disadvantages of different sensors for autonomous vehicles,” in 2022 7th International Conference on Social Sciences and Economic Development (ICSSED 2022). Atlantis Press, 2022, pp. 1020–1024. [6] W. Zhang, Y. Zhang, N. Liu, K. Ren, and P. Wang, “Ipaprec: A promising tool for learning high-performance mapless navi-gation skills with deep reinforcement learning,” IEEE/ASME Transactions on Mechatronics, vol. 27, no. 6, pp. 5451–5461, 2022. [7] Y. Zhang, Y. Hu, Y. Song, D. Zou, and W. Lin, “Learning vision-based agile flight via differentiable physics,” Nature Machine Intelligence, pp. 1–13, 2025. [8] Z. Xie and P. Dames, “Drl-vo: Learning to navigate through crowded dynamic scenes using velocity obstacles,” IEEE Trans-actions on Robotics, vol. 39, no. 4, pp. 2700–2719, 2023. [9] W. Zhang, S. Wang, M. Tan, Z. Yang, X. Wang, and X. Shen, “Drl-dclp: A deep reinforcement learning-based dimension-configurable local planner for robot navigation,” IEEE Robotics and Automation Letters, vol. 10, no. 4, pp. 3636–3643, 2025. [10] H. Liu, C. Wu, and H. Wang, “Real time object detection using lidar and camera fusion for autonomous driving,” Scientific Reports, vol. 13, no. 1, p. 8056, 2023. [11] Y. D. Yasuda, L. E. G. Martins, and F. A. Cappabianco, “Autonomous visual navigation for mobile robots: A systematic literature review,” ACM Computing Surveys (CSUR), vol. 53, no. 1, pp. 1–34, 2020. [12] J. Hossain, A.-Z. Faridee, N. Roy, A. Basak, and D. E. Asher, “Covernav: Cover following navigation planning in unstructured outdoor environment with deep reinforcement learning,” in 2023 IEEE International Conference on Autonomic Computing and Self-Organizing Systems (ACSOS), 2023, pp. 127–132. [13] P. Roth, J. Nubert, F. Yang, M. Mittal, and M. Hutter, “Viplanner: Visual semantic imperative learning for local nav-igation,” in 2024 IEEE International Conference on Robotics and Automation (ICRA), 2024, pp. 5243–5249. [14] A. Yang, W. Li, and Y. Hu, “Scoml: Trajectory planning based on self-correcting meta-reinforcement learning in hybrid terrain for mobile robot,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), 2024, pp. 14 125– 14 132. [15] Z. Zeng, Y. Wu, H. Park, D. Wang, F. Yang, S. Soatto, D. Lao, B.-W. Hong, and A. Wong, “Rsa: Resolving scale ambiguities in monocular depth estimators through language descriptions,” Advances in neural information processing systems, vol. 37, pp. 112 684–112 705, 2024. [16] P. Anderson, Q. Wu, D. Teney, J. Bruce, M. Johnson, N. Sün-derhauf, I. Reid, S. Gould, and A. van den Hengel, “Vision-and-language navigation: Interpreting visually-grounded navigation instructions in real environments,” in 2018 IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition, 2018, pp. 3674–3683. [17] N. Hirose, D. Shah, A. Sridhar, and S. Levine, “Exaug: Robot-conditioned navigation policies via geometric experience aug-mentation,” in 2023 IEEE International Conference on Robotics and Automation (ICRA), 2023, pp. 4077–4084. [18] D. Shah, A. Sridhar, A. Bhorkar, N. Hirose, and S. Levine, “Gnm: A general navigation model to drive any robot,” in 2023 IEEE International Conference on Robotics and Automation (ICRA), 2023, pp. 7226–7233. [19] D. Shah, A. Sridhar, N. Dashora, K. Stachowicz, K. Black, N. Hirose, and S. Levine, “Vint: A foundation model for visual navigation,” in Proceedings of The 7th Conference on Robot Learning, ser. Proceedings of Machine Learning Research, J. Tan, M. Toussaint, and K. Darvish, Eds., vol. 229. PMLR, 06–09 Nov 2023, pp. 711–733. [20] A. Eftekhar, L. Weihs, R. Hendrix, E. Caglar, J. Salvador, A. Herrasti, W. Han, E. VanderBilt, A. Kembhavi, A. Farhadi et al., “The one ring: a robotic indoor navigation generalist,” in The first CVPR workshop on 3D Vision Language Models (VLMs) for Robotics Manipulation: Opportunities and Chal-lenges. [21] D. Gordon, A. Kadian, D. Parikh, J. Hoffman, and D. Batra, “Splitnet: Sim2sim and task2task transfer for embodied visual navigation,” in Proceedings of the IEEE/CVF International Conference on Computer Vision, 2019, pp. 1022–1031. [22] K. Stachowicz, D. Shah, A. Bhorkar, I. Kostrikov, and S. Levine, “Fastrlap: A system for learning high-speed driving via deep rl and autonomous practicing,” in Conference on Robot Learning. PMLR, 2023, pp. 3100–3111. [23] K. Yadav, R. Ramrakhya, A. Majumdar, V.-P. Berges, S. Kuhar, D. Batra, A. Baevski, and O. Maksymets, “Offline visual representation learning for embodied navigation,” in Workshop on Reincarnating Reinforcement Learning at ICLR 2023, 2023. [24] G. Seneviratne, J. An, S. Ellahy, K. Weerakoon, M. B. Elnoor, J. D. Kannan, A. T. Sunil, and D. Manocha, “Halo : Human preference aligned offline reward learning for robot navigation,” in Proceedings of The 9th Conference on Robot Learning, ser. Proceedings of Machine Learning Research, J. Lim, S. Song, and H.-W. Park, Eds., vol. 305. PMLR, 27–30 Sep 2025, pp. 3267–3284. [25] A. Sridhar, D. Shah, C. Glossop, and S. Levine, “Nomad: Goal masked diffusion policies for navigation and exploration,” in 2024 IEEE International Conference on Robotics and Automa-tion (ICRA), 2024, pp. 63–70. [26] X. Dong, M. A. Garratt, S. G. Anavatti, and H. A. Abbass, “Towards real-time monocular depth estimation for robotics: A survey,” IEEE Transactions on Intelligent Transportation Systems, vol. 23, no. 10, pp. 16 940–16 961, 2022. [27] L. Yang, B. Kang, Z. Huang, X. Xu, J. Feng, and H. Zhao, “Depth anything: Unleashing the power of large-scale unlabeled data,” in 2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2024, pp. 10 371–10 381. [28] L. Yang, B. Kang, Z. Huang, Z. Zhao, X. Xu, J. Feng, and H. Zhao, “Depth anything v2,” in Proceedings of the 38th Inter-national Conference on Neural Information Processing Systems, ser. NIPS ’24. Red Hook, NY, USA: Curran Associates Inc., 2024. [29] J. M. Louw, J. Verster, and J. Dickens, “Practical implemen-tation of depth anything v2 as a lidar alternative in robotics navigation,” in MATEC Web of Conferences, vol. 417. EDP Sciences, 2025, p. 04003. [30] A. Ganj, H. Su, and T. Guo, “Hybriddepth: Robust metric depth fusion by leveraging depth from focus and single-image priors,” in 2025 IEEE/CVF Winter Conference on Applications of Computer Vision (WACV). IEEE, 2025, pp. 973–982. [31] W. Yin, C. Zhang, H. Chen, Z. Cai, G. Yu, K. Wang, X. Chen, and C. Shen, “Metric3d: Towards zero-shot metric 3d predic-tion from a single image,” in 2023 IEEE/CVF International Conference on Computer Vision (ICCV), 2023, pp. 9009–9019. [32] L. Piccinelli, Y.-H. Yang, C. Sakaridis, M. Segu, S. Li, L. Van Gool, and F. Yu, “UniDepth: Universal monocular metric 15 
+
+depth estimation,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2024. [33] J. Wang, M. Chen, N. Karaev, A. Vedaldi, C. Rupprecht, and D. Novotny, “Vggt: Visual geometry grounded transformer,” in 2025 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2025, pp. 5294–5306. [34] W. Lu, L. Chen, Y. Wang, Y. Wei, Z. Wu, R. Xiong, and Y. Wang, “Demonstration data-driven parameter adjustment for trajectory planning in highly constrained environments,” IEEE Robotics and Automation Letters, vol. 9, no. 12, pp. 11 641–11 648, 2024. [35] H. Wang, A. H. Tan, A. Fung, and G. Nejat, “X-nav: Learning end-to-end cross-embodiment navigation for mobile robots,” IEEE Robotics and Automation Letters, vol. 11, no. 1, pp. 698– 705, 2026. [36] D. Eigen, C. Puhrsch, and R. Fergus, “Depth map prediction from a single image using a multi-scale deep network,” in Proceedings of the 28th International Conference on Neural Information Processing Systems - Volume 2, ser. NIPS’14. Cambridge, MA, USA: MIT Press, 2014, p. 2366–2374. [37] R. Ranftl, K. Lasinger, D. Hafner, K. Schindler, and V. Koltun, “Towards robust monocular depth estimation: Mixing datasets for zero-shot cross-dataset transfer,” IEEE Transactions on Pattern Analysis and Machine Intelligence, vol. 44, no. 3, pp. 1623–1637, 2022. [38] W. Zhang, Y. Zhang, N. Liu, K. Ren, and P. Wang, “Ipaprec: A promising tool for learning high-performance mapless navi-gation skills with deep reinforcement learning,” IEEE/ASME Transactions on Mechatronics, vol. 27, no. 6, pp. 5451–5461, 2022. [39] C. Qi, H. Su, K. Mo, and L. J. Guibas, “Pointnet: Deep learning on point sets for 3d classification and segmentation,” 2017 IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pp. 77–85, 2016. [40] T. Haarnoja, A. Zhou, P. Abbeel, and S. Levine, “Soft actor-critic: Off-policy maximum entropy deep reinforcement learning with a stochastic actor,” in Proceedings of the 35th International Conference on Machine Learning, ser. Proceedings of Machine Learning Research, J. Dy and A. Krause, Eds., vol. 80. PMLR, 10–15 Jul 2018, pp. 1861–1870. [41] R. Vaughan, “Massively multi-robot simulation in stage,” Swarm intelligence, vol. 2, no. 2, pp. 189–208, 2008. [42] J. Deng, W. Dong, R. Socher, L.-J. Li, K. Li, and L. Fei-Fei, “Imagenet: A large-scale hierarchical image database,” in 2009 IEEE conference on computer vision and pattern recognition. IEEE, 2009, pp. 248–255. [43] A. E. Hoerl and R. W. Kennard, “Ridge regression: biased estimation for nonorthogonal problems,” Technometrics, vol. 42, no. 1, p. 80–86, Feb. 2000. [44] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agar-wal, G. Sastry, A. Askell, P. Mishkin, J. Clark, G. Krueger, and I. Sutskever, “Learning transferable visual models from natural language supervision,” in Proceedings of the 38th International Conference on Machine Learning, ser. Proceedings of Machine Learning Research, M. Meila and T. Zhang, Eds., vol. 139. PMLR, 18–24 Jul 2021, pp. 8748–8763. [45] M. Quigley, K. Conley, B. Gerkey, J. Faust, T. Foote, J. Leibs, R. Wheeler, A. Y. Ng et al., “Ros: an open-source robot operating system,” in ICRA workshop on open source software, vol. 3, no. 3.2. Kobe, 2009, p. 5. [46] D. Perille, A. Truong, X. Xiao, and P. Stone, “Benchmarking metric ground navigation,” in 2020 IEEE International Sympo-sium on Safety, Security, and Rescue Robotics (SSRR), 2020, pp. 116–121. [47] X. Xiao, Z. Xu, A. Datar, G. Warnell, P. Stone, J. J. Damanik, J. Jung, C. A. Deresa, T. D. Huy, C. Jinyu, C. Yichen, J. A. Cahyono, J. Wu, L. Mo, M. Lv, B. Lan, Q. Meng, W. Tao, and L. Cheng, “Autonomous ground navigation in highly con-strained spaces: Lessons learned from the third barn challenge at icra 2024 [competitions],” IEEE Robotics & Automation Magazine, vol. 31, no. 3, pp. 197–204, 2024. [48] S. Quinlan and O. Khatib, “Elastic bands: connecting path planning and control,” in [1993] Proceedings IEEE International Conference on Robotics and Automation, 1993, pp. 802–807 vol.2. [49] X. Xiao, Z. Xu, Z. Wang, Y. Song, G. Warnell, P. Stone, T. Zhang, S. Ravi, G. Wang, H. Karnan, J. Biswas, N. Moham-mad, L. Bramblett, R. Peddi, N. Bezzo, Z. Xie, and P. Dames, “Autonomous ground navigation in highly constrained spaces: Lessons learned from the benchmark autonomous robot naviga-tion challenge at icra 2022 [competitions],” IEEE Robotics & Automation Magazine, vol. 29, no. 4, pp. 148–156, 2022.
