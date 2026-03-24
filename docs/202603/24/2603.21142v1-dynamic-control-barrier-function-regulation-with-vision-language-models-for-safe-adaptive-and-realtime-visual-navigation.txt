@@ -1,0 +1,277 @@
+Title: Dynamic Control Barrier Function Regulation with Vision-Language Models for Safe, Adaptive, and Realtime Visual Navigation
+
+URL Source: https://arxiv.org/pdf/2603.21142v1
+
+Published Time: Tue, 24 Mar 2026 01:27:00 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Dynamic Control Barrier Function Regulation with Vision-Language Models for Safe, Adaptive, and Realtime Visual Navigation 
+
+Je ff rey Chen, Rohan Chandra 
+
+Supplementary Material, Videos at the following website: saferobotnav.github.io /AlphaAdj 
+
+Abstract — Robots operating in dynamic, unstructured envi-ronments must balance safety and e ffi ciency under potentially limited sensing. While control barrier functions (CBFs) provide principled collision avoidance via safety filtering, their behavior is often governed by fixed parameters that can be overly conservative in benign scenes or overly permissive near hazards. We present A lpha Adj , a vision-to-control navigation framework that uses egocentric RGB input to adapt the conservativeness of a CBF safety filter in real time. A vision-language model (VLM) produces a bounded scalar risk estimate from the current camera view, which we map to dynamically update a CBF parameter that modulates how strongly safety constraints are enforced. To address asynchronous inference and non-trivial VLM latency in practice, we combine a geometric, speed-aware dynamic cap and a staleness-gated fusion policy with lightweight implementation choices that reduce end-to-end inference overhead. We evaluate A lpha Adj across multiple static and dynamic obstacle scenarios in a variety of environments, comparing against fixed-parameter and uncapped ablations. Results show that A lpha Adj maintains collision-free navigation while improving e ffi ciency (in terms of path length and time to goal) by up to 18.5% relative to fixed settings and improving robustness and success rate relative to an uncapped baseline. 
+
+I. I ntroduction 
+
+Autonomous robots increasingly operate in dynamic, crowded, and unstructured environments. Prior work [1], [2], [3] suggests that achieving human-like mobility [4] in cluttered environments often requires low-level controllers to rely on accurate state measurements of the surrounding scene, which is di ffi cult to realize in practice, especially when the environment is dynamic. Most applications, however, would greatly benefit from navigation systems that produce human-like trajectories directly using input from onboard sensors such as cameras, without relying on expensive map-ping and perception for exact state measurements [5]. In such scenarios, ensuring safety and responsiveness using only visual input, such as RGB, is a major challenge. In this context, vision-language models (VLMs) off er promising advances in semantic perception, as these models can infer scene-level understanding directly from egocentric visual input [6]. Prior work has shown that vision can directly inform low-level navigation and safety, including CBF-based safety from point cloud geometry [7] and vision-based feedback control [8]. However, most existing pipelines still commit to a largely fixed safety behavior once deployed. For example, they often identify and react to obstacles using fixed controllers or cost functions that determine how close the robot is willing to pass obstacles and how strongly it prioritizes safety versus progress. This is limiting because the appropriate level of conserva-tiveness around obstacles can change rapidly across scenes  
+
+> Authors are with the Department of Computer Science, University of Virginia.
+
+{fyy2ws, aar8xx }@virginia.edu 
+
+and over time. For example, a robot should be more assertive in an open hallway with no nearby hazards, maintaining higher speed and allowing tighter goal seeking, because the collision risk is slow. As the robot approaches a narrow doorway, the situation can change in an instant. A person may step into the doorway or cross the robot’s path, increas-ing collision risk and requiring the robot to become more conservative by slowing down, increasing clearance, and prioritizing following of safe constraints. Once the passage clears, the robot should return to the more assertive settings to avoid unnecessary hesitation and achieve its goal more quickly. This risk-conditioned shift in required behavior motivates adaptive vision-based control. Additionally, the massive sizes of VLMs and other founda-tion models mean that VLM-based visual navigation su ff er from high latency for real-time robot navigation [9], [10]. This motivates adaptive, latency-aware vision-based control, where visual understanding is used not only to perceive hazards, but to continuously modulate how conservative the safety controller should be. In this work, we present an adaptive navigation algorithm that couples high-level visual semantic perception to adapt low-level safety behavior at runtime. Our framework extracts context from the egocentric RGB scene and outputs a collision-risk estimate using a VLM. The risk estimate is used to dynamically adjust a low level CBF control parameter which governs how conservatively (or assertively) the robot responds to potential hazards. This enables an adaptive and semantically aware navigation system that better matches the moment-to-moment demands of complex envi-ronments, enabling safer and more e ffi cient navigation that fixed-policy vision-control pipelines. 
+
+A. Main Contributions 
+
+Our contributions are threefold:  
+
+> •
+
+Real-time adaptive mobility directly from RGB in-puts: We enable real-time adaptive navigation directly from egocentric RGB inputs by using a VLM-derived collision risk signal to modulate a low level control pa-rameter that determines control policy conservativeness around obstacles. Our approach cautions safety when necessary near haz-ards while remaining agile in low-risk scenes, improv-ing the safety–e ffi ciency tradeo ff without altering the underlying controller structure.  
+
+> •
+
+Latency-aware robustness for asynchronous VLM risk: We show that asynchronous VLM inference la-tency can undermine safety when risk estimates are applied naively. To mitigate this, we introduce a latency-aware mechanism that detects stale or anomalous VLM 
+
+> arXiv:2603.21142v1 [cs.RO] 22 Mar 2026
+
+updates and triggers fallback behavior. We also report practical implementation choices that reduced end-to-end VLM latency in our system.  
+
+> •
+
+Practical risk-to-α mapping and fusion policy: We propose a geometric dynamic cap and a simple fusion rule that that ( i) uses VLM-derived conservativeness when fresh, ( ii ) clamps overly permissive values using the cap, and ( iii ) defaults to conservative cap-driven be-havior under staleness. This yields a deployable method for integrating semantic risk into safety filtering. 
+
+B. Organization of Paper 
+
+Section II reviews prior work in adaptive CBFs, adaptive parameter learning, risk, and vision-based navigation. Sec-tion III formalizes the navigation settings, gives background on CBFs, and describes the role of α in our CBF safety filter. Section IV outlines our approach to adaptive visual navigation. Section V presents simulation experiments across multiple scenarios and environments, comparing to ablations and baselines. We conclude in Section VI with a discussion of directions for future work. II. R elated Work 
+
+A. Adaptive CBF Parameter Tuning 
+
+Control Barrier Functions (CBFs) are a powerful math-ematical framework used to encode robot system safety in nonlinear systems [11], [12]. Adaptive CBF methods study how to adjust CBF parameters in order to further optimize robot performance while staying within these safe sets. Early formulations introduce adaptive CBFs that update safety certificates in response to uncertainty and changing operating conditions, improving practicality compared to static, hand-tuned choices [13]. However, rather than focus on overall system safety and performance, these earlier adaptive CBF approaches focus more on addressing the uncertainty of the dynamic model [14], [15], [16]. More recent work uses learn-ing to choose or refine CBF parameters during operation. One approach learns how to adapt CBF settings and checks that the chosen updates still preserve safety, demonstrating the idea on agile flight platforms such as a quadplane [17]. Another related direction focuses on the realistic case where the robot cannot produce arbitrary control inputs (due to speed or turn-rate limits) and adapts CBF parameters in an uncertainty-aware way to keep the safety filter feasible while improving performance [18]. Complementary work considers safety constraints that themselves change over time (e.g., changing contact conditions or moving hazards) and adapts CBFs in a robust way to remain safe even with modeling errors and disturbances [19]. Our method shares the same overall goal, but di ff er in what information drives the adaptation and what practical issue it emphasizes. Instead of adapting CBF parameters primarily from learned dynamics models or by searching over candidate parameter settings, we use egocentric RGB and a vision-language model (VLM) to estimate a scalar risk and directly modulate a single parameter α that controls the CBF’s conservativeness. 
+
+B. Online Planner Parameter Tuning 
+
+Our approach is philosophically related to Adaptive Plan-ner Parameter Learning (APPL) [20], which argues that classical navigation stacks often require extensive manual retuning to generalize across environments [21], and that even within a single environment a fixed parameter set may perform inconsistently across di ff erent contexts [22]. APPL addresses this by learning a policy that adjusts planner parameters online during deployment, such as cost weights, inflation radii, recovery behaviors, and velocity limits. The policy is learned using signals such as demonstrations, inter-ventions, evaluative feedback, or reinforcement learning in simulation [22], [23], [24], [25]. Despite this shared motivation of adaptive tuning, there are di ff erences in our mechanisms. APPL reparameterizes a classical planner, whereas we adapt a safety-critical control constraint inside a CBF-QP by modulating the CBF α pa-rameter using a VLM-derived risk estimate from egocentric RGB. APPL tunes planner parameters for robustness across contexts, while our method tunes CBF conservativeness online from visual semantics. 
+
+C. Risk Metrics and Risk-Aware Planning 
+
+Expected cost and worst-case metrics are two of the most common ways to measure risk in robotics [26]. Other tools used in risk-aware planning include chance constraints (for bounding the probability of a damaging safety viola-tion) [27], [28] and distributional robustness (for hedging against uncertainty in the underlying distribution) [29], [30]. Additionally, recent risk-aware control synthesis methods generate safety filters that encode spatially varying caution levels into the safety constraint [31]. In our system, unlike the previously mentioned ap-proaches, we do not explicitly build a full probability model over future outcomes and evaluate a risk metric online, nor do we utilize user-assigned risk values as in [31]. Instead, we use the VLM to produce an instantaneous, bounded risk score r ∈ [0 , 1] from the current RGB frame. This score is best interpreted as a practical proxy for scene di ffi culty or hazard likelihood in the near term, such as cluttered geometry or tight passages, rather than a formal risk metric over a trajectory cost distribution. We then use r to adapt the controller’s conservativeness by mapping it to the CBF parameter α (Section IV-A). 
+
+D. Vision-Based Navigation 
+
+There is increasing interest in using vision directly for control and safety. Frameworks like LivePoint [7] success-fully integrate CBFs for decentralized multi-robot navigation using only LiDAR-derived point cloud inputs, while other RGB-geometry based approaches [8] and [32] couple 3D scene geometry (via 3D Gaussian splatting) with CBF-based filtering to activate safety constraints more proactively. Visual-servoing techniques likewise use camera feedback directly to regulate robot motion [33], [34]. These approaches demonstrate that vision can inform low-level control, but they typically rely on fixed safety behavior once deployed. In highly dynamic environments, however, the right level of safety conservativeness can change rapidly. There are further challenges that come with usage of large foundation models in mobile robots. Because GPUs cannot be equipped on such robots, the foundation models must be run remotely or on cloud-based systems [35]. Such reliance on external setups may degrade performance as communication latency between the robot and the remote system lead to delays [9]. Such challenges directly motivates latency-aware adaptive vision-based control, where visual understanding is used not only to set an initial safety policy, but to continuously adjust how the controller trades o ff safety and progress in real time. III. P reliminaries 
+
+In this section, we formally introduce the navigation problem we study and the safety framework we use through relevant background on CBFs. We study safe navigation for a single ground robot in a cluttered environment using egocentric RGB observations. We formulate a single agent navigation scenario using the following tuple: ⟨X , U, T , J, Ω, O⟩, with discrete time t ∈{0, . . . , T }. The robot state x(t) ∈ X ⊂ Rn includes the robot position p(t) ∈ R2 and heading (yaw) ψ(t) ∈ R. The control 
+
+u(t) ∈ U ⊂ R2 is a desired planar velocity vector in the world frame. At each step, u(t) is converted into di ff erential-drive commands ( v(t), ω (t)) using the current heading ψ(t), where v(t) is the commanded forward speed and ω(t) is the commanded yaw rate. The robot follows discrete and deterministic control-a ffi ne dynamics 
+
+x(t + 1) = f (x(t)) + g(x(t)) u(t) (1) where functions f, g are locally Lipschitz continuous func-tions. The robot receives observations o(t) in the form of egocentric visual images. At each time step, the robot first computes a CBF conservativeness parameter α(t) from the current RGB observation, and then solves for a safe control input usafe conditioned on that α(t). 
+
+A. Safe Control 
+
+We formalize safety by discussing Control Barrier Func-tions (CBFs) [11], which are a mathematical framework used in control theory to ensure system safety while achieving desired control objectives. A CBF is a scalar function, h(x) that is defined over the state space of a system. We define the safe set C as the set of all states for which h(x) > 0. Ensuring safety involves keeping the system state within C at all times; safety is guaranteed as long as the CBF is always non-negative. This is achieved by designing a control input, u, such that the following condition is satisfied (For notational simplicity, here and moving forward, we omit explicit time t arguments when unambiguous): 
+
+ddt h(x) ≥ − α(h(x)) (2) where ddt h(x) denotes the time derivative of h(x) along system trajectories and α is an extended class K function, typically a linear or higher-order function that ensures the safety constraint is enforced with appropriate robustness. This condition limits how quickly the robot is allowed to move toward unsafe states. When the robot is far from the safety boundary ( h(x) is large, positive), the condition is easily satisfied and the controller has more freedom. But as the robot approaches the boundary h(x) = 0, the constraint tightens, requiring ddt h(x) to be either non-negative or not too negative, which means the robot cannot get closer to the boundary quickly. We seek safe yet effi cient navigation by dynamically adjusting CBF behavior using risk information inferred from the VLM. In particular, we adapt the CBF α parameter, which controls the aggressiveness of the safety constraint en-forcement: smaller α yields more conservative behavior near obstacles, while larger α permits more aggressive motion. We treat the CBF conservativeness α(t) as a time-varying scalar 
+
+α(t) ∈ [αmin , α max ] calculated online based on the current RGB observation. We enforce safety by filtering nominal controls through a CBF constraint for control-a ffi ne dynamics (Eq. 1). Substi-tuting Eq. 1 into the CBF condition in Eq. 2 yields 
+
+∂h
+
+∂x
+
+  f (x) + g(x)u ≥ − α(h(x)) (3) This inequality lower-bounds the rate of change of the barrier function h(x) along system trajectories. When α is small, the right-hand side is less negative, which forces  
+
+> ddt
+
+h(x) to be larger (i.e., h must decrease more slowly or increase), leading to more conservative avoidance. When α
+
+is large, the bound becomes more negative, allowing ddt h(x)to take more negative values (i.e., permitting h to decrease faster), which corresponds to more aggressive motion that can approach obstacles more quickly before corrective action is required. In our implementation, we use a per-obstacle CBF defined using a squared-distance safety margin. Let p ∈ R2 denote the robot position in the plane and let 
+
+c j ∈ R2 be the center of circular obstacle j with radius R j. We model the robot with an e ff ective radius RR, a circular safety approximation of the robot body, and include an optional safety padding δ.Defining Rsum , j = RR + R j + δ, the CBF for obstacle j is thus: 
+
+h j(x) = ∥p − c j∥2 − R2sum , j. (4) We first compute a nominal velocity unom that points the robot toward the goal, with its speed capped at the robot’s maximum speed vmax . We then compute a safe velocity 
+
+usafe by solving a small quadratic program that minimizes deviation from unom while enforcing the CBF constraint in Eq. 3. The QP is formulated as: 
+
+usafe = arg min 
+
+> u∈U
+
+12 ∥u − unom ∥2 (5) subject to CBF constraints holding and ∥u∥ ≤ vmax .
+
+This formulation preserves the goal-seeking behavior of 
+
+unom as much as possible while guaranteeing collision avoid-ance through the CBF constraint. IV. A lpha Adj : A pproach 
+
+We present a latency-aware framework that uses egocentric RGB to adapt the conservativeness of a CBF safety filter in real time. At a high level, the robot runs a nominal goal-seeking controller, and a CBF filter enforces collision avoidance. A VLM periodically estimates collision risk from the current RGB frame, and this risk is mapped to the CBF parameter α. Because VLM inference is asynchronous and introduces non-trivial latency, we propose a dynamic cap and mitigation policy for stale requests that guarantees conservative behavior when the VLM output is delayed. The overall system overview can be seen in Figure 1. Fig. 1: System overview. Egocentric RGB frames are processed asynchronously by a VLM to produce a risk estimate r, mapped to    
+
+> αvlm . A geometric, speed-aware cap αcap and a staleness test gate the VLM output to produce αfinal , which parameterizes the CBF safety filter that produces safe commands.
+
+A. Risk-to-α Mapping from VLM Output 
+
+We consider a mobile robot with egocentric RGB camera sensing operating in a cluttered environment with static or dynamic obstacles. The low-level controller executes every 0.0167 sconds (60 Hz). Every N = 30 control steps (0 .5seconds, 2 Hz), the controller captures an RGB frame and asynchronously queries our VLM risk service over HTTP (695 milliseconds average end-to-end round-trip latency). The VLM produces a scalar collision-risk estimate r ∈
+
+[0 , 1] from the current egocentric RGB frame, where r = 0indicates low risk and r = 1 indicates high risk. We interpret 
+
+r as a hazard score for the robot’s current motion context in relation to its environment (e.g., whether the next few seconds will likely require evasive action). We map risk to a bounded scalar αvlm using the monotone decreasing function 
+
+αvlm (r) = αmin + (αmax − αmin ) (1 − r)γ, (6) where αmin ≤ αvlm ≤ αmax and γ > 0 controls sensitivity. We devise the power-law mapping in Eq. 6 to satisfy four practical requirements for e ff ective closed-loop control: (i) boundedness so that αvlm stays within a stable range, (ii ) monotonicity, to ensure higher predicted risk always yields lower αvlm and hence more conservative behavior, ( iii )smoothness, to avoid abrupt parameter changes under noisy outputs, ( iv ) and simple tunability using a single parame-ter γ. By construction, the power-law form provides these properties. Exact values for αmin , α max , and γ are provided in Section V. 
+
+a) VLM prompt construction.: Risk is obtained by querying a local HTTP endpoint with a PNG image and a text instruction. The instruction presented to the VLM is formed by concatenating ( i) a fixed server-side formatting constraint that enforces a strict JSON response and ( ii ) a client-provided context string that is updated online with the robot’s current state. The server prepends the following base instruction: Server-Side VLM Instruction 
+
+You are a risk estimator for mobile robot navigation. Given this scene image, output ONLY a single-line JSON of the form {”risk”: <number between 0 and 1>. No prose, no markdown—just JSON. 
+
+The controller then appends an additional context prompt containing lightweight runtime information:         
+
+> (a) Low ( r=0.12) (b) Medium ( r=0.52) (c) High ( r=0.68)
+> Fig. 2: Example VLM risk estimates in the robot RGB view spanning low, medium, and high risk.
+
+Controller-Side Appended VLM Instruction 
+
+You are a safety estimator for a mobile robot. Given the current RGB view from a camera mounted on the robot, estimate current collision risk as a number in [0,1]. Lower values meaning lower imminent collision risk, and higher values meaning imminent collision risk. Return strict JSON only with keys: risk (0..1 float). Context: h min and current speed v m /s. 
+
+where hmin is the minimum barrier value with respect to the closest obstacle and v is the current commanded speed estimate. This two-part construction keeps the output format consistent for robust parsing while still allowing online context injection without modifying the VLM service. The server decodes the model output and extracts the last valid JSON-like risk value using a conservative parser. If the value is outside [0 , 1], it is clipped; if a percentage is produced, it is rescaled to [0 , 1]. In Figure 2, we show representative RGB frames spanning low /medium /high predicted risk, as produced by the VLM. The low risk (2a) scene contains an obstacle in view, but the VLM correctly judges that it is far away from the robot, returning a low risk score. The medium risk (2b) scene shows the robot approaching the obstacle, and while corrective action does not need to be done immediately, it will be necessary soon. The high risk (2c) scene shows an imminent obstacle, requiring corrective action. We do not provide few-shot examples with target numeric risk values, to avoid anchoring the model. Instead, we enforce a scripted input schema and a strict output schema, and interpret r
+
+as an near-term hazard score that is well suited for use in modulating controller conservativeness. VLM inference is executed asynchronously to avoid block-ing the control loop. Every 30 control steps, the current RGB frame is enqueued and sent to a separate VLM process over HTTP. This setup naturally introduces latency concerns. We reduce end-to-end inference overhead by constraining the response format to strict JSON-only. We also enforce an output script that keeps VLM responses short (low token budget) and limits response variability. By querying at a fixed lower rate of every 30 control steps, while the controller runs every step, we keep constant robot movement while keeping VLM updates frequent enough to be useful for navigation. We run the NVIDIA IsaacSim simulator on a separate GPU from the VLM, and our risk service uses LLaVA-1.5 7B served via FastAPI. We utilize LLaVA-1.5 7B as our VLM backbone because it provides a favorable latency–quality tradeo ff compared to larger alternatives. In our internal pro-filing, larger models such as LLaVA-1.5 13B increased end-to-end response time without resulting in a notable di ff erence in utility of the resulting risk signal. To further reduce inference time, we host the VLM ourselves as a local FastAPI endpoint, allowing the robot controller to send an image and receive a risk score over HTTP without relying on an external cloud service. We additionally apply 4-bit quantization to the model weights, compressing the weight tensors and reducing GPU usage, improving throughput. Overall, output format constraints reduced generation overhead, weight quantization reduced inference time, and our model choice struck a favorable accuracy–latency tradeo ff , reducing end to end latency from an average of 1482 to 695 milliseconds, an average improve-ment of 53%. Because inference is asynchronous, the controller holds the most recent valid αvlm until a new response arrives. Potential delays are handled by a latency-aware fusion policy, which guards against stale or overly permissive VLM out-puts. Let t denote the current time and let tvlm be the time at which the most recent valid VLM estimate was received. We define a staleness indicator: stale( t) = It − tvlm > Tstale 
+
+, (7) where Tstale is a threshold derived from the expected round-trip latency. When the VLM output is stale, directly using 
+
+αvlm can be unsafe because it may reflect an outdated scene. 
+
+B. Dynamic α Cap from Geometric Margin 
+
+Because VLM outputs can be delayed and may occasion-ally be overly permissive, we impose a geometric dynamic cap on α so that the controller cannot behave too aggressively when the robot is close to obstacles. The cap is designed primarily as a safety envelope and fallback mechanism. It guarantees an upper bound on aggressiveness based only on geometry and speed, independent of semantic estimation quality. 
+
+a) Distance based cap: At each time step, the most critical obstacle is simply the one that is the closest to our robot, which can also be defined as the obstacle with the smallest barrier value. We define clearance margin m as the distance between our robot and the closest obstacle. Thus a large m value indicates more clearance, and m = 0 means that the robot has collided with the nearest obstacle. We map clearance margin m to a cap by smoothly in-terpolating between a conservative near value αnear and a permissive far value αfar :
+
+s = min 1, mMsafe 
+
+!
+
+, (8) 
+
+αdist = αnear + (αfar − αnear ) sγc , (9) where Msafe > 0 is a clearance scale that defines when we consider the robot “safely far,” and γc > 0 shapes the transition. Equation 8 defines a normalized clearance score s 
+
+s ∈ [0 , 1] from raw margin m. We scale m by Msafe and clip at 1 so that ( i) s = 0 at safety boundary, ( ii ) s = 1 once the robot is at least Msafe meters away from the closest obstacle, and larger clearances do not further increase the cap. This turns the raw margin into a unitless variable representing ”how far are we”, that is suitable for smooth interpolation. Equation 9 then maps s to a distance-based cap αdist by smoothly interpolating between a conservative near value 
+
+αnear and a permissive far value αfar . The power-law shape parameter γc = 2 is chosen so the cap remains conservative until the robot is clearly far from the obstacle. 
+
+b) Speed-aware scaling: Clearance alone is not su ffi -cient: for the same clearance m, a faster robot should be more conservative. Let v denote the current forward speed estimate, and let Vmax > 0 be the maximum allowed forward speed. To αdist , we apply a speed-dependent scaling factor 
+
+η(v) = 11 + Gv
+
+ max(0 ,v)
+
+> Vmax
+
+ , (10) where Gv = 1 controls how strongly speed reduces the cap. Intuitively, η(v) smoothly tightens the cap as the robot moves faster. When the robot is stopped ( v = 0), η(0) = 1, and as v increases toward Vmax , η(v) decreases. We use max(0, v) so that small or negative speeds do not increase conservativeness. The final dynamic cap is 
+
+αcap = clip( αdist η(v), α near , α far ) , (11) where clip( x, ℓ, u) = min {u, max {ℓ, x}} enforces bounds. 
+
+c) Fusion policy: We combine αvlm with the caps using a simple fusion policy: when VLM estimate is fresh, we set 
+
+αfinal = min αvlm , α soft cap 
+
+ , (12) which ensures the VLM can only reduce conservativeness up to the safe envelope imposed by the soft cap. When the VLM estimate is stale, we ignore αvlm and fall back to the hard cap, 
+
+αfinal = αhard cap . (13) We use the same cap function αcap (m, v) throughout, but we instantiate it with two di ff erent near-obstacle floors to create two safety “modes.” The only di ff erence between the two is the minimum cap value the robot is allowed to use when it is very close to an obstacle (i.e., when the clearance margin m is near zero).  
+
+> •
+
+Soft cap (normal operation): When the VLM estimate is fresh, we use a soft cap that allows slightly larger 
+
+α values near obstacles. This preserves responsiveness and avoids being unnecessarily conservative, while still preventing the VLM from choosing an overly permis-sive α. 
+
+> •
+
+Hard cap (stale fallback): When the VLM estimate is stale, we use a more conservative hard cap that forces smaller α values near obstacles. This provides a guar-anteed conservative fallback when semantic feedback is delayed or unavailable. Both caps share the same equations from (9)–(11); we simply choose two constants αhard near < α soft near . All other cap parameters are identical in both modes, including αfar (the cap when the robot is safely far from obstacles), the clearance scale Msafe ,and the speed-scaling parameters Gv and Vmax .
+
+d) Why use the VLM if we already have a cap?: 
+
+A natural question is: if αcap (m, v) already bounds aggres-siveness near obstacles and provides a conservative fallback under staleness, why not simply use α ← αcap at all times and bypass the VLM? The key point is that the cap is intentionally designed as a fallback only in the case of minimum or flawed information. It is purely geometric, local, and conservative by construction. It is usually minimally su ffi cient to prevent collisions near hazards, but it does not exploit richer cues available in RGB that a ff ect how cautious or aggressive the robot should be for maximum e ffi ciency. By contrast, the VLM can provide additional scene-level insight from the full RGB image that geometry alone cannot reliably capture from a single nearest-obstacle margin. This insight can improve behavior in both directions:  
+
+> •
+
+More conservative earlier: In visually complex scenes (e.g., occlusions, crossings, or tight passages), the VLM can predict elevated risk even when m is still moderate. This reduces α proactively so the CBF filter intervenes earlier, improving safety margins before entering ahazardous region.  
+
+> •
+
+More agile when appropriate: In relatively open spaces, the VLM can predict low risk, increasing α and enabling faster progress and fewer unnecessary deviations. A geometry-only distance rule cannot distinguish “benign proximity” from “risky context” beyond local distance. Thus, the cap provides a guaranteed conservative baseline when the VLM estimate is stale or when rare anomalous VLM outputs occur, while the VLM provides higher-value, context-sensitive modulation that improves both safety and effi ciency when timely and reliable. 
+
+C. Overall Algorithm 
+
+The overall control stack per timestep is: 1) If scheduled (once every 30 steps), query the VLM risk service asynchronously and map the returned risk to a candidate αvlm (Section IV-A) 2) Read robot state x and compute geometric safety quan-tities such as clearance margin to closest obstacle and current speed estimate. (Section IV-B) 3) Compute geometric cap ( αcap ), determine staleness, and fuse with the latest VLM-based αvlm estimate to produce 
+
+αfinal (Eq. 11-13) 4) Compute a nominal goal-directed control unom , then apply a CBF safety filter, using αfinal , to obtain a safe control usafe (Eq. 5). 5) Convert usafe into executable robot commands ( v, ω ) and step the simulator. V. E xperiments 
+
+In this section, we evaluate the performance of our proposed framework in a variety of navigation scenarios. The goal of our experiments is to answer the following key questions: ( i) does A lpha Adj enable e ffi cient navigation while still remaining collision-free? ( ii ) how does A lpha Adj 
+
+compare to existing methods in terms of successful and effi cient navigation? To answer these questions, we conduct experiments in simulation. We first discuss the simulation setup, then describe baseline and comparison methods used for evaluation. Finally, we present and analyze the results, demonstrating the impact of A lpha Adj on safety and navi-gation e ffi ciency. 
+
+A. Simulation Design and Experiment Setup 
+
+We evaluate A lpha Adj in NVIDIA IsaacSim [36] using a Carter di ff erential-drive mobile robot with an egocentric RGB camera. The robot starts at rest, and is commanded with bounded linear (max 0 .50 meters /second) and angular velocities (max = 0.9 radians /second), and each rollout terminates upon reaching the goal, on collision with obstacle (upon any part of the robot contacting an obstacle) or after 1800 simulation steps (30 .06 seconds). Reaching the goal constitutes a successful run, while a collision or simulation stop constitutes a failed run. We evaluate on four di ff erent scenarios:       
+
+> Fig. 3: Fixed-αsweep in the warehouse cluttered field scenario. The x-axis varies the CBF αparameter. The left y-axis is path length, and right y-axis is time to goal, with both metrics preferring lower values. Path length and time to goal are marked ∞for collisions (black cross), as these are failed runs.
+> •
+
+Single Frontal Obstacle: A cylindrical obstacle is placed directly in between the robot and its destination, forcing the robot to deviate from its straight line path to avoid collision. The robot starts 9 meters away from the destination, and the obstacle (height 0 .6 meters, radius 0.4 meters) is placed 5 meters from the start.  
+
+> •
+
+Cluttered Field: Four obstacles of di ff erent sizes (radii 0.28, 0 .30, 0 .35, 0 .42 meters) are placed at di ff erent locations between the robot and the destination. The robot must change directions multiple times to reach the destination e ffi ciently without collision.  
+
+> •
+
+Dynamic Obstacle Crossing: Two obstacles move side to side, periodically blocking the robot’s path and line of sight to the destination. The two obstacles oscillate in 
+
+y at fixed x positions (5 and 7 meters from start), with amplitudes 1 .2 and 1 .5 meters, and angular frequencies 0.55 and 0 .85 radians /second, respectively. The robot must react to both moving obstacles to reach the desti-nation without collision.  
+
+> •
+
+Dynamic Frontal Obstacle: An obstacle is placed di-rectly between the robot and its destination and moves in a straight line toward the robot’s starting position at 0.35 meters /second, forcing the robot to deviate in time from the direct path to avoid collision. We consider two environments: generated toy environ-ment with a flat ground plane and a realistic warehouse environment loaded from IsaacSim assets, which provides a representative indoor navigation setting. Experiments were run on an AMD Ryzen Threadripper PRO 7955WX Machine with an NVIDIA RTX 6000 Ada GPU. We run each scenario 25 times and report average results. 
+
+B. Ablations and Baselines 
+
+We compare against the following ablations and baselines:. 1) A lpha Adj with no dynamic cap: This is an ablation baseline where we eliminate our dynamic cap approach, leaving us vulnerable to VLM latency. 2) A lpha Adj with no alpha adjustment, minimum alpha used: This is a conservative ablation baseline where we eliminate our alpha adjustment and instead use a fixed minimum alpha value throughout. 3) A lpha Adj with no alpha adjustment, maximum alpha used: This is an aggressive ablation baseline where we eliminate our alpha adjustment and instead use a fixed maximum alpha value throughout. To give further insight on how di ff erent fixed alpha values a ff ect results, in Fig. 3, we show a sliding scale of alpha values, collisions, path length, and time to (a) Warehouse, frontal obstacle. (b) Warehouse, cluttered field. (c) Warehouse, dynamic obstacle. (d) Warehouse, dynamic frontal ob-stacle.    
+
+> (e) Toy, frontal obstacle. (f) Toy, cluttered field. (g) Toy, dynamic obstacle. (h) Toy, dynamic frontal obstacle.
+
+Fig. 4: Top-down trajectories in four warehouse scenarios ( top ) and four toy scenarios ( bottom ).                                                                                    
+
+> Frontal Cluttered Dynamic Dynamic Frontal Metric Alpha Adj No cap αmin αmax Alpha Adj No cap αmin αmax Alpha Adj No cap αmin αmax Alpha Adj No cap αmin αmax
+> Success Yes Yes Yes No Yes No Yes No Yes Yes No Yes Yes No Yes No Time-to-goal (s) 8.733 8.583 10.550 –11.717 –13.050 –10.267 10.667 –10.383 10.850 –11.633 –Min margin (m) 0.542 0.522 2.766 –0.246 –1.551 –0.334 0.225 2.651 0.067 0.114 –3.095 –Path length (m) 9.967 9.825 12.192 –12.985 –14.982 –11.689 12.165 24.180 10.986 12.051 –13.651 –
+
+TABLE I: Warehouse: Baseline comparisons across scenarios (A lpha Adj , no cap, fixed αmin , fixed αmax ). 
+
+goal. Averaged over 10 runs, the results show a clear effi ciency–safety tradeo ff : conservative α=0.1 increases path length and time to goal, while an aggressive α=0.6leads to collision. Intermediate values are generally more e ffi cient, but path length and time to goal are not directly proportional. α=0.5 takes a more aggres-sive line (shorter path length than α=0.2) yet induces sharper corrections and stopping to change direction, substantially increasing time-to-goal. 
+
+C. Discussion 
+
+We show qualitative trajectory plots for each scenario in both the warehouse and toy (Figure 4) environments. Additionally, we report quantitative results for each scenario in the warehouse environment in Table I. Across all 8 environment–scenario pairs, Alpha Adj 
+
+reaches the goal in 8 /8 setups with 0 collisions, showing that integration of semantic risk modulation of the CBF safety filter can be done without sacrificing safety. The only other setting that consistently avoids collisions is fixed αmin .However, in the warehouse dynamic obstacle scenario, while 
+
+αmin did not collide, it also was unable to reach its destination due to its conservativeness, as seen in 4c. Furthermore, this conservativeness drastically increases detours: relative to Alpha Adj , averaged over all eight setups, fixed αmin increases path length by 3 .21 meters (18 .5%) and time-to-goal by 1 .27 seconds (10 .8%). Meanwhile, fixed αmax is overly aggressive, producing 6 collisions and only 2 /8 successful runs overall. Comparing A lpha Adj to the adaptive no-cap variant, re-moving the cap yields 2 collisions and 6 /8 successes overall. Averaged across scenarios, A lpha Adj improves over no-cap by 0 .53 seconds in time to goal (4 .5%). In a small number of cases, no-cap is slightly faster when the raw VLM risk predictions are already well-calibrated and stable for that scene, so capping does not provide additional benefit. For example, in the Warehouse frontal scenario (Figure 4a), no-cap reaches the goal minimally faster, arriving 0 .15 seconds faster and following a path that is 0 .14 meters shorter. We view this as a favorable tradeo ff . Over the entirety of the scenarios, the cap substantially improves robustness to VLM latency and occasional outlier risk scores, preventing collisions and improving reliability, while only incurring a negligible e ffi ciency cost in the rare cases where uncapped VLM predictions are already accurate. Compared to no cap, A lpha Adj is more e ffi cient in when it comes to both path length and time to goal in the scenarios shown in Figures 4b, 4c, 4d, 4e, 4f, 4g. Our success in every scenario is notable given our con-troller runs continuously at a 60 Hz control rate (one control step every 0 .0167 seconds), without pausing for any reason, even when VLM updates are delayed. Because our VLM is queried asynchronously, the robot continues executing control updates at every timestep while waiting for VLM responses. In contrast, synchronous VLM-based approaches require the robot to wait, remaining stationary while visual input is captured, sent to the VLM, processed, returned, and then converted into a control action, which substantially increases loop time. In examining synchronous approach latency analysis in [37], the average VLM-side latency (image + instruction input → VLM → response) is 9 .07 seconds for VLM-Nav [38], and 1 .75 seconds for VLM-Social-Nav [10]. These are far larger than our 0 .0167 seconds control period and do not even include subsequent control computation or motion execution. Similarly, synchronous Vision–LLM in [39] reports an overall decision–control loop time of approximately 6 .2 seconds, further illustrating how synchronous designs are bounded by VLM response time. In contrast, our approach maintains a control rate suitable for real systems while still enabling dynamic VLM-guided adjustment for safe and e ffi cient goal reaching. VI. C onclusion , L imitations , and Future Work 
+
+In this work, we introduced A lpha Adj , a latency-aware vision-only to control navigation framework that uses only egocentric RGB and a VLM risk estimate to adapt the conservativeness of a CBF safety filter in real time. The key components include a mapping from bounded VLM risk to parameter adjustment, asynchronous VLM inference with staleness detection, and a geometric dynamic cap that bounds aggressiveness and provides a conservative fallback under delayed updates. Our approach is evaluated primarily in simulation across a constrained set of environments and dynamics. Real robotic deployment may introduce additional physical challenges, but it represents a natural next step for harnessing the benefits of our design, enabling more diverse sensing and varied interactions. Future work could also center on further calibra-tion and interpretability of the VLM risk score, which could further improve reliability across a multitude of domains. ACKNOWLEDGMENT This work was carried out at the Chandra Robot △utonomy Lab (CR △L) at the University of Virginia. References 
+
+[1] G. B. Margolis, T. Chen, K. Paigwar, X. Fu, D. Kim, S. Kim, and P. Agrawal, “Learning to jump from pixels,” 2021. [Online]. Available: https: // arxiv.org /abs /2110.15344 [2] S. Gouru, S. Lakkoju, and R. Chandra, “Livenet: Robust, minimally invasive multi-robot control for safe and live navigation in constrained environments,” 2024. [Online]. Available: https: // arxiv.org /abs /2412. 04659 [3] V. Zinage, A. Jha, R. Chandra, and E. Bakolas, “Decentralized safe and scalable multi-agent control under limited actuation,” 2024. [Online]. Available: https: // arxiv.org /abs /2409.09573 [4] R. Chandra, V. Zinage, E. Bakolas, P. Stone, and J. Biswas, “Deadlock-free, safe, and decentralized multi-robot navigation in social mini-games via discrete-time control barrier functions,” 2024. [5] M. De Sa, P. Kotaru, and K. Sreenath, “Point cloud-based control barrier function regression for safe and e ffi cient vision-based control,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) , Yokohama, Japan, 2024, pp. 366–372. [6] F. Bordes, R. Y. Pang, A. Ajay, A. C. Li, A. Bardes, S. Petryk, O. Ma˜ nas, Z. Lin, A. Mahmoud, B. Jayaraman, M. Ibrahim, M. Hall, Y. Xiong, J. Lebensold, C. Ross, S. Jayakumar, C. Guo, D. Bouchacourt, H. Al-Tahan, K. Padthe, V. Sharma, H. Xu, X. E. Tan, M. Richards, S. Lavoie, P. Astolfi, R. A. Hemmat, J. Chen, K. Tirumala, R. Assouel, M. Moayeri, A. Talattof, K. Chaudhuri, Z. Liu, X. Chen, Q. Garrido, K. Ullrich, A. Agrawal, K. Saenko, A. Celikyilmaz, and V. Chandra, “An introduction to vision-language modeling,” 2024. [Online]. Available: https: // arxiv.org /abs /2405.17247 [7] J. Chen and R. Chandra, “Livepoint: Fully decentralized, safe, deadlock-free multi-robot control in cluttered environments with high-dimensional inputs,” 2025. [Online]. Available: https: // arxiv.org /
+
+abs /2503.13098 [8] T. Chen, A. Swann, J. Yu, O. Shorinwa, R. Murai, M. K. III, and M. Schwager, “Safer-splat: A control barrier function for safe navigation with online gaussian splatting maps,” 2025. [Online]. Available: https: // arxiv.org /abs /2409.09868 [9] N. Hirose, C. Glossop, D. Shah, and S. Levine, “Asyncvla: An asynchronous vla for fast and robust navigation on the edge,” 2026. [Online]. Available: https: // arxiv.org /abs /2602.13476 [10] D. Song, J. Liang, A. Payandeh, A. H. Raj, X. Xiao, and D. Manocha, “Vlm-social-nav: Socially aware robot navigation through scoring using vision-language models,” 2024. [Online]. Available: https: // arxiv.org /abs /2404.00210 [11] A. D. Ames, X. Xu, J. W. Grizzle, and P. Tabuada, “Control barrier function based quadratic programs for safety critical systems,” IEEE Transactions on Automatic Control , vol. 62, no. 8, pp. 3861–3876, 2016. [12] A. D. Ames, S. Coogan, M. Egerstedt, G. Notomista, K. Sreenath, and P. Tabuada, “Control barrier functions: Theory and applications,” in 2019 18th European Control Conference (ECC) , 2019, pp. 3420– 3431. [13] W. Xiao, C. Belta, and C. G. Cassandras, “Adaptive control barrier functions for safety-critical systems,” 2020. [Online]. Available: https: // arxiv.org /abs /2002.04577 [14] M. Black, E. Arabi, and D. Panagou, “A fixed-time stable adaptation law for safety-critical control under parametric uncertainty,” in 2021 European Control Conference (ECC) , 2021, pp. 1328–1333. [15] A. J. Taylor, V. D. Dorobantu, H. M. Le, Y. Yue, and A. D. Ames, “Episodic learning with control lyapunov functions for uncertain robotic systems,” in 2019 IEEE /RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, Nov. 2019, p. 6878–6884. [Online]. Available: http: // dx.doi.org /10.1109 /
+
+IROS40897.2019.8967820 [16] A. J. Taylor and A. D. Ames, “Adaptive safety with control barrier functions,” in 2020 American Control Conference (ACC) . IEEE, Jul. 2020, p. 1399–1405. [Online]. Available: http: // dx.doi.org /10.23919 /
+
+ACC45564.2020.9147463 [17] T. Kim, R. W. Beard, and D. Panagou, “How to adapt control barrier functions? a learning-based approach with applications to a vtol quadplane,” 2025. [Online]. Available: https: // arxiv.org /abs /2504. 03038 [18] T. Kim, R. I. Kee, and D. Panagou, “Learning to refine input constrained control barrier functions via uncertainty-aware online parameter adaptation,” 2025. [Online]. Available: https: 
+
+// arxiv.org /abs /2409.14616 [19] Y. Kim and C. Sloth, “Robust adaptive time-varying control barrier function with application to robotic surface treatment,” 2025. [Online]. Available: https: // arxiv.org /abs /2506.14249 [20] X. Xiao, Z. Wang, Z. Xu, B. Liu, G. Warnell, G. Dhamankar, A. Nair, and P. Stone, “Appl: Adaptive planner parameter learning,” Robotics and Autonomous Systems , vol. 154, p. 104132, 2022. [21] X. Xiao, B. Liu, G. Warnell, and P. Stone, “Motion planning and control for mobile robot navigation using machine learning: a survey,” 2022. [Online]. Available: https: // arxiv.org /abs /2011.13112 [22] X. Xiao, B. Liu, G. Warnell, J. Fink, and P. Stone, “Appld: Adaptive planner parameter learning from demonstration,” IEEE Robotics and Automation Letters , vol. 5, no. 3, pp. 4541–4547, 2020. [23] Z. Wang, X. Xiao, B. Liu, G. Warnell, and P. Stone, “Appli: Adaptive planner parameter learning from interventions,” in 2021 IEEE Inter-national Conference on Robotics and Automation (ICRA) . IEEE, 2021. [24] Z. Wang, X. Xiao, G. Warnell, and P. Stone, “Apple: Adaptive planner parameter learning from evaluative feedback,” IEEE Robotics and Automation Letters , vol. 6, no. 4, pp. 7744–7749, 2021. [25] Z. Xu, G. Dhamankar, A. Nair, X. Xiao, G. Warnell, B. Liu, Z. Wang, and P. Stone, “Applr: Adaptive planner parameter learning from reinforcement,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2021. [26] A. Majumdar and M. Pavone, “How should a robot assess risk? towards an axiomatic theory of risk in robotics,” 2017. [Online]. Available: https: // arxiv.org /abs /1710.11040 [27] M. Ono, M. Pavone, Y. Kuwata, and J. Balaram, “Chance-constrained dynamic programming with application to risk-aware robotic space exploration,” Autonomous Robots , vol. 39, 12 2015. [28] L. Blackmore, M. Ono, and B. C. Williams, “Chance-constrained optimal path planning with obstacles,” IEEE Transactions on Robotics ,vol. 27, no. 6, pp. 1080–1094, 2011. [29] E. Delage and Y. Ye, “Distributionally robust optimization under moment uncertainty with application to data-driven problems,” Op-erations Research , vol. 58, no. 3, pp. 595–612, 2010. [30] H. Xu and S. Mannor, “Distributionally robust markov decision processes,” in Advances in Neural Information Processing Systems ,J. La ff erty, C. Williams, J. Shawe-Taylor, R. Zemel, and A. Culotta, Eds., vol. 23. Curran Associates, Inc., 2010. [Online]. Available: https: // proceedings.neurips.cc /paper files /paper /
+
+2010 /file /19f3cd308f1455b3fa09a282e0d496f4-Paper.pdf [31] G. Bahati, R. M. Bena, M. Wilkinson, P. Mestres, R. K. Cosner, and A. D. Ames, “Risk-aware safety filters with poisson safety functions and laplace guidance fields,” 2025. [Online]. Available: https: // arxiv.org /abs /2510.25913 [32] D. Tscholl, Y. Nakka, and B. Gunter, “Perception-integrated safety critical control via analytic collision cone barrier functions on 3d gaussian splatting,” 2025. [Online]. Available: https: // arxiv.org /abs /
+
+2509.14421 [33] A. Ahmadi, L. Nardi, N. Chebrolu, and C. Stachniss, “Visual servoing-based navigation for monitoring row-crop fields,” in 2020 IEEE International Conference on Robotics and Automation (ICRA) , 2020, pp. 4920–4926. [34] Y. Li and J. Koˇ secka, “Learning view and target invariant visual servoing for navigation,” in 2020 IEEE International Conference on Robotics and Automation (ICRA) , 2020, pp. 658–664. [35] T. Niwa, S. Taguchi, and N. Hirose, “Spatio-temporal graph localization networks for image-based navigation,” 2022. [Online]. Available: https: // arxiv.org /abs /2204.13237 [36] NVIDIA, “Isaacsim,” https: // github.com /isaac-sim /IsaacSim, 2026, gitHub repository, accessed 2026-03-04. [37] J. Chen, Y. Li, P. Jiang, J. Du, Z. Chen, C. Tie, J. Deng, and L. Shao, “Lisn: Language-instructed social navigation with vlm-based controller modulating,” 2025. [Online]. Available: https: 
+
+// arxiv.org /abs /2512.09920 [38] D. Goetting, H. G. Singh, and A. Loquercio, “End-to-end navigation with vision language models: Transforming spatial reasoning into question-answering,” 2024. [Online]. Available: https: // arxiv.org /abs /2411.05755 [39] T.-Y. Kim and W.-S. Choi, “Autonomous vehicle maneuvering using vision–llm models for marine surface vehicles,” Journal of Marine Science and Engineering , vol. 13, no. 8, 2025. [Online]. Available: https: // www.mdpi.com /2077-1312 /13 /8/1553

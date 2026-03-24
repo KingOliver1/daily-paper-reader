@@ -6,39 +6,40 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-23
-- 运行时间：2026-03-23 19:44:30 UTC
+- 最新运行日期：2026-03-24
+- 运行时间：2026-03-24 20:06:07 UTC
 - 运行状态：成功
 - 本次总论文数：6
-- 精读区：3
-- 速读区：3
+- 精读区：4
+- 速读区：2
 
 ### 今日简报（AI）
-今日聚焦人形机器人柔顺控制与强化学习稳定性认证，两篇满分论文引领具身智能向高可靠性迈进。
-核心
-- 详情：[/202603/23/README](/202603/23/README)
+今日深度解析异构机器人协同与开源四足硬件，涵盖从“机器人遛狗”到钣金焊接工艺的 6 篇前沿成果。
+核心突破在于实现了异构系统间的零样本协作导航，并推出了具备多模态感知能力的实用型开源四足平台 MEVIUS2。
+推荐关注视觉语言模型在实时避障中的应用，探索复杂环境下多机协同与硬件创新的实战可能。
+- 详情：[/202603/24/README](/202603/24/README)
 
 ### 精读区论文标签
-1. [Task-Specified Compliance Bounds for Humanoids via Lipschitz-Constrained Policies](/202603/23/2603.16180v2-task-specified-compliance-bounds-for-humanoids-via-lipschitz-constrained-policies)  
+1. [Can a Robot Walk the Robotic Dog: Triple-Zero Collaborative Navigation for Heterogeneous Multi-Agent Systems](/202603/24/2603.21723v1-can-a-robot-walk-the-robotic-dog-triple-zero-collaborative-navigation-for-heterogeneous-multi-agent-systems)  
    标签：评分：10.0/10、query:robot
-   evidence：用于类人机器人双足行走和柔顺控制的Lipschitz约束强化学习
-2. [ContractionPPO: Certified Reinforcement Learning via Differentiable Contraction Layers](/202603/23/2603.19632v1-contractionppo-certified-reinforcement-learning-via-differentiable-contraction-layers)  
-   标签：评分：10.0/10、query:robot
-   evidence：非结构化环境下足式机器人运动的认证强化学习
-3. [AGILE: A Comprehensive Workflow for Humanoid Loco-Manipulation Learning](/202603/23/2603.20147v1-agile-a-comprehensive-workflow-for-humanoid-loco-manipulation-learning)  
+   evidence：类人机器人与四足机器人的协作导航
+2. [MEVIUS2: Practical Open-Source Quadruped Robot with Sheet Metal Welding and Multimodal Perception](/202603/24/2603.22031v1-mevius2-practical-open-source-quadruped-robot-with-sheet-metal-welding-and-multimodal-perception)  
    标签：评分：9.0/10、query:robot
-   evidence：人形机器人运动操作学习的强化学习工作流
+   evidence：具有多模态感知和强化学习遍历能力的四足机器人
+3. [Make Tracking Easy: Neural Motion Retargeting for Humanoid Whole-body Control](/202603/24/2603.22201v1-make-tracking-easy-neural-motion-retargeting-for-humanoid-whole-body-control)  
+   标签：评分：9.0/10、query:robot
+   evidence：类人机器人全身控制的神经运动重定向
+4. [Sim-to-Real of Humanoid Locomotion Policies via Joint Torque Space Perturbation Injection](/202603/24/2603.21853v1-sim-to-real-of-humanoid-locomotion-policies-via-joint-torque-space-perturbation-injection)  
+   标签：评分：8.0/10、query:robot
+   evidence：人形机器人运动策略的仿真到现实迁移
 
 ### 速读区论文标签
-1. [CeRLP: A Cross-embodiment Robot Local Planning Framework for Visual Navigation](/202603/23/2603.19602v1-cerlp-a-cross-embodiment-robot-local-planning-framework-for-visual-navigation)  
+1. [Dynamic Control Barrier Function Regulation with Vision-Language Models for Safe, Adaptive, and Realtime Visual Navigation](/202603/24/2603.21142v1-dynamic-control-barrier-function-regulation-with-vision-language-models-for-safe-adaptive-and-realtime-visual-navigation)  
    标签：评分：7.0/10、query:robot
-   evidence：跨具身机器人的视觉导航局部规划框架
-2. [HortiMulti: A Multi-Sensor Dataset for Localisation and Mapping in Horticultural Polytunnels](/202603/23/2603.20150v1-hortimulti-a-multi-sensor-dataset-for-localisation-and-mapping-in-horticultural-polytunnels)  
-   标签：评分：7.0/10、query:robot
-   evidence：复杂环境下的定位与建图多传感器数据集
-3. [IndoorR2X: Indoor Robot-to-Everything Coordination with LLM-Driven Planning](/202603/23/2603.20182v1-indoorr2x-indoor-robot-to-everything-coordination-with-llm-driven-planning)  
+   evidence：视觉到控制的导航和环境风险评估
+2. [HyReach: Vision-Guided Hybrid Manipulator Reaching in Unseen Cluttered Environments](/202603/24/2603.21421v1-hyreach-vision-guided-hybrid-manipulator-reaching-in-unseen-cluttered-environments)  
    标签：评分：6.0/10、query:robot
-   evidence：室内环境下的多机器人任务规划与感知
+   evidence：杂乱环境下的视觉引导感知与运动规划
 
 
 <div class="dpr-home-promo-card">
