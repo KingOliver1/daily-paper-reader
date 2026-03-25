@@ -6,40 +6,33 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-24
-- 运行时间：2026-03-24 20:06:07 UTC
+- 最新运行日期：2026-03-25
+- 运行时间：2026-03-25 19:36:05 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：4
+- 本次总论文数：4
+- 精读区：2
 - 速读区：2
 
 ### 今日简报（AI）
-今日深度解析异构机器人协同与开源四足硬件，涵盖从“机器人遛狗”到钣金焊接工艺的 6 篇前沿成果。
-核心突破在于实现了异构系统间的零样本协作导航，并推出了具备多模态感知能力的实用型开源四足平台 MEVIUS2。
-推荐关注视觉语言模型在实时避障中的应用，探索复杂环境下多机协同与硬件创新的实战可能。
-- 详情：[/202603/24/README](/202603/24/README)
+今日聚焦机器人高效导航与多机协作，深入探讨零样本感知与四足机器人协同搬运的前沿突破。
+重点关注
+- 详情：[/202603/25/README](/202603/25/README)
 
 ### 精读区论文标签
-1. [Can a Robot Walk the Robotic Dog: Triple-Zero Collaborative Navigation for Heterogeneous Multi-Agent Systems](/202603/24/2603.21723v1-can-a-robot-walk-the-robotic-dog-triple-zero-collaborative-navigation-for-heterogeneous-multi-agent-systems)  
-   标签：评分：10.0/10、query:robot
-   evidence：类人机器人与四足机器人的协作导航
-2. [MEVIUS2: Practical Open-Source Quadruped Robot with Sheet Metal Welding and Multimodal Perception](/202603/24/2603.22031v1-mevius2-practical-open-source-quadruped-robot-with-sheet-metal-welding-and-multimodal-perception)  
+1. [CATNAV: Cached Vision-Language Traversability for Efficient Zero-Shot Robot Navigation](/202603/25/2603.22800v1-catnav-cached-vision-language-traversability-for-efficient-zero-shot-robot-navigation)  
    标签：评分：9.0/10、query:robot
-   evidence：具有多模态感知和强化学习遍历能力的四足机器人
-3. [Make Tracking Easy: Neural Motion Retargeting for Humanoid Whole-body Control](/202603/24/2603.22201v1-make-tracking-easy-neural-motion-retargeting-for-humanoid-whole-body-control)  
+   evidence：非结构化环境下四足机器人的导航与通行能力评估
+2. [Learning Multi-Agent Local Collision-Avoidance for Collaborative Carrying tasks with Coupled Quadrupedal Robots](/202603/25/2603.23278v1-learning-multi-agent-local-collision-avoidance-for-collaborative-carrying-tasks-with-coupled-quadrupedal-robots)  
    标签：评分：9.0/10、query:robot
-   evidence：类人机器人全身控制的神经运动重定向
-4. [Sim-to-Real of Humanoid Locomotion Policies via Joint Torque Space Perturbation Injection](/202603/24/2603.21853v1-sim-to-real-of-humanoid-locomotion-policies-via-joint-torque-space-perturbation-injection)  
-   标签：评分：8.0/10、query:robot
-   evidence：人形机器人运动策略的仿真到现实迁移
+   evidence：基于强化学习的双四足机器人协同搬运
 
 ### 速读区论文标签
-1. [Dynamic Control Barrier Function Regulation with Vision-Language Models for Safe, Adaptive, and Realtime Visual Navigation](/202603/24/2603.21142v1-dynamic-control-barrier-function-regulation-with-vision-language-models-for-safe-adaptive-and-realtime-visual-navigation)  
+1. [Image-Conditioned Adaptive Parameter Tuning for Visual Odometry Frontends](/202603/25/2603.21785v1-image-conditioned-adaptive-parameter-tuning-for-visual-odometry-frontends)  
    标签：评分：7.0/10、query:robot
-   evidence：视觉到控制的导航和环境风险评估
-2. [HyReach: Vision-Guided Hybrid Manipulator Reaching in Unseen Cluttered Environments](/202603/24/2603.21421v1-hyreach-vision-guided-hybrid-manipulator-reaching-in-unseen-cluttered-environments)  
+   evidence：自主机器人视觉里程计的自适应参数调整
+2. [SG-VLA: Learning Spatially-Grounded Vision-Language-Action Models for Mobile Manipulation](/202603/25/2603.22760v1-sg-vla-learning-spatially-grounded-vision-language-action-models-for-mobile-manipulation)  
    标签：评分：6.0/10、query:robot
-   evidence：杂乱环境下的视觉引导感知与运动规划
+   evidence：用于移动操作和感知的空间接地视觉-语言-动作模型
 
 
 <div class="dpr-home-promo-card">

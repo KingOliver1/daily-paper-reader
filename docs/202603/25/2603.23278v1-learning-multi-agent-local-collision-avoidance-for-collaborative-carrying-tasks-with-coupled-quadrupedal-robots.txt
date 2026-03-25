@@ -1,0 +1,384 @@
+Title: Learning Multi-Agent Local Collision-Avoidance for Collaborative Carrying tasks with Coupled Quadrupedal Robots
+
+URL Source: https://arxiv.org/pdf/2603.23278v1
+
+Published Time: Wed, 25 Mar 2026 01:38:21 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Learning Multi-Agent Local Collision-Avoidance for Collaborative Carrying tasks with Coupled Quadrupedal Robots 
+
+Francesca Bray 1, Simone Tolomei 2, Andrei Cramariuc 1, Cesar Cadena 1, Marco Hutter 1
+
+Abstract — Robotic collaborative carrying could greatly ben-efit human activities like warehouse and construction site management. However, coordinating the simultaneous motion of multiple robots represents a significant challenge. Existing works primarily focus on obstacle-free environments, mak-ing them unsuitable for most real-world applications. Works that account for obstacles, either overfit to a specific terrain configuration or rely on pre-recorded maps combined with path planners to compute collision-free trajectories. This work focuses on two quadrupedal robots mechanically connected to a carried object. We propose a Reinforcement Learning (RL)-based policy that enables tracking a commanded velocity direction while avoiding collisions with nearby obstacles using only onboard sensing, eliminating the need for precomputed trajectories and complete map knowledge. Our work presents a hierarchical architecture, where a perceptive high-level object-centric policy commands two pretrained locomotion policies. Additionally, we employ a game-inspired curriculum to increase the complexity of obstacles in the terrain progressively. We validate our approach on two quadrupedal robots connected to a bar via spherical joints, benchmarking it against optimization-based and decentralized RL baselines. Our hardware experi-ments demonstrate the ability of our system to locomote in unknown environments without the need for a map or a path planner. The video of our work is available in the multimedia material. 
+
+I. I NTRODUCTION 
+
+Collaborative object transportation is a fundamental as-pect of human interaction, particularly in scenarios where a single individual cannot manipulate an object due to its size or weight. Such tasks are common in practical domains, including construction sites and warehouse operations, where coordinated motion and spatial awareness are required to avoid collisions with environmental obstacles. Examples of robotic collaboration are becoming more and more frequent in recent years, proposing both model-based and model-free approaches. Model-based ones [1]– [9] require a mathematical model of the whole system that describes not only the single agents’ dynamics, but also that of the whole team. The complexity of these models increases with the number of agents involved and the individual robots’       
+
+> 1Robotic Systems Lab, ETH Zurich. Email:
+
+frbray@ethz.ch . 
+
+> 2Centro di Ricerca “Enrico Piaggio”, and Dipartimento di Ingegneria dell’Informazione, Universit` a di Pisa, Pisa, Italy. This work was supported by the Luxembourg National Research Fund (Ref. 18990533), the European Union’s Horizon Europe Framework Pro-gramme under grant agreement No 101121321, the Swiss National Science Foundation (SNSF) through the National Centre of Competence in Digital Fabrication (NCCR dfab) and project No. 200021E 229503. This work has been conducted as part of ANYmal Research, a community to advance legged robotics. We thank Dylan Vogel and William Talbot for their helpful insights and support.
+
+Fig. 1: System deployed for hardware experiments. Each quadrupedal robot is provided with a mount ending with a spherical joint connected to a bar of 2 m length. The task-relevant frames are highlighted. 
+
+characteristics, making them impractical for online optimiza-tion solvers. As a result, simplified models are frequently adopted [8], [9], which may reduce robustness to unmodeled or unforeseen external influences. On the other hand, model-free approaches [10]–[13] do not rely on accurate system models, and the use of domain randomization during train-ing can improve their robustness to external disturbances. Moreover, legged robots have successfully been shown to push a large object to a desired goal location [13] using a hierarchical RL policy architecture. Effective collaborative carrying of extended objects with quadrupedal and bipedal robots has been shown in [10], [11], while [12] presents a team of two legged robots carrying a heavy weight tethered to the agents’ bases. However, all the above-mentioned works execute collab-orative manipulation tasks in empty environments, which is often not true for complex real-world scenarios. To approach this limitation, we employ an object-centric hierarchical RL controller able to track a commanded velocity direction while avoiding collisions with the system’s surroundings. In particular, the contribution of this work consists of a local collision-avoidance policy for a system of mechanically coupled quadrupedal robots that operates in unknown envi-ronments without requiring prior map knowledge or external path planners. To validate our approach, we benchmark it against optimization-based and decentralized RL baselines. Finally, we demonstrate the efficacy of our approach through hardware experiments across a variety of static obstacle con-figurations, as well as in a representative dynamic scenario. II. R ELATED WORK 
+
+In the following, we review existing approaches that address obstacle presence in the environment. 
+
+> arXiv:2603.23278v1 [cs.RO] 24 Mar 2026
+
+A. Model-based 
+
+The work presented in [14] demonstrates a system com-posed of two quadrupedal robots mechanically connected to a bar via ball joints. The authors propose a control architecture with three nested layers, where the highest layer consists of a planner with full access to obstacle locations and dimensions. This planner computes safe trajectories for the robots’ bases while accounting for the system’s kinematic constraints. The intermediate layer is a model-based controller that represents the system as a team of interconnected Single Rigid Bodies (SRBs) and optimizes its dynamic motion to track the planned trajectories. The resulting optimal ground reaction forces are then passed to the lowest layer, a Model Predictive Control (MPC) locomotion controller, which tracks them at the joint level. Similarly, [15] employs a planner to generate collision-free trajectories for a team of holonomic wheeled platforms equipped with manipulators. With full access to obstacle positions and dimensions, the planner computes desired paths for both the robot bases and their end-effectors. In [16], the authors present a two-tier framework for multi-robot formation control in dynamic environments. Utilizing full map knowledge, the global planner identifies a long-range path by sampling large, obstacle-free convex regions and connecting them via feasible formation configurations. To handle real-time execution, a local planner operates in position-time space, growing local convex polytopes to account for moving obstacles while optimizing formation parameters to track the intermediate configurations provided by the global path. This local optimization abstracts robot dynamics, which are subsequently handled at a higher fre-quency by individual low-level controllers that ensure inter-robot collision avoidance and adherence to the optimized formation. Generally, model-based controllers require explicit model-ing of the full system and its components, which often results in overly complex or inaccurate representations. Hence, we favor a model-free approach. 
+
+B. Model-free 
+
+The work presented in [17] demonstrates a team of quadrupedal robots collaboratively pushing an object from an initial to a target position. At the highest level, a Rapidly-exploring Random Tree (RRT)-based planner generates a collision-free trajectory for the object, leveraging full knowl-edge of the environment and obstacle locations. Adaptive policies extract subgoals along this path and forward them to a mid-level pushing controller, which computes the desired object-centric velocity commands for the agents. These com-mands are then executed by a low-level locomotion policy. In [18], two holonomic wheeled robots are trained to transport a long beam through a narrow aperture. However, this work focuses on a single map configuration only, hence overfitting to it. Finally, [19] also deploys a team of wheeled robots carrying a beam-like payload to be transported through a door. Their system selects among three discrete high-level motion types using a Convolutional Neural Network (CNN)-based Q-learning framework. The need to manually define these action modes can be limiting, as it requires the explicit specification of coordination strategies beforehand. Generally, the reliance on a prerecorded map limits the ap-plicability of such controllers in real-world scenarios, where terrain configurations may frequently change and dynamic obstacles are often present. Hence, in this work we present a collaborative carrying system able to track a commanded velocity direction in unknown environments while locally avoiding collisions with its surroundings. III. M ETHOD 
+
+A. Problem Statement 
+
+To study the problem of collaborative robotic transporta-tion we deploy the system shown in Fig.1, where two quadrupeds robots are connected to a bar of length L via a ball joint, which allows independent yaw rotation beneath the object, as well as limited roll and pitch motion relative to it. We formulate the problem as finding a controller π that at every time step t maps proprioceptive otsys and exteroceptive 
+
+zt observations to joint-level actions at that produce coor-dinated motion of the entire system: π(otsys , zt ) = at . The controller observes the object and agents’ base velocities 
+
+νtob j , νtbase i , i = 1, 2, along with the relative orientation between each agent and the bar ψob j ,base i , i = 1, 2. These proprioceptive inputs are collected by each agent via its onboard default state estimator, and provide information about the current state of the system. These are crucial for coordinating agents motion and minimizing internal forces on the object. In addition, each robot is equipped with four depth cameras, which are used to construct an elevation map of the system’s surroundings with dimensions H × W and resolution hres , which is then flattened into the vector zt ∈
+
+RH×W . These exteroceptive observations enable the system to perceive obstacles and avoid collisions by estimating the minimum distances between the environment and the system 
+
+dmin ob j , dmin i , i = 1, 2. To address the formulated problem, we employ a hierarchi-cal RL structure consisting of high- and low-level controllers, as illustrated in Fig. 2. In the following, we describe the components of the high-level policy. Throughout this work, we use the notation lbxa to denote the variable x of frame a expressed in frame b. Moreover, the left superscript l is used to distinguish between high-
+
+and low-level variables. Finally, the values of all parameters introduced in this section are summarized in Table II in the Appendix. 
+
+B. Terrain and Curriculum 
+
+To progressively increase task difficulty, we employ a game-inspired curriculum approach, which has been demon-strated to enhance the learning process [20]. At the beginning of each training, we generate a terrain comprising NC levels Fig. 2: Policy architecture. Single-robot feasible paths are sampled from the terrain, and the direction of the next waypoint defines the             
+
+> high-level command hl ob j c. Together with system-level observations, hl ob j o, these are provided to the high-level policy, which outputs high-level actions hl ob j a. These represent the rotated low-level commands ll i
+> base ic, which are executed by the trained locomotion policies.
+> Fig. 3: Example of a generated terrain used for training. The leftmost picture corresponds to the easiest curriculum levels, while the rightmost represents the more challenging ones.
+
+of progressively increasing difficulty, ranging from 0 to 
+
+Dmax . For each resulting subterrain, the difficulty level Di
+
+corresponds to the percentage of occupied terrain, with randomly placed obstacles. These are generated as boxes of height Hobs , while width and length are in the range: [ smin ,
+
+smax ] m. Fig. 3 illustrates an example of the resulting terrain, with the easiest curriculum levels on the left and the most challenging ones on the right. Agents can move up or down the curriculum depending on their performances (see Sec. III-C). 
+
+C. Commands 
+
+At the beginning of each training episode, we sample np
+
+points over free space, ensuring that each point maintains a minimum safety distance ds,wp from the nearest obstacle. This distance is chosen based solely on the dimensions of a single quadruped and is independent of the bar length 
+
+L. Once the sampling process is over, we apply Dijkstra’s 
+
+algorithm to compute all available shortest paths, retaining only NP of them with lengths in the range [ lmin , lmax ]. We define the high-level command hl ob j c as the desired velocity direction of the object frame in the xy -plane. We do not specify a desired angular velocity, as we want it to be learned by the high-level policy. The command hl ob j c is then defined as the norm of the distance in the xy -plane between the next waypoint W rwp xy and the current position of the object frame W rob j xy :
+
+> hl ob j
+
+c = ξob j ,W || (W rwp xy −W rob j xy )|| , (1) where ξob j ,W represents the rotation quaternion between the frames world and object . Once the object frame is within a radius Rwp from one waypoint, that node is considered reached, and the directional command starts pointing towards the next available one. If the goal is reached, the episode is terminated and the environment reset. Each sampled path is assigned the curriculum level cor-responding to the subterrain in which its starting node lies. During training, if a system successfully traverses more than half of its assigned path, it is promoted to a higher curriculum level in the next episode. Conversely, if it covers less than a quarter of the path, it is demoted by one level. To mitigate catastrophic forgetting, systems that reach the highest level are reassigned to a random curriculum level. At the start of training, all systems are initialized on low-difficulty paths, allowing them to first learn how to track the high-level 
+
+command in free space before progressing to more complex configurations. It is worth emphasizing that the path planner has no knowledge of the full system’s length. Consequently, the sampled paths are guaranteed to be feasible for a single agent, but not necessarily for the entire system. This issue can arise at higher curriculum levels if a corner is too tight to navigate. Nevertheless, this does not impede the learning process, as reaching the highest curriculum level is not mandatory. Therefore, our method can be applied to systems with varying bar lengths without requiring prior knowledge of the full system dimensions. 
+
+D. Action and Observation Spaces 
+
+The high-level actions hl ob j a correspond to the desired velocities of the agents’ bases expressed in object reference frame: ob j (vx, vy, ωz)base i , i = 1, 2. The proprioceptive terms in the high-level observa-tions hl ob j o include: the object linear and angular velocities 
+
+> ob j
+
+(vx, vy, ωz)ob j , the commanded velocity direction hl ob j c,the last applied action hl ob j at−1, the agents’ base velocities 
+
+> ob j
+
+(vx, vy, ωz)base i and the relative yaw angle between object and agents’ base frames: ob j ψob j −base i . The exteroceptive observations are represented by the height map of size H ×W
+
+with resolution hres centered on and oriented as the object 
+
+frame. The heights of the points in this grid are collected in a vector of size zt ∈ RH×W , which is concatenated with the proprioceptive observations. 
+
+E. Policy Architecture 
+
+As introduced in Sec. III-A, our architecture includes two nested layers. The low-level comprises two identical locomo-tion policies that track a planar SE(2) base velocity command ll i 
+
+> base i
+
+c expressed in the corresponding agent base frame:  
+
+> base i
+
+(vx, vy, ωz)base i , i = 1, 2. Each policy outputs gait phase offsets and residual joint position targets, which are tracked by a joint-space PD controller that generates actuator torques. These policies have already been trained and are kept frozen while training the high-level controller. Moreover, as shown in Fig. 2, the low-level commands ll ob j c correspond to the 
+
+high-level actions hl ob j a. The object-centric high-level policy receives observations hl ob j o and commands hl ob j c relative to the whole system, leading to a fully centralized architecture. This design choice is motivated by prior work [8], [17], where centralized architectures have demonstrated stronger performance than distributed or decentralized alternatives in similar settings. 
+
+F. Rewards 
+
+In the following, unless otherwise specified, all quantities are expressed in the object reference frame. The parameters 
+
+wi denote the weights of each term. 
+
+1) Task-related Rewards 
+
+Tracking Command : rewards the dot product between the commanded velocity direction and the normalized object 
+
+linear velocity along x and y axes: 
+
+Rt = w1(hl c · || vob j xy || ). (2) 
+
+Align Object to Command : symmetrically rewards the alignment of the object y -axis with the commanded velocity direction: 
+
+Ra = w2
+
+
+
+| arctan (hl cy,hl cx)| − π
+
+2
+
+2
+
+, (3) 
+
+2) Task-related Penalties 
+
+Distance from Obstacles : penalizes short distances be-tween the system’s frames i: base1, base2, object and their nearest obstacles: 
+
+Pdist i =
+
+
+
+w3 · e
+
+ −α(W dmin i −dsi )
+
+
+
+, if W dmin i < δ ,
+
+0, otherwise ,
+
+(4) where W dmin i = min (|| W robs ,i −W ri|| ), and W ri, W robs ,i repre-sent the positions of frame i and its nearest obstacle. Finally, 
+
+dsi and δ denote the safety radius and the distance threshold. 
+
+Internal Forces : penalizes the agents from trying to move in opposite directions along the object y -axis, minimizing the internal forces applied to the bar: 
+
+Pint f orces = w4(e|hl a2−hl a5|− 1.0). (5) 
+
+Undesired Contacts : penalizes the sum of net contact forces Fb j between specified system’s bodies b j and the terrain, which includes the floor and the obstacles. 
+
+PC =
+
+(w5 ∑b j || Fb j || , if || Fb j || > 1.00, otherwise , (6) 
+
+Stand in Place : penalizes the system when the cumulative displacements of the object frame along both the x and y
+
+axes remain below a threshold τ over the previous Tstand 
+
+simulation steps. 
+
+Pstand =
+
+w6 · e
+
+ 
+
+> −β
+
+√∆ 2  
+
+> x+∆2
+> y
+
+
+
+, if ∆x < τ ∧ ∆y < τ,
+
+0, otherwise ,
+
+(7) where ∆x and ∆y denote the l2-norms of consecutive position increments along the x and y axes, respectively, accumulated over the history buffer. 
+
+3) Regularization Penalties 
+
+The regularization terms are meant to penalize the object 
+
+acceleration, Pob j acc = w7|| ˙vob j || 2, the action rate, Pa rate =
+
+w8|| hl at−1 −hl at || , and the angular velocities of the agents bases’ around their vertical axis, Pang vel = w9(ω2 
+
+> base 1z
+
++
+
+ω2 
+
+> base 2z
+
+)
+
+The final reward is computed as the sum of all the above terms. 
+
+G. Terminations 
+
+We terminate the episode if any of the agents’ bases are tilted over a certain angle γ with respect to the world gravity vector, and if they are lower than a certain height threshold Th. These terms replace traditional terminations used in legged locomotion for undesired base contacts, which would negatively affect our collision-avoidance learning task, leading to an overly-conservative policy. Finally, termination occurs once the maximum episode length is exceeded or the path goal node is reached. These last two terms are outside the scope of the learning process and do not influence it negatively. IV. S IMULATION EXPERIMENTS AND RESULTS 
+
+A. Setup 
+
+The training of the proposed high-level policy is conducted in the Isaac Lab simulation environment [21], using the Proximal Policy Optimization (PPO) algorithm [22]. Both actor and critic networks are implemented as multilayer perceptrons with hidden layers of size [128, 128, 128], and ELU as the activation function. Additionally, the actor network is provided with a final scaled tanh layer, which constrains the actions to be in the range [ vmin , vmax ]. Finally, the system is trained with an object of length L = 2 m. 
+
+B. Baselines comparisons 
+
+In this section, we compare the proposed fully central-ized policy with (i) a decentralized reinforcement learning baseline and (ii) an optimization-based method. 
+
+1) Decentralized RL baseline 
+
+We implement a decentralized Multi-Agent PPO (MAPPO) [23] algorithm following the Centralized Training with Decentralized Execution (CTDE) paradigm. During training, the critic has access to the global observations (Sec. III-D), while each agent receives only local observations. Specifically, each agent observes: the object linear and angular velocities, the desired object velocity, its own linear and angular velocities, its orientation relative to the bar, and its corresponding half of the system height map. At execution time, the decentralized policy receives the object command defined in Sec. III-C and outputs desired base velocities expressed in the object frame as described in Sec. III-D. The same low-level controller from Sec. III-E is then deployed. The policy is trained and executed at 20 Hz, consistent with the centralized formulation (see Sec. V-A for details). 
+
+2) Optimization-based baseline. 
+
+As an optimization-based baseline we implement the global planner presented in [16] and adapt it to our robotic system. It outputs a sequence of feasible system configura-tions connecting start and goal locations. Each configuration includes the object pose and the relative orientations of the agents with respect to the bar. Agent trajectories are obtained by linearly interpolating between consecutive configurations. Although this does not provide a fully realistic evaluation, we enforce a bound on the distance between successive poses so that they remain sufficiently close, making straight-line interpolation a reasonable approximation of the underlying motion. To ensure a fair comparison, the optimization-based planner is restricted to the same local map knowledge as our policy, i.e., the area covered by the height map. The next configuration is computed via a probabilistic roadmap (PRM) within the visible region. We vary the number of sampled configurations nsamples (100 and 1500), while fixing the number of neighbors and interpolation steps to 5. We evaluate all methods on three experiments:  
+
+> •
+
+Boxes : Two obstacles are placed 3 m ahead of the initial configuration, forming a 2.5 m-wide corridor. A third obstacle, placed 2.5 m further, forms a second corridor. Two waypoints are defined: the first between the initial pair of obstacles, and the second 5.5 m away at a 45° angle. The setup is shown in Fig. 4.  
+
+> •
+
+Empty : Identical waypoint configuration as above, but without obstacles.  
+
+> •
+
+Corridor : Two obstacles are placed 3 m ahead, forming a 2 m-wide corridor. A single waypoint is positioned 7 m in front of the initial configuration. Table I reports success rate (SR), execution frequency ( f ), and average path lengths for successful trials only. RL methods are evaluated over 100 trials of 70 s each, while the optimization-based baseline is evaluated over 10 trials with unconstrained duration, and includes a full-map variant (nsamples = 1500) for completeness. For the optimization-based method, increasing nsamples improves success but re-duces frequency by one order of magnitude (10 −2→10 −3
+
+Hz), making real-time deployment impractical. In the Empty 
+
+scenario, all methods achieve 100% SR; however, only the RL policies maintain execution frequencies compatible with real-time operation. In Corridor , our method achieves the highest SR (99%) among locally informed approaches, outperforming MAPPO (81%) and the optimization-based planner (30% / 90%). In the more challenging Boxes ter-rain, MAPPO degrades significantly (16% SR), while the optimization-based planner reaches 80% at the cost of re-duced execution frequency and generally longer trajectories. Our approach attains 99% SR and the shortest average paths among locally informed methods in cluttered envi-ronments, demonstrating superior robustness and trajectory efficiency. Moreover, compared to the optimization-based method with full map knowledge, our policy achieves near-identical success rates and comparable trajectory lengths across scenarios, despite relying solely on local perceptual information, while maintaining real-time execution at 20 Hz. Finally, the consistent performance gains over the decentral-ized MAPPO baseline support our choice of a centralized architecture over a decentralized one. An example of the trajectories obtained with the four compared methods for the Boxes experiment is presented in Fig. 4. V. H ARDWARE EXPERIMENTS AND RESULTS 
+
+A. Setup 
+
+Differently from simulation, where all system components run on the same machine, on hardware each locomotion policy executes on the robot’s on-board laptop, while the 
+
+high-level policy runs on a third external PC. To reproduce the simulation setup on hardware, we need to replicate: 1) the communication between the low- and high-level policies, 2) a shared fixed reference frame world , and 3) a single elevation map centered on and aligned with the object frame. To enable communication between all the laptops, we use the ROS package nimbro network [24], which allows topic sharing via WiFi. Moreover, we create a mesh network by deploying three Rajant modules [25], one per agent and one connected to the external PC. To obtain a shared fixed reference frame world , we align the x-axes of base1 and base2 so that they point in the same direction (see Fig. 1). On agent1 , we then publish a new frame world from map1 with an identity transform. On 
+
+agent2 , we publish world from map2 with a translation of −L
+
+along the y-axis. This procedure ensures that the two pub-lished world frames overlap in the full-system localization environment, and the choice of agent used for alignment does not affect the outcome. To define the reference frame object ,we identify its y-axis as the normalized vector pointing from 
+
+agent1 to agent2 position in world frame. The z-axis remains parallel to that of agent1 as, by design, the simulated system lacks a pitch joint between agent1 and the object. This is required to close the sim2real gap. The x-axis follows from the right-hand rule, and the frame is placed in the geometric center of the bar. Position, linear xy and angular z velocities of the object frame are calculated as follows, where all the quantities are expressed in world frame: 
+
+rob j = rbase 1 + rbase 2
+
+2 (8) 
+
+vob j xy = vbase 1xy + vbase 2xy 
+
+2 (9) 
+
+ωob j z =
+
+
+
+vbase 2xy − vbase 1xy 
+
+
+
+·
+
+ −rob jy ,rob jx  
+
+> ∥rob jxy ∥
+
+
+
+∥rob j xy ∥ (10) Each agent builds its elevation map of size 8x8 m2 and 4 cm resolution using a Jetson Orin [26]. Since the obstacles TABLE I: Success rate (SR), execution frequency ( f ), and average path lengths for succesful trials of agent1 , agent2 , and the object 
+
+(mean ± std, in m) across experiments. The optimization-based planner is evaluated with local map knowledge for different nsamples and with full map knowledge using nsamples = 1500.                                                                                                                                                                                  
+
+> MAPPO Opt.-based Local
+> nsamples 100 Opt.-based Local
+> nsamples 1500 Ours Opt.-based Full
+> nsamples 1500
+> Empty SR 100% 100 % 100% 100% 100 %
+> f20 Hz 10 −2Hz 10 −3Hz 20 Hz –
+> Lagent 19.09 ±0.11 10.10 ±1.05 9.64 ±0.74 8.00 ±0.14 8.65 ±0.01
+> Lagent 29.04 ±0.08 9.67 ±0.76 9.82 ±0.81 8.48 ±0.14 8.65 ±0.01
+> Lob j 9.02 ±0.06 8.75 ±0.26 8.98 ±0.39 8.15 ±0.05 8.65 ±0.01 Corridor SR 81% 30 % 90% 99% 100 %
+> f20 Hz 10 −2Hz 10 −3Hz 20 Hz –
+> Lagent 17.49 ±0.60 9.17 ±2.08 8.50 ±0.93 8.77 ±0.30 9.06 ±0.89
+> Lagent 28.04 ±0.62 9.31 ±1.24 8.21 ±0.96 8.80 ±0.50 9.38 ±0.92
+> Lob j 7.07 ±0.50 7.43 ±0.65 7.26 ±0.21 7.95 ±0.21 7.63 ±0.29 Boxes SR 16% 30 % 80% 99% 100 %
+> f20 Hz 10 −2Hz 10 −3Hz 20 Hz –
+> Lagent 115.42 ±3.18 10.89 ±1.03 11.27 ±1.61 10.42 ±1.87 12.20 ±1.97
+> Lagent 216.62 ±2.53 12.27 ±1.79 12.01 ±1.82 8.82 ±1.69 12.47 ±1.39
+> Lob j 14.06 ±2.67 10.48 ±1.26 9.62 ±1.20 8.78 ±1.54 11.03 ±1.37
+
+Fig. 4: Trajectory comparison in the Boxes scenario. From left to right: MAPPO, Optimization-based (local map, nsamples = 1500), Ours, and Optimization-based (full map, nsamples = 1500). The black line denotes the object path, colored lines represent the agents. Red stars indicate intermediate waypoints. 
+
+are higher than the robots’ bases, the agents cannot perceive the boxes’ top surface, which results in empty cells in the elevation maps. To circumvent this issue, we implement a 
+
+max filter on the elevation map, which fills the missing data with the highest value read among its neighbouring cells. We decide to merge the maps collected by the two agents rather than using only one of them to avoid 1) perceiving the other robot as an obstacle, 2) having visual obstructions given by the other agent’s position. Therefore, for each robot, we identify the portion of the map to be sampled and orient it as the object reference frame. This submap is then down-sampled with a resolution of 30 cm, and the 3D coordinates of the points are published over a topic sent through nimbro 
+
+to the high-level PC. The communication of the height map through Rajants 
+
+from each agent to the high-level PC takes on average 25 ms. This forces us to run the high-level policy at 20 Hz, yielding an additional 50 ms. Finally, the external PC sends the high-level actions back to the agents via the rajants , accumulating 25 ms more. We define a safety distance from the nearest obstacle dmin of 10 cm, which, together with the average delay tdelay of 100 ms, limits each agent’s maximum linear velocity to dmin /tdelay = 1 m/s. To account for occasional higher delays from the Rajant modules, the high-level actions are constrained within the range [-0.8, 0.8] using the final scaled tanh layer described in Sec. III-E, effectively limiting the maximum linear and angular velocities to ±0.8 m/s and rad/s, respectively. 
+
+B. Experiments 1) Waypoints-following 
+
+We evaluate the differences in system behavior between free and cluttered environments replicating the experiments 
+
+Boxes and Empty introduced in Sec. IV-B. In all the following visualizations, the darker robot is referred to as agent1 , while the orange one as agent2 . The behaviour and trajectories of the agents in empty space can be seen in Fig. 5, while Fig. 6 shows the case with obstacles. Figures 5b and 6b show the real-time exteroceptive observations collected by both agents and the trajectories computed by the agents’ bases. At times, due to base inclination, the bar enters the field of view of the depth cameras and is erroneously perceived as an obstacle. To account for this artifact during training, the height maps are augmented with noise to simulate such perception errors. The right-most plots in these figures highlight clear differences between corresponding trajectories in the two experiments. This demonstrates that our policy adapts its behavior to the surroundings and that our system can locomote in unknown environments without requiring any a priori map. Further-more, assuming the waypoint-defined trajectory of the object Fig. 5: Waypoints-following on empty terrain experiment. Top: system configuration at the start and after reaching two predefined waypoints (red stars). Bottom: real-time exteroceptive observations, overlaid with the trajectories of the agents’ bases and the position of the world   
+
+> frame.
+> Fig. 6: Waypoint-following on cluttered terrain experiment. Top: system configuration at the start and after reaching two predefined waypoints (red stars). Bottom: real-time exteroceptive observations highlighting obstacle locations, overlaid with the trajectories of the agents’ bases and the position of the world frame.
+
+frame is feasible, no path planner or prior knowledge of the length of the carried object is required. In the subsequent experiments, the commanded velocity direction previously provided by waypoints-following is re-placed by joystick input. 
+
+2) Dynamic obstacle 
+
+Since our policy does not rely on prior map knowledge or precomputed paths, we assess its real-time reactivity by evaluating its response to a dynamic obstacle. Fig. 7 illustrates the obstacle setup: two static boxes create a 2.5 m-wide corridor, while a third box, positioned 2.5 m further along, moves from an initial (left) to a final (right) location. The system is commanded to traverse the corridor and then proceed diagonally to the right. The detailed behaviour can be seen in the attached video, and closely resembles the one observed in the previous experiment. The system successfully follows the commands without collisions, even when navigating near the dynamic obstacle. The box is moved at a sufficiently low speed to allow updates of the elevation maps, which occur at 5 Hz [26]. 
+
+> Fig. 7: Placement of initial (left) and final (right) position of the box in the dynamic obstacle experiment.
+
+3) Corridors 
+
+We further evaluate the policy by commanding the system to traverse corridors of decreasing width: 3.0 m, 2.5 m, and 2.0 m, the latter corresponding to the minimum width successfully crossed in simulation. The corridor is defined by the two boxes in the first row of Fig. 6a, with the system commanded to move straight forward. All trials are completed successfully, without any collisions, and the system exhibits consistent behaviour across all widths. All the mentioned experiments and visualizations are available in the attached video. VI. C ONCLUSIONS 
+
+We presented an RL-based policy for two coupled robots that is able to track a commanded velocity direction while also performing local collision-avoidance. By benchmarking against optimization-based and decentralized RL methods, we demonstrate the comparative advantages of our approach. Moreover, we validate our approach on hardware with two quadrupedal robots attached to a 2 m bar via spherical joints. The system is tested in environments of increasing difficulty, from a corridor crossing to dynamic obstacle avoidance. The system relies only on its onboard sensing and thus it does not require any pre-recorded map, as it is able to locomote in unknown environments. This also eliminates the need for a path planner that computes collision-free agents’ trajectories, as this is taken care of by the policy. Future work includes extending to more challenging ter-rains, such as slopes, stairs, and staircases with turns. APPENDIX 
+
+L 2.0 m α 10.0 
+
+HxW [4.0x6.0] m dsbase i , dsob j 0.6 m, 0.2 m 
+
+hres 0.3 m δ 2.0 m 
+
+NC 50 w4 -0.2 
+
+Dmax 0.1 w5 -2.5 
+
+Hobs 1.0 m w6 -0.1 
+
+[smin , smax ] [1.0, 1.5] m β 15.0 
+
+np 2000 Tstand 10 
+
+ds,wp 0.75 τ 0.15 m 
+
+NP 1500 w7 -0.001 
+
+[lmin , lmax ] [5.0, 12.0] m w8 -0.0005 
+
+Rwp 0.5 m w9 -0.1 
+
+w1 -0.5 γ 0.7 rad 
+
+w2 -0.5 Th 0.15 m 
+
+w3 -7.5 [vmin , vmax ] [-0.8, 0.8] 
+
+TABLE II: Summary of all parameters introduced in Sec. III. 
+
+REFERENCES [1] Q. Liu, Z. Nie, Z. Gong, and X.-J. Liu, “An omnidirectional transporta-tion system with high terrain adaptability and flexible configurations using multiple nonholonomic mobile robots,” IEEE Robotics and Automation Letters , vol. 8, no. 9, pp. 6060–6067, 2023. [2] P. Culbertson and M. Schwager, “Decentralized adaptive control for collaborative manipulation,” in 2018 IEEE International Conference on Robotics and Automation (ICRA) , 2018, pp. 278–285. [3] N. Kumar and S. Coros, “An optimization framework for simulation and kinematic control of constrained collaborative mobile agents (ccma) system,” in 2019 IEEE/RSJ International Conference on In-telligent Robots and Systems (IROS) , 2019, pp. 8215–8222. [4] S. Erhart, D. Sieber, and S. Hirche, “An impedance-based control ar-chitecture for multi-robot cooperative dual-arm mobile manipulation,” in 2013 IEEE/RSJ International Conference on Intelligent Robots and Systems , 2013, pp. 315–322. [5] Y. Ren, S. Sosnowski, and S. Hirche, “Fully distributed cooperation for networked uncertain mobile manipulators,” IEEE Transactions on Robotics , vol. 36, no. 4, pp. 984–1003, 2020. [6] L. Yan, T. Stouraitis, and S. Vijayakumar, “Decentralized ability-aware adaptive control for multi-robot collaborative manipulation,” IEEE Robotics and Automation Letters , vol. 6, no. 2, pp. 2311–2318, 2021. [7] K. A. Hamed, V. R. Kamidi, A. Pandala, W.-L. Ma, and A. D. Ames, “Distributed feedback controllers for stable cooperative locomotion of quadrupedal robots: A virtual constraint approach,” in 2020 American Control Conference (ACC) , 2020, pp. 5314–5321. [8] J. Kim, R. T. Fawcett, V. R. Kamidi, A. D. Ames, and K. A. Hamed, “Layered control for cooperative locomotion of two quadrupedal robots: Centralized and distributed approaches,” 2022. [9] F. D. Vincenti and S. Coros, “Centralized Model Predictive Control for Collaborative Loco-Manipulation,” in Proceedings of Robotics: Science and Systems , Daegu, Republic of Korea, July 2023. [10] B. Pandit, A. Gupta, M. S. Gadde, A. Johnson, A. K. Shrestha, H. Duan, J. Dao, and A. Fern, “Learning decentralized multi-biped control for payload transport,” 2024. [11] Y. Ji, B. Zhang, and K. Sreenath, “Reinforcement learning for col-laborative quadrupedal manipulation of a payload over challenging terrain,” in 2021 IEEE 17th International Conference on Automation Science and Engineering (CASE) , 2021, pp. 899–904. [12] H. Zhu, S. Yang, W. Wang, X. He, and N. Ding, “Cooperative trans-portation of tether-suspended payload via quadruped robots based on deep reinforcement learning,” in 2023 IEEE International Conference on Robotics and Biomimetics (ROBIO) , 2023, pp. 1–6. [13] O. Nachum, M. Ahn, H. Ponte, S. Gu, and V. Kumar, “Multi-agent manipulation via locomotion using hierarchical sim2real,” 2019. [14] J. Kim, J. Lee, and A. D. Ames, “Safety-critical coordination for cooperative legged locomotion via control barrier functions,” 2023. [15] F. Kennel-Maushart and S. Coros, “Payload-aware trajectory optimisa-tion for non-holonomic mobile multi-robot manipulation with tip-over avoidance,” IEEE Robotics and Automation Letters , vol. 9, no. 9, pp. 7669–7676, 2024. [16] J. Alonso-Mora, S. Baker, and D. Rus, “Multi-robot formation control and object transport in dynamic environments via constrained opti-mization,” The International Journal of Robotics Research , vol. 36, no. 9, pp. 1000–1021, 2017. [17] Y. Feng, C. Hong, Y. Niu, S. Liu, Y. Yang, W. Yu, T. Zhang, J. Tan, and D. Zhao, “Learning multi-agent loco-manipulation for long-horizon quadrupedal pushing,” 2025. [18] L. Zhang, Y. Sun, A. Barth, and O. Ma, “Decentralized control of multi-robot system in cooperative object transportation using deep reinforcement learning,” IEEE Access , vol. 8, pp. 184 109–184 119, 2020. [19] S. V. Manko, S. A. K. Diane, A. E. Krivoshatskiy, I. D. Margolin, and E. A. Slepynina, “Adaptive control of a multi-robot system for transportation of large-sized objects based on reinforcement learning,” in 2018 IEEE Conference of Russian Young Researchers in Electrical and Electronic Engineering (EIConRus) , 2018, pp. 923–927. [20] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk in minutes using massively parallel deep reinforcement learning,” 2022. [21] M. Mittal, C. Yu, Q. Yu, J. Liu, N. Rudin, D. Hoeller, J. L. Yuan, R. Singh, Y. Guo, H. Mazhar, A. Mandlekar, B. Babich, G. State, M. Hutter, and A. Garg, “Orbit: A unified simulation framework for interactive robot learning environments,” IEEE Robotics and Automa-tion Letters , vol. 8, no. 6, pp. 3740–3747, Jun. 2023. [22] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” 2017. [23] C. Yu, A. Velu, E. Vinitsky, J. Gao, Y. Wang, A. Bayen, and Y. Wu, “The surprising effectiveness of ppo in cooperative, multi-agent games,” 2022. [24] M. Schwarz, “nimbro network – ros transport for high-latency, low-quality networks,” Online. Available: https://github.com/ AIS-Bonn/nimbro network, 2025, accessed: Aug. 8, 2025. [25] Rajant Corporation, “Product specifications,” https://rajant.com/ products/breadcrumb-wireless-nodes/dx-series/, 2025, accessed: Aug. 5, 2025. [26] T. Miki, L. Wellhausen, R. Grandia, F. Jenelten, T. Homberger, and M. Hutter, “Elevation mapping for locomotion and navigation using gpu,” 2022.

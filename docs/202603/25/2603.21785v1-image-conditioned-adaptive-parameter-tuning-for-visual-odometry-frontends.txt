@@ -1,0 +1,395 @@
+Title: Image-Conditioned Adaptive Parameter Tuning for Visual Odometry Frontends
+
+URL Source: https://arxiv.org/pdf/2603.21785v1
+
+Published Time: Tue, 24 Mar 2026 02:06:37 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# Image-Conditioned Adaptive Parameter Tuning for Visual Odometry Frontends 
+
+Simone Nascivera 1 , Leonard Bauersfeld 1 , Jeff Delaune 2 , and Davide Scaramuzza 1 
+
+> 1
+
+Robotics and Perception Group, University of Zurich, Switzerland  
+
+> 2
+
+Jet Propulsion Laboratory, California Institute of Technology, USA 
+
+Abstract. Resource-constrained autonomous robots rely on sparse di-rect and semi-direct visual-(inertial)-odometry (VO) pipelines, as they provide a favorable tradeoff between accuracy, robustness, and computa-tional cost. However, the performance of most systems depends critically on hand-tuned hyperparameters governing feature detection, tracking, and outlier rejection. These parameters are typically fixed during de-ployment, even though their optimal values vary with scene characteris-tics such as texture density, illumination, motion blur, and sensor noise, leading to brittle performance in real-world environments. We propose the first image-conditioned reinforcement learning framework for online tuning of VO frontend parameters, effectively embedding the expert into the system . Our key idea is to formulate the frontend configuration as a sequential decision-making problem and learn a policy that directly maps visual input to feature detection and tracking parameters. The policy uses a lightweight texture-aware CNN encoder and a privileged critic during training. Unlike prior RL-based approaches that rely solely on internal VO statistics, our method observes the image content and proactively adapts parameters before tracking degrades. Experiments on TartanAirV2 and TUM RGB-D show 3 × longer feature tracks and 3 ×
+
+lower computational cost, despite training entirely in simulation. 
+
+Keywords: Visual Odometry · Reinforcement Learning · Adaptive Pa-rameter Tuning 
+
+# 1 Introduction 
+
+Reliable localization in GPS-denied environments is a fundamental requirement for autonomous robots operating indoors [10], underground [41,49], and in plan-etary exploration settings [5, 6]. Visual(-inertial) odometry (VO/VIO) systems relying on a monocular camera have become a standard solution for mobile robots. Many of these systems are direct or semi-direct [1, 2, 9, 12, 13, 18, 19], and adopt a patch-based paradigm, in which salient image patches are detected and subsequently tracked across frames using Lucas-Kanade tracking (KLT) [22]. In practice, successful deployment hinges on a set of hyperparameters gov-erning feature detection, feature tracking, and outlier rejection. The optimal 
+
+> arXiv:2603.21785v1 [cs.CV] 23 Mar 2026
+
+2 S. Nascivera et al. Frame 
+
+Deployment Training  
+
+> RL-Based Parameter
+> Selection Agent
+> Grayscale, 640x640
+> Embedding
+> 128 x 1
+> Action
+> 3 x 1
+> number of features
+> prev actions
+> CNN
+> MLP
+> FAST Threshold
+> KLT Patch Size
+> To VO
+> Pipeline
+> RANSAC Threshold
+> FAST
+> Corners KLT
+> Tracking
+> RANSAC
+> Filtering
+> Feature Detection and Tracking
+> RL-Based Parameter
+> Selection Agent
+> Feature
+> Detection
+> and
+> Tracking
+> Training
+> Reward
+> Feature Drift
+> Coverage
+> Compute
+> Train: 40 Env.
+> Eval: 5 Env.
+> Tartan Air v2
+> Environment
+> Actions
+> Reward
+> Observations
+
+Fig. 1: Our reinforcement learning (RL) agent dynamically selects feature detection and tracking parameters based on the current image. By conditioning decisions on vi-sual appearance, the policy adapts the frontend to scene characteristics such as texture density, illumination, motion blur, and sensor noise. The policy is trained to minimize feature drift while maximizing spatial coverage and computational efficiency. Training is performed in simulation using TartanAirV2, while evaluation is conducted on un-seen synthetic sequences and real-world sequences from TUM RGB-D, demonstrating strong sim-to-real generalization. 
+
+value for those parameters depends on the texture density, illumination, motion blur, and noise levels. In exploratory settings, the characteristics are inherently unknown in advance, rendering static parameter tuning brittle. Even in known environments, static parameters are always a tradeoff across the entire scene. A human expert inspecting the image can often immediately recognize when tracking is likely to fail (for example, due to low texture, strong motion blur, or high noise) and would adjust the tracking parameters accordingly. During autonomous operations, however, such human-in-the-loop approaches are not possible. In this work, we overcome the limitations of static parameters and em-bed the expert into the system by learning a policy that directly maps visual input to an optimal set of feature detection and tracking parameters at each timestep. We present the first image-conditioned, reinforcement learning (RL)-based framework for online tuning of feature detection and tracking parameters in visual(-inertial) odometry frontends. By conditioning the policy directly on vi-sual input via a lightweight, texture-aware CNN encoder and using a privileged critic during training, the proposed method enables strategic adaptation of fron-tend parameters to changing scene characteristics. This sets the present work apart from related work [28], which operates solely on internal frontend statis-tics and does not observe the image content itself. Consequently, [28] can only Title Suppressed Due to Excessive Length 3
+
+react to degraded tracking after it occurs. In contrast, our method conditions decisions directly on visual input and optimizes the parameters governing fea-ture detection and tracking themselves, enabling proactive adaptation to scene appearance and improving tracking robustness even in challenging conditions. The proposed approach is backend-agnostic. Through extensive experiments in simulation on TartanAirV2, we show that image-conditioned, agent-based pa-rameter tuning yields longer and more accurate feature tracks, improved spatial coverage, and better compliance with computational constraints. The difference to static parameter configurations becomes especially pronounced when consider-ing data with realistic sensor noise and motion blur. On real-world data from the TUM RGB-D SLAM dataset [37], we demonstrate that our approach —trained entirely on synthetic data from TartanAirV2—improves feature tracking, obtains three times longer tracks, and simultaneously reduces the computational costs by a factor of three. In summary, our main contributions are: 1. Image-conditioned VO parameter tuning . We introduce the first method that learns to adapt feature detection, tracking, and outlier rejection param-eters directly from visual input. 2. RL formulation for VO frontend configuration . We formulate frontend parameter selection as a sequential decision-making problem and train an agent using reinforcement learning with a lightweight visual encoder and privileged critic. 3. Robust and efficient feature tracking . On synthetic and real-world datasets, our approach significantly improves tracking robustness and gen-eralizes from synthetic to real-world data. 
+
+# 2 Related Work 
+
+2.1 Visual Odometry 
+
+Visual odometry (VO) pipelines are commonly categorized into classical and learned approaches based on their design. Classical methods, introduced more than three decades ago [3], remain widely deployed in practice, ranging from virtual reality systems to drones [6, 50] and smartphones. These pipelines are typically organized into tracking and mapping modules and are further grouped into direct, semi-direct, and indirect methods depending on how inter-frame correspondences are established. 
+
+Classical Methods Direct methods estimate camera motion by minimizing photometric error and are commonly divided into dense and sparse variants. Dense approaches track nearly all pixels across frames [16] and are generally robust but computationally expensive. Sparse direct methods, such as DSO [9] and xVIO [6], track selected image patches using photometric alignment, often within a factor-graph formulation or using KLT-based tracking [22]. While more computationally efficient, these methods are typically more sensitive to noise, illumination changes, and texture degradation. 4 S. Nascivera et al. 
+
+Indirect methods, such as ORB-SLAM and its successors [4, 29, 30], rely on detecting salient features and establishing correspondences via descriptor match-ing. Semi-direct approaches such as SVO [12] combine both paradigms by using features to define regions of interest, while refining pose estimates through pho-tometric alignment of local patches. A related class of methods incorporates learned feature descriptors and matchers [7, 20, 36] while retaining the classical indirect pipeline structure. 
+
+Learning-Based Methods In recent years, VO has increasingly adopted deep learning, reflecting broader trends in computer vision. End-to-end learned ap-proaches directly regress camera motion from image streams [44, 46, 47]. While these methods can achieve strong performance within distributions similar to their training data, they often degrade under domain shift and exhibit limited out-of-distribution generalization. Hybrid methods aim to combine the strengths of classical and learned ap-proaches by preserving the overall pipeline structure while replacing individual components with neural networks. DROID-SLAM [39] performs dense multi-frame reconstruction and refines estimates using a differentiable bundle-adjust-ment layer, while DPVO [21] improves efficiency by tracking patches instead of full frames. Although hybrid approaches improve robustness and interpretability compared to end-to-end methods, their learned components remain difficult to analyze and diagnose and are substantially more computationally demanding than lightweight methods such as SVO. A recent trend explores the use of geometrically grounded foundation mod-els within VO and SLAM systems. MASt3R-SLAM [31] integrates the MASt3R model [8, 17, 45] to generate dense 3D pointmaps, which are refined using a graph-based backend. Similarly, VGGT-SLAM [24] employs the VGGT foun-dation model [43] to align submaps, with recent extensions improving runtime through revised factor-graph formulations [23]. Despite these advances, end-to-end, hybrid, and foundation-model-based systems typically require substantial computational resources, limiting their deployment on mobile robotic platforms. 
+
+2.2 Robustness to Feature Degradation 
+
+Robust feature tracking in direct and semi-direct VO remains challenging in unknown or visually degraded environments and is particularly critical for ex-ploration scenarios. Classical systems often rely on hand-crafted heuristics to adapt feature selection under changing texture conditions. For example, [11] switches between feature detectors based on the number of FAST keypoints [35] as a proxy for feature availability, while [48] dynamically fuses points, lines, and planes depending on the reliability of available features. Although not explicitly designed to address feature degradation, RL-based approaches provide a promising bridge between classical and learned methods by enabling online adaptation of pipeline parameters. In particular, RL-VO [28] introduced the formulation of VO parameter tuning as a sequential decision-making problem, where an agent adjusts frontend hyperparameters to improve Title Suppressed Due to Excessive Length 5
+
+estimation accuracy. However, this approach operates solely on internal pipeline statistics and does not reason directly over visual input, limiting its ability to anticipate and mitigate feature tracking failures. 
+
+# 3 Methodology 
+
+This section presents our image-conditioned, RL-based approach for online tun-ing of feature detection and tracking parameters. We explicitly restrict the scope to the feature detection and tracking frontend, as improvements at this level are agnostic to the downstream visual(-inertial) odometry (VO/VIO) formulation and thus directly applicable across a broad class of pipelines. 
+
+3.1 Feature Detection and Tracking 
+
+We consider a standard feature-based tracking pipeline as employed by many lightweight semi-direct and direct VO/VIO systems. It consists of a feature de-tection, feature tracking and outlier rejection stage. At each timestep, distinctive features are first detected in the current frame using a corner detector. Due to its high computational efficiency, the FAST [40] detector is widely adopted in robotic real-time systems. FAST exposes a single primary hyperparameter: the corner score threshold, which determines whether a pixel qualifies as a feature based on the intensity contrast of its surrounding Bresenham circle. Once detected, features are tracked across frames using the Lucas-Kanade tracker (KLT) [22]. We employ a pyramidal KLT formulation with three pyramid levels to account for larger inter-frame displacements. In KLT, one can select the patch size (in pixels). This hyperparameter is critical, as it determines the maximum tolerable displacement. To avoid overlapping KLT patches, we discard newly sampled FAST features that are closer than half the patch size from the one present. To reject poorly tracked features, a geometric outlier rejection step is applied. Specifically, we estimate the fundamental matrix between the previous and cur-rent frames using an 8-point RANSAC scheme. Features whose reprojection error exceeds a threshold are classified as outliers and discarded. The robustness and computational cost of this step are governed by the inlier threshold. To eliminate false correspondences that survive RANSAC due to epipolar ambiguity, we apply Tukey’s statistical filter [42], discarding matches with optical flow magnitudes exceeding Q3 + 1 .5 × IQR, where Q3 and IQR denote the third quartile and interquartile range, respectively. The inlier features are propagated to the next timestep, while additional features are detected independently in each frame us-ing the FAST detector to replenish the feature set. The union of tracked inliers and newly detected features constitutes the input to the subsequent timestep, thereby closing the frame-to-frame tracking loop. 6 S. Nascivera et al.               
+
+> Table 1: Action Space for the RL-Agent Parameter Values Unit FAST Threshold {0,1, . . . , 209 }–KLT Patch Size {3,5, . . . , 41 }pixel RANSAC Threshold [0 ,3] pixel
+
+3.2 Realtime, RL-Based Parameter Tuning 
+
+The performance of the feature detection and tracking pipeline described above is highly sensitive to the choice of hyperparameters, including the FAST score threshold, KLT patch size, as well as RANSAC thresholds. These parameters jointly affect tracking robustness, accuracy, feature age, spatial coverage, and computational cost. In practice, they are typically selected by expert tuning under the assumption of a roughly known operating environment. Recent work [28] has shown that RL is a suitable framework for parameter adaptation in VO pipelines. However, prior approaches rely exclusively on in-ternal VO statistics, which fundamentally limits their ability to reason about the underlying causes of performance degradation. In contrast, the visual ap-pearance of the scene-such as texture richness and motion blur, is the primary determinant of suitable tracking parameters. We therefore formulate parameter tuning as a sequential decision-making problem conditioned directly on image observations, as shown in Fig. 1. At each timestep, the current image is processed by a convolutional neural net-work (CNN) encoder that produces a compact latent embedding. This encoder is pretrained offline for efficiency, as described in Sec. 3.4. We concatenate the image embedding with a state vector containing the feature counts from the current and previous frames, alongside the most recent actions. This aggregated vector is then passed through an MLP network, which outputs a set of tracking parameters that serve as the agent’s actions. A significant challenge when learning an RL policy in this context is the reward signal’s strong dependency on the underlying scene. Empirically, we ob-serve that the variance in rewards between easy and difficult frames severely overshadows the variance between optimal and suboptimal tracking parameters, which hinders effective learning. To enable the critic network to contextualize the relative difficulty of different frames, we employ a privileged critic architecture. Specifically, the critic is provided with the current dataset frame index, encoded as Fourier features [38] using 17 frequency bands. We adopt a continuous action space rather than a discrete one to help the network capture the inherent relationships between parameter values. We map our continuous action space to the ranges summarized in Tab. 1. Title Suppressed Due to Excessive Length 7
+
+Table 2: Runtimes Parameter AMD Ryzen 9 9950X3D CPU 
+
+τc = constant 187 .9201 us 
+
+τklt = ν1nklt + ν2w2 + ν3nklt w2 ν1 = 0 .0731 ν2 = 0 .0166 ν3 = 0 .0010 
+
+τransac = ν4nransac + ν5N t + ν6nransac N t ν4 = 2 .4456 ν5 = 0 .1042 ν6 = 0 .0050 
+
+Table 3: Hyperparameters 
+
+λ1 = −15 λ2 = 0 .15 λ3 = 5 λ4 = 0 .3 λ5 = 3 λ6 = 0 .03 λ7 = 10 .2 λ8 = 0 .1
+
+3.3 RL-Training Rewards 
+
+To maintain generality we do not evaluate trajectory-level metrics such as ab-solute or relative pose error during training, which would require a specific VO/VIO pipeline. Instead, we define reward terms directly in image space, tar-geting properties that are broadly beneficial to downstream estimation. First, we reward small feature drift to encourage accurate and stable tracking. Let xti denote the ground-truth pixel location of the ith feature at time t, and let ˆxti denote the tracked pixel location of the same feature, then the drift ∆ti
+
+and corresponding reward rt 
+
+> drift
+
+for the timestep are given as: 
+
+∆ti = ˆxti −  ˆxt−1 
+
+> i
+
++ xti − xt−1
+
+> i
+
+ (1) 
+
+rt 
+
+> drift
+
+=
+
+(PNi=1 λ1 · tanh( λ2∆ti) + λ3 if N > 0
+
+−35 otherwise  (2) Second, the term rt 
+
+> cover
+
+rewards spatial coverage , to ensure well-distributed features. The image is partitioned into an 8 × 8 grid, and coverage α is defined as the fraction of grid cells containing at least one active feature. The parameter 
+
+α0 = 0 .3 determines how little features can be tolerated and depends on the exact VO/VIO method employed (for a VIO system, a much lower threshold is reasonable) 
+
+rt 
+
+> cover
+
+=
+
+(
+
+λ4 · (α − α0) + λ6 if α ≥ 0.3
+
+λ5 · (α − α0) + λ6 otherwise ; α = cells occupied 
+
+8 · 8 (3) Third, we incorporate a computational efficiency reward rt
+
+> comp
+
+. We estimate runtime using a cost model that accounts for the number of tracked features N t,KLT patch size w, iterations nklt , and RANSAC iterations nransac , along with a constant term τπ . We evaluate the inference latency of our policy network on an embedded NVIDIA device, recording an average execution time of 100 μs. This overhead is negligible relative to the real-time constraints even at the highest sampling rate in our dataset (80 Hz). To extrapolate these computational costs 8 S. Nascivera et al. 
+
+to other hardware platforms, we introduce a scaling factor, β.
+
+τ = β (τklt + τransac + τc) (4) 
+
+rt 
+
+> comp
+
+= clip 
+
+
+
+− exp ( −1/τ + λ7) + λ8, −10 , 0.1
+
+
+
+(5) This factor is estimated by comparing single-thread performance benchmarks [33] between our reference processor (AMD Ryzen 9 9950X3D) and the target CPU. For the evaluations presented in this paper, we exemplarily target the NVIDIA’s embedded computers (e.g. Jetson TX2 with ARM Cortex-A57), which yields a scaling factor of β = 10 . The measured runtime parameter are measured offline and summarized in Tab. 2. As discussed in Section 3.2, the reward signal exhibits a stronger correlation with the frame index than with the applied action. Inspired by [32], we overcome this issue by training our policy with a (per step) training reward rt 
+
+> train
+
+computed by comparing the reward achieved by the policy rtπ with a base reward rt
+
+> ref
+
+.
+
+rt 
+
+> train
+
+= rtπ − rt
+
+> ref
+
+; rtπ|ref = rt 
+
+> drift
+
++ rt 
+
+> cover
+
++ rt 
+
+> comp
+
+(6) The base reward is computed by running the method on the training data with a static set of parameters obtained through bayesian optimization. We note that this training formulation requires pixel-accurate ground truth feature correspondences in order to compute drift-based rewards. Consequently, training is performed entirely in simulation. Details on the dataset and experi-mental setup are provided in Sec. 4. 
+
+3.4 CNN Encoder Training 
+
+End-to-end RL on large images is computationally prohibitively expensive due to the cost of backpropagating through a visual encoder alongside experience replay storage. To minimize runtime memory and compute, we pretrain and freeze our visual encoder using a surrogate continuous contextual bandits task [25]. Because the Kanade-Lucas-Tomasi (KLT) tracker operates frame-to-frame with negligi-ble Markovian dependencies, restricting the action space to the KLT patch size simplifies the formulation into a single-step RL problem. The network regresses the average feature drift based on the initial 640 ×640 pixels grayscale frame and the sampled FAST score threshold. We train the network using Soft Actor-Critic (SAC) [14] for its superior sample efficiency. Architecturally, a CNN compresses the image into a 128-dimensional vector, which is concatenated with the normal-ized FAST threshold and processed by a small MLP. For this single-step setup, the discount factor γ is 0, and the reward is defined as the negative average feature drift. Training utilizes randomly sampled noisy and blurred images from our dataset, a learning rate of 3×10 −4, a batch size of 64, and a 10,000-transition replay buffer. Title Suppressed Due to Excessive Length 9
+
+# 4 Experimental Setup 
+
+This section describes the datasets used for training and evaluation, the training procedure, and the baselines against which our approach is compared. 
+
+4.1 Datasets Synthetic Data As discussed in Sec. 3.3, our training reward relies on pixel-accurate ground-truth feature correspondences in order to compute feature drift. This requirement restricts both training and quantitative evaluation to synthetic datasets. We utilize the TartanAirV2 dataset, which provides a diverse collec-tion of photorealistic indoor and outdoor environments, each containing multiple camera trajectories. In addition to RGB images, TartanAirV2 provides ground-truth depth maps, camera poses, and dense optical flow, making it well suited for our purposes. Due to the computational cost of executing the full feature detection and tracking pipeline during training, we use only a single sequence per environment for policy training. This leads to a total of 68000 frames. For evaluation, we evaluate on sequences that are disjoint from the training set and our evaluation set consists of 5 sequences, with 5500 frames in total. This experiment tests the ability of the learned policy to generalize to unseen environments. 
+
+Renderer TartanAirV2 provides image data at a relatively low frame rate of 10 Hz [34], which is not representative of modern machine-vision cameras commonly used in VO and VIO systems. To obtain more realistic temporal sampling, we upsample the dataset by re-rendering intermediate frames. Given two consecutive frames It and It+1 with corresponding camera poses  
+
+> C
+
+Tt and C Tt+1 , as well as depth maps dt and dt+1 , we proceed as follows: First, intermediate camera poses C Tt+τ are generated by interpolating the original poses using cubic splines. Next, the depth map is projected into the intermediate camera frame using a pinhole camera model. Regions that are not visible due to occlusions are filled using the depth map from the other frame, yielding dt+τ .Finally, for each pixel in the synthesized image, a ray is cast from the interpo-lated camera center. The intersection of this ray with the projected depth surface 
+
+dt+τ determines the corresponding intensity value, which is sampled from It and 
+
+It+1 using bilinear interpolation. This is basically equivalent to re-rendering the original scene with a rendering engine. 
+
+Motion Blur The synthetic dataset does not contain motion blur, which is not representative of real-world camera imagery. To account for this, we augment the rendered frames with motion blur using the provided ground-truth optical flow. Specifically, we compute a per-frame motion-blur kernel from the flow field and convolve the image with this kernel to approximate the effect of continuous camera motion during exposure. We fix the simulated exposure time to 12 .5 ms ,corresponding to the frame interval at 80 Hz , which is equivalent to a shutter 10 S. Nascivera et al. 
+
+angle of 360 ◦ in cinematography. We note that this model is an approximation, as it does not account for longer exposures in darker scenes. 
+
+Sensor Noise Unlike real-world cameras, the dataset images are noise-free. We therefore inject synthetic sensor noise. In this work, we adopt a simple noise model that assumes additive Gaussian noise on the linear image intensities. Since the dataset provides gamma-corrected PNG images rather than raw sensor measurements, we assume a standard gamma value of γ = 2 .2. Given a noise-free image I ∈ [0 , 1] , the noisy image ˜I is generated as 
+
+˜I = clip 
+
+
+
+(Iγ + N (0 , 0.01)) 1/γ , 0.0, 1.0
+
+
+
+, (7) where N (0 , 0.01) denotes zero-mean Gaussian noise. In Fig. 2 a comparison of nominal (original) images and images augmented with motion-blur and noise is shown.       
+
+> (a) Nominal (b) With motion-blur (c) With motion-blur and noise
+> Fig. 2: Since TartanAirV2 does not feature realistic noise and blur dynamics, we aug-ment the dataset. For evaluation we seperately consider the nominal and the augmented versions.
+
+Real-World Data In addition to synthetic data, we perform quantitative experiments on real-world imagery using the publicly available TUM RGB-D SLAM Dataset. This dataset was selected for its high-accuracy ground-truth camera poses and synchronized depth maps, which were captured using a Mi-crosoft Kinect sensor. Leveraging this precise pose and depth data enables us to synthesize semi-dense ground-truth optical flow between consecutive frames, al-lowing a per-feature drift evaluatiokn similar to synthetic data. The sensor data was recorded at 30 Hz with a resolution of 640x480 pixels. We select 7 different sequences from the Freiburg_1 set for evaluation. 
+
+4.2 Training Details 
+
+Policy training is performed using proximal policy optimization (PPO). The learning rate is linearly decayed from 3 × 10 −4 to 3 × 10 −5 over the course of Title Suppressed Due to Excessive Length 11                       
+
+> Table 4: PPO Hyperparameters and Network Architecture.
+> Parameter Value Parameter Value
+> discount factor γ0.99 parallel environments 256
+> GAE-λ0.95 rollout steps 128
+> PPO epochs 20 batch size 2048
+> clip range 0.2policy network MLP [256 ,256]
+> entropy coefficient 0.0value network MLP [256 ,256]
+
+training. Each training episode consists of a sequence of 128 consecutive frames. As the underlying sequences are longer, only a subset of frames from each envi-ronment is observed per epoch. Training is conducted in parallel across N = 256 
+
+environments to improve sample efficiency and stabilize policy updates. The CNN encoder described in Sec. 3.4 is frozen during RL training, and only the MLP policy network is optimized. The PPO hyperparameters used in our ex-periments are summarized in Tab. 4. 
+
+4.3 Baselines 
+
+We compare our method against static parameter selection strategies, as we are the first to propose an image-conditioned approach that dynamically adapts feature detection and tracking parameters online. The baseline employs a sampling-based optimization strategy to determine a single static parameter set. Specifically, we use particle swarm optimization (PSO) [15] to minimize the same objectives used during RL training. We consider two variants of this baseline. In the first, PSO is run on the training set, and the resulting parameter configuration is evaluated on the test sequences, enabling a direct comparison to our learned policy. In the second variant, PSO is run directly on the test sequence itself, yielding an upper bound on the performance achievable by any static parameter configuration. While this latter comparison is intentionally unfair, it highlights the performance difference between an known and unknown deployment environment. 
+
+# 5 Results 
+
+5.1 Results on Synthetic Data 
+
+We evaluate our method on a set of 5 sequences of TartanAirV2 not seen during training. They come from the EndOfTheWorld environment as well as the Amer-icanDiner environment. For each sequence we consider a version at the original 10 Hz and temporally upsampled versions at 20 Hz, 40 Hz and 80 Hz with our re-rendering method described in Sec. 4.1. We consider the four metrics, feature drift ∆, coverage α, feature age and computation time τ . For each evaluation we consider the nominal dataset, the dataset with introduced motion blur and finally a realistic version with both motion blur and noise. 12 S. Nascivera et al. 0
+
+50 
+
+100 
+
+> Feature Drift [px/s] ( ↓)
+
+Nominal With Blur 
+
+RL (ours) PSO opt. on training set PSO opt. on test set 
+
+With Blur + Noise 
+
+0
+
+20 
+
+40 
+
+60 
+
+80 
+
+100 
+
+> Coverage [%] ( ↑)
+
+0
+
+5
+
+10 
+
+15 
+
+> Track Length ( ↑)
+
+0 20 40 60 80 
+
+10 1
+
+10 2
+
+real-time limit 
+
+Framerate [Hz] 
+
+> Runtime [ms] ( ↓)
+
+0 20 40 60 80 
+
+real-time limit 
+
+Framerate [Hz] 
+
+0 20 40 60 80 
+
+real-time limit 
+
+Framerate [Hz] 
+
+Fig. 3: Comparison of our method on synthetic data. We train RL (ours) on a training set of 40 sequences and plot the evaluation results on 5 unseen test sequences. The PSO opt. on training set baseline is optimized using the same training data as RL and then evaluated on the test set. PSO opt. on test set represents an unfair comparison and upper bound achievable by any static parameters, as we optimize directly on the test set. Especially in the challenging, yet realistic Blur + Noise setting, our method clearly outperforms the baseline and gets close to the static parameters found for the test set. 
+
+The results of this evaluation on synthetic data are shown in Fig. 3. The first row of plots compares the average feature drift in pixels per second. We note two aspects: first, at the lowest framerate of only 10 Hz all methods perform significantly worse. At framerates ≥ 20 Hz the drift does not strongly depend on the framerate. Interestingly, the addition of motion blur alone does not ad-versely affect the performance. However, once noise is introduced alongside the Title Suppressed Due to Excessive Length 13 
+
+motionblur, then our method clearly outperforms the static parameter tuning PSO baseline. Looking at the coverage plots a similar tendency is visible: unless one in-troduces realistic motion blur and noise, all methods perform on par. In the presence of blur and noise our method clearly outperforms the baseline. For the track length, our method consistently outperforms both the baseline as well as the PSO optimized on the test set. Finally, considering the runtime we can see than all methods respect the real-time constraint. The experiment demonstrates that the RL agent successfully learned an op-timal trade-off: leveraging available computational slack to maximize tracking robustness and overall performance while retaining a sufficient runtime margin. 
+
+5.2 Results on Real-world Sequences 
+
+The previous section demonstrated the effectiveness of the proposed approach on synthetic test data, especially in the challenging, realistic Blur + Noise sce-nario. In this section we evaluate the generalization capabilities to real-world data. For our real-world experiments, we assess the proposed tracking system using the TUM RGB-D SLAM benchmark, a standard dataset for evaluating visual odometry under varying camera motions and environmental conditions. Note that both PSO and our RL method are only optimized/trained on the synthetic TartanAirV2 dataset. Therefore, this experiment evaluates true out-of-distribution generalization.                                                                          
+
+> Table 5: Comparison of our RL method against PSO in the real-world sequences. Feature Drift [px/s] ( ↓)Feature Age [frames] ( ↑)Spatial Coverage [%] ( ↑)Computation Time [ms] ( ↓)Sequence PSO RL (Ours) PSO RL (Ours) PSO RL (Ours) PSO RL (Ours) f1_floor 38 36 12.8 26.3 19 35 4.0 3.1
+> f1_360 79 59 6.2 8.9 13 17 8.3 3.6
+> f1_desk 57 57 6.6 22.3 28 39 27.0 5.2
+> f1_xyz 39 39 8.9 29.5 35 45 9.7 4.2
+> f1_rpy 54 55 5.7 14.6 23 33 23.3 5.1
+> f1_desk2 62 63 6.1 16.0 22 32 25.0 4.6
+> f1_room 44 44 6.5 15.9 24 34 19.1 4.8
+> Average 51 48 7.9 19.4 23 34 15.4 4.3
+
+Table 5 reports the results on seven individual sequences from the dataset as well as their average. Looking at the feature drift we see that the performance difference between PSO and our RL method is marginal. However, on all other metrics our method beats the baseline by a large margin. This result is curious at first, but can likely be attributed to imperfect groundtruth optical flow in the 14 S. Nascivera et al. 
+
+dataset. As described in Sec. 3.3 we use a per frame drift metric which relies on accurate optical flow between frames—something very difficult to obtain in real-world data. Given that our method tracks feature 2.5 times as long as and has a 50 % better coverage, it is very likely that it would also drift less in practice. The results on real-world underscore the generalizability of our approach, proving that a learned, dynamic policy provides a more reliable and efficient solution across diverse, real-world conditions than static hyperparameter tuning. 
+
+# 6 Discussion and Conclusion 
+
+This work introduces a novel Reinforcement Learning (RL) formulation designed to continuously adapt the hyperparameters of a visual feature detection and tracking front-end. By explicitly leveraging the incoming image stream as the contextual state for the agent’s decision-making process, our approach tightly couples the perceptual conditions of the environment with the internal param-eterization of the tracking pipeline. This context-aware, dynamic adjustment provides a fundamental advantage over traditional methods: it allows the sys-tem to preemptively respond to visual degradations—such as motion blur or varying illumination—by continuously modulating its tracking behavior. During the evaluation on the synthetic data we notice however, that our method does not outperform statically tuned parameters on the test set. This is not a fair comparison as PSO optimized only on the test can arbitrarily overfit to the this data, but it highlights the challenges of tuning the parameters of the detection and tracking pipeline. In fact it shows that there exists a parameter configuration which is even better than the one found by our method. Never-theless, our real-world evaluations demonstrate robust sim-to-real generalization capabilities of the learned policy. While our method does not strictly outperform the baseline on all TUM RGB-D sequences in terms of feature drift, the RL pol-icy clearly beats the baseline in terms of average feature age, spatial coverage and computation time. Successful sim-to-real transfer is a key aspect: obtaining sub-pixel accurate groundtruth optical flow for real-world data is almost impossible. However, with-out it, tuning a feature-tracking pipeline is not challenging as the accuracy of the groundtruth must be very high. Training an agent or even using Bayesian optimization to tune the parameters without accurate groundtruth is brittle. Our approach to train a policy entirely in simulation and subsequently apply it zero-shot to real-world scenarios effectively overcomes this limitation. An alter-native way overcome this limitation in the future would be the creation of a new dataset tailored specifically to this task. In particular, these sequences could be sampled by following the methodology established by the KITTI Vision Bench-mark [26,27]: by fusing LiDAR scans with 3D CAD models and raw imagery, we can achieve highly accurate, dense optical flow ground truth for long sequences, thereby eliminating reconstruction bias from the evaluation. Title Suppressed Due to Excessive Length 15 
+
+# Acknowledgments 
+
+This work was supported by the European Union’s Horizon Europe Research and Innovation Programme under grant agreement No. 101120732 (AUTOASSESS) and the European Research Council (ERC) under grant agreement No. 864042 (AGILEFLIGHT). This research was carried out at the Jet Propulsion Labora-tory, California Institute of Technology, and was sponsored by JVSRP and the National Aeronautics and Space Administration (80NM0018D0004). ©2026. All rights reserved. 
+
+# References 
+
+1. Bloesch, M., Burri, M., Omari, S., Hutter, M., Siegwart, R.: Iterated extended kalman filter based visual-inertial odometry using direct photometric feedback. The International Journal of Robotics Research 36 (10), 1053–1072 (2017) 2. Bloesch, M., Omari, S., Hutter, M., Siegwart, R.: Robust visual inertial odometry using a direct ekf-based approach. In: 2015 IEEE/RSJ international conference on intelligent robots and systems (IROS). pp. 298–304. IEEE (2015) 3. Cadena, C., Carlone, L., Carrillo, H., Latif, Y., Scaramuzza, D., Neira, J., Reid, I.D., Leonard, J.J.: Simultaneous localization and mapping: Present, future, and the robust-perception age. CoRR (2016) 4. Campos, C., Elvira, R., Rodriguez, J.J.G., Montiel, J.M.M., Tardos, J.D.: Orb-slam3: An accurate open-source library for visual, visual–inertial, and multimap slam. IEEE Transactions on Robotics (2021) 5. Cheng, Y., Maimone, M., Matthies, L.: Visual odometry on the mars exploration rovers. In: 2005 IEEE International Conference on Systems, Man and Cybernetics. vol. 1, pp. 903–910. IEEE (2005) 6. Delaune, J., Bayard, D.S., Brockers, R.: xvio: A range-visual-inertial odometry framework (2020) 7. DeTone, D., Malisiewicz, T., Rabinovich, A.: Superpoint: Self-supervised interest point detection and description. In: CVPR Workshops (2018) 8. Duisterhof, B.P., Zust, L., Weinzaepfel, P., Leroy, V., Cabon, Y., Revaud, J.: MASt3r-sfm: a fully-integrated solution for unconstrained structure-from-motion. In: International Conference on 3D Vision 2025 (2025) 9. Engel, J., Koltun, V., Cremers, D.: Direct sparse odometry. IEEE Transactions on Pattern Analysis and Machine Intelligence (2018) 10. Filipenko, M., Afanasyev, I.: Comparison of various slam systems for mobile robot in an indoor environment. In: 2018 International Conference on Intelligent Systems (IS). pp. 400–407. IEEE (2018) 11. Fontan, A., Civera, J., Milford, M.: AnyFeature-VSLAM: Automating the usage of any chosen feature into visual slam. In: Robotics: Science and Systems (2024) 12. Forster, C., Pizzoli, M., Scaramuzza, D.: SVO: Fast semi-direct monocular visual odometry. In: ICRA (2014) 13. Geneva, P., Eckenhoff, K., Lee, W., Yang, Y., Huang, G.: Openvins: A research platform for visual-inertial estimation. In: 2020 IEEE International Conference on Robotics and Automation (ICRA). pp. 4666–4672. IEEE (2020) 14. Haarnoja, T., Zhou, A., Abbeel, P., Levine, S.: Soft actor-critic: Off-policy maxi-mum entropy deep reinforcement learning with a stochastic actor. In: International conference on machine learning. pp. 1861–1870. Pmlr (2018) 16 S. Nascivera et al. 15. Kennedy, J., Eberhart, R.: Particle swarm optimization. In: Proceedings of ICNN’95 - International Conference on Neural Networks. vol. 4, pp. 1942–1948 (1995). https:/ /doi.org/10.1109/ICNN.1995.488968 
+
+16. Kerl, C., Stueckler, J., Cremers, D.: Dense continuous-time tracking and mapping with rolling shutter rgb-d cameras. In: ICCV (2015) 17. Leroy, V., Cabon, Y., Revaud, J.: Grounding image matching in 3d with mast3r. In: ECCV (2024) 18. Leutenegger, S., Furgale, P., Rabaud, V., Chli, M., Konolige, K., Siegwart, R.: Keyframe-based visual-inertial slam using nonlinear optimization. Proceedings of Robotis Science and Systems (RSS) 2013 (2013) 19. Leutenegger, S., Lynen, S., Bosse, M., Siegwart, R., Furgale, P.: Keyframe-based visual–inertial odometry using nonlinear optimization. The International Journal of Robotics Research 34 (3), 314–334 (2015) 20. Lindenberger, P., Sarlin, P.E., Pollefeys, M.: Lightglue: Local feature matching at light speed. In: ICCV (2023) 21. Lipson, L., Teed, Z., Deng, J.: Deep patch visual slam. In: ECCV (2024) 22. Lucas, B.D., Kanade, T.: An iterative image registration technique with an appli-cation to stereo vision. In: IJCAI (1981) 23. Maggio, D., Carlone, L.: Vggt-slam 2.0: Real-time dense feed-forward scene recon-struction (2026) 24. Maggio, D., Lim, H., Carlone, L.: Vggt-slam: Dense rgb slam optimized on the sl(4) manifold. NeurIPS (2025) 25. Majzoubi, M., Zhang, C., Chari, R., Krishnamurthy, A., Langford, J., Slivkins, A.: Efficient contextual bandits with continuous actions. Advances in Neural Informa-tion Processing Systems 33 , 349–360 (2020) 26. Menze, M., Heipke, C., Geiger, A.: Joint 3d estimation of vehicles and scene flow. In: ISPRS Workshop on Image Sequence Analysis (ISA) (2015) 27. Menze, M., Heipke, C., Geiger, A.: Object scene flow. ISPRS Journal of Pho-togrammetry and Remote Sensing (JPRS) (2018) 28. Messikommer, N., Cioffi, G., Gehrig, M., Scaramuzza, D.: Reinforcement learning meets visual odometry. In: ECCV (2024) 29. Mur-Artal, R., Montiel, J.M.M., Tardos, J.D.: Orb-slam: A versatile and accurate monocular slam system. IEEE Transactions on Robotics (2015) 30. Mur-Artal, R., Tardos, J.D.: Orb-slam2: An open-source slam system for monoc-ular, stereo, and rgb-d cameras. IEEE Transactions on Robotics (2017) 31. Murai, R., Dexheimer, E., Davison, A.J.: Mast3r-slam: Real-time dense slam with 3d reconstruction priors. In: CVPR (2025) 32. Ng, A.Y., Harada, D., Russell, S.: Policy invariance under reward transformations: Theory and application to reward shaping. In: Icml. vol. 99, pp. 278–287. Citeseer (1999) 33. PassMark Software: Passmark software - pc benchmark charts. https:/ /www. cpubenchmark.net/ (2026), accessed: 2026-03-05 34. Patel, M., Yang, F., Qiu, Y., Cadena, C., Scherer, S., Hutter, M., Wang, W.: Tartanground: A large-scale dataset for ground robot perception and navigation. arXiv preprint arXiv:2505.10696 (2025) 35. Rosten, E., Drummond, T.: Machine learning for high-speed corner detection. In: ECCV (2006) 36. Sarlin, P.E., DeTone, D., Malisiewicz, T., Rabinovich, A.: Superglue: Learning feature matching with graph neural networks. In: CVPR (2020) Title Suppressed Due to Excessive Length 17 37. Sturm, J., Engelhard, N., Endres, F., Burgard, W., Cremers, D.: A benchmark for the evaluation of rgb-d slam systems. In: Proc. of the International Conference on Intelligent Robot Systems (IROS) (Oct 2012) 38. Tancik, M., Srinivasan, P., Mildenhall, B., Fridovich-Keil, S., Raghavan, N., Sing-hal, U., Ramamoorthi, R., Barron, J., Ng, R.: Fourier features let networks learn high frequency functions in low dimensional domains. Advances in neural informa-tion processing systems 33 , 7537–7547 (2020) 39. Teed, Z., Deng, J.: Droid-slam: Deep visual slam for monocular, stereo, and rgb-d cameras. NeurIPS (2021) 40. Trajković, M., Hedley, M.: Fast corner detection. Image and Vision Comput-ing 16 (2), 75–87 (1998). https:/ /doi.org/https:/ /doi.org/10.1016/S0262-8856(97)00056-5 
+
+41. Tranzatto, M., Dharmadhikari, M., Bernreiter, L., Camurri, M., Khattak, S., Mas-carich, F., Pfreundschuh, P., Wisth, D., Zimmermann, S., Kulkarni, M., et al.: Team cerberus wins the darpa subterranean challenge: Technical overview and lessons learned. Field Robotics 4, 349–312 (2024) 42. Tukey, J.W., et al.: Exploratory data analysis, vol. 2. Springer (1977) 43. Wang, J., Chen, M., Karaev, N., et al.: Vggt: Visual geometry grounded trans-former. In: CVPR (2025) 44. Wang, S., Clark, R., Wen, H., Trigoni, N.: Deepvo: Towards end-to-end visual odometry with deep recurrent convolutional neural networks. In: ICRA (2017) 45. Wang, S., Leroy, V., Cabon, Y., et al.: Dust3r: Geometric 3d vision made easy. In: CVPR (2024) 46. Wang, W., Hu, Y., Scherer, S.: Tartanvo: A generalizable learning-based vo. In: CoRL (2020) 47. Wang, W., Zhu, D., Wang, X., et al.: Tartanair: A dataset to push the limits of visual slam. In: IROS (2020) 48. Yan, J., Zheng, Y., Yang, J., Mihaylova, L., Yuan, W., Gu, F.: Plpf-vslam: An indoor visual slam with adaptive fusion of point-line-plane features. Journal of Field Robotics (2023) 49. Zhao, S., Gao, Y., Wu, T., Singh, D., Jiang, R., Sun, H., Sarawata, M., Qiu, Y., Whittaker, W., Higgins, I., et al.: Subt-mrs dataset: Pushing slam towards all-weather environments. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 22647–22657 (2024) 50. Zhou, G., Fang, L., Tang, K., Zhang, H., Wang, K., Yang, K.: Guidance: A visual sensing platform for robotic applications. In: CVPR Workshops (2015)
