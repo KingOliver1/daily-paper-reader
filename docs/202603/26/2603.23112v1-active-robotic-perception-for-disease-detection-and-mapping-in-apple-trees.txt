@@ -1,0 +1,224 @@
+Title: Active Robotic Perception for Disease Detection and Mapping in Apple Trees
+
+URL Source: https://arxiv.org/pdf/2603.23112v1
+
+Published Time: Wed, 25 Mar 2026 01:06:54 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Active Robotic Perception for Disease Detection and Mapping in Apple Trees 
+
+Hayden Feddock 1, Francisco Yandun 1, Sr ¯ dan A´ cimovi´ c2, Abhisesh Silwal 1
+
+Abstract — Large-scale orchard production requires timely and precise disease monitoring, yet routine manual scouting is labor-intensive and financially impractical at the scale of modern operations. As a result, disease outbreaks are often detected late and tracked at coarse spatial resolutions, typically at the orchard-block level. We present an autonomous mobile active perception system for targeted disease detection and mapping in dormant apple trees, demonstrated on one of the most devastating diseases affecting apple today—fire blight. The system integrates flash-illuminated stereo RGB sensing, real-time depth estimation, instance-level segmentation, and confidence-aware semantic 3D mapping to achieve precise localization of disease symptoms. Semantic predictions are fused into the volumetric occupancy map representation enabling the tracking of both occupancy and per-voxel semantic confidence, building actionable spatial maps for growers. To actively re-fine observations within complex canopies, we evaluate three viewpoint planning strategies within a unified perception–action loop: a deterministic geometric baseline, a volumetric next-best-view planner that maximizes unknown-space reduction, and a semantic next-best-view planner that prioritizes low-confidence symptomatic regions. Experiments on a fabricated lab tree and five simulated symptomatic trees demonstrate reliable symptom localization and mapping as a precursor to a field evaluation. In simulation, the semantic planner achieves the highest F1 score (0.6106) after 30 viewpoints, while the volumetric planner achieves the highest ROI coverage (85.82%). In the lab setting, the semantic planner attains the highest final F1 (0.9058), with both next-best-view planners substantially improving coverage over the baseline. The codebase for this work is available at https://github.com/Feddockh/husky_xarm6_mcr. 
+
+Index Terms — Robotics and Automation in Agriculture and Forestry, Mapping, Object Detection, Segmentation and Cate-gorization 
+
+I. INTRODUCTION Fruit production in the United States faces mounting pressure from increasing labor shortages, growing global food demand, and tightening economic margins. Orchard crops, in particular, require extensive monitoring to identify emerging diseases, assess canopy health, and guide manage-ment decisions. A substantial portion of disease-related crop loss in pome-fruit orchards is attributable to fire blight, one of the most destructive bacterial diseases affecting the apple and pear production globally. Historical outbreaks illustrate the severity: in 2000 an epidemic in Michigan destroyed more than 220,000 trees resulting in approximately $42 million in losses [1] and in 2017 an outbreak in China devastated  
+
+> 1H. Feddock, F. Yandun, and A. Silwal are with the Robotics Institute, Carnegie Mellon University, Pittsburgh, PA 15213, USA
+
+{hfeddock, fyandun, asilwal}@andrew.cmu.edu          
+
+> 2S. A´ cimovi´ cis with the Department of Plant Pathology, Vir-ginia Polytechnic Institute and State University, Blacksburg, VA, USA
+
+acimovic@vt.edu 
+
+> Fig. 1: Autonomous disease inspection system (left) and representative fire blight symptoms (right). Shoot blight instances exhibit a characteristic shepherd’s crook (top), while canker regions appear as sunken or darkened lesions on woody tissue (bottom).
+
+over 1 million trees estimated at $1.4 million [2]. Financial losses for United States growers are estimated to exceed $100 million annually [1]. Fire blight is caused by the bacterium Erwinia amylovora ,a highly contagious pathogen that overwinters in bark lesions known as cankers and spreads rapidly via insects, rainwater, and wind; ultimately infecting blossoms and young shoots [3]. Infected shoots develop a characteristic symptom called “shepherd’s crook,” while infected woody tissue leads to canker development and, in severe cases, rootstock blight that necessitates tree removal. Dormant-season pruning remains the most effective mitigation strategy, but it is costly, labor-intensive and must be performed at large scale. As labor availability declines and operational costs rise, growers often lack the capacity to perform routine scouting at the frequency and spatial resolution needed for timely intervention. Robotic monitoring systems offer a promising solution by enabling autonomous inspection and the construction of actionable maps of disease incidence. Such maps allow growers to pre-cisely allocate resources—chemicals, labor, and equipment— while tracking disease trends across the orchard with higher temporal and spatial accuracy than manual scouting provides. Although orchard robotics presents clear benefits, the orchard canopy remains a challenging environment for au-tonomous perception due to dense foliage, severe occlu-sions, thin branch geometry, and large variations in natural 
+
+> arXiv:2603.23112v1 [cs.RO] 24 Mar 2026
+
+lighting. Traditional wide-angle RGB cameras and LiDAR sensors struggle to detect the fine visual cues associated with disease detection, such as canker margins or necrotic shoot tips, and fixed sensor configurations cannot reliably avoid occlusion. Multi-camera arrays spanning the height of the canopy may offer broader coverage, but they are restricted to near-perpendicular viewing angles, cannot break the plane of the canopy to investigate occluded regions, and may be prohibitively expensive to deploy at orchard scale. These limitations motivate an active perception approach in which a robotic manipulator positions a camera to acquire discriminative, task-relevant views. This approach enables the utilization of specialized sensors like multispectral or flash-illuminated RGB cameras which can be highly effective for disease detection but typically operate with narrow fields of view. In this work, we present a robotic inspection system that leverages active perception for targeted disease detection in orchard environments. The system integrates task-specific imaging, real-time semantic occupancy reconstruction, and viewpoint selection to enable efficient, high-resolution in-spection of complex canopy structures. Autonomy in the current system primarily refers to the perception and ma-nipulation pipeline, where the robotic arm autonomously selects and executes inspection viewpoints, while the mobile base positioning is fixed during inspection. At the sensing level, we utilize a flash-illuminated stereo RGB camera that improves visual contrast under variable lighting and extends operational flexibility beyond ideal daylight conditions [4]. At the representation level, we construct a semantic occu-pancy map that jointly encodes geometry, class labels, and prediction confidence, allowing the generation of actionable maps for growers and downstream viewpoint planning to reason over both spatial structure and detection uncertainty [5]. Finally, at the planning level, we introduce a suite of viewpoint generation and selection strategies designed for unstructured canopy inspection—all of which have been evaluated on our lab and simulated tree cases. In summary, the primary contributions of this work are:  
+
+> •
+
+A task-specific active imaging pipeline that combines flash stereo RGB, real-time scene reconstruction using stereo matching based on foundational models, and instance segmentation of dormant season fire blight symptoms.  
+
+> •
+
+A confidence-aware semantic occupancy represen-tation that jointly maintains occupancy probability, se-mantic labels, and prediction confidence within a unified volumetric map.  
+
+> •
+
+A suite of viewpoint generation strategies for canopy inspection that includes both geometric coverage-based and information-driven next-best-view planners, en-abling adaptive active perception tailored to canopy structure and semantic uncertainty. II. RELATED WORKS Prior work on vision-based detection of fire blight symp-toms has largely relied on multispectral imagery from aerial systems [6], [7] and individual close-up leaf or tissue hyper-spectral detections [8], [9]. Bagheri indentifies that remote sensing of fire blight using aerial imagery can be used to detect fire blight symptoms with limited success. However, aerial imagery often misses symptomatic indicators beneath the tree crown [10]. Mahmud et al. proposed a two-modality approach combining multispectral UAV imagery for canopy screening with a ground RGB instance-segmentation model. This work also confirmed that UAV scouting can miss infections located on the side or bottom of tree canopies and may lack sufficient resolution to quantify infected areas [11]. Veres et al. emphasized ground-level scouting for symptom-level localization and deployed a pickup-truck-mounted multi-channel (RGB+NIR) imaging rig to collect side-view orchard imagery over the growing season [12]. More recently, Linker and Dafny-Yalin showed that dormant-trunk cankers in pear trees can be detected with CNN-based object detection from tripod-acquired imagery and used geo-referenced images to generate disease maps; however, this remains a fixed-view acquisition pipeline and does not explicitly address occlusion-driven view selection [13]. Active perception and next-best-view (NBV) planning provide a principled foundation for overcoming occlusions and prioritizing task-relevant observations. General active-vision surveys show that view planning is commonly framed as selecting a view sequence that maximizes useful informa-tion under sensing and motion constraints. In agricultural robotics, NBV has been successfully applied to targeted plant-part perception: Burusa et al. proposed attention-driven and semantics-aware NBV strategies for efficient search and detection of task-relevant tomato plant parts in cluttered, occluded scenes, validating performance in real greenhouse experiments [14], [15]. In orchards, Freeman demonstrated NBV planning for apple fruitlet sizing using ROI-targeted view sampling and attention-guided information gain, sup-ported by multi-resolution volumetric mapping to maintain fine occupancy detail while accelerating view evaluation [16]. These works motivate NBV reasoning in plant struc-tures, but they focus on reconstruction and sizing rather than disease symptom refinement and mapping. In contrast, our work targets dormant-season fire blight symptoms—where sanitation and pruning decisions can be made before in-season symptom escalation—by integrating learned symptom segmentation with confidence-aware 3D semantic mapping and manipulator-based active viewpoint selection for targeted symptom refinement. In addition, we leverage flash-illuminated sensing to reduce sensitivity to outdoor lighting variability; related work on active lighting for agricultural vision demonstrates that controlled illumina-tion can improve image consistency and reduce training-data requirements, and recent field disease-scouting systems in other crops have also adopted active illumination to improve robustness [4]. Together, these components enable an active perception system for autonomous disease detection and mapping in apple trees that explicitly reasons over both occlusion and semantic uncertainty. Fig. 2: Effect of our flash camera on a canker in the afternoon. Image on the left was captured using an iPhone 15 max and the image on the right was captured using the flash camera detailed in [4] which is the primary camera used in our robotic system. 
+
+III. SYSTEM OVERVIEW Our platform consists of a mobile manipulation system designed for autonomous disease inspection in orchard envi-ronments. The hardware platform integrates a Husky A200 ground robot with an xArm6 robotic manipulator, enabling mobility through orchard rows. A flash-illuminated stereo RGB camera is rigidly fixed to the manipulator end effector, allowing the system to acquire flash imagery and active repositioning of the sensor within dense canopy structures. The manipulator provides six degrees of freedom, enabling the camera to break the plane of the canopy, navigate around occlusions, and capture high-confidence observations of suspected disease regions. The perception, mapping, and viewpoint planning systems are executed onboard a GPU-enabled computing unit running ROS2 middleware, which manages communication between sensing, state estimation, mapping, and control modules. The system operates in a closed perception–action loop: stereo images are processed to produce semantic 3D re-constructions, candidate viewpoints are generated based on map state and detection uncertainty, and the manipulator is commanded to move to the next candidate viewpoint. All sensing data is transformed into a common global reference frame using robot odometry and manipulator kinematics. The overall architecture is platform-agnostic, allowing individual components (e.g., manipulator, base, camera, compute) to be replaced without modifying the underlying planning or mapping framework. IV. PERCEPTION AND SEMANTIC RECONSTRUCTION The perception pipeline transforms raw stereo RGB obser-vations into a confidence-aware semantic 3D representation of disease symptoms. As illustrated in Fig. 3, we use four stages: (1) flash-illuminated stereo image acquisition, (2) instance-level disease detection, (3) real-time depth estima-tion, and (4) semantic point cloud construction. This modular structure allows perception components to be independently swapped while maintaining a consistent 3D representation for downstream planning. 
+
+A. Stereo Flash RGB 
+
+Accurate disease detection in orchard environments is hindered by strong illumination variability, cast shadows, specular highlights, and dense occlusions within the canopy. To mitigate these effects, we employ a stereo RGB camera pair augmented with synchronized flash illumination first introduced in by Silwal et al. [4]. This camera reduces the dependence on natural light sources, mitigates the effects of shadows, and increases visual consistency across time of day. Additionally, we have found that it improves contrast along textured surfaces such as canker margins and necrotic shoot tips as seen in Fig. 2. Images are captured at resolution 
+
+1440 ×1088 using a hardware-trigger synchronized to ensure temporal alignment between left and right frames. Prior to processing, stereo images are undistorted and rectified using intrinsic and extrinsic calibration parameters. 
+
+B. Stereo Matching 
+
+Depth estimation is performed using the matching model Foundation Stereo [17]. Normally the inference time for this method is prohibitively slow for real time applications, but by using the small ViT model, scaling the input images and compiling for TensorRT usage, we were able to achieve inference times close to 30ms. The network predicts a dense disparity map, which is converted to depth using known stereo baseline and focal length parameters. To improve the subsequent later occupancy map creation in foliage-rich environments, we apply fast post-processing methods such as speckle filtering to remove isolated noise regions and artifacts generated from the stereo matcher. The resulting filtered depth map is re-projected into 3D using standard pinhole camera geometry, producing a dense point cloud in the camera coordinate frame. 
+
+C. Detection Model 
+
+Disease symptoms are detected using a convolutional neural network based on the YOLO26 instance segmentation architecture [18]. The base model was trained on 1,275 annotated real-world images and fine-tuned using 289 lab images for laboratory evaluation and 849 simulation images for simulation-based testing. The model is trained to produce instance-level segmentations for visually distinctive dormant-season fire blight indicators, including shepherd’s crooks and canker lesions. For each detected instance, the network outputs a segmentation mask, class label, and associated confidence score. Predictions below a confidence threshold are discarded. 
+
+D. Semantic Point Cloud 
+
+Semantic predictions are lifted into 3D by converting disparity to depth and back-projecting pixels into the camera coordinate frame using the calibrated stereo pinhole model. Each resulting 3D point inherits the corresponding semantic label and confidence. Fig. 3: The perception pipeline (top) generates semantic 3D reconstructions from stereo depth and instance segmentation. The viewpoint planning module (bottom) first generates candidate viewpoints using a plane-based sampling strategy (baseline planner), augments them with orientation variations, and then selects viewpoints by clustering either frontier voxels (volumetric planner) or semantically uncertain regions (semantic planner) and sampling poses oriented toward the cluster centroids. 
+
+To associate semantics with 3D points, instance segmenta-tion masks are rasterized into per-pixel class and confidence maps. All entries are initialized to a background class with a set background confidence. Detected instances are sorted by confidence and written in ascending order such that higher-confidence instances overwrite lower-confidence assignments in overlapping regions. For each mask-positive pixel, the corresponding class ID and confidence are recorded. For each valid pixel, the corresponding 3D point is com-puted and assigned its semantic class label and confidence value from the rasterized prediction maps. Pixels with invalid disparity or depth beyond a maximum sensing range are optionally retained as background points by assigning them the maximum range value. This allows the downstream oc-cupancy mapping process to explicitly represent unobserved space. V. SCENE REPRESENTATION The perception pipeline produces geometric observations (stereo depth) and semantic observations (instance-level seg-mentations with associated confidence). These observations are fused into a semantic point cloud and discretized into an OctoMap-based volumetric representation that supports both (i) collision-aware reasoning through occupancy probabilities and (ii) task-aware reasoning through per-voxel semantic labels and confidences. The representation is implemented as a derived octree object that extends the standard occupancy node payload with semantic information. 
+
+A. Occupancy Mapping 
+
+We represent the 3D scene using an OctoMap object at res-olution r, where each voxel maintains a probabilistic estimate of occupancy in log-odds form [5]. Given a sensor origin and a point cloud derived from stereo, measurements are in-tegrated via ray casting: voxels traversed by rays are updated toward free space, while ray endpoints are updated toward occupied space. This process yields a compact volumetric representation that preserves structure in sparse regions while adaptively refining resolution in cluttered areas. The map is incrementally updated as new sensor data arrives. To improve computational efficiency, we restrict the OctoMap domain to a bounded region tightly fitted to the target tree. Constraining the spatial extent of the map reduces both memory usage and traversal depth, thereby accelerating voxel read and write operations. Additionally, ray casting is terminated early when rays exit the bounding region, further reducing unnecessary free-space updates and improving integration speed. 
+
+B. Semantic Occupancy Mapping 
+
+In addition to occupancy, we store semantic attributes at voxel level. Each node in the semantic octree maintains: i) the standard occupancy log-odds value, and ii) a semantic class identifier c ∈ Z and confidence s ∈ [0 , 1] .Semantic labels are integrated into the map using the semantic point cloud, where each 3D point carries a predicted class and confidence. For each point, the corresponding voxel in the octree is updated with this semantic information. Semantic updates are applied only to voxels that have already been marked as occupied through geometric integration. 
+
+1) Fusion Updates: Occupancy updates follow the stan-dard OctoMap log-odds formulation: ray-traced free-space cells are updated with a free log-odds increment, and endpoints are updated with an occupied increment. After inserting a batch of measurements, inner occupancy values are updated by the octree’s standard propagation. We use a semantic fusion update method similar to the method used by Burusa et al. [15]. Semantic fusion at an occupied voxel uses a confidence-aware rule that encourages consistency under repeated ob-servations while remaining robust to occasional misclassi-fications. Let (ct, s t) denote the incoming class label and confidence at time t, and let (ˆ c, ˆs) denote the voxel’s current semantic estimate. If no prior semantic information is stored, we assign (ˆ c, ˆs) ← (ct, s t). If the incoming label matches the stored label (ct = ˆ c), we increase stability by averaging confidence and applying a small boost: 
+
+ˆs ← clip 
+
+ ˆs + st
+
+2 + γ, 0, 1
+
+
+
+(1) where γ is a fixed confidence boost. If the incoming label differs (ct̸ = ˆ c), we select the label with higher confidence 
+
+(ˆ c, ˆs) ←
+
+(
+
+(ct, s t) if st > ˆs
+
+(ˆ c, ˆs) otherwise (2) and apply a mismatch penalty to reduce overconfidence under disagreement: 
+
+ˆs ← clip(ˆ s(1 − λ), 0, 1) (3) where λ is a mismatch penalty. This fusion strategy favors persistent, high-confidence labels while allowing later high-confidence observations to correct earlier errors. VI. VIEWPOINT PLANNING To evaluate active inspection strategies for unstructured orchard canopies, we implement and compare three view-point planning approaches: (i) a deterministic geometric 
+
+Algorithm 1 Volumetric Next-Best-View (NBV) Selection                                                       
+
+> Require: Map M, current pose xt, feasible set Q, candidate generator G, information gain IG( ·), cost C(·)
+> Ensure: Selected next-best view vnext
+> 1: Update Mwith latest sensor data
+> 2: Vc← G (M, x t)▷Generate candidate viewpoints
+> 3: Vc←Vc∩ Q ▷Filter infeasible poses
+> 4: for all vi∈Vcdo
+> 5: IG i←IG( vi,M)▷Information gain from view
+> 6: Ci←C(xt, v i)▷Motion cost (eg. Euclidean)
+> 7: Ui←IG i−αC i
+> 8: end for
+> 9: vnext ←arg max vi∈VcUi▷Select best viewpoint
+> 10: Command robot to move to vnext
+> 11: return vnext
+
+baseline planner, (ii) a volumetric next-best-view (NBV) planner that maximizes occupancy uncertainty reduction, and (iii) a semantics-driven NBV planner that prioritizes regions of low semantic confidence. All planners operate within the same perception–action loop and share a common feasibility filtering stage to ensure kinematic and collision validity. Representation of the viewpoint selection process can be seen in Fig. 3. 
+
+A. Workspace Filtering 
+
+To avoid unnecessary inverse kinematics calls and reduce planning time, all candidate viewpoints are first filtered using a precomputed reachable workspace model. Following [16], we densely sample approximately 10 6 end-effector configurations offline and discretize the reachable positions into a fine-resolution voxel grid. Each voxel stores a binary reachability indicator. At runtime, viewpoints outside this workspace volume are immediately rejected before motion planning is attempted. 
+
+B. Baseline View Planner 
+
+The baseline planner provides structured canopy coverage without reasoning about map uncertainty. A midplane is computed through the defined region orthogonal to the pri-mary viewing direction. Given camera horizontal and vertical fields of view (θh, θ v ) and nominal inspection distance d, the planar coverage footprint is 
+
+w = 2 d tan( θh/2) , h = 2 d tan( θv /2) . (4) To ensure overlap between adjacent views, grid spacing is 
+
+∆u = w(1 − ρ), ∆v = h(1 − ρ), (5) where ρ ∈ [0 , 1) is the overlap ratio. A uniform grid of frustum cross-sections is tiled across the midplane and projected along the viewing direction to generate candidate camera poses. Subsequently, viewpoints are ordered in a row-alternating pattern to minimize manipulator travel. While this approach guarantees deterministic planar coverage, it does not adapt to occlusions or map uncertainty. C. Volumetric-Based NBV Planner 
+
+The volumetric planner selects camera poses that maxi-mize reduction of occupancy uncertainty within the region of interest, following standard information-gain NBV formu-lations. Algorithm 1 summarizes the NBV selection loop. 
+
+1) Volumetric Viewpoint Generation: First, candidates are formed from two sources: (i) a midplane grid (as in the baseline planner) augmented with small spherical-cap orientation perturbations, and (ii) frontier-based viewpoints sampled around clusters of frontier voxels. Subsequently, frontiers are defined as free or occupied voxels adjacent to unknown space. To reduce redundancy, frontier voxels are clustered using k-means (upper limit of 100 voxels per cluster). For each cluster centroid, viewpoints are sampled from a hemisphere facing the centroid within a bounded radial range near the ideal camera distance [16]. 
+
+2) Volumetric Information Gain: For a candidate view-point v, volumetric information gain is computed by ray marching through the camera frustum and counting the number of unknown voxels encountered Ur , averaged over a set of rays R:
+
+IG( v) = 1
+
+|R|
+
+X
+
+> r∈R
+
+Ur , (6) 
+
+Ur =
+
+> Nr
+
+X
+
+> i=0
+
+1{O (pr,i ) = unknown } , (7) where pr,i is the i-th sampled point along ray r and O(·) ∈{free , occupied , unknown } is the voxel occupancy state. Ray marching terminates when an occupied voxel is reached, the maximum sensor range is exceeded, or once the ray exits the region of interest. To balance exploration benefit with motion effort, we define a utility function 
+
+U (v) = IG( v) − α∥xt − v∥, (8) where α is a tunable cost weight and ∥xt−v∥ is the Euclidean distance from the current camera pose xt to the candidate viewpoint. Candidate viewpoints are ranked by utility and evaluated in descending order until a feasible motion plan is found, after which the robot executes the motion and the map is updated. 
+
+D. Semantic-Based NBV Planner 
+
+The semantic planner extends the volumetric NBV frame-work by explicitly targeting regions of low semantic confi-dence rather than purely geometric uncertainty. This design is motivated by human scouting behavior: when inspecting a tree, a grower naturally revisits and examines more closely areas that appear ambiguous or potentially symptomatic. Similarly, the semantic planner prioritizes viewpoints that refine uncertain disease predictions, enabling focused inspec-tion of regions that warrant further scrutiny. The overall NBV loop, feasibility filtering, and utility formulation remain unchanged. The key differences lie in candidate generation and the information gain metric. 
+
+a) Semantic Viewpoint Generation: Instead of clus-tering geometric frontiers, we identify occupied voxels whose semantic confidence falls below a threshold τc. These low-confidence voxels are clustered using k-means, and hemisphere-based viewpoints are sampled around each clus-ter centroid, analogous to the frontier-based sampling used in the volumetric planner. The planar grid with angular offsets is retained to maintain broader canopy coverage. 
+
+b) Semantic Information Gain: The semantic informa-tion gain augments volumetric uncertainty with semantic uncertainty. For each ray r, volumetric uncertainty Ur is computed as before. For each occupied voxel along the ray, semantic uncertainty is defined as (1 − c(p)) , where c(p) is the detection confidence. A weighting factor β ≥ 0 controls the relative influence of semantic refinement. The semantic information gain for viewpoint v is: 
+
+IG sem (v) = 1
+
+|R|
+
+X
+
+> r∈R
+
+((1 − β)Ur + βS r ) , (9) where 
+
+Sr =
+
+> Nr
+
+X
+
+> i=0
+
+(1 − c(pr,i )) 1{O (pr,i ) = occupied } . (10) Unknown voxels contribute volumetric gain, while occupied voxels contribute proportional to their lack of semantic confidence. VII. EVALUATION Predicted disease instances are represented as clusters of connected occupied voxels belonging to the same semantic class. For each cluster, we compute the centroid and use it as the predicted symptom location. Ground truth symptoms are represented as labeled 3D points with an associated matching radius t. A prediction is considered correctly matched if the centroid of a predicted cluster lies within radius t of a ground truth point of the same class. The matching radius was set to t = 0.10 m to prevent overlap between neighboring symptoms while tolerating small localization noise. We define precision and recall as Precision = T P p
+
+T P p + F P , Recall = T P c
+
+T P c + F N , (11) where T P p denotes predicted clusters correctly matched to ground truth, F P predicted clusters with no matching ground truth, T P c ground truth symptoms matched by at least one predicted cluster, and F N ground truth symptoms without a matching prediction. This asymmetric definition is necessary because predic-tions are clusters rather than direct point estimates. Multiple clusters may lie within a single ground truth radius, and we aim to avoid discarding correct or incorrect detections due to duplicate cluster formation. The F1 score is then com-puted using our precision and recall scores and is evaluated throughout the planner’s execution. To evaluate the effectiveness of our approach to explore and find symptoms within the canopy, we additionally com-pute the geometric coverage of the region of interest (ROI). Fig. 4: Blender-rendered symptomatic apple trees used in simulated Gazebo evaluations. Each tree contains randomly distributed shepherd’s crooks and cankers to simulate realistic outbreak variability and geometric complexity. 
+
+> Fig. 5: Laboratory setup with the Husky mobile base, xArm6 manipulator, and flash stereo camera inspecting a fabricated symptomatic tree. The black backdrop shown is purely for cosmetic purposes and is not required for system operation.
+
+Coverage is defined as the fraction of voxels within the bounding box that have been assigned either occupied or free state: Coverage = Nknown 
+
+Ntotal 
+
+, (12) where Nknown is the number of voxels with non-unknown occupancy and Ntotal is the total number of voxels in the ROI. Due to non-determinism in detection, inverse kinematics, and motion planning, each planner was executed 10 times per tree. Mean and standard deviation were computed across runs. In simulation, results were first averaged per tree and then averaged across the five test trees. Bounding boxes were fitted to each tree to define a consistent ROI for all planners. Table I shows the parameters we used for the planners across all experiments. 
+
+> TABLE I: Planning Parameters
+
+Parameter Value OctoMap resolution 0.04 m 
+
+α (utility weight) 0.1 
+
+β (semantic weight) 0.7 Camera max range 0.9 m Background confidence 0.3 Detection confidence threshold 0.3 
+
+We evaluated the system in both physical and simulated environments. The simulations consisted of five symptomatic apple trees which were generated in Blender and evaluated in Gazebo. Each tree contained 5–8 cankers and 5–8 shepherd’s crooks distributed across varying canopy geometries (Fig. 4). Symptoms were positioned to reflect realistic outbreak pat-terns, including occluded and difficult-to-view instances. For each tree, results were averaged across 10 runs per planner. These per-tree averages were then aggregated to evaluate overall planner robustness across diverse canopy structures. In the laboratory setting (Fig. 5), a fabricated tree was outfitted with six 3D printed shepherd’s crook instances generated from field imagery. Ground truth symptom loca-tions were obtained using ArUco markers to estimate 3D positions relative to the robot base frame. Each planner was executed 10 times, and mean and standard deviation were computed across runs. In both environments, the trees were positioned 1.0 m away from the robot base to ensure consistent conditions across experiments. VIII. RESULTS 
+
+> TABLE II: Planner performance at 30 viewpoints
+
+Simulation Laboratory Planner F1 Coverage (%) F1 Coverage (%) Baseline 0.5120 59.57 0.8448 70.93 Volumetric 0.5125 85.82 0.8670 97.46 
+
+Semantic 0.6106 74.34 0.9058 96.02 
+
+Figure 6 illustrates planner performance over the first 30 viewpoints. Across both environments, viewpoint selection significantly influences inspection behavior, affecting both geometric coverage of the canopy and detection accuracy. In simulation, the volumetric planner rapidly increases ROI coverage early in the sequence due to its objective of exploring unknown space, producing the most complete geometric reconstruction of the canopy (85.82% coverage). However, this exploration-driven strategy yields only modest improvements in detection accuracy relative to the baseline. In contrast, the semantic planner prioritizes regions with low-confidence predictions, leading to a steady improvement in F1 score as additional viewpoints refine ambiguous de-tections. As summarized in Table II, the semantic planner achieves the highest final F1 score (0.6106) while maintain-ing substantial scene coverage. The laboratory experiment exhibits similar trends but smaller performance differences between planners. Because the fabricated tree has a more planar structure and fewer occlusions, all planners achieve relatively high detection accuracy. Nevertheless, the volumetric planner again pro-duces the most complete geometric coverage of the region of interest, while the semantic planner consistently achieves the strongest detection performance, reaching a final F1 score of 0.9058. IX. CONCLUSIONS AND FUTURE WORK We presented an autonomous mobile manipulation system for disease detection and semantic mapping in apple trees, demonstrated on dormant-season fire blight. The system integrates flash stereo sensing, instance-level segmentation, confidence-aware semantic occupancy mapping, and active viewpoint selection within a unified perception–action loop. Fig. 6: Planner performance in simulation (top) averaged across five symptomatic trees and in the lab setting (bottom). Curves show mean F1 score and ROI coverage over the first 30 viewpoints; shaded regions denote standard deviation across runs. 
+
+Our experiments demonstrate that active viewpoint se-lection can significantly improve inspection efficiency and detection performance in structured canopy environments. In particular, semantic-aware planning allows the system to revisit uncertain regions and refine disease detections while maintaining strong geometric coverage. Future work will focus on field deployment in com-mercial orchards to evaluate performance under real-world conditions. We also plan to investigate learning-based view-point selection strategies and extend the system to multi-tree mapping, additional disease cases, and integration of multispectral imaging. ACKNOWLEDGMENT This work was supported by the USDA NIFA SCRI program (2023–2027). The authors thank Professor Sr ¯ dan A´ cimovi´ c and his team at Virginia Polytechnic Institute, Professor Kari Peter and her team at Pennsylvania State Uni-versity, and members of the Kantor Lab at Carnegie Mellon University for their valuable collaboration and support. We also thank the growers at Rivendale Farms, Trax Farms, and Soergel Orchards for their assistance and feedback. REFERENCES [1] J. L. Norelli, A. L. Jones, and H. S. Aldwinckle, “Fire blight management in the twenty-first century: Using new technologies that enhance host resistance in apple,” Plant Disease , vol. 87, no. 7, pp. 756–765, 2003. [2] W. Sun, P. Gong, Y. Zhao, L. Ming, Q. Zeng, and F. Liu, “Current situation of fire blight in china,” Phytopathology , vol. 113, no. 12, pp. 2143–2151, 2023. [3] T. Van der Zwet and H. L. Keil, Fire Blight: A Bacterial Disease of Rosaceous Plants . US Department of Agriculture, 1979, no. 510. [4] A. Silwal, T. Parhar, F. Yandun, H. Baweja, and G. Kantor, “A robust illumination-invariant camera system for agricultural applications,” in 
+
+Proc. IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2021, pp. 3292–3298. [5] A. Hornung, K. M. Wurm, M. Bennewitz, C. Stachniss, and W. Burgard, “OctoMap: An efficient probabilistic 3D mapping framework based on octrees,” Autonomous Robots , 2013, software available at https://octomap.github.io. [Online]. Available: https: //octomap.github.io [6] H. Schoofs, S. Delalieux, T. Deckers, and D. Bylemans, “Fire blight monitoring in pear orchards by uav systems carrying spectral sensors,” 
+
+Agronomy , vol. 10, p. 615, 2020. [7] D. Xiao, Y. Pan, J. Feng, J. Yin, Y. Liu, and L. He, “Remote sensing detection algorithm for apple fire blight based on uav multispectral image,” Computers and Electronics in Agriculture , vol. 199, p. 107137, 2022. [8] H. Skoneczny, K. Kubiak, M. Spiralski, and J. Kotlarz, “Fire blight disease detection for apple trees: Hyperspectral analysis of healthy, infected and dry leaves,” Remote Sensing , vol. 12, p. 2101, 2020. [9] N. Bagheri, H. Mohamadi-Monavar, A. Azizi, and A. Ghasemi, “Detection of fire blight disease in pear trees by hyperspectral data,” 
+
+European Journal of Remote Sensing , vol. 51, pp. 1–10, 2018. [10] N. Bagheri, “Application of aerial remote sensing technology for detection of fire blight infected pear trees,” Computers and Electronics in Agriculture , vol. 168, p. 105147, 2020. [11] M. S. Mahmud, A. Zahid, L. He, D. Choi, G. Krawczyk, and H. Zhu, “Detection and infected area segmentation of apple fire blight using image processing and deep transfer learning,” Computers and Electronics in Agriculture , vol. 209, p. 107862, 2023. [12] M. Veres, C. Tarry, K. Grigg-McGuffin, W. McFadden-Smith, and M. Moussa, “Evaluation of multi-channel sensors and density esti-mation learning for detecting fire blight disease in pear orchards,” 
+
+Sensors , vol. 24, no. 16, p. 5387, 2024. [13] R. Linker and M. Dafny-Yalin, “Mapping fire blight cankers and autumn blooming in pear trees using Faster R-CNN,” Precision Agriculture , vol. 25, no. 1, pp. 396–411, Feb. 2024. [14] A. K. Burusa, E. J. van Henten, and G. Kootstra, “Attention-driven next-best-view planning for efficient reconstruction of plants and targeted plant parts,” Biosystems Engineering , vol. 246, pp. 248–262, 2024. [Online]. Available: https://www.sciencedirect.com/ science/article/pii/S1537511024001740 [15] A. K. Burusa, J. Scholten, X. Wang, D. Rapado-Rincón, E. J. van Henten, and G. Kootstra, “Semantics-aware next-best-view planning for efficient search and detection of task-relevant plant parts,” Biosystems Engineering , vol. 248, pp. 1–14, 2024. [Online]. Available: https://www.sciencedirect.com/science/article/pii/ S1537511024002204 [16] H. Freeman and G. Kantor, “Autonomous apple fruitlet sizing with next best view planning,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, May 2024, p. 15847–15853. [Online]. Available: http://dx.doi.org/10.1109/ ICRA57147.2024.10610226 [17] B. Wen, M. Trepte, J. Aribido, J. Kautz, O. Gallo, and S. Birchfield, “Foundationstereo: Zero-shot stereo matching,” 2025. [Online]. Available: https://arxiv.org/abs/2501.09898 [18] G. Jocher and J. Qiu, “Ultralytics yolo26,” 2026. [Online]. Available: https://github.com/ultralytics/ultralytics

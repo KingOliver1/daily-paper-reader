@@ -1,0 +1,683 @@
+Title: Bio-Inspired Event-Based Visual Servoing for Ground Robots
+
+URL Source: https://arxiv.org/pdf/2603.23672v1
+
+Published Time: Thu, 26 Mar 2026 00:20:36 GMT
+
+Number of Pages: 7
+
+Markdown Content:
+# Bio-Inspired Event-Based Visual Servoing for Ground Robots 
+
+Maral Mordad 1,∗, Kian Behzad 1,∗, Debojyoti Biswas 2, Noah J. Cowan 2,3,†, and Milad Siami 1,†
+
+Abstract — Biological sensory systems are inherently adaptive, filtering out constant stimuli and prioritizing relative changes, likely enhancing computational and metabolic efficiency. In-spired by active sensing behaviors across a wide range of animals, this paper presents a novel event-based visual servoing framework for ground robots. Utilizing a Dynamic Vision Sensor (DVS), we demonstrate that by applying a fixed spa-tial kernel to the asynchronous event stream generated from structured logarithmic intensity-change patterns, the resulting net event flux analytically isolates specific kinematic states. We establish a generalized theoretical bound for this event rate estimator and show that linear and quadratic spatial profiles isolate the robot’s velocity and position-velocity product, respec-tively. Leveraging these properties, we employ a multi-pattern stimulus to directly synthesize a nonlinear state-feedback term entirely without traditional state estimation. To overcome the inescapable loss of linear observability at equilibrium inherent in event sensing, we propose a bio-inspired active sensing limit-cycle controller. Experimental validation on a 1/10-scale autonomous ground vehicle confirms the efficacy, extreme low-latency, and computational efficiency of the proposed direct-sensing approach. 
+
+I. I NTRODUCTION 
+
+Biological sensors function primarily as relative detectors that attenuate constant (i.e., low-frequency or “DC”) stim-uli while emphasizing changes (“AC”) [1], a characteristic known as sensory adaptation. To prevent stationary objects from becoming “invisible” due to these high-pass sensors, animals execute continuous bursts of back-and-forth swim-ming motions [2]–[4] that convert static spatial gradients into detectable temporal signals [5]. Examples include electric fish [2], [3], [6], rodents actively whisking to induce friction-based micro-accelerations [7], insects relying on flight-driven optic flow [1], blind cave fish gliding to distort pressure waves [8], and the human visual system employing invol-untary microsaccades to prevent perceptual fading [9]. Such adaptive, high-pass sensing, while highly efficient and low-latency, poses significant design challenges for robotics. For example, in mobile robotics, conventional state estimation and control methods fail under these conditions, as proved in [10]. Traditional sensors, such as frame-based cameras, IMUs, and LiDAR, rely on power-hungry, absolute sensing. They capture data at fixed intervals regardless of  
+
+> 1Department of Electrical & Computer Engineering, Northeastern Uni-versity, Boston, MA 02115 USA (Emails:
+
+{mordad.m, behzad.k, m.siami }@northeastern.edu ).  
+
+> 2Laboratory for Computational Sensing and Robotics, Johns Hopkins University, Baltimore, MD 21218 USA (Email:
+
+dbiswas2@jhu.edu ).        
+
+> 3Department of Mechanical Engineering, Johns Hopkins University, Baltimore, MD 21218 USA (Email:
+
+ncowan@jhu.edu). 
+
+> ∗These authors contributed equally to this work.
+> †N. J. Cowan and M. Siami share senior authorship.
+
+whether a scene is dynamic or static. For this reason, replicat-ing bio-inspired principles is crucial for future developments, which requires a fundamental shift from these traditional methods to relative, event-driven sensing [11]–[13]. In this work, we employ a neuromorphic event camera, also known as a Dynamic Vision Sensor (DVS). Serving as a technological analog to biological vision, the DVS samples light based on scene dynamics rather than an arbitrary exter-nal clock [13]. Instead of capturing full images at fixed frame rates, each pixel operates independently and asynchronously. A pixel triggers a spike (an address-event) only when its local logarithmic brightness changes by a preset threshold, producing a continuous stream of event tuples containing the pixel coordinates, a microsecond-resolution timestamp, and the polarity of the change (brightness increase or decrease) [14], [15]. Consequently, the DVS offers several key advan-tages over standard cameras, including microsecond temporal resolution, high dynamic range (HDR), and immunity to mo-tion blur [13], [16]. Furthermore, by transmitting data exclu-sively during motion, the DVS performs inherent hardware-level compression, effectively filtering out redundant static backgrounds. Motivated by these biological principles, we aim to de-velop robust Event-Based Visual Servoing (EBVS) for em-bodied intelligent agents, such as ground robots, drones, and collaborative factory robots. EBVS entails moving either an event camera or the camera’s visual target such that the generated event stream drives the camera to a desired region [17]. Image-Based Visual Servoing (IBVS) is widely estab-lished in the literature, traditionally relying on frame-based cameras to extract and match geometric features against a stored “desired” view [14], [18], [19]. Kernel-Based Vi-sual Servoing (KBVS) [20], [21] bypasses explicit feature extraction and segmentation by applying a spatial kernel that processes the entire image as a continuous signal. This kernel-based paradigm serves as the foundational framework for our proposed approach to EBVS. To reduce computa-tional overhead, Garcia et al. [22] emulated an event-based camera to trigger IBVS updates only when tracked features crossed spatial boundaries. Similarly, Gil et al. [23] utilized event cameras for high-speed feature tracking, falling back to frame-based vision when necessary. Pushing toward fully event-driven perception, Muthusamy et al. [17] replaced con-ventional vision processing with event-based feature tracking while retaining traditional IBVS control laws. More recently, learning-based approaches have emerged; for example, Vinod et al. [24] employed deep neural networks to map fused RGB images and simulated event streams directly to motor 
+
+> arXiv:2603.23672v1 [cs.RO] 24 Mar 2026
+
+commands. In this work, we propose a purely event-driven and computationally efficient EBVS framework that applies a spatial kernel to predefined intensity patterns. The objective is to regulate the camera position to a desired region of the displayed pattern. Our approach avoids explicit feature extraction, feature tracking, and state estimation. In fact, it relies solely on the net number of events generated by the event camera, leading to a highly computationally effi-cient implementation. To maintain system observability and overcome sensory adaptation, we adapt the control-theoretic framework proposed in [10]. This allows us to formulate a direct sensor-to-motor active sensing control law with proven stability conditions. Our overall contribution is a novel EBVS approach that overcomes the lack of local observability inherent in event-based sensing using a bio-inspired, limit-cycle-based control law with guaranteed (local) exponential convergence 1.II. P ROBLEM FORMULATION AND MODELING 
+
+In this section, we describe the sensing and control problem for the proposed EBVS system and outline the experimental setup, assumptions, and modeling used in this study. The experimental platform consists of a Prophesee Evaluation Kit 4 (EVK4) [25], mounted on a ground vehicle. The vehicle used in this setup is the Quanser QCar [26], a 1/10-scale autonomous research platform. In our setup, the robot is constrained to move along the 
+
+x-axis of its body frame, while the camera faces a monitor displaying a horizontally exponential intensity profile. The overall experimental setup is illustrated in Figure 1. The camera frame is defined such that the z-axis points forward, the x-axis points to the left, and the y-axis points upward. Although the camera and robot frames are located at different points, their x-axes are aligned. This alignment is adopted to simplify the notation. Consequently, the variable x(t) denotes both the camera position and the robot position throughout the paper. The objective is to stabilize the camera position 
+
+x(t) at the desired region of the displayed pattern. 
+
+A. Event Camera Model and Event Processing 
+
+We model the event camera using a standard pinhole pro-jection. Let C p = [ px, p y , p z ]⊤ denote a 3D point expressed in the camera coordinate frame. The projection of this point onto the image plane with coordinates I u = [ u, v ]⊤ is given by 
+
+u = −fx
+
+px
+
+pz
+
++ ox, v = −fy
+
+py
+
+pz
+
++ oy ,
+
+where fx and fy are the focal lengths in pixels, and (ox, o y )
+
+denotes the principal point. Here, (u, v ) represent continuous image-plane coordinates, while the camera sensor samples this continuous domain at discrete pixel locations. The image coordinate system is defined such that u increases to the right and v increases downward.  
+
+> 1The GitHub repository provides access to video demonstrations, example codes, and datasets associated with this work: https://github.com/ SiamiLab/BioInspiredEBVS .
+
+In our setup, the camera moves strictly along the camera’s 
+
+x-axis, while maintaining a constant distance Z from the monitor. As the camera moves, the visual pattern shifts laterally across the image plane. The light intensity I(u, v, t )
+
+observed by a pixel at (u, v ) at time t can be expressed as 
+
+I(u, v, t ) = I0 (u + μ(t), v ) , (1) where I0(u, v ) indicates the light intensity of pixel (u, v )
+
+when the camera is located exactly at the origin ( x = 0 ). Based on the pinhole camera model μ(t) = − fx 
+
+> Z
+
+x(t), which represents the horizontal shift of the image pattern on the sensor induced by the camera translation x(t).In this work, we assume that the robot can move alongside a scene that exhibits an arbitrary horizontally exponential intensity profile. Accordingly, the reference intensity pattern 
+
+I0(u, v ) is modeled as 
+
+I0(u, v ) = exp  f (u), ∀v, (2) where f (u) represents the horizontal logarithmic intensity profile. Unlike a conventional camera, which directly mea-sures absolute intensity values as in (1) and (2), an event camera generates asynchronous events at the pixel level in re-sponse to changes in light intensity. An event e = ( u, v, p, t )
+
+is triggered when the change in the logarithm of the light intensity at a pixel exceeds a predefined threshold. Here, 
+
+p ∈ {− 1, 1} indicates the polarity of the brightness change (decrease or increase), and t is the timestamp recorded with microsecond resolution. Mathematically, this condition is expressed as 
+
+|∆ log I(u, v )| = | log I(u, v, t + ∆ t) − log I(u, v, t )| ≥ C, 
+
+where we assume the threshold for both positive and negative events has the same magnitude C.
+
+Definition 1 (Net Event Count): Let K ⊂ Z2 denote a specified region of pixels on a sensor array. Over a time interval [t, t +∆ t], let Npos and Nneg denote the total number of positive ( p = 1 ) and negative ( p = −1) events triggered within K, respectively. The net event count Nnet is defined as Nnet ≜ Npos − Nneg .Under the ideal generative event model, this discrete count is related to the logarithmic intensity change by 
+
+Nnet = X
+
+> (u,v )∈K
+
+∆ log I(u, v )
+
+C ,
+
+where I(u, v ) is the pixel intensity, ∆ log I(u, v ) is the change in logarithmic intensity over the interval ∆t, and 
+
+C > 0 is the contrast threshold. 
+
+Theorem 1: Let x(t) ∈ C2(R) denote the camera posi-tion with instantaneous linear velocity ˙x(t) and acceleration 
+
+¨x(t). Assume the camera observes a scene with an arbi-trary horizontally exponential intensity profile I0(u, v ) = exp( f (u)) , ∀v, where f ∈ C3(R). Let the event-counting kernel K consist of Nu × Nv pixels and be horizontally symmetric with respect to the principal point. During a sufficiently small time interval ∆t, the net event count Nnet Fig. 1. Experimental setup and control architecture. (A) A ground vehicle moves parallel to a monitor displaying quadratic and linear intensity patterns for an event camera. RGB axes denote the x, y, z coordinate frames for the robot, camera, and world (origin at the pattern’s stabilization target). (B) 
+
+> Closed-loop EBVS with active sensing: Net event counts from the stimuli regulate vehicle-driven camera motion to stabilize it at the desired center.
+
+is bounded by 
+
+|Nnet − M ∆t| ≤ Ltime ∆t2 + Lspace ∆t, (3) where the net event rate estimator M is evaluated at the image-plane coordinate μ(t) = − fx 
+
+> Z
+
+x(t) as 
+
+M ≜ − NuNv fx
+
+CZ ˙x(t)f ′(μ(t)) .
+
+The estimation error is bounded by a temporal constant 
+
+Ltime and a spatial constant Lspace , defined as 
+
+Ltime ≜   NuNv
+
+> 2C
+
+ "
+
+F (2) max 
+
+ fx 
+
+> Z
+
+vmax 
+
+2
+
++ F (1) max 
+
+ fx 
+
+> Z
+
+amax 
+
+ #
+
+,Lspace ≜   NuNv
+
+> C
+
+  N 2
+
+> u
+> 8
+
+  fx 
+
+> Z
+
+vmax 
+
+
+
+F (3) max ,
+
+where vmax and amax denote the maximum absolute ve-locity and acceleration of the robot, respectively. F (n)max =sup |f (n)(u)| represents the suprema of the spatial deriva-tives of the logarithmic intensity over the observed interval. 
+
+Proof: For a small interval ∆t, the change in loga-rithmic intensity at pixel coordinate (u, v ) can be expanded using a first-order temporal Taylor expansion ∆ log I(u, v ) =  
+
+> ddt
+
+log I(u, v, t ) ∆ t+R2(t, ∆t), where R2(t, ∆t) denotes the temporal Lagrange remainder [27]. Using (1) and (2), and applying the chain rule, the temporal derivative becomes  
+
+> ddt
+
+log I(u, v, t ) = f ′(u + μ(t)) ˙ μ(t). Because f ′ is evaluated at an offset u from μ(t), we perform a second-order spatial Taylor expansion of f ′ around μ(t) as f ′(u + μ(t)) =
+
+f ′(μ(t)) + uf ′′ (μ(t)) + S2(u, t ), where S2(u, t ) is the spa-tial Lagrange remainder. Substituting this into the temporal derivative and summing over all Nu×Nv pixels in the kernel 
+
+K yields the net event count as                 
+
+> Nnet = 1
+> C
+> X
+> (u,v )∈K
+> h
+> ˙μ(t) f′(μ(t)) + uf ′′ (μ(t)) + S2(u, t )∆t+R2
+> i
+> =M∆t+˙μ(t)∆ tf ′′ (μ(t))
+> C
+> X
+> (u,v )∈K
+> u+˙μ(t)∆ tC
+> X
+> (u,v )∈K
+> S2+1
+> C
+> X
+> (u,v )∈K
+> R2.
+
+Because the kernel K is horizontally symmetric, the lin-ear sum of horizontal coordinates vanishes ( P 
+
+> (u,v )∈K
+
+u =0). Isolating the estimation error leaves the two remain-der sums as |Nnet − M ∆t| ≤ | ˙μ(t)|∆tC
+
+P 
+
+> (u,v )∈K
+
+|S2| +
+
+> 1
+> C
+
+P 
+
+> (u,v )∈K
+
+|R2|.To bound the spatial error, based on the Lagrangian remainder S2(u, t ) = u2 
+
+> 2
+
+f ′′′ (ξ∗) for some ξ∗ ∈ (μ(t), μ (t) + 
+
+u). Note the maximum absolute pixel coordinate is umax = 
+
+> Nu
+> 2
+
+, ensuring u2 
+
+> 2
+
+≤ N 2 
+
+> u
+> 8
+
+. Applying the supremum F (3) max 
+
+across NuNv pixels yields Lspace ∆t. Similarly to bound the temporal error, R2(t, ∆t) = ∆t2 
+
+> 2
+
+[f ′′ (u + μ(ϵ∗))( ˙ μ(ϵ∗)) 2 +
+
+f ′(u + μ(ϵ∗)) ¨ μ(ϵ∗)] for some ϵ∗ ∈ (t, t + ∆ t). Maximizing this over the interval with vmax , amax , F (1) max , and F (2) max 
+
+yields Ltime ∆t2. This establishes the generalized bounds and completes the proof. 
+
+Example 1 (Quadratic Profile): For an intensity with a quadratic profile I0(u, v ) = exp( − u2 
+
+> 2σ2
+
+) for some non-zero constant σ ∈ R, the net event estimates the product of camera position and velocity. Defining f (u) = − u2 
+
+> 2σ2
+
+, the spatial derivatives are f ′(u) = − uσ2 and f ′′ (u) = − 1 
+
+> σ2
+
+. Notably, 
+
+f ′′′ (u) = 0 . Substituting f ′(μ(t)) = fx 
+
+> Zσ 2
+
+x(t) into M yields 
+
+MQuadratic = − NuNv f 2
+
+> x
+> CZ 2σ2
+
+| {z }
+
+> := Cq
+
+x(t) ˙ x(t). (4) Since F (3) max = 0 , the spatial bound is Lspace = 0 , safely recovering the purely temporal bound for the quadratic pro-file. Using f ′(u) and f ′′ (u), the temporal bound Ltime ∆t2
+
+can be explicitly evaluated, and by normalizing with Cq ∆t,this yields the bound 
+
+ v2max  
+
+> 2
+
++ ZN uamax 
+
+> 2fx
+
+
+
+∆t on the estimate of x(t) ˙ x(t) itself. 
+
+Example 2 (Linear Profile): If the scene exhibits a linear profile I0(u, v ) = exp( ku ) for some non-zero constant 
+
+k ∈ R, the net event count becomes strictly proportional to the camera’s instantaneous velocity. Furthermore, the spatial estimation error vanishes entirely, and the temporal error depends exclusively on the camera’s acceleration. Let 
+
+f (u) = ku . The spatial derivatives are constant or zero: 
+
+f ′(u) = k, f ′′ (u) = 0, and f ′′′ (u) = 0. Substituting f ′(μ(t)) = k into M yields 
+
+MLinear = − NuNv fxkCZ 
+
+| {z }
+
+> := Cl
+
+˙x(t). (5) Because the third derivative is exactly zero globally (F (3) max = 0), the spatial error bound evaluates to zero 
+
+Lspace = 0 . For the temporal error bound, the suprema of the first and second derivatives are F (1) max = |k| and F (2) max =0. Substituting these into the Ltime equation eliminates the velocity-squared term, leaving only the acceleration-dependent term as Ltime = |k|   NuNv
+
+> 2C
+
+  fx 
+
+> Z
+
+amax 
+
+
+
+.This demonstrates that for a linear profile, a perfectly symmetric kernel introduces no spatial approximation error, and temporal error arises only if the camera is accelerating. By normalizing Ltime ∆t2 with Cl∆t, we obtain the bound  
+
+> amax
+> 2
+
+∆t on the estimate of ˙x(t) itself. 
+
+B. Longitudinal Dynamics of the Robot 
+
+Following [28], the longitudinal dynamics of the robot (aka the camera’s motion) are governed by the DC motor model as ˙ω(t) = Kt  
+
+> JwRa
+
+Va(t) −
+
+ KtKv 
+
+> RaJw
+
++ BJw
+
+
+
+ω(t) − Tc 
+
+> Jw
+
+,where ω(t) is the motor’s angular velocity, Va(t) is the armature voltage, Kt is the torque constant, Jw is the equivalent inertia, Ra is the armature resistance, Kv is the back-emf constant, B is the viscous friction, and Tc
+
+represents Coulomb friction. The armature voltage and motor angular velocity relate to the input PWM duty cycle u(t) and robot linear velocity 
+
+˙x(t) via Va(t) = Vbat u(t) and ˙x(t) = Rw 
+
+> G
+
+ω(t), respectively. Here, Vbat is the nominal battery voltage, Rw is the wheel radius, and G is the transmission ratio. Substituting these relationships yields the system’s longitudinal dynamics 
+
+¨x(t) = −p1 ˙x(t) + p2u(t) − p3, (6) where p1 = KtKv 
+
+> RaJw
+
++ BJw , p2 = KtRw Vbat   
+
+> JwRaG
+
+, and p3 = Rw Tc 
+
+> JwG
+
+are lumped physical constants. 
+
+C. Synthesis of Event-Driven Feedback 
+
+With the robot’s longitudinal dynamics established in (6), the core control challenge is to regulate this system utilizing only the asynchronous event streams modeled in Section II-A. Conventional state observers are ill-suited for this task; formulating continuous-time estimators for asynchronous, relative neuromorphic data is highly complex, and more critically, the plant fundamentally loses local observability as the camera velocity approaches zero. Rather than attempting explicit state reconstruction, we leverage a dual-pattern vi-sual stimulus. By concurrently computing the event flux over a quadratic kernel ( K1) and a linear kernel ( K2), we indepen-dently estimate the position-velocity product x(t) ˙ x(t) via (4) and the instantaneous velocity ˙x(t) via (5). Multiplying these parallel streams allows us to directly synthesize the higher-order nonlinear feedback term, x(t) ˙ x(t)2, entirely within the sensor domain. The subsequent section details how this synthesized signal is embedded into a bio-inspired active sensing control law to actively overcome these fundamental observability limitations. III. A CTIVE SENSING STRATEGY 
+
+Prior research by Biswas et al. [10] demonstrated that systems of the form (6) with event-based outputs lose observability under linearization. Moreover, that study es-tablished that no dynamic output-feedback controller can asymptotically stabilize the origin of this class of systems [10, Proposition 3.1]. To overcome this limitation, the prior work by Biswas et al. [10] proposed stabilizing the system around a periodic orbit rather than an equilibrium. That paper considered a simplified, dimensionless mass-damper system to a limit cycle of fixed period. Here, we show how to apply that controller to the physical system (6) by stabilizing it to the tunable limit cycle as 
+
+ξ⋆(t) = ( x⋆(t), ˙x⋆(t)) =  a sin( ωt ), aω cos( ωt ),
+
+where a is the amplitude and ω is the oscillation frequency of the periodic motion. Assuming full knowledge of the parameters pi, i = 1 , 2, 3 in (6), the control input is chosen as 
+
+u = 1 
+
+> p2
+
+(p1aω cos( ωt ) − aω 2 sin( ωt ) + p3
+
+− K(x(t) ˙ x(t)2 − a3ω2 sin( ωt ) cos 2(ωt ))) . (7) where K is the output feedback gain. The first two terms provide feedforward excitation that counteracts damping and sustains informative motion necessary for observability [10], while the constant term p3 compensates the friction term in (6). The final nonlinear feedback terms vanish on the target orbit and penalize deviations from it. Together, these components stabilize the system to ξ⋆(t).Linearization of the system (6) with input (7) around ξ∗(t)
+
+yields 
+
+˙˜ξ = A(t) ˜ξ, where ˜ξ := ξ − ξ∗ (8) 
+
+A(t) := 
+
+ 0 1
+
+−δω 2 cos 2(ωt ) −p1 − δω sin(2 ωt )
+
+
+
+, (9) with ξ = ( x, ˙x)⊤ and the parameter δ defined as δ := Ka 2.The linearized dynamics are time-periodic with period 
+
+π/ω in the original time variable t (equivalently, π-periodic in the rescaled time τ = ωt ). 
+
+Theorem 2 (Extension from Biswas et al. [10]): The ori-gin of the system (8) is exponentially stable for 0 < δ ≤√ω2+4 p21−ω 
+
+> 2ω
+
+=: δ†.
+
+Proof: Consider a quadratic Lyapunov candidate func-tion, V ( ˜ξ(t)) given by 
+
+V ( ˜ξ(t)) = 12 ˜ξ(t)⊤P ˜ξ(t), P =
+
+ 1 1 
+
+> p1
+> 1
+> p1
+
+η
+
+
+
+, ηp 21 > 1. (10) The derivative of V along the trajectories of the linear system (8) is given by 
+
+˙V ( ˜ξ(t)) = − ˜ξ(t)⊤Q(t) ˜ξ(t), (11) where Q(t) := − 12 (P A (t) + A(t)⊤P ) is 
+
+" δω 2 
+
+> p1
+
+cos 2(ωt ) δ 
+
+> 2
+
+q12 (t) 
+
+> δ
+> 2
+
+q12 (t) ηp 1 − 1 
+
+> p1
+
++ ηδω sin(2 ωt )
+
+#
+
+,
+
+with q12 (t) = (ω/p 1) sin(2 ωt ) + ηω 2 cos 2(ωt ). Q (t) is positive semidefinite if both the trace and determinant are nonnegative. Imposing nonnegativity of the trace, we have: 
+
+Tr( Q) = δω 2 
+
+> p1
+
+cos 2(ωt ) + ηp 1 − 1 
+
+> p1
+
++ ηδω sin(2 ωt )
+
+≥ ηp 1 − 1 
+
+> p1
+
+− ηδω. (12) Thus if δ ≤ ηp 21−1 
+
+> ηp 1ω
+
+then Tr( Q) ≥ 0 ∀t. The determinant is 
+
+Det( Q) = − δω 2
+
+> 4p21
+
+cos 2(ωt ) B(t),
+
+where 
+
+B(t) := 4(1 − ηp 21) + δ (ηωp 1 cos( ωt ) − 2 sin( ωt )) 2 .
+
+Since − δω 2
+
+> 4p21
+
+cos 2(ωt ) ≤ 0 ∀t, with equality only at t =
+
+kπ/ω , k ∈ Z, it suffices to ensure that B(t) ≤ 0 for all time. Using 
+
+(ηωp 1 cos( ωt ) − 2 sin( ωt )) 2 ≤ (ηp 1ω)2 + 4 ,
+
+we obtain 
+
+B(t) ≤ − 4( ηp 21 − 1) + δ (ηp 1ω)2 + 4 .
+
+Therefore, a sufficient condition for B(t) ≤ 0, and hence for 
+
+Det( Q) ≥ 0 for all time, is 
+
+δ ≤ 4( ηp 21 − 1) 
+
+η2ω2p21 + 4 . (13) Let a := ηp 1ω > 0. Since (a − 2) 2 ≥ 0, we have 
+
+4
+
+a2 + 4 ≤ 1
+
+a .
+
+Therefore, 4( ηp 21 − 1) (ηp 1ω)2 + 4 ≤ ηp 21 − 1
+
+ηp 1ω ,
+
+and hence the determinant condition (13) implies the trace condition (12). Maximizing the right-hand side of (13) over 
+
+η yields 
+
+η† = 1
+
+p21
+
+1 + 
+
+r
+
+1 + 4p21
+
+ω2
+
+!
+
+, (14) with the corresponding bound 
+
+δ† =
+
+pω2 + 4 p21 − ω
+
+2ω . (15) Thus, choosing η = η† in our candidate Lyapunov function, then if 0 < δ ≤ δ†, det( Q(t)) ≥ 0 for all time. Let q(t) := λmin (Q(t)) ≥ 0. Since Q(t) is continuous and T -periodic, with T = π/ω , the function q(t) is also continuous and T -periodic. Moreover, because q(t) vanishes only at isolated times, it is not identically zero on [0 , T ], and hence 
+
+μ := 
+
+Z T
+
+> 0
+
+q(s) ds > 0.
+
+Now, since 
+
+˙V = − ˜ξ⊤Q(t) ˜ξ ≤ − q(t)| ˜ξ|2 ≤ − q(t)
+
+λmax (P ) ˜ξ⊤P ˜ξ, 
+
+the quantity g(t) := ˜ξ(t)⊤P ˜ξ(t) satisfies 
+
+˙g(t) ≤ − q(t)
+
+λmax (P ) g(t).
+
+Therefore, 
+
+g(t) ≤ g(0) exp 
+
+
+
+− 1
+
+λmax (P )
+
+Z t
+
+> 0
+
+q(s) ds 
+
+
+
+. (16) Using periodicity and the inequality ⌊x⌋ ≥ x − 1,
+
+Z t
+
+> 0
+
+q(s) ds ≥
+
+j tT
+
+k
+
+μ ≥ μT t − μ, 
+
+so 
+
+g(t) ≤ eμ/λ max (P )g(0) exp 
+
+
+
+− μT λ max (P ) t
+
+
+
+. (17) Since λmin (P )| ˜ξ|2 ≤ g(t) ≤ λmax (P )| ˜ξ|2, it follows that 
+
+| ˜ξ(t)| ≤ Ce −αt | ˜ξ(0) | (18) for some constants C, α > 0. Hence, the origin is exponen-tially stable, which completes the proof. IV. E XPERIMENTS AND SIMULATIONS 
+
+This section details the implementation and experimental validation of the proposed EBVS framework. 
+
+A. Motion Dynamics Parameters 
+
+The lumped parameters p1, p2, and p3 in (6) were iden-tified using the data-driven method from [28]. Due to a slight drivetrain asymmetry, the parameters differ between forward (p1, p 2, p 3) = (2 .530 , 33 .977 , 1.349) and backward 
+
+(2 .954 , 37 .497 , −1.510) motion. The proposed active sensing controller smoothly switches between directional parameters using the transition function 
+
+tanh( β ˙x).
+
+B. Net Event Count Estimator Results 
+
+To validate the theoretical estimators derived in Section II-A, a dual-pattern stimulus was presented to the event camera, as illustrated in Figure 2. The stimulus comprises a quadratic intensity profile in the upper region and a linear profile in the lower region of the display. By defining two spatially distinct kernels, K1 and K2, corresponding to these regions, the net event count within K1 provides an estimate of the position-velocity product, x(t) ˙ x(t), while the net count within K2
+
+independently estimates the instantaneous velocity, ˙x(t).To determine the lumped constants for the estimators 
+
+MQuadratic and MLinear defined in (4) and (5), where the lumped constants correspond to Cq ∆t and Cl∆t, respec-tively, we employed a data-driven approach. These param-eters were identified by minimizing the least-squares error between the measured net event counts and the corresponding kinematic states: the position-velocity product x(t) ˙ x(t) for the quadratic profile and instantaneous velocity ˙x(t) for the Fig. 2. (A) Dual-pattern display with quadratic (top) and linear (bottom) intensity profiles. (B) Corresponding accumulated event stream, where white and blue dots indicate positive and negative polarity events, respectively. The robot’s motion to the right relative to the pattern generates the observed events. Red rectangles denote the kernels K1 and K2.      
+
+> Fig. 3. Event-based state estimation vs. ground truth. Top: x(t) ˙ x(t)from
+> K1. Bottom: ˙x(t)from K2. Shaded regions indicate theoretical bounds. Ground truth for the robot’s position is provided by an array of six overhead motion capture cameras, while ground truth velocity is measured directly via the robot’s onboard wheel encoders.
+
+linear profile. Figure 3 illustrates the resulting estimates alongside their ground-truth values and the theoretical error bounds in (3). In this experiment, the robot executed a stochastic oscillatory motion to evaluate estimator perfor-mance across a broad operational envelope. During each forward and backward phase, the maximum velocity and target position were randomized. This approach ensures that the net event count estimators are validated against a diverse range of kinematic profiles. To validate the robustness of the proposed net event count estimator across various operational conditions, we evaluated its performance while varying the spread of the quadratic profile ( σ), the slope coefficient of the linear profile ( k), and the maximum allowed robot velocity vmax , which also affects the maximum acceleration amax through the actuator limits. The results of these scenarios are summarized in Table I. Estimation accuracy is quantified using the length-normalized L2 norm of the discrete error vectors. Specif-ically, let e ∈ RNs represent the sample-wise difference between the estimated and ground-truth signals over Ns total samples. The average estimation errors for the quadratic and linear profiles, denoted as ∥eq∥ and ∥el∥ respectively, are formally calculated as 1 
+
+> Ns
+
+∥e∥2. In these trials, the maximum robot velocity vmax was systematically varied because it                                                             
+
+> TABLE I ESTIMATION ERRORS BY TARGET PROFILE AND VELOCITY
+> Trial Parameters Results
+> σk(×10 −3)vmax amax (≈)∥eq∥∥el∥
+> 1330 1.299 0.45 20.000807 0.004303
+> 2330 1.299 0.65 30.001573 0.006937
+> 3330 2.205 0.45 20.000649 0.003578
+> 4330 2.205 0.65 30.001657 0.007203
+> 5430 1.299 0.45 20.000994 0.004303
+> 6430 1.299 0.65 30.001491 0.006356
+> 7430 2.205 0.45 20.000985 0.004740
+> 8430 2.205 0.65 30.001532 0.007376
+
+can be directly regulated via the underlying motor control commands. As demonstrated in the table, the magnitude of the estimation errors ∥eq∥ and ∥el∥ exhibits a strong, direct dependence on vmax and amax . Conversely, the errors remain largely invariant to changes in the displayed pattern parameters, specifically the spread σ and the linear slope k.This empirical observation validates our proposed theoreti-cal framework, confirming that the estimator’s accuracy is fundamentally bounded by the temporal kinematics of the sensor rather than the spatial characteristics of the target. 
+
+C. EBVS with Active Sensing 
+
+Using the dual-displayed pattern, we estimate x(t) ˙ x(t) and 
+
+˙x(t) directly from the net event counts to generate feedback for the control law (7). Figure 4(A) shows the closed-loop response, where the robot stabilizes around the center of the quadratic profile (i.e., x = 0 ). For this trial, the reference amplitude and oscillation frequency of the periodic motion are set to a = 0 .18 and ω = 2 π/ 1.5, respectively. Also, the output gain is set to K = 1 .5, yielding δ = 0 .0486 .Figure 4(B) illustrates a scenario in which the center of the quadratic profile is shifted over time, thereby changing the stabilization point (i.e., x = 0 ). Specifically, the target is switched between offsets of −0.085 m and 0.085 m relative to the monitor center. For clarity in reporting, the ground-truth position is expressed in a fixed global frame defined at the center of the monitor, as measured by the motion capture system, even though the controller origin varies over time. For this trial, the same parameter values are used. V. C ONCLUSION AND FUTURE WORK 
+
+This paper presented a purely event-driven, bio-inspired visual servoing framework that bypasses computationally expensive feature extraction by directly coupling spatial intensity patterns with the net event rate of a dynamic vision sensor. By demonstrating that specific spatial profiles isolate distinct kinematic states, we successfully synthesized direct nonlinear state feedback and maintained system observability at equilibrium using a limit-cycle active sensing controller. Future work will focus on extending this framework to multi-dimensional visual servoing and exploring its robustness against dynamic targets in unstructured environments. A limitation of the current approach is that it relies on a spe-cially designed visual scene and simple rectangular kernels, but future work will investigate how to relax the former assumption by using richer kernel geometries as in prior Fig. 4. Closed-loop EBVS response for (A) fixed and (B) time-varying stabilization points. In both cases, in the left panel, the top plot shows position and the bottom plot shows velocity, with the desired oscillation radius a indicated by dashed black lines. The right panels present the phase portraits, where green and red markers denote the start and end of the trajectory, respectively. 
+
+work for traditional cameras [20]. Furthermore, we plan to investigate alternative active sensing control architectures to optimize the trade-off between sensory effort and tracking ac-curacy. Preliminary investigations indicate that replacing the 
+
+x ˙x2 nonlinear feedback with a lower-order x ˙x formulation, augmented by an integral control component, yields highly promising results for improving steady-state error rejection and overall system efficiency. VI. A CKNOWLEDGMENT 
+
+This work was supported by the Office of Naval Research, United States, under grant N00014-21-1-2431 to NJC and MS, the National Institutes of Health, United States, under grant R01NS147767 to NJC, and the U.S. National Science Foundation under grant award 2208182 to MS. REFERENCES [1] G. K. Taylor and H. G. Krapp, “Sensory systems and flight stability: what do insects measure and why?” Adv Insect Physiol , vol. 34, pp. 231–316, 2007. [2] S. A. Stamper, E. Roth, N. J. Cowan, and E. S. Fortune, “Active sensing via movement shapes spatiotemporal patterns of sensory feedback,” J Exp Biol , vol. 215, no. 9, pp. 1567–1574, 2012. [3] D. Biswas, L. A. Arend, S. A. Stamper, B. P. V´ agv¨ olgyi, E. S. Fortune, and N. J. Cowan, “Closed-loop control of active sensing movements regulates sensory slip,” Curr Biol , vol. 28, no. 24, pp. 4029–4036, 2018. [4] D. Biswas, A. Lamperski, Y. Yang, K. Hoffman, J. Guckenheimer, E. S. Fortune, and N. J. Cowan, “Mode switching in organisms for solving explore-versus-exploit problems,” Nat Mach Intell , vol. 5, no. 11, pp. 1285–1296, 2023. [5] M. Nelson, Z. Xu, and J. Payne, “Characterization and modeling of p-type electrosensory afferent responses to amplitude modulations in a wave-type electric fish,” J Comp Physiol A , vol. 181, no. 5, pp. 532–544, 1997. [6] C. Chen, T. D. Murphey, and M. A. MacIver, “Tuning movement for sensing in an uncertain world,” eLife , vol. 9, p. e52371, 2020. [7] B. Mitchinson, R. A. Grant, K. Arkley, V. Rankov, I. Perkon, and T. J. Prescott, “Active vibrissal sensing in rodents and marsupials,” Philos Trans R Soc Lond B Biol Sci , vol. 366, no. 1581, pp. 3037–3048, 2011. [8] S. P. Windsor, S. E. Norris, S. M. Cameron, G. D. Mallinson, and J. C. Montgomery, “The flow fields involved in hydrodynamic imaging by blind mexican cave fish astyanax fasciatus . Part I: open water and heading towards a wall,” J Exp Biol , vol. 213, no. 22, pp. 3819–3831, 2010. [9] M. Rucci, R. Iovin, M. Poletti, and F. Santini, “Miniature eye move-ments enhance fine spatial detail,” Nature , vol. 447, no. 7146, pp. 852–855, 2007. [10] D. Biswas, E. D. Sontag, and N. J. Cowan, “An exact active sensing strategy for a class of bio-inspired systems,” Eur J Control , vol. 86, p. 101361, 2025. [11] R. Pfeifer and J. Bongard, How the body shapes the way we think: a new view of intelligence . MIT press, 2006. [12] R. Pfeifer, F. Iida, and G. G´ omez, “Morphological computation for adaptive behavior and cognition,” in International Congress Series ,vol. 1291. Elsevier, 2006, pp. 22–29. [13] G. Gallego, T. Delbr¨ uck, G. Orchard, C. Bartolozzi, B. Taba, A. Censi, S. Leutenegger, A. J. Davison, J. Conradt, K. Daniilidis et al. , “Event-based vision: A survey,” IEEE Trans Pattern Anal Mach Intell , vol. 44, no. 1, pp. 154–180, 2020. [14] D. Kragic, H. I. Christensen et al. , “Survey on visual servoing for ma-nipulation,” Computational Vision and Active Perception Laboratory, Fiskartorpsv , vol. 15, p. 2002, 2002. [15] P. Lichtsteiner, C. Posch, and T. Delbruck, “A 128×128 120 db 15 μslatency asynchronous temporal-contrast vision sensor,” IEEE J Solid-State Circuits , vol. 43, no. 2, pp. 566–576, 2008. [16] C. Posch, T. Serrano-Gotarredona, B. Linares-Barranco, and T. Del-bruck, “Retinomorphic event-based vision sensors: bioinspired cam-eras with spiking output,” Proc IEEE , vol. 102, no. 10, pp. 1470–1484, 2014. [17] R. Muthusamy, A. Ayyad, M. Halwani, D. Swart, D. Gan, L. Senevi-ratne, and Y. Zweiri, “Neuromorphic eye-in-hand visual servoing,” 
+
+IEEE Access , vol. 9, pp. 55 853–55 870, 2021. [18] N. J. Cowan, J. D. Weingarten, and D. E. Koditschek, “Visual servoing via navigation functions,” IEEE Trans Robotics , vol. 18, no. 4, pp. 521–533, 2002. [19] S. Hutchinson, G. D. Hager, and P. I. Corke, “A tutorial on visual servo control,” IEEE Trans Robotics , vol. 12, no. 5, pp. 651–670, 2002. [20] V. Kallem, M. Dewan, J. P. Swensen, G. D. Hager, and N. J. Cowan, “Kernel-based visual servoing,” in Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS) . IEEE, 2007, pp. 1975–1980. [21] J. P. Swensen, V. Kallem, and N. J. Cowan, “Empirical characterization of convergence properties for kernel-based visual servoing,” in Visual Servoing via Advanced Numerical Methods . Springer, 2010, pp. 23– 38. [22] G. J. Garcia, J. Pomares, F. Torres, and P. Gil, “Event-based visual servoing,” in Proc. 10th Int. Conf. Informatics in Control, Automation and Robotics (ICINCO) , 2013, pp. 307–314. [23] P. Gil, G. J. Garc´ ıa, C. Mateo, and F. Torres, “Active visual features based on events to guide robot manipulators in tracking tasks,” IFAC Proc Vol , vol. 47, no. 3, pp. 11 890–11 897, 2014. [24] K. Vinod, P. J. Ramesh, B. Chakravarthi et al. , “Sebvs: Synthetic event-based visual servoing for robot navigation and manipulation,” 
+
+arXiv preprint arXiv:2508.17643 , 2025. [25] Prophesee. (2024) Prophesee metavision evk4 hd event-based vision sensor. Accessed: 2025-02-10. [Online]. Available: https: //docs.prophesee.ai/stable/hw/evk/evk4.html [26] Q. Inc., “QCar: Sensor-Rich Autonomous Vehicle for Self-Driving Applications,” https://www.quanser.com/products/qcar/#details, 2024. [27] C. Dym, Principles of mathematical modeling . Elsevier, 2004. [28] C. Caponio, P. Stano, R. Carli, I. Olivieri, D. Ragone, A. Sorniotti, P. Gruber, and U. Montanaro, “Modeling, positioning, and deep rein-forcement learning path following control of scaled robotic vehicles: design and experimental validation,” IEEE Trans Autom Sci Eng ,vol. 22, pp. 9856–9871, 2024.

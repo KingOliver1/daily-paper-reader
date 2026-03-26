@@ -1,0 +1,920 @@
+Title: Bayesian Active Object Recognition and 6D Pose Estimation from Multimodal Contact Sensing
+
+URL Source: https://arxiv.org/pdf/2603.21410v1
+
+Published Time: Tue, 24 Mar 2026 01:54:01 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# Bayesian Active Object Recognition and 6D Pose Estimation from Multimodal Contact Sensing 
+
+Haodong Zheng 1, Gabriele M. Caddeo 2, Andrei C. Jalba 1, Wijnand A. IJsselsteijn 1,Lorenzo Natale 2, Raymond H. Cuijpers 1F/T sensor GelSight mini sensor 
+
+Fig. 1: Side-by-side comparison showing (left) the calibrated simulated setup, (center) its real-world counterpart, and (right) the corresponding results. Our framework leverages rich information from robot motion, a force torque sensor and GelSight sensor to perform active object recognition and pose estimation within a few touches (actions). The blue points on the simulated setup figure represents the swept volume of the robot arm, the middle figure shows the tactile image from GelSight, where a contact surface type and a contact patch is obtained. The blue shape in the results indicates the ground truth of the object class and pose, while the red shape indicates the MAP estimation of the object class and pose. The points with red normals are the contact points extracted from the GelSight sensor, while the points with green normal vectors are the contact points estimated from the force torque signals. 
+
+Abstract —We present an active tactile exploration framework for joint object recognition and 6D pose estimation. The proposed method integrates wrist force/torque sensing, GelSight tactile sensing, and free-space constraints within a Bayesian inference framework that maintains a belief over object class and pose during active tactile exploration. By combining contact and non-contact evidence, the framework reduces ambiguity and improves robustness in the joint class-pose estimation problem. To enable efficient inference in the large hypothesis space, we employ a customized particle filter that progressively samples particles based on new observations. The inferred belief is further used to guide active exploration by selecting informative next touches under reachability constraints. For effective data collection, a motion planning and control framework is developed to plan and execute feasible paths for tactile exploration, handle unexpected contacts and GelSight-surface alignment with tactile servoing. We evaluate the framework in simulation and on a Franka Panda robot using 11 YCB objects. Results show that incorporating tactile and free-space information substantially improves recog-nition and pose estimation accuracy and stability, while reducing the number of action cycles compared with force/torque-only baselines. Code, dataset, and supplementary material will be made available online. 
+
+I. I NTRODUCTION 
+
+# ROBOTS that operate outside carefully engineered factory settings inevitably have to deal with uncertainty: they often do not know which object they are interacting with, where it is located, or how it is oriented, and visual sensing is frequently compromised by occlusions, specularities, or clutter. In these conditions, physical contact is not merely an exceptional event to be avoided, but a rich source of information. Using touch geometric and material properties can be recognised and object’s can be inferred [1]. Similar tactile capabilities are highly desirable for robotic platforms, since accurate object identity and pose estimates are critical for grasp planning and dexterous manipulation [2]. Yet, despite its potential, contact information is often un-derused. In many systems, “contact” is treated as a binary signal (contact/no contact) [3] or, at best, as a sparse set of contact points inferred from wrist force/torque (F/T) mea-surements. Vision-based approaches to object recognition and pose estimation are widely deployed, but their performance can degrade significantly under occlusion and poor lighting conditions [4]. Meanwhile, the emergence of different tactile 
+
+> arXiv:2603.21410v1 [cs.RO] 22 Mar 2026
+
+sensing technologies [5], [6], [7] provides an alternative source of perception that is largely insensitive to these visual failure modes. In particular, vision-based tactile sensors [8] such as GelSight [9], GelSlim [10], [11] and DIGIT [12], [13] can recover fine-grained local surface geometry at contact and, in many cases, additional cues such as force-related signals and texture [14], [15]. However, tactile observations are inherently local: each contact patch covers only a small region, and relying on tactile sensing alone makes it challenging to recover global context without actively collecting information across multiple touches. Crucially, contact does not yield a single type of measure-ment; instead, it produces a multimodal bundle of signals that encode different aspects of the environment. Firstly, interaction forces and torques describe how the environment resists the robot’s motion and can be used to infer the line of action of contact and assess the plausibility of hypothesized object poses. Second, vision-based tactile sensing provides dense, local geometric information (contact patches, normals, and local surface structure) that is difficult to obtain reliably with external cameras at close range. Third, and often overlooked, the absence of contact is informative: when the robot moves through space without colliding, it acquires “negative” evi-dence that the object cannot occupy that region. This free-space information can dramatically prune the set of feasible object hypotheses, especially early in exploration when uncer-tainty is large. Together, force interaction, tactile geometry, and free-space constraints provide complementary evidence that is rarely integrated in a unified perception pipeline, despite its potential to reduce ambiguity efficiently. Since a single tactile measurement only provides local information, ambiguity has to be resolved by actively taking multiple measurements. As a result, the robot must decide where to touch next, plan safe motions in the presence of uncertain object pose, and maintain controlled contact to obtain stable, informative tactile images. In this paper, we argue that robust object recognition and 6D pose estimation in the real world requires treating contact as a multimodal sensing event and fusing its complementary signals in a unified inference and control loop. We propose an active tactile exploration framework that combines (i) wrist force/torque measurements, (ii) tactile contact patches from a GelSight-class sensor, including contact-type labels (e.g., planar, edge, corner) that capture local surface structure, and (iii) motion-derived free-space “negative contact” information. At each time step, the tactile sensor provides a contact area and oriented contact observations, and the contact-type label is used to modulate the likelihood (e.g., down-weighting normal consistency near edges/corners where the signed distance field (SDF) gradient is ill-defined). These measurements are integrated into a Bayesian pipeline based on a particle filter that jointly estimates object class and pose. Compared to approaches that rely on a single contact signal, the proposed fusion leverages both positive evidence (where contact occurs) and negative evidence (where the robot has moved without contact) to reduce uncertainty more rapidly. To make inference tractable in a large class–pose space, we approximate the posterior with a particle-based representation and employ point-pair-feature-based proposal heuristics that progressively concentrate samples around plausible hypotheses as new observations arrive. Based on the current estimate, the framework actively selects the next target point of interest on the maximum a posterior (MAP) hypothesis to acquire new data, while accounting for reachability and previously unreachable targets. We close the loop with a control stack that plans collision-free motions to pre-touch configurations and executes contacts with compliance. In addition, we use tactile servoing to align the tactile sensor with the object surface and center the contact patch on the sensor, improving data quality and robustness under model mismatch. We evaluate the full autonomous pipeline in simulation and on a real Franka Panda robot using 11 YCB [16] objects, and show that multimodal contact fusion enables accurate object recognition and 6D pose estimation with only a small number of action cycles (4 /6touches). Fig. 1 shows the simulated and real-world scenarios with an example of MAP estimation of object class and pose. The main contributions of this work are threefold. First ,we formulate a unified probabilistic framework that combines force-based contact constraints, tactile surface geometry (in-cluding contact-type information) and free-space constraints, explicitly leveraging both positive and negative evidence from physical interaction. Second , we present an active exploration and control pipeline that realizes informative touches in prac-tice, combining reachability-aware target selection, motion planning, compliant execution, and tactile servoing for stable contact data acquisition. Third , we demonstrate in simulation and on a real Franka Panda robot that integrating the full spectrum of contact-derived signals reduces the number of action cycles required for correct classification and improves pose accuracy and stability compared to baselines that use only subsets of these sensing modalities. II. R ELATED WORK 
+
+Our work is closely related to recent works that employ tactile sensing in Bayesian-based object recognition, pose estimation, and active tactile exploration. Static tactile object recognition was tackled in [17], where they recognize grasped object with an almost fully sensorized hand using deep learn-ing technique. Other approaches address the problem on static conditions focusing on small objects [18], [19]. Previous work approached the object recognition problem based on material properties. In this context, [20], [21], [22], [23] relied on properties such as stiffness, texture, thermal conductivity, and softness to distinguish between different objects, while our method focuses on object recognition with geometric informa-tion. Pose estimation from single touch was tackled in [24], [25], where a perception model was trained in simulation to estimate a probability distribution over possible object poses given tactile data. In [26] the authors leverage tactile sensing to infer poses compatible with the surface touched. Because tactile observations are inherently local and sparse, a single touch may not sufficiently reduce uncertainty over object class and 6D pose, motivating belief updates from sequential tactile measurements. Bayesian filtering was employed in [27] to fuse proprioception and touch and estimate both the location of contacts and the in-hand object pose. Some researchers used methods more in line with our work with touch-based pose estimation of objects. Koval et al. [28] proposed the manifold particle filter by adaptively sampling particles that reside on the contact manifold to increase sampling efficiency. In [29] the authors proposed the Scaling Series algorithm, combining the Bayesian Monte Carlo technique coupled with annealing, to refine the posterior distribution of the 6-degree-of-freedom (DOF) pose through multiple stages with a small number of particles at each stage. Vezzani et al. [30] proposed using a memory unscented Kalman filter (MUKF) to cover the 6-DOF pose space with a small number of particles, where each particle is treated as a Gaussian distribution instead of a discrete sample. Although the methods are quite efficient, the works by [28], [29], [30] were confined to pose estimation. As they limited their scope to the pose estimation of a known object, multi-class classification was not addressed in their work. Vezzani et al. [31] extended their work on pose estimation [30] to address object recognition and pose estimation simultaneously by applying the localization scheme to multiple object classes and selecting the object class with the smallest localization error. [32] proposes a unified Bayesian framework for active tactile object recognition, pose estimation, and shape reconstruction using object priors under idealized assumptions. As a largely theoretical study, it models the tactile sensor as a point contact and does not exploit the multimodal signals available in our setting, including GelSight observations, wrist force/torque measurements, and motion-derived free-space information. Active data acquisition is crucial to our approach and strongly affects recognition and pose estimation performance. Similarly to our approach, an active tactile perception al-gorithm was devised in [33], leveraging contour tracing to recognize the object. In [34] the authors introduce an ac-tive exploration approach based on reinforcement learning to precisely reconstruct the shape of objects using vision-based tactile sensors. In [35] the authors devise a novel exploration strategy to simultaneously detect symmetries in a 3-D object and use this information to enhance shape estimation, lever-aging the Gaussian Process (GP). Similarly, Driess [36], [37] et. al. used the GP posterior variance and differential entropy to guide the active exploration of robot fingers on surface of an object for shape reconstruction. The authors of [3] expand the 2D problem of [38] with a co-training framework for exploration and decision making to 3D object recognition with tactile signals. Instead of adopting data-hungry reinforcement-learning approaches or GP-based planners with substantial computational overhead, we propose a lightweight planning and control stack with a simple but effective target-point selection strategy for active data acquisition, tailored to the physical constraints of our hardware and workspace. III. M ETHOD 
+
+The goal of this paper is to incorporate the tactile informa-tion made available by the vision-based tactile sensor, force torque sensor and robot proprioception to achieve fast active object recognition and pose estimation with a real robot setup. On top of that, a motion planning and control framework is developed and integrated with the Bayesian framework to perform active data acquisition using a Franka Emika panda robot arm with a force torque sensor and a GelSight tactile sensor mounted as the end effector. This section provides a detailed description of all the components shown in Fig. 2. Firstly, a description of the data extraction methods for the GelSight Sensor, force torque sensor and robot motion is given. Then the derivation of the Bayesian probabilistic model used to fuse the extracted data for object class and pose inference is presented. Lastly, implementation details on the target point selection scheme and the developed motion planning and control framework for active data collection are given. The world frame in this study is defined as the base frame of the robot arm, the estimated object pose are expressed in the world frame. 
+
+A. Data processing and feature extraction 1) Data extraction from GelSight Mini: To refine joint estimation of object class and pose, we use contact information from GelSight tactile sensors, focusing on the local geometric features of the surface in contact. From a GelSight Mini sensor, a tactile image is obtained based on the force distribution at the contact patch, from their tactile image we reconstruct surface normals and depth using the GelSight pipeline [39], and form an oriented point cloud; in simulation we use TACTO-generated depth [40]. For each contact patch, we retain points deeper than 0.5 mm, downsample the points to 10 points per patch for efficiency, and transform them to the world frame via forward kinematics before using them for Bayesian inference. In parallel, a contact classifier [41] predicts one of four local contact types (flat, curved, edge, corner). The oriented points and contact label are then used as observations to infer object class and pose. 
+
+2) Contact Estimation with Force Torque Sensor: Precise GelSight alignment is not always feasible due to kinematic and collision constraints. We therefore introduce a force/torque-based contact estimation module that uses wrench measure-ments and the known end-effector geometry to infer the contact point during collisions. Unlike with the Gelsight sensor, this method assumes a single point contact with no free moment, enabling real-time estimation. While accuracy degrades when multiple simultaneous contacts occur (e.g., in concave regions), the estimates remain informative. A graphical example of contact location estimation based on force torque readings is given in Fig. 3. To estimate the contact location given the force reading F = [ Fx, Fy, Fz] and torque reading T = [ Tx, Ty, Tz] from the force torque sensor, we calculate the effective arm vector l0 by 
+
+l0 = F × T
+
+|| F|| 2 (1) For each vertex x on the end effector, we calculate its projection on the effective arm vector direction, 
+
+l(x) = x · l0
+
+|| l0|| 2 l0 (2) The distance between l(x) and l0, i.e., ∥l(x) − l0∥, measures how well a candidate vertex x explains the measured wrench. Fig. 2: Overview of the proposed system. The system processes measurements from the GelSight sensor, the force/torque sensor, and robot proprioception to extract contact points and contact-type labels, and to build a free-space map. These observations are then fed to a customized particle filter, which performs Bayesian inference over object class and 6D pose. The particle filter proposes new particles conditioned on the incoming observations, approximates their weights, and mixes them with the existing particle set for subsequent belief updates, yielding both the MAP estimate and the posterior distribution. The MAP estimate is used to select the next target point and approach direction for data collection. Given the target point and approach direction, our planning and control stack generates and executes a trajectory with compliance, and aligns the GelSight sensor with the contact surface once contact is detected. Each module shown in the figure is described in detail in the Section III. Force Torque Sensor  FT sensor origin  
+
+> Candidate contacts
+> Sensed Torque
+> Effective arm
+> Sensed Force
+> Candidate contact normals
+
+Fig. 3: Example of force/torque-based contact localization. The cross indicates the outward direction of the measured torque T. From the measured wrench (F, T), two candidate contact points x1 and x2 are computed. The estimate x∗ is chosen as x1 since ∠(n1, F) > 135 ◦ while ∠(n2, F) < 135 ◦.However, minimizing ∥l(x) − l0∥ alone typically yields two candidate contact locations on a convex body with different surface normals. We therefore incorporate normal–force con-sistency to disambiguate the solution. Assuming the friction coefficient μ between the end effector and the object is less than 1, the reaction force direction −F
+
+must lie within the friction cone. Using the conservative bound 
+
+μ < 1 implies the angle between −F and the contact normal 
+
+n(x) should be smaller than 45 ◦. We estimate the contact location as 
+
+x∗ = arg min 
+
+> x∈Ve
+
+∥l(x) − l0∥ + λ 1
+
+ n(x) · (−F)
+
+∥F∥ < cos 
+
+ π
+
+4
+
+
+
+, (3) where 1[·] is an indicator function. The penalty weight λ
+
+is chosen such that violating the friction-cone constraint is penalized equivalently to a 1 m displacement in the effective moment arm. The estimated contact location x∗ is then transformed from the F/T sensor frame to the world frame using forward kinematics and passed to the Bayesian inference framework. Contact estimation is performed only when ∥F∥ > 2 N to ensure sufficient signal-to-noise ratio. To reduce variance in the estimated contact position, we apply a sliding-window average over the 10 most recent predictions. 
+
+3) Free space carving with robot motion: As the robot moves, its end-effector sweeps out a volume that certifies free space. This information could be leveraged to rule out object classes and pose hypotheses that violate the non-penetration constraints with the free space. To store and update the free space carved out by the robot, we maintain a 3D voxel grid map of the workspace. The workspace is assumed to be 1m x 1m x 1m centered at (0,0.5,0.5) in the base frame of the robot. It is discretized into a (200 × 200 × 200 ) grid map, each grid is of size (5mm × 5mm × 5mm ). The map is initialized to zero and updated at 60 Hz using the current end-effector volume. Let Ve denote a set of vertices sampled on the last two links of the robot arm and the end-effector geometry; we mark all voxels containing any vertex as free 
+
+mr(x) = 1, ∀x ∈ Ve. (4) Here mr(x) indexes the voxel containing x, Any voxel with value greater than 0 is treated as free space and used to reject object class/pose hypotheses that would intersect it. 
+
+B. Bayesian joint estimation of object class and object pose 
+
+We formulate the joint estimation of the object class and object pose as a Bayesian inference problem. 
+
+Latent variables: object class c and object pose p, concate-nated into a vector z ← [c, p].
+
+Object priors: We represent each object in the form of a signed distance field (SDF). Given an object class c and object pose p, the predicted Euclidean signed distance value bds from a point x to the object surface is given by its signed distance function 
+
+bds := f (x, z), (5) 
+
+bds = 0 on surface 
+
+bds > 0 outside object 
+
+bds < 0 inside object (6) The predicted surface normal bn at a contact point x can be obtained through differentiation, 
+
+bn = ∇x f (x, z). (7) 
+
+Known environment constraints: In this study, experiments are performed on a table in front of the robot arm, which serves as the floor of the environment. We assume the table height is known. Under gravity, the object should rest on the table; thus it should neither float above nor penetrate the tabletop. We denote these tabletop constraints by E and write p(E | z)
+
+for the likelihood that E is satisfied given z. These constraints are enforced at every time step. 
+
+Input: At time step t, the robot may receive oriented contact points from the GelSight sensor, (Xgt , Ngt ), oriented contact points from the force/torque sensor, (X ft , N ft ), and the free-space map Mrt , where superscripts g, f , and r denote GelSight, FT sensing, and robot motion, respectively. We represent each oriented point as a single observation 
+
+di,t ≜ xi,t , ni,t
+
+ with xi,t ∈ Xt and ni,t ∈ Nt , and collect all observations in Dt . Superscripts are used to distinguish sources (e.g., g vs. f ); when omitted, the notation refers to the union of all contacts. 
+
+Assumption: The object remains stationary during tactile exploration. 
+
+Goal: Estimate the posterior distribution of the latent variables 
+
+p(z|Mr1: T , Dg 
+
+> 1: T
+
+, D f 
+
+> 1: T
+
+, E1: T ) given the observations and the environmental constraints from the time step 1 to T . Assuming conditional independence in observations across modalities and different time steps when conditioning on z, based on Bayes’ theorem, we obtain the following equations, 
+
+p(z|Mr1: T , Dg 
+
+> 1: T
+
+, D f 
+
+> 1: T
+
+, E1: T )= p(z, Mr1: T , Dg 
+
+> 1: T
+
+, D f 
+
+> 1: T
+
+, E1: T )
+
+∑z p(z, Mr1: T , Dg 
+
+> 1: T
+
+, D f 
+
+> 1: T
+
+, E1: T )
+
+∝ p(z, Mr1: T , Dg 
+
+> 1: T
+
+, D f 
+
+> 1: T
+
+, E1: T )= p(z)p(Mr 
+
+> 1: T
+
+|z)p(Dg 
+
+> 1: T
+
+|z)p(D f 
+
+> 1: T
+
+|z)p(E1: T |z)= p(z)p(Mr 
+
+> 1: T−1
+
+|z)p(Dg 
+
+> 1: T−1
+
+|z)p(D f 
+
+> 1: T−1
+
+|z)p(E1: T −1|z)
+
+× p(MrT |z)p(DgT |z)p(D fT |z)p(ET |z)= p(z, Mr 
+
+> 1: T−1
+
+, Dg 
+
+> 1: T−1
+
+, D f 
+
+> 1: T−1
+
+, E1: T −1)
+
+| {z }
+
+> joint distribution in the previous time steps
+
+×
+
+p(MT |z)p(DgT |z)p(D fT |z)p(ET |z)
+
+| {z }
+
+> observational likelihood in the current time step
+
+(8) In this study, p(z) is an uniform distribution. Since z = ( c, p)
+
+comprises a discrete class variable c and a continuous pose 
+
+p, marginalizing over z amounts to summing over c and integrating over p. With a slight abuse of notation, we write 
+
+∑z to denote this sum–integral operation. Equation (8) then yields the recursive posterior update. Assuming conditional independence of oriented contact points within a time step given z, the likelihoods p(Dgt | z) and p(D ft | z) further decompose as 
+
+p(Dgt |z) = 
+
+> Ng
+
+# ∏
+
+> i=1
+
+p(dgi,t |z), (9) 
+
+p(D ft |z) = 
+
+> Nf
+
+# ∏
+
+> i=1
+
+p(d fi,t |z). (10) 
+
+C. Likelihood function for oriented contact points 
+
+To derive the likelihood function for oriented contact points, we treat the difference ∆d between the signed distance value 
+
+ds and the predicted signed distance value bds, and the angle θ
+
+between the normal vector n and the predicted normal vector 
+
+bn as two independent random Gaussian variables, where ∆d ∼
+
+N (0, σd ) and θ ∼ N (0, σθ ). For contact points ds = 0, the measurement likelihood function can be written as 
+
+θ (x, z) = arccos (bn(x, z) · n), (11) 
+
+p(d|z) = 1
+
+Z exp 
+
+"
+
+− 12
+
+bd2 
+
+> s
+
+(x, z)
+
+σ 2
+
+> d
+
++ θ 2(x, z)
+
+σ 2
+
+> θ
+
+!# 
+
+, (12) where Z is the normalization constant for the Gaussian likelihood function. Note σd and σθ for GelSight contact points and FT contact points take different values, where 
+
+σ fd = 2σ gd and σ f 
+
+> θ
+
+= 2σ g 
+
+> θ
+
+.
+
+D. Contact label for GelSight contact points 
+
+In addition, each GelSight contact patch Dgt comes with a contact type label. If the detected contact type label is an edge or a corner, the likelihood calculation would not take into account the normal vectors in that patch for the likelihood calculation. In this case, for each oriented contact observation 
+
+dgi,t = [ xgi,t , ngi,t ] ∈ Dgt , we use 
+
+p(dgi,t | z) = 1
+
+Z exp −
+
+bd2 
+
+> s
+
+(xgi,t , z)
+
+2σ gd
+
+> 2
+
+!
+
+. (13) The reasoning behind this choice is that at sharp edges and corners, the gradient on the signed distance function is ill-defined. 
+
+E. Likelihood function for non-penetration constraint with the free space carved out by robot motion 
+
+To evaluate the extent of violation of the non-penetration constraint for a hypothesis z, we represent each hypothesis z
+
+with 200 feature points V(z) on the estimated object surface, which is obtained by transforming 200 precomputed feature points of the hypothesized class into the hypothesized pose. Then we lookup the corresponding values of the transformed points on the free space grid map, and check the number of feature points that overlap with the free space grids, denoted by n, where 
+
+n = ∑
+
+> v∈V(z)
+
+mr(v), (14) 
+
+mr denotes the free space map lookup function. The observational likelihood function for observing the free space map Mr given z is defined as 
+
+p(Mr|z) = 1
+
+Zm
+
+exp (− 12σ gd 
+
+> 2
+
+· (1)2 · n), (15) where Zm is the normalization constant. In this study, the free-space map is enforced as a semi-hard constraint that strongly penalizes particles violating non-penetration while avoiding zero weights even when all par-ticles violate the constraint. Each violation reduces the like-lihood by an amount equivalent to observing a contact point located 1 m from the estimated object surface. To avoid over-penalizing minor mismatches, we update the free-space map using a slightly shrunken end-effector volume (1 cm margin), so particles that marginally intersect the true end effector are not penalized. A key advantage of this scheme is that the per-hypothesis evaluation cost remains constant as the free-space map grows in complexity. 
+
+F. Likelihood function for environment constraints 
+
+To capture the tabletop constraint, we denote the height of the table as ht and define the following likelihood function to penalize object hypotheses whose lowest surface point is more than 2 cm above or below the table plane, 
+
+p(E|z) = 1
+
+Ze
+
+exp − 1(v∗ 
+
+> z
+
+> ht + 0.02 ) + 1(v∗ 
+
+> z
+
+< ht − 0.02 )
+
+2σ gd
+
+> 2
+
+!
+
+,
+
+(16) 
+
+v∗ 
+
+> z
+
+= min  
+
+> v∈V(z)
+
+vz, (17) where 1(·) is the indicator function and Ze is the normalization constant. A violation of the constraint reduces the likelihood by an amount equivalent to observing a contact point located 1 m from the estimated object surface. Similarly to the free-space likelihood function, this formulation avoids over-penalizing minor mismatches. 
+
+G. Customized particle filter for object recognition and pose estimation 
+
+Combining (8)–(16) yields a recursive Bayesian update for 
+
+p(z | Mr 
+
+> 1: t
+
+, Dg 
+
+> 1: t
+
+, D f 
+
+> 1: t
+
+, E1: t ). In practice, the normalization over z
+
+is intractable, so we approximate the posterior with a particle filter using a finite number of samples based on importance sampling: 
+
+p(z|Mr 
+
+> 1: t
+
+, Dg 
+
+> 1: t
+
+, D f 
+
+> 1: t
+
+, E1: t ) = 
+
+> N
+
+# ∑
+
+> j=1
+
+w j,t δ (z − z j,t ), (18) where δ (·) is the Dirac delta and {z j,t , w j,t }Nj=1 are weighted particles. Although the subscript t typically denotes a time-varying state [42], we assume that the object is stationary; thus z j,t+1 = z j,t and only the weights are updated over time. The resulting recursive update for w j,t is derived as follows: 
+
+w j,t = p(z j,t |Mr 
+
+> 1: t
+
+, Dg 
+
+> 1: t
+
+, D f 
+
+> 1: t
+
+, E1: t )
+
+∝ w j,t = p(z j,t , Mr 
+
+> 1: t
+
+, Dg 
+
+> 1: t
+
+, D f 
+
+> 1: t
+
+, E1: t )= p(z j,t , Mr 
+
+> 1: t
+
+, Dg
+
+> 1: t−1
+
+, D f
+
+> 1: t−1
+
+, E1: t−1) p(Mrt , Dgt , D ft , Et |z j,t )= p(z j,t , Mr
+
+> 1: t−1
+
+, Dg
+
+> 1: t−1
+
+, D f
+
+> 1: t−1
+
+, E1: t−1)
+
+| {z } 
+
+> wj,t−1
+
+× p(Mrt |z j,t )p(Dgt |z j,t )p(D ft |z j,t )p(Et |z j,t )
+
+| {z }
+
+> observational likelihood in the current step
+
+.
+
+(19) In (19), the unnormalized weight w j,t is calculated, to get w j,t ,we divide it by the sum of all w j,t ,
+
+w j,t = w j,t
+
+∑Nj=1 w j,t
+
+. (20) Approximating the joint posterior over 11 object classes and a 6D pose requires many particles, especially early in inference when uncertainty is high. To keep the particle set tractable, we adapt the point-pair feature sampling scheme and weight ap-proximation scheme of [32] to progressively propose new par-ticles at each time step conditioned on the latest observations (contact points, normals), rather than uniformly covering the full latent space. Figure 4 summarizes the sampling scheme. At each time step, we downsample the latest patch of contact points to pair with downsampled previously observed contact points. For each point pair, we calculate the distance (rounded Fig. 4: Example of the three particle sampling schemes. Point-pair-based sampling: for each observed contact point pair 
+
+(xi, ni) and (x j, n j), we compute point-pair features ∥xi, j∥2,
+
+θi, j, θi,d , θ j,d , and labels li, l j, where xi, j = x j − xi. Here θi, j is the angle between ni and n j, while θi,d and θ j,d are the angles between ni and xi, j, and between n j and xi, j, respectively. Model point pairs with similar features are retrieved from the database; aligning a model pair to the observed pair yields candidate class/pose hypotheses. Local random variations: ad-ditional particles are generated by applying small perturbations to the poses of the top-weighted particles (e.g., ps → p′
+
+> s
+
+, p′′  
+
+> s
+
+). 
+
+Iterative closest point(ICP) sampling: ICP is applied to refine the poses of top particles using the accumulated contact points, producing new hypotheses that better fit the observations (e.g., 
+
+ps → p∗ 
+
+> s
+
+). In the illustration, cs, ce, cr denote three object classes (square, ellipse, and rectangle), with canonical poses 
+
+pos , poe , por and aligned poses ps, pe, pr.to the nearest 0.01 cm) between the two points, the angles (rounded to the nearest multiples of 12 degrees) between their respective normals and the displacement vectors as its features. Potential point pair correspondences on known models can be found by matching the point-pair features of each observed point pair with the precomputed feature values for the point pairs on known models (stored in a hash table for fast lookup). Aligning the corresponding point pairs on known models with observed point pairs yields candidate class/pose hypotheses. A limitation of point-pair sampling scheme is that it relies on a discretized surface (vertices), which can introduce small residual pose offsets even in the noise-free case. To mitigate this limitation, we supplement point-pair sampling with two additional proposal mechanisms. First, we refine the top 10 MAP particles using iterative closest point (ICP) against the observed contact points, and insert the refined poses as new particles. Since ICP is unreliable with sparse contacts, we activate it only after collecting more than four GelSight contact patches. Before ICP is enabled, we instead jitter the top 10 MAP particles by sampling independent translation perturbations in each axis from U[−0.01 , 0.01 ] m and rotation perturbations in each Euler angle from U[−10 , 10 ]◦, generating 12 variants per particle (120 total). The same weight approx-imation scheme is applied to all newly proposed particles at a given time step, independent of the proposal strategy. For new particles z′ 
+
+> k,t
+
+, k = 1, 2, 3, . . . proposed at time step 
+
+t, we approximate the ratio of the weights w′ 
+
+> k,t
+
+among the newly proposed particles by evaluating them on a subset of observed contact points DgS and D fS , specifically by the following equation, 
+
+w′
+
+> k,t
+
+w′
+
+> ∗,t
+
+= p(DgS, D fS |z′ 
+
+> k,t
+
+)
+
+p(DgS, D fS |z′ 
+
+> ∗,t
+
+) , (21) where 
+
+z′ 
+
+> ∗,t
+
+= argmax 
+
+> z′
+> k,t
+
+p(DgS, D fS |z′ 
+
+> k,t
+
+). (22) 
+
+DgS and D fS are down-sampled from existing contact points using Poisson Disk Sampling, such that they do not exceed a predefine number of points limit (e.g., 100 points) to keep the computational cost tractable. Then the ratio between the maximal weight w′ 
+
+> ∗,t
+
+among the newly proposed particles and the MAP weight w∗ 
+
+> t
+
+by evaluating them on all observed contact points Dg 
+
+> 1: t
+
+, D f 
+
+> 1: t
+
+by 
+
+w′
+
+> ∗,t
+
+w∗
+
+> t
+
+= p(Dg 
+
+> 1: t
+
+, D f 
+
+> 1: t
+
+|z′ 
+
+> ∗,t
+
+)
+
+p(Dg 
+
+> 1: t
+
+, D f 
+
+> 1: t
+
+|z∗ 
+
+> t
+
+) , (23) where 
+
+z∗ 
+
+> t
+
+= argmax  
+
+> zj,t
+
+w j,t . (24) Combining (21)-(23) yields, 
+
+w′ 
+
+> k,t
+
+= p(DgS, D fS |z′ 
+
+> k,t
+
+)p(Dg 
+
+> 1: t
+
+, D f 
+
+> 1: t
+
+|z′ 
+
+> ∗,t
+
+)
+
+p(DgS, D fS |z′ 
+
+> ∗,t
+
+)p(Dg 
+
+> 1: t
+
+, D f 
+
+> 1: t
+
+|z∗ 
+
+> t
+
+) w∗ (25) This approximation scheme keeps the per-step likelihood eval-uation tractable by scoring most newly proposed particles on only a subset of the observed contact points. Only the best-performing new particle on this subset, denoted z′j,t , is then evaluated on the full contact set, ensuring that a new particle can overtake the current MAP estimation only if it fits all observations better. The top-K new particles are retained and merged into the particle pool. To further reduce computation, the free-space map and environment constraints are omitted during this approximation stage and are only evaluated for all particles after the new particles have been added to the particle pool. 
+
+H. Target point selection 
+
+To actively acquire data, we select the next target point via the following criterion: 
+
+xt+1 = argmax 
+
+> xm∈M∗
+
+min 
+
+> xc∈Xc∪Xu
+
+∥xm − xc∥2, (26) where M∗ is the set of candidate vertices on the MAP shape, 
+
+Xc are observed contact points, and Xu are previously selected but unreachable targets. This favors points far from both explored and unreachable regions. Since experiments are performed on a table, we restrict candidates to vertices above height h whose normals do not point downward: 
+
+M∗ = x ∈ M xz > h, n(x) · [0, 0, 1]T ≥ 0 . (27) The target point xt+1 with its corresponding normal vector 
+
+nt+1 is then passed to a motion planner for trajectory planning. If no feasible trajectory to reach xt+1 is found, xt+1 will be added to Xu, and a new target point will be proposed using (26) with updated Xu.
+
+I. Motion planner and Control Scheme for Active Data Ac-quisition 
+
+Given a proposed target point with normal direction, the robot must plan and carry out motions to establish contacts with the object surface and collect free-space information for Bayesian inference. Due to high uncertainty on the object identity and pose at the early inference stage, the robot often comes into contact with the object in unexpected timing and locations. To collect data effectively, we design a motion planning and control stack, whose logic is shown in (Fig. 5). For each action cycle, the stack finds a feasible target point to explore, plans and executes the trajectory while handling contacts and data collection with a wrist force/torque sensor and a GelSight Mini sensor mounted on the robot arm. More detailed descriptions are given in the following subsections. 
+
+1) Path Planner: For trajectory planning, we implement a Bi-directional RRT* (Bi-RRT*) planner in PyBullet for the Franka Emika Panda robot arm. The planning scene includes an approximate lab environment and the mesh of the current MAP object hypothesis (class and pose), updated at each time step. Given the target point xt+1 and its surface normal nt+1,the planner generates a collision-free joint-space path to a pre-touch configuration. 
+
+2) Trajectory planning: Given a target (x, n), we compute a pre-touch pose, a touch pose, and a fallback pose, and solve the inverse kinematics (damped least squares) to obtain the corresponding joint configurations. The pre-touch pose places the sensor 3 cm from x along −n and orients the gel normal 
+
+nG towards −n. Since position and pointing direction do not uniquely determine a 6D pose, we discretize a rotation angle 
+
+θn about nG to generate multiple candidates. The pre-touch pose (tp, up) is 
+
+tp = x − 0.03 n, (28) 
+
+θp = atan2 (∥nG × (−n)∥, nG · (−n)) , (29) 
+
+ur = ( cos ( θp
+
+2 ), sin ( θp
+
+2 ) · rp) (30) 
+
+un = ( cos ( θn
+
+2 ), sin ( θn
+
+2 ) · nG) (31) 
+
+rp = nG × (−n)
+
+∥nG × (−n)∥ , up = ur un u, (32) Bi-RRT* path planner  
+
+> Target point
+> with
+> normal vector
+> Execute path with joint impedance
+> No
+> Yes Contact
+> detected?
+> Tactile servoing
+> No
+> Yes
+> Get clear
+> contact patch?
+> Reach the end of path
+> Yes
+> No
+> Feasible path
+> found?
+> Start End
+> Select new
+> target point with normal vector
+
+Overview of one action cycle 
+
+> Record GelSight
+> contact points
+> Yes
+> No
+> Violate
+> constraints/
+> time limit
+> Record FT
+> contact points
+
+Fig. 5: An overview of one action cycle in the planning and control stack. The target selection scheme proposes target points with normal vectors as inputs to the Bi-RRT* motion planner until a feasible path to the target is found. The path is executed with joint impedance control. If a contact is detected by the F/T sensor during execution, it triggers tactile servoing to align the GelSight sensor with the contact surface. From current pose to pretouch pose  GelSight Sensor 
+
+> Gel
+> From pretouch pose to touch pose
+> From touch pose to fallback pose
+> Fallback position
+> Target point
+> Pretouch position
+> Touch position
+> Contact locations
+> Target normal
+> Estimated surface
+> Trajectory Planning
+
+Fig. 6: An overview of the trajectory planning process given a target point with a normal direction. The trajectory consists of three segments: from the current pose to a pre-touch pose where the sensor aligns with the normal vector and faces directly toward the target point; from the pre-touch pose moving long the opposite normal direction to a touch pose to establish contact with the estimated surface; from the touch pose to the fallback pose located at the centroid of the existing contact points. When ∥nG ×(−n)∥ = 0, we choose any unit axis rp ⊥ nG (e.g., by projecting a random vector onto the orthogonal complement of nG and normalizing). The touch pose advances 5 cm from the pre-touch pose along −n (contact expected). The fallback pose uses the centroid of previous contacts as the target position and the direction from the expected touch position toward the target position as the approach direction. The resulting trajectory has three segments. (i) A collision-free segment planned by Bi-RRT* from the current joint configuration to the pre-touch configuration. (ii) A short local approach from pre-touch to touch, where contact is expected if the estimated class and pose are correct; this segment is generated by Cartesian linear interpolation with inverse kinematics. (iii) If no contact is detected at the touch pose and a feasible fallback configuration is found, the fallback segment is executed by joint-space interpolation from touch to the fallback configuration, steering the sensor toward a region where contact is more likely (for convex objects, the fallback position lies inside the object). In this manner, even without contact, the collision-free motion provides free-space information to update the belief over object class and pose. 
+
+3) Trajectory execution: As collisions could take place at any phase of the trajectory execution, compliance in the controller is necessary to prevent damaging the robot hard-ware. Thus, trajectories are executed with a joint impedance controller for compliance. 
+
+τ = KJ(qd − q) − DJ ˙q + C(q, ˙q) + G(q) (33) 
+
+KJ = diag ([ k1, k2, k3, k4, k5, k6, k7]) (34) 
+
+DJ = diag ([ d1, d2, d3, d4, d5, d6, d7]) (35) where τ is the commanded torque, q and qd are the current joint configuration and the desired joint configuration, respec-tively. The joint stiffness matrix and the joint damping matrix are denoted as KJ and DJ respectively, C(q, ˙q) is the Coriolis compensation term, G(q) is the gravity compensation term. The controller tracks the trajectory at 0 .05 seconds per waypoint. If the joint-space tracking error |q − qd | exceeds a predefined threshold, the current waypoint is held until the error falls below the threshold. If the error remains above the threshold for more than 3 seconds, the system treats it as a body/environment collision, terminates the execution of the current trajectory, and triggers the recovery mode (see corner-case handling). This error bound also limits the commanded torques under joint impedance control, preventing emergency stops. If contact is detected during trajectory execution, tactile servoing is activated. 
+
+4) Tactile Servoing: Since the estimated shape may not perfectly match the true object, the vision-based tactile sensor can collide in unintended configurations, e.g., with incomplete gel contact or a contact patch located near the gel boundary, resulting in no patch or a small patch. To address this, we propose a tactile servoing scheme that aligns the gel with the object surface and centers the contact patch. We compute the desired orientation qd by rotating the gel normal vector nG toward the reaction force direction, approximated by the negative external force −fE . Specifically, Control  
+
+> Scheme
+> NOT ALIGNED ALIGNED
+
+Fig. 7: Control scheme for tactile servoing: at each step of the control loop (60Hz), we compute a target gel-center position 
+
+xd and a rotation (θ , r) to align the gel normal nG (blue) with the opposite external force direction −fE (red) while maintaining contact. The commands are derived from the estimated contact location c, current gel center xG (green), nG,and fE . A Cartesian impedance controller outputs joint torques 
+
+τ to drive xG → xd and nG → − , fE , ideally converging to a force equilibrium (superscript ∗). we find a rotation axis r and rotation angle θ such that a single rotation aligns nG with −fE . The axis and angle are obtained from the cross and dot products of nG and −fE :
+
+θ = atan2 (∥nG × (−fE )∥ , nG · (−fE )) , (36) 
+
+r = nG × (−fE )
+
+∥nG × (−fE )∥ , (37) When ∥nG ×(−fE )∥ = 0, the rotation axis in (37) is ill-defined. In this case, we choose any unit vector r ⊥ nG, constructed using the same procedure as in Sec. III-I2. To avoid rapid motions, we clip the rotation angle to 45 ◦:
+
+θ = min 
+
+
+
+atan2 (∥nG × (−fE )∥, nG · (−fE )) , π
+
+4
+
+
+
+. (38) To maintain contact during alignment, we set the target gel-center position xd a distance α along the reaction-force direction −fE from the estimated contact location c:
+
+xd = c − α fE
+
+∥fE ∥ . (39) The offset α regulates the interaction force: overly large forces may damage the gel, whereas overly small forces may not produce sufficient indentation. We therefore adapt α based on the measured force magnitude. Given a desired static force magnitude ∥f∗ 
+
+> E
+
+∥ and translational stiffness kt , we set 
+
+α = k f
+
+kt
+
+(|| f∗ 
+
+> E
+
+|| − || fE || ) (40) where k f is a force-servoing gain. We choose k f > kt to compensate for the fact that the measured wrench is influenced by both translation and rotation during alignment; if k f is small, it will not be able to reduce the interaction force effectively. Additionally, once a contact patch is obtained by the GelSight sensor, the controller replaces the estimated contact location of the force torque sensor with the contact patch center on the tactile image to center the contact patch towards on the tactile image. The Cartesian-impedance tactile servoing law is 
+
+ε = [ xd − xG, θ r] (41) 
+
+τ = JTG(Kε − DJ G ˙q) + C(q, ˙q) + G(q) (42) 
+
+K = diag ([ kt , kt , kt , kr, kr, kr]) (43) 
+
+D = 2√K (44) where τ is the commanded torque and q is the current joint configuration; JG is the Jacobian matrix calculated at the gel center xG. K and D are the Cartesian stiffness matrix and the Cartesian damping matrix respectively, while C(q, ˙q) and 
+
+G(q) denote Coriolis and gravity compensation terms, respec-tively. The damping in each direction is chosen heuristically to yield critical damping for the corresponding virtual mass– spring–damper system, assuming a unit virtual mass of 1 kg. If a contact patch is observed from the tactile sensor for more than 0.5 seconds, the contact patch will be processed and passed to the Bayesian framework as input. The controller then retracts the GelSight sensor away from the object surface along its pointing direction. 
+
+5) Corner cases handling: To improve robustness during autonomous exploration, we implement simple recovery be-haviors for common planning/execution failures: (i) proximity to joint limits or self-collision during execution or tactile servoing, (ii) unintended body/environment collisions due to model mismatch, (iii) failure to obtain a stable tactile patch within a time limit, (iv) repeated sampling of the same region (e.g., when the start pose is too close to the object), and (v) infeasible planning queries caused by slight penetration between the robot and the estimated object mesh in the planner. In cases (i)–(ii), the robot aborts and retraces the executed trajectory in reverse to return to a safe start configuration. In case (iii), tactile servoing is terminated, the sensor retracts, and the collected free-space and F/T contact cues are still integrated into the Bayesian update. In case (iv), the robot moves to a predefined reset configuration (collision-free and 
+
+> 50 cm above the table) before resuming exploration. In case (v), the planner resolves small penetrations by shifting the estimated object pose away from the robot in increments of 1 mm until PyBullet reports no penetration. IV. E XPERIMENTAL RESULTS 
+
+We evaluate our approach in both simulation and the real world. Performance is measured by (i) the number of actions required to correctly recognize the object (i.e., after which the estimated class remains consistent with the ground truth), and (ii) the number of actions required to achieve a consistently accurate pose estimate. Pose accuracy is quantified using the ADD-S metric [43], which computes the mean Euclidean distance between closest 3D model points under the predicted and ground-truth poses; we report success if ADD-S drops below 6 mm and remains below 6 mm for the rest of the trial. 
+
+Real-world setup. Experiments are conducted in our lab using a Franka Emika Panda robot arm, a Bota Systems Sen-sONE F/T sensor, and a GelSight Mini sensor. The GelSight 
+
+Fig. 8: The 3D-printed YCB objects used in the experiments. sensor is mounted to the F/T sensor via a custom flange, and the F/T sensor is mounted on the robot wrist, see Fig. 1. 
+
+Simulation setup. We build a digital twin of the real setup in PyBullet [44], including the table, lab walls, and the Panda arm with the F/T and GelSight sensors. Objects are initialized with the same poses as in the real experiments. F/T contact points are simulated in PyBullet, while GelSight contact patches are generated using TACTO [40]. 
+
+Objects and protocol. We evaluate our framework on 11 objects from the YCB model set [16], selected to span diverse shapes while including similarly sized objects with comparable local surface structure (e.g., two boxes and two cans), which are shown in Fig. 8. Following [45], we 3D-print the objects to prevent undesired motion during contact. For each object, we run 5 trials with the same object pose but randomized initial contact locations, resulting in different exploration sequences. Each trial lasts for 15 action cycles (time steps), where one cycle corresponds to executing a full trajectory (trajectory execution plus tactile servoing). 
+
+Baselines. To assess the contribution of each sensing source, we compare our full method with three ablations: using F/T sensor only, using F/T sensor and GelSight sensor, using F/T sensor and free-space map, abbreviated as FT only, FT+GS ,and FT+FS respectively. 
+
+Dataset: During real-world experiments, we record at each time step the ground-truth object class and pose, the MAP class and pose, F/T-based contact points, GelSight contact points, and the free-space map. The resulting dataset captures the noise characteristics of our hardware setup and enables offline evaluation and comparison of inference methods under identical sensing conditions. For the FT only, FT+GS , and FT+FS ablations in the real-world setting, we use the recorded dataset and replay only the corresponding modalities as input to the Bayesian inference module. In simulation, these ablations are executed from scratch rather than via replay. The key difference is that replay fixes the contact and free-space observations at each time step to the recorded sequence, whereas running from scratch allows the active exploration policy to guide the data Sim  Real Fig. 9: Class-wise number of actions required to find the correct class and reach the desired pose estimation error in simulation and real-world experiments. #Actions Simulation Real world FT FT+GS FT+FS FT+GS+FS FT FT+GS FT+FS FT+GS+FS Classification 4.3 ± 3.2 4.1 ± 2.7 3.6 ± 2.0 333...444 ±±± 111...999 6.6 ± 4.7 6.7 ± 4.6 5.0 ± 3.1 444...222 ±±± 222...222                        
+
+> Pose 6.6±3.76.1±3.55.6±2.4444...777±±±222...1118.6±4.57.9±4.46.3±2.8555...333±±±111...777
+
+TABLE I: Mean and standard deviation of action cycles needed to obtain the correct class and the desired pose error on average. 10 action cycles 
+
+> 9 FT patches
+> 7 GS patches
+> .
+> 4 action cycles
+> 4 FT patches
+> 4 GS patches
+> 7 action cycles
+> 7 FT patches
+> 6 GS patches
+> 1 action cycle
+> 1 FT patch
+> 1 GS patch
+
+Fig. 10: An example of how the estimated class and pose evolves as more data are collected, taken from one of the real-world experiments on the mustard bottle. The top row shows the ground truth object class and pose in blue and the MAP estimation in red, with the FT contact points (green) and GelSight contact points (black + red). The bottle row shows the belief distribution on the object class. From left to right, as more data are collected, the framework gradually became more confident about the object class and refined the object pose.                    
+
+> Distance (mm) Simulation Real world mean stdv max mean stdv max GelSight 1.2 0.8 6.5 3.3 2.0 17.7
+> Force torque 0.7 0.8 6.4 4.5 2.4 36.1
+
+TABLE II: Mean, standard deviation and maximum of the distance from the recorded contact points to the ground truth surface in simulation and in real-world. collection. 
+
+Sim2Real noise For completeness, we report the noise levels of contact points in both simulation and real-world experiments, as shown in Table II. We measure noise as the distance from each recorded contact point to the nearest vertex on the ground-truth object surface. In the real-world setting, this metric also includes calibration-induced errors. Conse-quently, if the calibrated ground-truth pose is imperfect, the true sensor noise may differ from the reported value. The same caveat applies to the reported pose error, which is computed as ADD between the MAP estimation and the calibrated ground truth. Since calibration error affects both the noise metric and the pose-error metric, our results should be interpreted as the achieved object recognition and pose estimation performance under the corresponding reported noise level. 
+
+A. Results 
+
+Table I reports the mean number of action cycles required to reach the correct class and to achieve the target pose accuracy, averaged over objects and trials. An F/T contact is recorded only when contact occurs, and a GelSight patch is recorded only when alignment succeeds. Overall, fusing complementary cues reduces the number of action cycles and improves esti-mation accuracy. Adding GelSight observations to F/T yields only modest gains, whereas incorporating free-space (FS) constraints substantially improves performance by pruning the hypothesis space. Relative to FT only, FT+FS improves the metrics by approximately 15–20% in both simulation and real experiments, and fusing all modalities ( FT+GS+FS ) yields consistent gains above 20% (up to ∼30%). The reduced ADD-S (mm) Simulation Real world FT FT+GS FT+FS FT+GS+FS FT FT+GS FT+FS FT+GS+FS mean ±stdv 1.8 ± 1.3 1.8 ± 0.9 111...666 ±±± 000...666 1.6 ± 0.7 6.1 ± 8.6 7.8 ± 11 .8 3.3 ± 1.1 222...999 ±±± 000...888        
+
+> max 9.34.5222...9993.448 .849 .89.1444...999
+
+TABLE III: Mean and standard deviation of the final pose estimation error (after 15 action cycles) measured by ADD for simulation and real-world experiments average over all object classes. Sim  Real 
+
+Fig. 11: Classification success rate and pose estimation success rate over time step in the simulated and real-world experi-ments. standard deviation further indicates that multimodal fusion improves stability and reliability. Fig. 9 provides a class-wise breakdown of the number of action cycles for correct classification (top) and pose accuracy (bottom). Integrating all three modalities is consistently the best or second-best method across objects in both simulation and the real world, with similar relative behavior across scenar-ios. Objects with similar shapes/sizes to others in the set (e.g., 
+
+mustard bottle , mug , sugar box , pudding box , bowl ) typically require more actions to disambiguate, while distinctive objects (e.g., baseball ) require fewer. The potted meat can is an outlier; we analyze this case later in this section. To demonstrate how active inference evolves over time, an example is given in Fig. 10, as more information was made available through active exploration, the uncertainty in the belief distribution dropped and the estimated pose was refined. Fig. 11 shows classification and pose-estimation success rates as a function of action cycles. In real-world experiments, 
+
+FT+GS+FS reaches 100% success rate in both metrics after 11 cycles, outperforming all ablations. The strong gap between methods with FS ( FT+FS , FT+GS+FS ) and those without (FT , FT+GS ) indicates that FS is crucial for resolving class and pose ambiguity. Similar trends hold in simulation, with smaller gaps due to differences in experimental protocol (replay vs. online exploration) and the lower noise level of simulated F/T contacts. Table III reports the final pose error after 15 cycles. In simulation, FT+FS achieves the lowest final error, while in real experiments FT+GS+FS performs best and FT+FS is second due to one misclassification case. Notably, in the real-world re-play ablations, FT+GS can yield a larger final pose error than 
+
+FT on some objects (e.g., potted meat can and mug ). Since replay fixes the contact sequence, removing modalities can introduce ambiguities that the system cannot actively resolve by selecting new informative targets; in such cases, adding GelSight may bias the posterior toward hypotheses that explain sparse local contacts well but correspond to an incorrect class or a misaligned pose. To verify that this effect is not caused by poor contact fitting, we compute the mean distance from observed contacts to the final MAP surface; in the worst case, the mean distances for FT+GS+FS , FT+GS , FT+FS , and 
+
+FT are 5 .5 mm, 5 .0 mm, 5 .0 mm, and 4 .8 mm, respectively, indicating comparable fits to the contact data. Therefore, the larger pose error in FT+GS is mainly attributable to residual class/pose ambiguity under sparse contact-only evidence. The performance gap between simulated experiments and the real-world experiments in the FT+GS+FT condition is due to the non-comparable level of noise between the two scenarios described in Table II. The larger noise level in real-world experiments is likely the main cause for the performance drop compared to the low-noise scenario in the simulation as the initial conditions were kept as close as possible between the simulated and the real-world experiments. Finally, as an index of the planning and control stack perfor-mance in real experiments, 91 .5% of action cycles produced an F/T contact (755/825), and 72 .8% of contacts resulted in successful GelSight alignment (550/755). The failure of alignment is caused by either the robot getting close to joint limit and self-collision configurations, or taking too long to stabilize the GelSight sensor around the contact surface. V. D ISCUSSION 
+
+A. Role of each modality 
+
+As shown in the Results section, fusing complementary information sources achieved more robust object recognition and pose estimation. Tactile observations are inherently local and sparse; resolving class–pose ambiguity therefore requires accumulating informative evidence over multiple interactions. In practice, relying on GelSight alone is not always suffi-cient. Accurate GelSight measurements require the sensor to be well aligned with the contact surface, and this can be difficult to guarantee under kinematic constraints (e.g., joint limits and self-collision) and model mismatch. In contrast, wrist force/torque (F/T) sensing and motion-derived free-space information remain available even when GelSight alignment is unsuccessful. In our framework, F/T contact estimates provide coarse but broadly available constraints that are useful for proposing and scoring hypotheses, while the free-space map acts as a global constraint that rules out hypotheses incon-sistent with collision-free motion. This explains the strong gains observed when incorporating free-space information. When alignment succeeds, GelSight provides more precise local geometric cues (contact patch and normal estimates) than F/T alone. These higher-fidelity measurements improve sample efficiency by enabling better hypothesis proposals and more accurate pose refinement, and they are particularly helpful for reaching the target pose threshold with fewer action cycles. 
+
+B. The role of the planning and control stack 
+
+The planning and control stack is a key enabler for fully autonomous active exploration under uncertainty. It allows the robot to execute reachability-aware target motions, remain compliant during contact, and handle both expected and unex-pected collisions without interrupting the exploration process. Importantly, the stack ensures that informative measurements are collected reliably: it provides contact events for F/T-based estimation, enables stable GelSight alignment when possible through tactile servoing, and continuously accumulates free-space evidence from collision-free motion. These capabilities directly contribute to the overall performance observed in both simulation and real-world experiments. 
+
+C. Limitations and Future work 
+
+This work assumes that (i) the object is rigid and remains stationary during interaction and (ii) only a single object is present in the scene. Relaxing these assumptions—e.g., to han-dle object motion, articulated objects, or multi-object scenes— is an important direction for future work. The computational cost of the current inference procedure scales approximately linearly with the number of object priors. Improving scala-bility (e.g., via hierarchical retrieval, coarse-to-fine hypoth-esis selection, or learned proposal distributions) is another promising direction. Finally, while we focus on contact-based perception in this study, the Bayesian formulation naturally supports additional sensing sources. Integrating vision cues such as point clouds, pose tracking, and segmentation could further improve robustness in cluttered scenes and enable more general manipulation tasks. Beyond scaling the approach by collecting larger datasets, an important direction is to extend the framework to recognize and reconstruct novel objects beyond the prior set. VI. C ONCLUSION 
+
+In this paper, we addressed the problem of active object recognition and pose estimation by fusing information from a GelSight sensor, a wrist force/torque sensor and robot motion under a unified Bayesian framework, with a planning and control stack for efficient active data acquisition. Through extensive experiments in both simulation and real-world lab environments, we show that our system can recognize the object within 4 action cycles and estimate its pose within 6 action cycles on average. We believe that our system is a step toward general-purpose perception for robots that can exploit the full spectrum of contact-derived cues and remain effective when other sensing signals are unreliable or unavailable. REFERENCES [1] R. L. Klatzky, S. J. Lederman, and V. A. Metzger, “Identifying objects by touch: An “expert system”,” Perception & Psychophysics , vol. 37, no. 4, pp. 299–302, Jul. 1985. [2] S. Luo, N. F. Lepora, W. Yuan, K. Althoefer, G. Cheng, and R. Dahiya, “Tactile robotics: An outlook,” IEEE Transactions on Robotics , vol. 41, pp. 5564–5583, 2025. [3] J. Xu, H. Lin, S. Song, and M. Ciocarlie, “Tandem3d: Active tactile exploration for 3d object recognition,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) , 2023, pp. 10 401– 10 407. [4] H. Li, J. Akl, S. Sridhar, T. Brady, and T. Padır, “Vita-zero: Zero-shot visuotactile object 6d pose estimation,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) , 2025, pp. 16 050– 16 057. [5] L. Jamone, L. Natale, G. Metta, and G. Sandini, “Highly sensitive soft tactile sensors for an anthropomorphic robotic hand,” IEEE Sensors Journal , vol. 15, no. 8, pp. 4226–4233, 2015. [6] N. F. Lepora, “Soft biomimetic optical tactile sensing with the tactip: A review,” IEEE Sensors Journal , vol. 21, no. 19, pp. 21 131–21 143, 2021. [7] Z. Lin, J. Zhuang, Y. Li, X. Wu, S. Luo, D. F. Gomes, F. Huang, and Z. Yang, “Gelfinger: A novel visual-tactile sensor with multi-angle tactile image stitching,” IEEE Robotics and Automation Letters , vol. 8, no. 9, pp. 5982–5989, 2023. [8] A. C. Abad and A. Ranasinghe, “Visuotactile Sensors With Emphasis on GelSight Sensor: A Review,” IEEE Sensors Journal , vol. 20, no. 14, pp. 7628–7638, Jul. 2020. [9] W. Yuan, S. Dong, and E. H. Adelson, “GelSight: High-Resolution Robot Tactile Sensors for Estimating Geometry and Force,” Sensors ,vol. 17, no. 12, p. 2762, Dec. 2017. [10] I. H. Taylor, S. Dong, and A. Rodriguez, “GelSlim 3.0: High-Resolution Measurement of Shape, Force and Slip in a Compact Tactile-Sensing Finger,” in 2022 International Conference on Robotics and Automation (ICRA) . Philadelphia, PA, USA: IEEE, May 2022, pp. 10 781–10 787. [11] A. Sipos, W. van den Bogert, and N. Fazeli, “Gelslim 4.0: Focusing on touch and reproducibility,” 2024. [Online]. Available: https://arxiv.org/abs/2409.19770 [12] M. Lambeta, P.-W. Chou, S. Tian, B. Yang, B. Maloon, V. R. Most, D. Stroud, R. Santos, A. Byagowi, G. Kammerer, D. Jayaraman, and R. Calandra, “DIGIT: A Novel Design for a Low-Cost Compact High-Resolution Tactile Sensor with Application to In-Hand Manipulation,”                         
+
+> IEEE Robotics and Automation Letters , vol. 5, no. 3, pp. 3838–3845, Jul. 2020. [13] M. Lambeta, T. Wu, A. Sengul, V. R. Most, N. Black, K. Sawyer, R. Mercado, H. Qi, A. Sohn, B. Taylor, N. Tydingco, G. Kammerer, D. Stroud, J. Khatha, K. Jenkins, K. Most, N. Stein, R. Chavira, T. Craven-Bartle, E. Sanchez, Y. Ding, J. Malik, and R. Calandra, “Digitizing touch with an artificial multimodal fingertip,” 2024. [Online]. Available: https://arxiv.org/abs/2411.02479 [14] A.-H. Shahidzadeh, G. Caddeo, K. Alapati, L. Natale, C. Ferm¨ uller, and Y. Aloimonos, “Feelanyforce: Estimating contact force feedback from tactile sensation for vision-based tactile sensors,” 2024. [Online]. Available: https://arxiv.org/abs/2410.02048 [15] S. Li, Z. Wang, C. Wu, X. Li, S. Luo, B. Fang, F. Sun, X.-P. Zhang, and W. Ding, “When vision meets touch: A contemporary review for visuotactile sensors from the signal processing perspective,”
+> IEEE Journal of Selected Topics in Signal Processing , vol. 18, no. 3, p. 267–287, Apr. 2024. [Online]. Available: http://dx.doi.org/10.1109/ JSTSP.2024.3416841
+
+[16] B. Calli, A. Walsman, A. Singh, S. Srinivasa, P. Abbeel, and A. M. Dollar, “Benchmarking in manipulation research: Using the yale-cmu-berkeley object and model set,” IEEE Robotics & Automation Magazine ,vol. 22, no. 3, pp. 36–52, 2015. [17] A. Schmitz, Y. Bansho, K. Noda, H. Iwata, T. Ogata, and S. Sugano, “Tactile object recognition using deep learning and dropout,” in 2014 IEEE-RAS International Conference on Humanoid Robots , 2014, pp. 1044–1050. [18] R. Patel, R. Ouyang, B. Romero, and E. Adelson, “Digger finger: Gelsight tactile sensor for object identification inside granular media,” 2021. [Online]. Available: https://arxiv.org/abs/2102.10230 [19] A. Karamipour and S. H. Sadati, “Tactile object recognition using fluid-type sensor and deep learning,” IEEE Sensors Letters , vol. 7, no. 9, pp. 1–4, 2023. [20] M. Kaboli, K. Yao, D. Feng, and G. Cheng, “Tactile-based active object discrimination and target object search in an unknown workspace,” 
+
+Autonomous Robots , vol. 43, no. 1, pp. 123–152, Jan. 2019. [21] M. Kaboli, D. Feng, K. Yao, P. Lanillos, and G. Cheng, “A Tactile-Based Framework for Active Object Learning and Discrimination using Multimodal Robotic Skin,” IEEE Robotics and Automation Letters ,vol. 2, no. 4, pp. 2143–2150, Oct. 2017. [22] D. Xu, G. E. Loeb, and J. A. Fishel, “Tactile identification of objects using Bayesian exploration,” in 2013 IEEE International Conference on Robotics and Automation . Karlsruhe, Germany: IEEE, May 2013, pp. 3056–3061. [23] M. Regoli, N. Jamali, G. Metta, and L. Natale, “Controlled tactile exploration and haptic object recognition,” in 2017 18th International Conference on Advanced Robotics (ICAR) , Jul. 2017, pp. 47–54. [24] M. Bauza, E. Valls, B. Lim, T. Sechopoulos, and A. Rodriguez, “Tactile Object Pose Estimation from the First Touch with Geometric Contact Rendering,” Dec. 2020. [25] M. Bauza, A. Bronars, and A. Rodriguez, “Tac2pose: Tactile object pose estimation from the first touch,” The International Journal of Robotics Research , vol. 42, no. 13, p. 1185–1209, Sep. 2023. [Online]. Available: http://dx.doi.org/10.1177/02783649231196925 [26] G. M. Caddeo, N. A. Piga, F. Bottarel, and L. Natale, “Collision-aware In-hand 6D Object Pose Estimation using Multiple Vision-based Tactile Sensors,” Jan. 2023. [27] A. Sipos and N. Fazeli, “Simultaneous Contact Location and Object Pose Estimation Using Proprioception and Tactile Feedback,” Aug. 2022. [28] M. C. Koval, N. S. Pollard, and S. S. Srinivasa, “Pose estimation for planar contact manipulation with manifold particle filters,” The International Journal of Robotics Research , vol. 34, no. 7, pp. 922– 945, 2015. [29] A. Petrovskaya and O. Khatib, “Global Localization of Objects via Touch,” IEEE Transactions on Robotics , vol. 27, no. 3, pp. 569–585, Jun. 2011. [30] G. Vezzani, U. Pattacini, G. Battistelli, L. Chisci, and L. Natale, “Memory Unscented Particle Filter for 6-DOF Tactile Localization,” 
+
+IEEE Transactions on Robotics , vol. 33, no. 5, pp. 1139–1155, Oct. 2017. [31] G. Vezzani, N. Jamali, U. Pattacini, G. Battistelli, L. Chisci, and L. Na-tale, “A novel Bayesian filtering approach to tactile object recognition,” in 2016 IEEE-RAS 16th International Conference on Humanoid Robots (Humanoids) . IEEE, Nov. 2016, pp. 256–263. [32] H. Zheng, A. Jalba, R. H. Cuijpers, W. IJsselsteijn, and S. Schoenmakers, “A bayesian framework for active object recognition, pose estimation and shape transfer learning through touch,” 2024. [Online]. Available: https://arxiv.org/abs/2409.06912 [33] C. Xiao, S. Xu, W. Wu, and J. Wachs, “Active multiobject exploration and recognition via tactile whiskers,” IEEE Transactions on Robotics ,vol. 38, no. 6, pp. 3479–3497, 2022. [34] A.-H. Shahidzadeh, S. J. Yoo, P. Mantripragada, C. D. Singh, C. Ferm¨ uller, and Y. Aloimonos, “Actexplore: Active tactile explo-ration on unknown objects,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) , 2024, pp. 3411–3418. [35] A. A. Bonzini, L. Seminara, S. Macci` o, A. Carf` ı, and L. Jamone, “Robotic haptic exploration of object shape with autonomous symmetry detection,” IEEE Transactions on Robotics , 2025. [36] D. Driess, P. Englert, M. T. . I. International, and u. 2017, “Active learning with query paths for tactile object shape exploration,” ieeex-plore.ieee.org .[37] D. Driess, D. Hennes, and M. Toussaint, “Active Multi-Contact Contin-uous Tactile Exploration with Gaussian Process Differential Entropy,” in 2019 International Conference on Robotics and Automation (ICRA) ,May 2019, pp. 7844–7850, iSSN: 2577-087X. [38] J. Xu, S. Song, and M. Ciocarlie, “Tandem: Learning joint exploration and decision making with tactile sensors,” IEEE Robotics and Automa-tion Letters , vol. 7, no. 4, pp. 10 391–10 398, 2022. [39] W. Yuan, S. Dong, and E. H. Adelson, “GelSight: High-resolution robot tactile sensors for estimating geometry and force,” Dec. 2017. [40] S. Wang, M. Lambeta, P.-W. Chou, and R. Calandra, “TACTO: A Fast, Flexible, and Open-source Simulator for High-Resolution Vision-based Tactile Sensors,” IEEE Robotics and Automation Letters , vol. 7, no. 2, pp. 3930–3937, Apr. 2022. [41] G. M. Caddeo, A. Maracani, P. D. Alfano, N. A. Piga, L. Rosasco, and L. Natale, “Sim2surf: A sim2real surface classifier for vision-based tactile sensors with a bilevel adaptation pipeline,” IEEE Sensors Journal ,vol. 25, no. 5, pp. 8697–8709, 2025. [42] J. Elfring, E. Torta, and R. van de Molengraft, “Particle Filters: A Hands-On Tutorial,” Sensors , vol. 21, no. 2, p. 438, Jan. 2021. [43] Y. Xiang, T. Schmidt, V. Narayanan, and D. Fox, “Posecnn: Aconvolutional neural network for 6d object pose estimation in cluttered scenes,” 2018. [Online]. Available: https://arxiv.org/abs/1711.00199 [44] E. Coumans and Y. Bai, “Pybullet, a python module for physics simulation for games, robotics and machine learning,” 2016. [45] G. M. Caddeo, A. Maracani, P. D. Alfano, N. A. Piga, L. Rosasco, and L. Natale, “Sim2real bilevel adaptation for object surface classifi-cation using vision-based tactile sensors,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 15 128–15 134. 
+
+Haodong Zheng received his B.Eng. Degree in Mechatronic Engineering in 2017 at the Shantou University, China, and his M.Sc. Degree in Complex Adaptive Systems in 2022 at the Chalmers Uni-versity of Technology, Sweden. He is currently a PhD candidate in the Human Technology Interaction Group at the Eindhoven University of Technol-ogy, The Netherlands. His research interests include robotic visuo-tactile perception and manipulation through Deep Learning and Bayesian methods. 
+
+Gabriele Mario Caddeo received his B.S. degree in biomedical engineering, in 2018, the M.S. de-gree in electronic engineering, in 2020, from the Polytechnic University of Turin, and the PhD in Robotics in 2025, from the University of Genoa and the Italian Institute of Technology, in the Humanoid Sensing and Perception Lab, under the supervision of Lorenzo Natale. He was previously a Visiting Researcher at the Technical University of Munich and the University of Maryland. He is currently a postdoctoral researcher at the same lab. His research interests include generative AI and sensorimotor policies for perception and manipulation with sensor fusion through deep learning and classical methods 
+
+Andrei C. Jalba received his Ph.D. degree in 2004 from the Institute for Mathematics and Comput-ing Science of the University of Groningen, The Netherlands. Currently, he is an assistant professor in visualization and computer graphics at the Eind-hoven University of Technology, the Netherlands. His expertise includes multi-scale shape represen-tation, processing and reconstruction, physics-based material simulation and visual, scientific and multi-core computing. Wijnand IJsselsteijn is a full professor of Cogni-tion and Affect in Human-Technology Interaction at Eindhoven University of Technology (TU/e). He has an active research program on the impact of media technology on human psychology, and the use of psychology to improve technology design. His focus is on conceptualizing and measuring human experi-ences in relation to digital environments (immersive media, serious games, affective computing, personal informatics) in the service of human learning, health, and wellbeing. He has a keen interest in the relation between data science, AI and psychology, and works on technological inno-vations (such as sensor-enabled mobile technologies, virtual environments) that make possible novel forms of human behavior tracking, combining methodological rigor with ecological validity. 
+
+Lorenzo Natale Senior Member, IEEE) received the electronic engineering degree from University of Genova, Genoa, Italy, in 2000, and the Ph.D. degree in robotics from University of Genova, Genoa, Italy, in 2004. He was a Postdoctoral Researcher with the MIT Computer Science and Artificial Intelligence Laboratory and visiting Professor at the University of Manchester. He is currently a Senior Researcher with the Istituto Italiano di Tecnologia, Genoa, Italy, where he leads the Humanoid Sensing and Percep-tion group. Lorenzo Natale was one of the main contributors to the design and development of the iCub platform, for which he led the development of the software architecture and middleware. His research interests range from vision and tactile sensing to software architectures for robotics. He served as General Chair of IEEE ARSO 2018 and Program Chair of ICDL-Epirob 2014 and HAI 2017. He is currently specialty Chief Editor for the Humanoid Robotics Section of Frontiers in Robotics and AI, Ellis Fellow and Core Faculty of the Ellis Genoa Unit. 
+
+Raymond H. Cuijpers graduated in Applied Physics at the TU/e in 1996. He received his PhD in Physics of Man from Utrecht University in 2000. He did a postdoc on the role of shape perception on hu-man visuo-motor control at Erasmus MC Rotterdam. In 2004, he did a second postdoc at Radboud Univer-sity Nijmegen. In 2008 he was appointed Assistant Professor at TU/e at the Human-Technology Inter-action group. In 2014 he became associate professor in Cognitive Robotics and Human-Robot Interaction. His research interests include visual perception and visuo-motor control.
