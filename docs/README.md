@@ -6,46 +6,31 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-26
-- 运行时间：2026-03-26 19:57:32 UTC
+- 最新运行日期：2026-03-27
+- 运行时间：2026-03-27 20:11:29 UTC
 - 运行状态：成功
-- 本次总论文数：8
-- 精读区：3
-- 速读区：5
+- 本次总论文数：3
+- 精读区：1
+- 速读区：2
 
 ### 今日简报（AI）
-今日聚焦人形机器人核心突破，深度解析步态稳定性与多目标偏好控制等 8 项前沿成果。
-重点推荐通过扭矩空间扰动优化实机迁移，以及利用强化学习实现个性化人形控制的两大满分研究。
-建议深入关注人形机器人从仿真到现实（Sim-to-Real）的鲁棒性方案，这是迈向复杂应用场景的技术基石。
-- 详情：[/202603/26/README](/202603/26/README)
+今日聚焦工业安全前沿，深度解析得分 9.0 的 SafeGuard ASF 智能人形机器人系统。
+重点展示了人形机器人在自主巡检中的安全保障，并探讨了结合贝叶斯推理与拓扑意图的导航优化方案。
+建议关注具身
+- 详情：[/202603/27/README](/202603/27/README)
 
 ### 精读区论文标签
-1. [Sim-to-Real of Humanoid Locomotion Policies via Joint Torque Space Perturbation Injection](/202603/26/2603.21853v2-sim-to-real-of-humanoid-locomotion-policies-via-joint-torque-space-perturbation-injection)  
-   标签：评分：10.0/10、query:robot
-   evidence：通过转矩扰动实现类人机器人运动的越障迁移
-2. [PCHC: Enabling Preference Conditioned Humanoid Control via Multi-Objective Reinforcement Learning](/202603/26/2603.24047v1-pchc-enabling-preference-conditioned-humanoid-control-via-multi-objective-reinforcement-learning)  
-   标签：评分：10.0/10、query:robot
-   evidence：用于人形机器人控制的多目标强化学习
-3. [SafeFlow: Real-Time Text-Driven Humanoid Whole-Body Control via Physics-Guided Rectified Flow and Selective Safety Gating](/202603/26/2603.23983v1-safeflow-real-time-text-driven-humanoid-whole-body-control-via-physics-guided-rectified-flow-and-selective-safety-gating)  
+1. [SafeGuard ASF: SR Agentic Humanoid Robot System for Autonomous Industrial Safety](/202603/27/2603.25353v1-safeguard-asf-sr-agentic-humanoid-robot-system-for-autonomous-industrial-safety)  
    标签：评分：9.0/10、query:robot
-   evidence：人形机器人全身控制与运动生成
+   evidence：具有多模态感知和学习运动的人形机器人系统
 
 ### 速读区论文标签
-1. [Bio-Inspired Event-Based Visual Servoing for Ground Robots](/202603/26/2603.23672v1-bio-inspired-event-based-visual-servoing-for-ground-robots)  
-   标签：评分：7.0/10、query:robot
-   evidence：地面机器人的基于事件视觉感知
-2. [C-STEP: Continuous Space-Time Empowerment for Physics-informed Safe Reinforcement Learning of Mobile Agents](/202603/26/2603.24241v1-c-step-continuous-space-time-empowerment-for-physics-informed-safe-reinforcement-learning-of-mobile-agents)  
-   标签：评分：7.0/10、query:robot
-   evidence：用于移动智能体的物理启发式安全强化学习
-3. [Bayesian Active Object Recognition and 6D Pose Estimation from Multimodal Contact Sensing](/202603/26/2603.21410v1-bayesian-active-object-recognition-and-6d-pose-estimation-from-multimodal-contact-sensing)  
+1. [Integrating Deep RL and Bayesian Inference for ObjectNav in Mobile Robotics](/202603/27/2603.25366v1-integrating-deep-rl-and-bayesian-inference-for-objectnav-in-mobile-robotics)  
    标签：评分：6.0/10、query:robot
-   evidence：多模态接触感知与位姿估计
-4. [Active Robotic Perception for Disease Detection and Mapping in Apple Trees](/202603/26/2603.23112v1-active-robotic-perception-for-disease-detection-and-mapping-in-apple-trees)  
+   evidence：结合深度强化学习与贝叶斯推理进行移动机器人导航
+2. [IntentReact: Guiding Reactive Object-Centric Navigation via Topological Intent](/202603/27/2603.25382v1-intentreact-guiding-reactive-object-centric-navigation-via-topological-intent)  
    标签：评分：6.0/10、query:robot
-   evidence：主动机器人感知和语义3D建图
-5. [Information-Driven Active Perception for k-step Predictive Safety Monitoring](/202603/26/2603.23450v1-information-driven-active-perception-for-k-step-predictive-safety-monitoring)  
-   标签：评分：6.0/10、query:robot
-   evidence：用于预测性安全监测的主动感知
+   evidence：以物体为中心的导航和局部感知驱动控制
 
 
 <div class="dpr-home-promo-card">
