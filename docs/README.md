@@ -6,31 +6,28 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-27
-- 运行时间：2026-03-27 20:11:29 UTC
+- 最新运行日期：2026-03-28
+- 运行时间：2026-03-28 19:56:56 UTC
 - 运行状态：成功
-- 本次总论文数：3
+- 本次总论文数：2
 - 精读区：1
-- 速读区：2
+- 速读区：1
 
 ### 今日简报（AI）
-今日聚焦工业安全前沿，深度解析得分 9.0 的 SafeGuard ASF 智能人形机器人系统。
-重点展示了人形机器人在自主巡检中的安全保障，并探讨了结合贝叶斯推理与拓扑意图的导航优化方案。
-建议关注具身
-- 详情：[/202603/27/README](/202603/27/README)
+今日聚焦复杂环境下的机器人稳健导航，深入探讨深度感知受损与未知约束下的应对方案。
+核心结论指出跨模态强化学习能有效弥补深度测量缺陷，结合环境约束表征可显著提升导航可靠性。
+建议关注多模态感知融合技术，以应对现实场景中传感器失效或环境多变的挑战。
+- 详情：[/202603/28/README](/202603/28/README)
 
 ### 精读区论文标签
-1. [SafeGuard ASF: SR Agentic Humanoid Robot System for Autonomous Industrial Safety](/202603/27/2603.25353v1-safeguard-asf-sr-agentic-humanoid-robot-system-for-autonomous-industrial-safety)  
-   标签：评分：9.0/10、query:robot
-   evidence：具有多模态感知和学习运动的人形机器人系统
+1. [Cross-Modal Reinforcement Learning for Navigation with Degraded Depth Measurements](/202603/28/2603.22182v1-cross-modal-reinforcement-learning-for-navigation-with-degraded-depth-measurements)  
+   标签：评分：8.0/10、query:robot
+   evidence：退化环境下的跨模态强化学习导航
 
 ### 速读区论文标签
-1. [Integrating Deep RL and Bayesian Inference for ObjectNav in Mobile Robotics](/202603/27/2603.25366v1-integrating-deep-rl-and-bayesian-inference-for-objectnav-in-mobile-robotics)  
+1. [Characterization of Constraints in Flexible Unknown Environments](/202603/28/2603.24813v1-characterization-of-constraints-in-flexible-unknown-environments)  
    标签：评分：6.0/10、query:robot
-   evidence：结合深度强化学习与贝叶斯推理进行移动机器人导航
-2. [IntentReact: Guiding Reactive Object-Centric Navigation via Topological Intent](/202603/27/2603.25382v1-intentreact-guiding-reactive-object-centric-navigation-via-topological-intent)  
-   标签：评分：6.0/10、query:robot
-   evidence：以物体为中心的导航和局部感知驱动控制
+   evidence：未知环境下的自主操作在线路径规划
 
 
 <div class="dpr-home-promo-card">
