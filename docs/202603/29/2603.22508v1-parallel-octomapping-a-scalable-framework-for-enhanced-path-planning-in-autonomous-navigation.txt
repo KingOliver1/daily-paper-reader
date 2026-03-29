@@ -1,0 +1,969 @@
+Title: Parallel OctoMapping: A Scalable Framework for Enhanced Path Planning in Autonomous Navigation
+
+URL Source: https://arxiv.org/pdf/2603.22508v1
+
+Published Time: Wed, 25 Mar 2026 00:16:57 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+> 1
+
+# Parallel OctoMapping: A Scalable Framework for Enhanced Path Planning in Autonomous Navigation 
+
+Yihui Mao, Tian Tan, Xuehui Shen, Warren E. Dixon, and Rushikesh Kamalapurkar 
+
+Abstract —Mapping is essential in robotics and autonomous systems because it provides the spatial foundation for path plan-ning. Efficient mapping enables planning algorithms to generate reliable paths while ensuring safety and adapting in real time to complex environments. Fixed-resolution mapping methods often produce overly conservative obstacle representations that lead to suboptimal paths or planning failures in cluttered scenes. To address this issue, we introduce Parallel OctoMapping (POMP), an efficient OctoMap-based mapping technique that maximizes available free space and supports multi-threaded computation. To the best of our knowledge, POMP is the first method that, at a fixed occupancy-grid resolution, refines the representation of free space while preserving map fidelity and compatibility with existing search-based planners. It can therefore be integrated into existing planning pipelines, yielding higher pathfinding success rates and shorter path lengths, especially in cluttered environ-ments, while substantially improving computational efficiency. 
+
+Index Terms —OctoMap, occupancy mapping, autonomous navigation, path planning, search-based planning, parallel com-puting. 
+
+I. INTRODUCTION Understanding the environment is fundamental to autonomy in mobile robotics. A well-designed mapping method that enforces spatial consistency across observations, produces an accurate and memory-efficient representation of the environ-ment, and supports fast, informative spatial queries is thus a critical component of modern autonomy systems. Therefore, good map representations improve the reliability of down-stream planning and collision-avoidance modules, enabling safer, higher-quality trajectories and ultimately more robust autonomous navigation [1]–[5]. In online navigation, mapping accuracy alone is insufficient. The mapping module must also meet time and computation constraints, supporting fast construction and frequent updates without sacrificing fidelity (runtime efficiency), while keeping memory usage bounded through sparse representations (mem-ory efficiency). During execution, the map should provide online querying capability, allowing the planner to obtain the 
+
+This research is supported, in part, by the Air Force Research Laboratory under Grant No. FA8651-24-1-0019, the Air Force Office of Scientific Research under Grant No. FA9550-19-1-0169, and the U.S. Army Research Laboratory under Grant No. W911NF-25-2-0045. Any opinions, findings, and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the sponsoring agencies. Yihui Mao, Xuehui Shen, Warren E. Dixon, and Rushikesh Kamalapurkar are with the Department of Mechanical and Aerospace Engineering, University of Florida, Gainesville, FL 32611 USA (e-mail: {yihui.mao, xuehuishen, wdixon, rkamalapurkar }@ufl.edu). Tian Tan is with the Department of Electrical and Systems Engineer-ing, University of Pennsylvania, Philadelphia, PA 19104 USA (e-mail: tiantan@alumni.upenn.edu). 
+
+spatial information it needs, so that mapping and planning can work together within a unified navigation pipeline (continuous usability). OctoMap is a widely adopted representation for 3D occupancy mapping because its sparse octree structure en-ables memory-efficient storage, multi-resolution queries, and incremental updates [1]. However, in large environments with dense point clouds and high update rates, a standard OctoMap pipeline can become compute-bound and may struggle to sustain real-time throughput. Search-based methods are widely used for planning because they integrate naturally with grid and voxel maps and can provide completeness and optimality guarantees under stan-dard assumptions [6]–[9]. The performance of search-based planning, however, is strongly influenced by map resolution and the choice of representation. With fixed resolution cells, typical occupancy grids may mark an entire cell as occupied when a relatively small portion of an obstacle falls within it. The conservative labeling rule can unnecessarily mark traversable space as non-traversable, resulting in broken con-nectivity in narrow passages, increased search effort, degraded path quality, and in some cases planning failures in cluttered scenes [10]. A straightforward remedy is to increase the grid resolution, but this substantially increases mapping compu-tation and memory consumption, enlarges the search graph, and ultimately lengthens planning time. Motivated by these limitations, we seek map representations that better exploit within-cell free space to preserve narrow passages without globally refining the resolution, while remaining efficient for online planning. To address the limitations of fixed-resolution mapping for path planning, we propose an efficient mapping technique based on OctoMap that accelerates map construction through multi-threaded parallel computation and maximizes the uti-lization of cell space at fixed resolution. While conventional methods conservatively label an entire cell as occupied when-ever it contains even a small portion of an obstacle, Parallel OctoMapping (POMP) performs a finer-grained analysis of the internal clustered spatial distribution of the point cloud to safely reclaim significant navigable space that would otherwise be inaccessible under traditional methods. In summary, our contributions are as follows:  
+
+> •
+
+A novel OctoMap-based mapping technique (POMP) is developed that maximizes grid/voxel space utilization in 2D and 3D by subdividing each fixed-resolution grid/cell into distinct sub-regions. By introducing Clear , Safe ,and Unsafe states based on the clustered spatial distri-bution of the point cloud, this method unlocks significant navigable space overlooked by conservative Occupancy 
+
+> arXiv:2603.22508v1 [cs.RO] 23 Mar 2026 2
+
+Grid Map (OGM) methods.  
+
+> •
+
+POMP performs parallel, multi-threaded computation, significantly reducing map-construction time in large en-vironments with dense point clouds and frequent updates.  
+
+> •
+
+POMP improves the feasibility and optimality of search-based path planning while reducing mapping time com-pared with conventional fixed-resolution occupancy grid methods. II. RELATED WORK 
+
+A. Mapping Representations and Frameworks 
+
+Point clouds, commonly captured in robotic tasks like mapping and planning, often contain excessive points and sensor noise, making them less suitable for efficiently rep-resenting large-scale environments. One simple alternative is the grid/voxel map, which partitions space into uniform squares/cubes to represent the scene; however, many of these remain unexplored in each sensor measurement, leading to a substantial memory overhead. Tree-based representations have been studied to overcome these issues. The OctoMap [1] is a well-established represen-tation that uses an Octree, which divides 3D space into eight subspaces that have the same volume. OctoMaps compactly and probabilistically represent an environment with occupancy states, including unknown, occupied, or free. In recent years, a variety of mapping frameworks [1], [11]–[17] have been proposed to improve map representa-tion and computational efficiency. In addition, some of these frameworks [18]–[20] facilitate navigation by providing map representations that are more suitable for path planning. Trun-cated Signed Distance Fields (TSDFs) [2], [21], originally used in computer graphics, represent geometry implicitly by storing truncated signed distance to the observed surface. In practice, TSDF values are updated using distances projected along the sensor ray, and they are maintained only within a narrow truncation band around the surface. Voxblox [18] builds upon TSDF by incrementally constructing Euclidean Signed Distance Fields (ESDFs) from the TSDF map, allowing efficient queries of the Euclidean distance from each voxel to the nearest obstacle to support path planning. FIESTA [19] is another well-known fast incremental ESDF mapping framework for online motion planning of aerial robots. It computes the ESDF directly from an occupancy grid map and builds a growing global map, and has been reported to achieve higher accuracy and computational performance compared to Voxblox in its experiments. 
+
+B. Planning on Structured Maps 
+
+Discrete volumetric occupancy maps are typically imple-mented using one of three commonly used structures: uniform voxels [22]–[24], Octrees (e.g., OctoMap [25]), and hashed voxel/block structures [18], [26]. Occupancy grid mapping, where uniform voxel cells dis-cretize the space, is easy to implement and aligns well with LiDAR and RGB-D data; however, dense implemen-tations allocate memory uniformly across the bounded map volume, which leads to rapidly increasing memory usage as the resolution becomes finer. Octree–based representa-tions such as OctoMap provide hierarchical, memory–efficient storage and naturally support multi–resolution updates, but their pointer–based hierarchy incurs O(log n) access time and makes neighborhood queries across different depths cumber-some. Hashed voxel/block structures can achieve sparse access in expected near O(1) access time and scale well to large environments, but suffer from potential hash collisions and require careful memory management. To combine the strengths of these approaches while avoid-ing their weaknesses, we use the octree solely as a parallel point cloud reader and storage backend, streaming its leaf states to a fixed-resolution occupancy grid in real time. Atomic updates propagate each leaf change to the corresponding grid cell without race conditions, so the planner operates on a grid array with per-voxel access time of O(1) and constant-stride neighbor checks, without traversing the tree during planning, while the map remains sparsely represented in the tree. This decoupled design preserves the octree’s efficient incremental construction and provides the planner with acontiguous grid array for fixed-stride access, enabling fast search-based planning. III. P RELIMINARIES 
+
+A. OctoMap and Occupancy Grid Mapping Overview 
+
+OctoMap [1] is a 3D occupancy mapping framework that uses an Octree-based data structure to efficiently store, update, and query volumetric information. An Octree is a hierarchical structure that recursively subdivides 3D space into cubic volumes, or voxels, starting from a root node and continuing until a predefined resolution is reached. The occupancy grid map for pathfinding is generated from the Octree built in the mapping process. The OctoMap and the occupancy grid map are configured as follows. 
+
+Octree Configuration. The first step is to align the OctoMap with the workspace of interest. We set the root center croot 
+
+of the Octree to coincide with the geometric center cmap 
+
+of the environment bounds along each coordinate axis. Let 
+
+Lx, L y , L z denote the side lengths of the workspace along the 
+
+x, y, and z axes. We then define Lmax = max {Lx, L y , L z }
+
+as the maximum extent of the environment. The depth n of the Octree is determined by the smallest resolution r (i.e., the edge length of a leaf cube). Since each additional tree level subdivides a cube into 8 smaller ones, the minimum depth required to achieve a leaf size r is computed as 
+
+n =
+
+
+
+log 2
+
+ Lmax 
+
+r
+
+ 
+
+.
+
+The depth guarantees that the root node has a side length S0 =2 nr which is large enough to cover the maximum workspace dimension Lmax in all directions. Intuitively, this step defines the “outer box” of the Octree and ensures that the leaf nodes match the desired map resolution. 
+
+Grid Configuration. Nx, Ny , and Nz denote the numbers of leaf nodes along the x, y, and z axes after discretizing the half of the workspace with leaf size r:
+
+Nx =
+
+l Lx
+
+> 2r
+
+m
+
+, Ny =
+
+l Ly
+
+> 2r
+
+m
+
+, Nz =
+
+l Lz
+
+> 2r
+
+m
+
+,3
+
+where Lx, Ly , and Lz are the workspace extents along the x,
+
+y, and z axes, respectively. The origin of the occupancy grid, ogrid , is placed at the vertex with the smallest coordinates in all three dimensions: 
+
+ogrid =
+
+
+
+cmap x − Nxr − r
+
+> 2
+
+cmap y − Ny r − r
+
+> 2
+
+cmap z − Nz r − r
+
+> 2
+
+ .
+
+Finally, the grid dimensions are defined as: 
+
+dim x = 2 Nx + 1 , dim y = 2 Ny + 1 , dim z = 2 Nz + 1 ,
+
+The grid configuration guarantees that the occupancy grid is symmetrically aligned with the octree root, spans the full environment, and extends by half a cell (r/ 2) beyond the outermost octree leaf nodes. 
+
+B. Parallelization of occupancy update 
+
+A dense point cloud input can make OctoMap construction a computational bottleneck, given that the commonly used implementation is often used in a single-threaded or effectively sequential manner in practice. Sequential processing limits throughput and responsiveness in real time mapping tasks, especially when handling large-scale or high-frequency sensor data. We parallelize OctoMap construction with Intel oneAPI Threading Building Blocks (oneTBB), a task-based C++ li-brary whose work-stealing scheduler balances the irregular, fine-grained tasks in voxel updates [27]. Compared with GPU approaches [16], CPU parallelism can avoid host–device transfer costs when data reside on the CPU and often better matches the branching and sparse access patterns of Octree updates. Among CPU options, both OpenMP and oneTBB support dynamic scheduling and task parallelism. We choose oneTBB for its composable task-graph API and work-stealing runtime, which can better accommodate many small, irregular tasks than a simple thread-pool design. To ensure correctness during concurrent updates, we employ the compare-and-swap (CAS) instruction, an atomic primitive supported by most modern multiprocessor architectures. CAS atomically compares a memory location with an expected value and, only if they match, updates it to a new value. For per-voxel updates that can be encoded in a single atomic variable, we apply CAS in a retry loop. Each successful CAS atomically commits the new per-voxel state, preventing lost updates under contention. IV. O VERVIEW 
+
+Fig. 1 provides an overview of the proposed POMP frame-work. The framework consists of two tightly coupled com-ponents: (i) an OctoMap backend for real-time map con-struction, and (ii) a planner-facing fixed-resolution occupancy grid map (OGM) to support efficient search-based planning. Specifically, the OctoMap is continuously updated online, and the leaf-level region states are projected onto the OGM to determine the navigability of each corresponding grid cell for planning. Alignment        
+
+> (Section III-A)
+> Point Clouds
+> Configuration
+> Octree
+> Occupancy
+> Grid Map
+> Planning
+> Construction
+> (Section V-B)
+> Mapping Strategy Map Structure
+> Region State Determination
+> Leaf
+> Point Cloud
+> Storage
+> Occupancy
+> Update OR
+> Cell
+> Diagonal Examination
+> Navigability State
+> Determination
+> Search-Based Pathfinding
+> Mapping
+> (Section V-C) (Section V-D & E)
+> Fig. 1. System overview of our proposed mapping framework
+
+Because the OctoMap and the OGM are tightly coupled, their spatial relationship is explicitly defined (see Section III-A). In particular, the OctoMap leaf-node size is set equal to the OGM cell size. The number of OGM cells is selected to be larger by one along each axis than the number of OctoMap leaf nodes, and it is shifted by a half-cell offset so that the two discretizations are staggered by half of the cell size. This arrangement yields a consistent, overlap-based correspondence between OctoMap leaf nodes and OGM cells, enabling reliable projection of leaf-level region states onto the grid for planning. Due to half-cell offset, the leaf-node boundaries at the chosen depth often pass through the centers of OGM cells, effectively slicing the original grid and introducing additional split lines; because these boundaries are uniformly spaced, any narrow passage of sufficient width (larger than the chosen OGM cell resolution) must be intersected by at least one boundary (pigeonhole principle) and therefore cannot be “skipped” by discretization. We then apply occupancy thresholding with a safety margin to preserve the required clearance even when an obstacle occupies only a small fraction of an OGM cell (See the Region block in Fig. 2 and the left panel of Fig. 3). POMP starts by acquiring a stream of point clouds, either directly from range sensors (e.g., LiDAR) or from an existing point cloud map. An OctoMap is then constructed with a predefined leaf resolution, where incoming measurements are integrated through leaf-node point storage and/or occupancy updates (see Section V-B). Based on the resulting leaf-level statistics, we assign each leaf node a navigability label (‘Un-safe’ / ‘Safe’ / ‘Clear’) based on occupancy thresholding, and use this label to evaluate the traversability of the corresponding OGM cell (See Section V-C). The developed method fundamentally overcomes a key limitation of existing mapping techniques. The conventional methods [28], [29] employ overconservative occupancy label-ing, marking a grid as fully occupied regardless of whether it is densely filled or contains only a few sparse points. Our approach, described in Algorithm 1 and Algorithm 2, performs a targeted subdivision at the leaf node to unlock navigable free space in OGM for motion planning. This process retains a significant portion of the free space that would otherwise be deemed untraversable. The resulting OGM thus provides a substantially larger configuration space for path planners, 4
+
+TABLE I TERMINOLOGY AND NOTATION .                
+
+> Category Term Definition Sym.
+> OctoMap node A hierarchical spatial unit in the Octree corresponding to a cubic region of space. leaf size The edge length of a leaf node. r
+> threshold A user-defined range to classify points as unsafe, safe or clear for navigation. thr occupied state A state in which the OctoMap node contains point cloud. unoccupied state A state where no point cloud is marked in an OctoMap node. Region region A leaf node equally separated into 4 regions in 2D and 8 regions in 3D. unsafe state A region state in a leaf node with points outside the range set by the threshold. safe state A region state in a leaf node with all points inside the range set by the threshold. clear state A region state in a leaf node without a point cloud. Occupancy Grid Map grid A discrete unit of the 2D occupancy grid map. voxel A discrete unit of the 3D occupancy grid map. resolution The grid/voxel edge length, same as the leaf size in our method. res
+
+directly enhancing both the probability of finding a valid path and the quality of the solution in complex environments. V. POMP D ESIGN AND IMPLEMENTATION 
+
+In this section, we present the implementation of the data structures and algorithms. The terminology and notation used in this paper are summarized in Table I. 
+
+A. Data Structure 
+
+In Data Structure 1, Lines 1 and 2 define common attributes of a standard Octree node: the node’s size and pointers to its child nodes. The atomic type is used to enable concurrent (thread-safe) modifications to the child pointers without requiring a mutex, allowing safe node creation and point insertion in parallel. In line 3, we instantiate a node when it contains point cloud data to represent occupancy. In 2D, each node has four children, whereas in 3D it has eight. In line 4, we optionally store point coordinates in each leaf node using a concurrent vector. A concurrent vector is a thread-safe data structure that allows multiple threads to insert or access elements simultaneously without explicit locking, thus preventing race conditions during tree construction. Line 5 de-fines safe_state : an atomic bitmask records the occupancy and safety of regions within a leaf node (8 bits in 2D and 16 bits in 3D). Using an atomic type ensures thread-safe updates during concurrent point insertions. 
+
+Data Structure 1: OctreeNode  
+
+> 1
+
+Structure:  
+
+> 2
+
+double node_size ; 
+
+> 3
+
+array <atomic <OctreeNode* >,8 > children ; 
+
+> 4
+
+concurrent vector <PointType > points ; 
+
+> 5
+
+atomic <uint16 t > safe_state {0};
+
+Data Structure 2 includes the pointer to the top-level node of the Octree, serving as the root for accessing and traversing the entire tree in Line 2. The map in Line 4 is for pathfinding, which is formally introduced in Data Structure 3. The leafsize is a given value that represents the leaf node size, and is the same as the resolution of the map in 
+
+Data Structure 3 .
+
+Data Structure 2: Octree  
+
+> 1
+
+Structure:  
+
+> 2
+
+OctreeNode* root ; 
+
+> 3
+
+double leafsize ; 
+
+> 4
+
+OccupancyGridMap* map ;
+
+Data Structure 3: OccupancyGridMap  
+
+> 1
+
+Structure:  
+
+> 2
+
+double resolution ; 
+
+> 3
+
+atomic <unsigned char >* voxels ;
+
+Data Structure 3 is the OccupancyGridMap, where Line 3 references an array of unsigned char (1 byte) occupancy state for thread-safe parallel updates. It plays the same role as occupancy grid cells but is designed to minimize conser-vative full-occupancy labels, improving spatial efficiency. The 
+
+resolution (Line 2) represents the size of each voxel in the map. 
+
+B. Parallel Octree Construction 654 7 82 31 
+
+> 1
+> 34
+> 8
+> 7
+> 2
+> 6
+> Region Octree
+
+Fig. 2. Parallel insertion of point clouds into the Octree with concurrent node construction. Each leaf node is subdivided into 4 regions in 2D or 8 regions in 3D. In the figure, “ ” represents occupied, “ ” represents unoccupied, and “ ” denotes the threshold bounding box. The bounding box is centered on a leaf node and used to determine the region state; by default, the edge length of the bounding box is set to half the leaf size. The regions are classified as 
+
+Clear “ ” (no points), Safe “ ”, or Unsafe “ ” (see Fig.3). 
+
+The parallel Octree construction follows the standard octree insertion procedure, which is illustrated in Fig. 2, but inserts points concurrently using multiple threads (See Algorithm 1). We parallelize point insertion by distributing the input points across threads; each thread traverses the tree from 5h               
+
+> thr
+> c
+> Fig. 3. Illustration of the threshold setup and region classification: Clear ,
+> Safe , and Unsafe . The left panel depicts the boundary of the area, where
+> hdenotes half the edge length of an OctoMap leaf node (equal to the map resolution), and the threshold distance is thr = h·ratio , with ratio specified at initialization. Red points lie outside the thresholded boundary, while blue points lie inside; these points determine the region safe state label ( unsafe
+> /safe /clear ).
+
+the root to the corresponding leaf for every point it inserts. Using parallel threads to access the same node can lead to race conditions; therefore, whenever constructing a new child under a parent node, we first check whether the pointer is nullptr. An atomic compare-and-swap (CAS) is used to safely construct child nodes during parallel point insertion. A new node is constructed only if the child pointer remains nullptr 
+
+at the time of the operation. A successful CAS atomically sets the corresponding child pointer to the newly allocated node, whereas failure indicates that another thread has already constructed the child, in which case the newly allocated node is discarded. This process is repeated recursively until reaching a leaf node, whose size corresponds to the predefined resolution. Each OctoMap leaf node is subdivided into four regions in 2D or eight regions in 3D. During the point insertion (see the 
+
+set_safe_state function), each point is checked against the leaf node center c. A region is marked unsafe if it contains any point whose perpendicular distance to each axis-aligned splitting line/plane (used to partition the leaf cube) exceeds the threshold thr = h · ratio , where h is half of the leaf-cube edge length. Equivalently, max i |pi − ci| ≥ thr , where pi and ci
+
+are the i-th coordinate components of the point p and the leaf center c, respectively, and the splitting planes pass through c.This threshold provides a margin so that points too close to the boundary are conservatively treated as obstacles. If all points in the region lie within this margin, the region is marked safe. If the region contains no points, it is marked clear. All settings are illustrated in Fig. 3. For compact storage, these states are encoded in a single safe_state variable, with an 8-bit representation in 2D ( uint8_t ) and a 16-bit representation in 3D ( uint16_t ). In 2D, the lower 4 bits record the safe/unsafe flags of the four regions, and the upper 4 bits record whether each region is clear (i.e., empty) or occupied (i.e., contains points). In 3D, the lower 8 bits record the safe / unsafe flags of the eight regions, and the upper 8 bits record the corresponding clear / non-clear flags. Note that Unsafe , Safe , and Clear are the three region states we use to evaluate safety for navigability. A region is non-clear if it has been visited by points, which includes both the unsafe and safe cases. This atomic encoding allows multiple threads to update the safe state of different regions in parallel without requiring locks. The state of each region determines the navigability of its corresponding occupancy grid/voxel. 
+
+Algorithm 1: Parallel Octree Build 
+
+Input: Points P 
+
+> 1
+
+Function TreeBuild( P): 
+
+> 2
+
+foreach p ∈ P in parallel do  
+
+> 3
+
+ParallelInsertPoints (p, root )
+
+Input: Points p, OctreeNode node  
+
+> 1
+
+Function ParallelInsertPoints( p, node ): 
+
+> 2
+
+if node is leaf: then  
+
+> 3
+
+push p into node.points  
+
+> 4
+
+set_safe_state (p,node)  
+
+> 5
+
+return  
+
+> 6
+
+else  
+
+> 7
+
+idx ← node.get child idx( p) 
+
+> 8
+
+child ←node.children[idx]  
+
+> 9
+
+if child is nullptr then  
+
+> 10
+
+newNode = new OctreeNode;  
+
+> 11
+
+expected ← nullptr;  
+
+> 12
+
+ok ←CAS(child,expected,newNode)  
+
+> 13
+
+if ok then  
+
+> 14
+
+child ← newNode  
+
+> 15
+
+else  
+
+> 16
+
+destroy(newNode)  
+
+> 17
+
+ParallelInsertPoints( p,child) 
+
+Input: Points p, OctreeNode node  
+
+> 1
+
+Function set_safe_state( p, node ): 
+
+> 2
+
+c ← node.center;  
+
+> 3
+
+h ← node.size * 0.5;  
+
+> 4
+
+idx ← node. get_child_idx( p) 
+
+> 5
+
+mask ← 1u<<(idx+8)  
+
+> 6
+
+if ∥p − c∥∞ ≥ h · ratio then  
+
+> 7
+
+mask ← 1u<<(idx)  
+
+> 8
+
+AtomicOr(node.safe_state,mask) 
+
+C. Mapping Implementation 
+
+The OctoMap and the OGM are tightly coupled: the OctoMap is continuously updated online, as described in Section V-B, and the OGM used for pathfinding is derived from the OctoMap. The region safe states in the leaf level, as shown in Fig. 3, are used to infer the navigability of the corresponding OGM cells, and the inferred navigability is then used to assign the occupancy of each cell. Fig. 4 illustrates the spatial correspondence between the OctoMap and the OGM over the entire map. In Algorithm 2, the constructed OctoMap is traversed from the root to the leaves using the function traverse(node) .At each leaf node, we call project_onto_OGM(node) 
+
+to mark the occupancy of the corresponding OGM cell. This function applies diagonal examination (see Fig. 5) to determine the navigability of the OGM cell containing the region, as well as the navigability of the OGM cell containing its diagonal 6      
+
+> Fig. 4. Illustration of the mapping configuration from Octree leaf nodes (left) to leaf regions and their projection onto the OGM (right). The occupancy grid is shown with a dash–dot outline, OctoMap nodes with a long-dashed outline, and region partitions with solid lines.
+> Fig. 5. Illustration of the diagonal examination pairs and rules for determining grid navigability. is the unsafe region in the leaf node, is the safe region in the leaf node, and is the clear region in the leaf node. The arrow represents the direction of examination. The floating square with a black border indicates that the corresponding cell of OGM should be marked as Occupied after the examination.
+
+region, and accordingly assigns the occupancy of that cell using set_cell_Occupied(idx) . Here, from_idx and 
+
+to_idx follow the arrow direction illustrated in Fig. 5. 
+
+D. Diagonal Examination 
+
+In a standard occupancy grid map, a free cell has up to 8
+
+neighbors in 2D and up to 26 neighbors in 3D. Accordingly, motion primitives can be categorized into two types: axis-aligned and diagonal moves. Under our alignment configuration, the OGM is shifted by a half-cell offset so that the two discretizations are staggered by half of the cell size. Consequently, each OGM cell overlaps multiple OctoMap leaf regions: four in 2D and eight in 3D. A clear region contains no obstacles and is navigable in all directions; a safe region is assumed to be navigable only in axis-aligned directions; and an unsafe region is not navigable in any direction. We leverage this decomposition and let the regions jointly determine whether an OGM cell should be marked as occupied (see Fig. 6). 
+
+Algorithm 2: Occupancy Grid Mapping 
+
+Input: OctreeNode node  
+
+> 1
+
+Function project_onto_OGM( node ): 
+
+> 2
+
+if region[from idx] is clear then  
+
+> 3
+
+if region[to idx] is not clear then  
+
+> 4
+
+set_cell_Occupied(to_idx)  
+
+> 5
+
+else  
+
+> 6
+
+if region[from idx] is safe then  
+
+> 7
+
+if region[to idx] is not clear then  
+
+> 8
+
+set_cell_Occupied(to_idx)  
+
+> 9
+
+else  
+
+> 10
+
+set_cell_Occupied(from_idx)  
+
+> 11
+
+else  
+
+> 12
+
+if region[to idx] is unsafe then  
+
+> 13
+
+set_cell_Occupied(to_idx)  
+
+> 14
+
+set_cell_Occupied(from_idx) 
+
+Input: OctreeNode node  
+
+> 1
+
+Function traverse( node ): 
+
+> 2
+
+if node is Leaf then  
+
+> 3
+
+project_onto_OGM (node ) 
+
+> 4
+
+else  
+
+> 5
+
+foreach child ∈ node in parallel do  
+
+> 6
+
+traverse(child) 
+
+Since the three safe states depend on navigability in axis-aligned directions, we only need to perform diagonal exami-nations along each cell’s diagonal directions. Once diagonal-direction navigability is evaluated, the cell’s overall navigabil-ity is determined, including both axis-aligned and diagonal navigations. For example, the center OGM cell (cell 5) in Fig. 6 is considered axis-aligned navigable from its axis-aligned neighboring cells (cells 2, 4, 6, and 8) to cell 5 if cell 5 contains only clear or safe regions. The final occupancy of cell 5 is jointly determined by the diagonal region examinations of the cell pairs (1,5), (5,7), (3,5), and (5,9). To mark a cell as unoccupied in the OGM, we also need to ensure diagonal navigability. Using leaf-node regions within 71 2 3
+
+# 4 5 6
+
+# 7 8 9
+
+1
+
+2
+
+3
+
+4
+
+5 6
+
+7 8
+
+9
+
+2
+
+3
+
+4
+
+5 6
+
+7 8
+
+9
+
+# 8
+
+# 5
+
+# 2 3
+
+Fig. 6. Illustration of the OGM produced by our method. This panel shows the bottom-right corner of the map in Fig. 4. For clarity, the OGM cell boundaries are drawn with a black dash-dotted outline, and the leaf-node boundary is shown as a gold long-dashed box. The nine OGM cells are labeled 1–9, and nine representative points are shown, colored by whether they lie inside or outside the threshold bound. The occupancy of diagonal pairs of OGM cells is determined by using Fig. 5. The arrows indicate the feasible navigations between grid cells, and the colors encode each cell’s feasible navigations. Colored crosses mark the point cloud blocked during the Diagonal Examination for the corresponding colored cells. TABLE II NAVIGABILITY STATE DETERMINATION TABLE BASED ON THE DIAGONAL EXAMINATION 
+
+Region pair Axis-dir. navigability Diag-dir. navigability Marking in cell Notes [unsafe unsafe] unsafe: ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗ unsafe: ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗ unsafe: ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗ unsafe: ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗ Marking both diagonal cells as Occupied Axis-aligned: ∥p − c∥∞ ≥ h · ratio ⇒ ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗
+
+Diagonal: both regions contain points ⇒ ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗
+
+[safe safe] safe: ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓ safe: ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓ safe: ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗ safe: ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗ Mark one as Occupied to block diagonal access while preserving axis-aligned navigation in the other region Axis-aligned: ∥p − c∥∞ < h · ratio ⇒ ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓
+
+Diagonal: both regions contain points ⇒ ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗
+
+[clear clear] clear: ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓ clear: ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓ clear: ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓ clear: ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓ Keep Unoccupied in both diagonal cells Both regions do not contain points ⇒ ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓
+
+[unsafe safe] unsafe: ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗ safe: ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓ unsafe: ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗ safe: ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗ Mark the unsafe cell as Occupied . Allow axis-aligned navigation in the safe region. Axis-aligned: ∥p − c∥∞ ≥ h · ratio ⇒ ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗
+
+∥p − c∥∞ < h · ratio ⇒ ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓
+
+Diagonal: both regions contain points ⇒ ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗
+
+[unsafe clear] unsafe: ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗ clear: ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓ unsafe: ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗ clear: ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓ Mark the unsafe cell as Occupied . Allow axis-aligned and diagonal navigation in the clear region. Axis-aligned: ∥p − c∥∞ ≥ h · ratio ⇒ ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗
+
+Diagonal: unsafe region is non-empty ⇒ ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗
+
+The clear region contains no points ⇒ ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓
+
+[safe clear] safe: ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓ clear: ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓ safe: ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗ clear: ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓ Mark the safe cell as Occupied . Allow axis-aligned and diagonal navigation in the clear region. Axis-aligned: ∥p − c∥∞ < h · ratio ⇒ ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓
+
+Diagonal: safe region is non-empty ⇒ ✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗✗
+
+The clear region contains no points ⇒ ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓
+
+an OGM cell to directly determine diagonal navigability is overly conservative. For example, in Fig. 6, although cells 5 and 7 are not diagonally navigable under the traditional criterion due to the points in the two cells (point 5 in cell 7, and point 2 and 7 in cell 5), it is sufficient to mark only cell 7 as occupied to block the diagonal navigation from cell 5 to cell 7. Similarly, marking cells 9 and 1 as occupied blocks the diagonal navigation from cell 5 to cells 9 and 1, while preserving axis-aligned navigation through cell 5 and the diagonal navigation from cell 5 to cell 3. Moreover, cell 4 is marked as occupied because the region containing point 4 is unsafe, and cell 6 is marked as occupied to prevent the diagonal navigation from cell 8 to cell 6 for the same reason. We therefore take a leaf-node-centric view of diagonal navigability and determine the navigability of diagonal pairs of OGM cells using their corresponding diagonal regions of the leaf node that overlaps them. In the 2D case, the four regions of a leaf node yield two diagonal pairs, labeled [1 , 4] , [2 , 3] in Fig. 2. In the 3D case, the eight regions of a leaf node yield four diagonal pairs, labeled [1 , 8] , [2 , 7] , [3 , 6] , [4 , 5] in Fig. 2. As shown in Fig. 5, the navigability of diagonal regions is independent. Accordingly, in 2D only two diagonal pairs need to be examined, whereas in 3D only four diagonal examination directions are required. 
+
+E. Navigability State Determination 
+
+The navigability of diagonal pairs of OGM cells is shown in Table II. Since safe regions are navigable in axis-aligned directions but not along diagonal directions, marking either the cell containing the safe region or its diagonally adjacent cell as Occupied is sufficient to block diagonal navigation between the two cells, thereby ensuring that the cell containing the safe region remains safe (e.g., cells 5 and 7, and cells 5 and 9 in Fig. 6). Cells containing one or more unsafe regions are marked Occupied . Cells containing no pointcloud points are marked Unoccupied .8
+
+Fig. 7. Top row (POMP): Using the obstacle setup in Fig. 4 and the mapping rule in Fig. 5, POMP assigns each region an Unsafe/Safe/Clear label (top left), updates the corresponding occupancy grid cells and their valid navigations between cells (top middle), and produces the final occupancy map (top right). Compared to direct OGM, POMP preserves more valid navigations (blue). Bottom row (direct OGM): For the same point cloud map, a standard occupancy grid voxelizes space (bottom left), marks a cell as occupied if it contains any points and marks the valid navigations between cells (bottom middle), and yields the final occupancy map (bottom right). start 
+
+> end
+
+Fig. 8. Paths planned using POMP (red) and direct (traditional) OGM (blue) superimposed on the point cloud (a) and on the occupancy grid (b). The orange box (enlarged on the right) highlights the region responsible for the shorter path. Differences between our POMP and direct OGM are highlighted in (c) by cell numbers (1)-(5). These cells are classified as unoccupied by POMP but occupied by the direct OGM. In particular, keeping cells (2) and (3) free in our method explains the shorter path found, as it preserves a traversable narrow passage (see middle figure). 
+
+Based on the above, the rules for occupancy assignment can be summarized as follows (see Fig. 5): 1) Safety hierarchy: regions are prioritized in the order of their safety levels as Clear , Safe , and Unsafe .2) Mixed pair: when two diagonally paired regions have different safety levels, the cell containing the safer region is designated as Unoccupied , while the cell containing the less safe region is Occupied .3) Equal pair:  
+
+> •
+
+if both regions are Unsafe , both cells are desig-nated as Occupied ; 
+
+> •
+
+if both regions are Safe , designate either cell as 
+
+Occupied and the other as Unoccupied , with the choice made consistently;  
+
+> •
+
+if both regions are Clear , then both cells are designated as Unoccupied ;Note that each OGM cell participates in multiple pairs of diagonal leaf-node regions (4 in 2D and 8 in 3D). All cells in the OGM are initialized as unoccupied. Once a cell is designated as occupied in any one of the examinations of its diagonal pairs, it is marked as occupied. Otherwise, it remains unoccupied. (see Fig. 7). To prevent race conditions caused by cells participating in multiple examinations, we use atomic operations for both the region safe state update and the cell-9
+
+level occupancy update. In addition, octree construction and projection onto the OGM are executed sequentially rather than asynchronously. The comparison between our method (POMP) and the direct OGM is shown in Fig. 7 and Fig. 8. Fig. 7 uses the same point cloud as Fig. 4. In the middle column of Fig. 7, the additional valid navigation enabled by the extra cells preserved by POMP is highlighted in blue; these extra cells enable a feasible path in our method, whereas the direct OGM fails to find one. Fig. 8 shows another case where POMP produces a shorter path by preserving more navigable space, particularly in narrow passages. VI. E XPERIMENTS 
+
+In this section, we present randomized experiments to illus-trate specific characteristics of the POMP algorithm, followed by offline experiments on real-world datasets and ROS bag simulations to demonstrate POMP’s performance. Except for Experiment B-1(a), all experiments are implemented in ROS 2 and conducted on an Intel Core Ultra 9 285 (2.50 GHz) system with 24 cores and 24 threads. 
+
+A. Randomized Point Clouds 
+
+Fig. 9. Two maps utilized in the randomized point clouds experiments. 
+
+In the following, five experiments on randomized datasets are presented to illustrate the performance of POMP for tree construction, OGM construction, navigability, and planning. 
+
+1) Tree Construction: In this experiment, we focus exclu-sively on evaluation of the computational efficiency of the Oc-tree construction module of POMP. POMP is compared against three state-of-the-art incremental tree construction methods: i-Octree, ikd-Tree, and PCL Octree, for spatial representation across different leaf sizes. For evaluation, datasets containing 500 ,000 , 1,000 ,000 , and 
+
+2,000 ,000 points are randomly generated within a 10 m ×
+
+10 m × 10 m workspace, and tree construction was repeated 200 times for each dataset using varying leaf sizes (0.01 m, 0.02 m, 0.03 m, 0.04 m, 0.05 m, 0.06 m and 0.07 m). As shown in Fig. 10, across three datasets, POMP is at least 2 × faster than i-Octree, 7–10 × faster than ikd-Tree, and about 9 × faster than PCL Octree, while maintaining simi-larly low standard deviations across resolutions. These results demonstrate that, from a data-structure perspective, POMP achieves consistently higher tree construction throughput than state-of-the-art tree construction techniques. 0.01 0.02 0.03 0.04 0.05 0.06 0.07                            
+
+> Leaf Size (m)
+> 20
+> 40
+> 60
+> 80
+> 100
+> 120
+> Run Time (ms)
+> Construction Time vs. Leaf Size (500K Points)
+> POMP octree i-Octree ikd-Tree PCL octree
+> 0.01 0.02
+> 12.5
+> 15.0 0.01 0.02 0.03 0.04 0.05 0.06 0.07
+> Leaf Size (m)
+> 50
+> 100
+> 150
+> 200
+> 250
+> Run Time (ms)
+> Construction Time vs. Leaf Size (1M Points)
+> POMP octree i-Octree ikd-Tree PCL octree
+> 0.01 0.02
+> 25
+> 30 0.01 0.02 0.03 0.04 0.05 0.06 0.07
+> Leaf Size (m)
+> 200
+> 400
+> 600
+> Run Time (ms)
+> Construction Time vs. Leaf Size (2M Points)
+> POMP octree i-Octree ikd-Tree PCL octree
+> 0.01 0.02
+> 55
+> 60
+
+Fig. 10. Experiment A-1: Runtime comparison with point clouds, showing from top to bottom: 500 ,000 , 1,000 ,000 , and 2,000 ,000 points. 
+
+2) OctoMap Construction & Occupancy Mapping: The second experiment evaluates the total runtime of OctoMap construction and the subsequent projection of region safe states from leaf nodes onto OGM cell occupancy, and com-pares it with two baselines: a direct OGM method and the original Octree. In direct OGM method, the environment is discretized into grid cells, and each point in the point cloud directly updates the occupancy state of its corresponding cell. This experiment utilizes static uniform random cylinder environments. Cylinders are randomly distributed within the workspace defined by x ∈ [−10 , 10] , y ∈ [−10 , 10] , and 
+
+z ∈ [−5, 5] (meters). A total of 50 million, 5 million, and 500 thousand points are sampled, with the cylinder radius uniformly drawn from [0 .8, 1.0] m. To ensure robustness, 500 independent trial maps are generated under this configuration. The results are shown in Fig. 11; across varying resolutions, our method is approximately 4–6× faster than the direct OGM method for 50M points, 2–3× faster for 5M points, and slightly faster for 500K points. Notably, this runtime includes both OctoMap construction and the subsequent projection onto an OGM, but it still outperforms the direct method. These results indicate that POMP better supports real-time updates and continuous map availability, especially for dense point clouds, which is critical for online planning in large-scale, high-rate sensing scenarios. 
+
+3) Navigability: In the third experiment, we evaluate the navigability performance of POMP on randomized 3D worlds 10 0.5 1.0 1.5 2.0 2.5 3.0                                                              
+
+> Resolution (m)
+> 50
+> 100 100
+> 500
+> 1000 1000
+> Run Time (ms)
+> 40.91 33.24 28.51 29.50 26.62 28.62
+> 182.7 183.4 182.9 183.7 182.5 183.0
+> 1402 1388 1383 1389 1373 1375
+> Mapping Performance (50M Points)
+> POMP Octree direct OGM Original Octree
+> 0.5 1.0 1.5 2.0 2.5 3.0
+> Resolution (m)
+> 5
+> 10 10
+> 50
+> 100 100
+> Run Time (ms)
+> 6.480 5.881 5.517 5.587 5.969 6.361
+> 16.96 16.97 17.08 16.99 16.91 16.89
+> 138.1 134.9 134.7 134.1 132.4 132.9
+> Mapping Performance (5M Points)
+> POMP Octree direct OGM Original Octree
+> 0.5 1.0 1.5 2.0 2.5 3.0
+> Resolution (m)
+> 11
+> 5
+> 10 10
+> Run Time (ms)
+> 1.262 1.268 1.330 1.653 1.768 1.893
+> 1.761 1.801 1.827 1.863 1.853 1.894
+> 14.14 13.90 13.77 13.62 13.65 13.56
+> Mapping Performance (500K Points)
+> POMP Octree direct OGM Original Octree
+
+Fig. 11. Experiment A-2: Comparison of the total runtime of OctoMap construction and the subsequent projection of region safe states from leaf nodes onto OGM cell occupancy, against two baseline map representations (direct OGM and the original Octree). 
+
+of size 50 m × 50 m × 50 m uniformly populated with three geometric shapes, including spheres, right circular cones, and axis-aligned boxes. The metric used to assess navigability is navigable space ratio (NSR), defined as the ratio of navigable cells to total cells. To assess performance across spatial resolutions, we vary the resolution from 0.5 to 5.0 m in 
+
+0.5 m increments and generate 200 independent worlds for each resolution. Each world contains 100 spheres, 100 cones, and 100 boxes (300 obstacles in total), with their surfaces uniformly sampled into generated point clouds containing 
+
+600 ,000 points. 0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0 5.5 
+
+Resolution (m) 
+
+> 0%
+> 20%
+> 40%
+> 60%
+> 80%
+> 100%
+> NSR
+
+Navigability Performance  
+
+> POMP OGM
+
+Fig. 12. Experiment A-3: Comparison of the navigable space ratio (NSR) across OGM cell resolutions. 
+
+As shown in Fig. 12, across varying resolutions POMP outperforms the direct occupancy grid construction, achieving up to about 10% higher NSR at coarse resolutions. These results demonstrate that, at a fixed occupancy grid resolution, POMP refines the free space representation by reducing overly conservative occupancy labeling, thereby enlarging the feasible planning space for search-based planners. 
+
+4) Planning Performance: The fourth experiment evaluates planning performance using the same randomized datasets as in the second experiment. The start and goal positions are fixed at (−9, −9, −2) and (9 , 9, 2) , respectively. A total of 500 independent trial maps are generated, and we evaluate the runtime of planning with two search-based pathfinding algorithms, A* and Jump Point Search (JPS). The evaluation metrics include planning runtime, pathfinding success rate, and path length, under both direct occupancy grid construction and POMP in varying resolutions. For a fair comparison, all cells outside the environment boundary are marked as occupied in all trials. When comparing path lengths, comparisons are made only when both ap-proaches are able to find a path. The results in Fig. 13 indicate that, for search-based planners (A* and JPS), POMP incurs essentially no additional planning-time overhead compared with direct OGM. However, across varying map resolutions, POMP substantially improves the pathfinding success rate and consistently reduces the resulting path length. 0.75 1.00 1.25 1.50 1.75 2.00                  
+
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> Planning Time (ms)  Planning A*
+> A* on POMP
+> A* on OGM
+> 0.75 1.00 1.25 1.50 1.75 2.00
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> Planning Time (ms)  Planning JPS
+> JPS on POMP
+> JPS on OGM
+> 0.75 1.00 1.25 1.50 1.75 2.00
+> Resolution (m)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Pathfinding Rate (%)  Pathfinding Rate
+> POMP
+> OGM
+> 0.75 1.00 1.25 1.50 1.75 2.00
+> Resolution (m)
+> 24
+> 28
+> 32
+> 36
+> 40
+> 44
+> 48
+> Path Length (m)  Pathfinding Distance
+> POMP
+> OGM
+
+Fig. 13. Experiment A-4 : Planning runtime and path length are reported only when both approaches successfully found a path. Note that at a resolution of 2.0 m, across all 500 trial maps, no path was found in the direct OGM, but paths were still found in the POMP maps. 
+
+5) Performance Comparison Across Threshold Ratio: The fifth experiment evaluates the effect of the threshold ratio on planning performance. In contrast to the fourth experiment, we consider a continuous-motion scenario with a single environ-ment populated by uniformly random cubes. Cubes are initially distributed within the workspace x ∈ [−25 , 25] , y ∈ [−25 , 25] ,and z ∈ [−25 , 25] . A total of 800 cubes are placed in the workspace, resulting in a point cloud of approximately 70,000 points. The cube side lengths are uniformly distributed over 
+
+[1 .0, 2.0] m. Each cube independently selects a fixed random direction and then moves for 500 frames, translating 1 to 2 m 
+
+per frame. When a cube contacts the workspace boundary, its motion follows a specular reflection rule, with the angle of incidence equal to the angle of reflection. Threshold ratios of ratio ∈ { 0.95 , 0.75 , 0.50 , 0.25 } are eval-uated and compared against a direct OGM baseline. For path planning, the start and the goal are fixed at (−20 , −20 , −20) 
+
+and (20 , 20 , 20) , respectively. 11 
+
+TABLE III EXPERIMENT B-1( A): C ONSTRUCTION RUNTIME (MS ) OF OCTO MAP , O CCUPANCY GRID MAP , AND OURS UNDER VARYING RESOLUTIONS ON FIVE 
+
+MAPS (20-THREAD CPU) 
+
+Dataset Cambridge 15 Cambridge 16 Apartment 0 Apartment 1 Apartment 2 Resolution (m) 1.0 3.0 5.0 1.0 3.0 5.0 0.05 0.10 0.50 0.05 0.10 0.50 0.05 0.10 0.50 
+
+OctoMap 5089.00 4893.54 4878.26 4825.89 4626.40 4613.28 364.46 236.26 190.91 152.30 97.51 79.40 168.87 109.26 89.23 
+
+OGM 454.99 450.45 447.62 430.51 425.16 421.18 17.11 17.68 16.94 7.16 7.01 7.02 8.35 7.99 7.26 
+
+Ours 314.25 244.38 220.13 296.04 233.06 214.62 19.71 13.04 8.07 7.22 4.57 4.04 8.40 5.40 4.11 
+
+TABLE IV EXPERIMENT B-1( B): C ONSTRUCTION RUNTIME (MS ) OF OCTO MAP , O CCUPANCY GRID MAP , AND OURS UNDER VARYING RESOLUTIONS ON FIVE 
+
+MAPS (24-THREAD CPU) 
+
+Dataset Cambridge 15 Cambridge 16 Apartment 0 Apartment 1 Apartment 2 Resolution (m) 1.0 3.0 5.0 1.0 3.0 5.0 0.05 0.10 0.50 0.05 0.10 0.50 0.05 0.10 0.50 
+
+OctoMap 3336.56 3222.84 3209.94 3167.78 3047.52 3039.78 220.76 144.46 121.60 88.18 59.50 51.10 99.44 67.50 57.98 
+
+OGM 437.32 433.98 427.26 417.36 407.78 403.34 17.46 16.82 16.12 7.24 6.90 6.92 8.08 8.02 8.10 
+
+Ours 213.78 158.74 135.08 205.08 151.14 128.54 17.20 11.78 6.58 8.02 5.88 3.16 8.68 6.84 3.64 
+
+TABLE V EXPERIMENT A-5: P ATHFINDING RATE ACROSS 500 FRAMES WITH VARYING THRESHOLD RATIO 
+
+Resolution (m) 1.0 1.5 2.0 2.5 3.0 3.5 4.0 POMP 0.95 82.2% 68.8% 58.8% 50.0% 38.4% 23.0% 15.4% 
+
+POMP 0.75 82.2% 67.4% 57.7% 46.4% 37.6% 21.8% 14.4% 
+
+POMP 0.50 81.4% 66.8% 56.3% 43.0% 35.0% 19.6% 13.0% 
+
+POMP 0.25 81.4% 66.4% 55.8% 42.4% 34.0% 19.0% 12.4% 
+
+OGM 81.4% 66.4% 55.6% 42.0% 32.2% 16.2% 9.6% 
+
+As reported in Table V, decreasing the threshold ratio makes the safety margin more conservative, which reduces the effective navigable space and leads to a gradual decrease in planning success rate. However, for every evaluated resolution and ratio, POMP still outperforms the direct OGM baseline in pathfinding rate, demonstrating that the free-space refinement feature of POMP enlarges the feasible planning space while allowing the conservativeness to be tuned via ratio .
+
+B. Offline experiments on Real-world Datasets 
+
+We evaluate POMP in real-world scenarios using three public datasets: SensatUrban [30], Replica [31] and 
+
+Treescope [32]. SensatUrban is an urban-scale pho-togrammetric point cloud dataset with nearly three billion points from three UK cities; Replica provides high quality reconstructions of diverse indoor environments. Treescope is the first robotics dataset in precision agriculture and forestry designed specifically for counting and mapping trees in forest and orchard environments. The datasets Cambridge_15 
+
+and Cambridge_16 from SensatUrban, Apartment_0 ,
+
+Apartment_1 , and Apartment_2 from Replica, and 
+
+Cloud_7 from WSF-19 in Treescope are used for evaluation (See Fig. 14). Dataset details are provided in Table VI. 
+
+1) Map Construction Performance: Map construction run-time of POMP is evaluated against two baselines: direct OGM 
+
+Fig. 14. Benchmark maps used in the application experiments include Cambridge 15, Cambridge 16, Cloud 7, Apartment 0, Apartment 1, and Apartment 2. TABLE VI DETAILS OF MAPS IN DATASETS FOR BENCHMARK EXPERIMENT 
+
+Dataset Mapped area (m 3) Point number 
+
+Cambridge 15 400 × 400 × 60 119684095 Cambridge 16 400 × 400 × 35 113159239 Apartment 0 9.4 × 14.8 × 5.3 4564613 Apartment 1 10.7 × 7.9 × 2.9 1909995 Apartment 2 9.4 × 10.2 × 2.8 2136963 Cloud 7 45 × 104 × 12 12915992 
+
+with the same settings as in the randomized data experiment, and the original OctoMap, which updates occupancy via point cloud insertion. For OctoMap, we used the official open-source implementation available on GitHub [1]. Since the performance of POMP scales with thread count, we evaluated it on two machines: (i) an Intel Core i9-13900H system with 14 cores and 20 threads, and (ii) an Intel Core Ultra 9 285 (2.50 GHz) system with 24 cores 12 
+
+and 24 threads. As shown in Table III and IV, the reported time covers the entire pre-planning pipeline, including Octree construction and its projection onto an OGM. Compared with the direct OGM baseline, which loops over all points and directly updates the occupancy state of their corresponding cells, our method achieves lower runtime, supports real-time updates and online path planning, and, like OctoMap, yields a sparse representation of large scenes. 
+
+2) Planning Performance in Sparse Environments: In this experiment, we compared our method in terms of pathfinding success rate, path length, and A* and JPS planning time on two large-scale but relatively sparse point cloud scenes, 
+
+Cambridge_15 and Cambridge_16 , across varying reso-lutions. To ensure fairness, this experiment followed the same configuration as the randomized data experiments.                                                              
+
+> TABLE VII EXPERIMENT B-2: P ATHFINDING METRICS ACROSS RESOLUTIONS
+> Cambridge 15 Cambridge 16 Resolution (m) 2610 14 2610 14
+> OGM Pathfinding (%) 84.1 46.7 36.7 20.2 81.4 24.6 7.0 0.4
+> POMP Pathfinding (%) 91.5 68.8 50.2 45.1 82.7 29.6 7.5 6.3 OGM Path Length (m) 225.46 218.34 233.43 211.10 222.58 241.99 177.16 -
+> POMP Path Length (m) 225.42 218.30 233.40 210.90 222.42 237.70 176.64 -
+> A* on OGM (ms) 217.113 5.148 0.853 0.03 130.048 3.045 0.071 -
+> A* on POMP (ms) 215.331 5.497 0.995 0.084 122.764 2.72 0.029 -
+> JPS on OGM (ms) 114.408 1.518 0.204 0.001 67.955 1.289 0.014 -
+> JPS on POMP (ms) 123.703 1.715 0.188 0.001 67.514 1.13 0.001 -
+
+As shown in Table VII, real-world results are consistent with the randomized data results. POMP shows a clear advantage in the success rate of pathfinding. Compared with the baseline direct OGM, it produces paths of comparable or shorter length, though with slightly longer planning time in some cases. 
+
+3) Planning Performance in Cluttered Environments: To study performance in clustered environments, we use the 
+
+Cloud_7 (WSF-19, Treescope) dataset and measure pathfind-ing rate, resulting path length, and A* and JPS planning time over a range of resolutions.   
+
+> Fig. 15. Cloud_7 from WSF-19 in the Treescope dataset. The upper-left panel shows the raw point cloud map, the lower-left panel shows the octree constructed from the point cloud, and the right panel shows the planning result. The blue path is generated by POMP, while the purple path is obtained using the direct OGM.
+
+As shown in Table VIII, POMP shows a clear advantage in the success rate. Compared with the baseline direct OGM,                                                  
+
+> TABLE VIII EXPERIMENT B-3: P ATHFINDING METRICS ON CLOUD 7
+> Cloud 7 Resolution (m) 0.5 1.0 1.5 2.0 2.5
+> OGM Pathfinding (%) 82.8 45.2 25.0 5.4 0.7
+> POMP Pathfinding (%) 92.1 68.4 44.9 33.6 16.4 OGM Path Length (m) 45.90 48.08 52.62 33.23 -
+> POMP Path Length (m) 45.84 47.70 50.94 31.22 -
+> A* on OGM (ms) 86.984 8.314 1.928 0.074 -
+> A* on POMP (ms) 91.589 10.246 2.692 0.167 -
+> JPS on OGM (ms) 43.827 4.454 1.104 0.019 -
+> JPS on POMP (ms) 48.234 5.239 1.524 0.074 -
+
+it produces paths of comparable or shorter length, though with slightly longer planning time. Since POMP provides the planners with more free cells than the baseline, a slight increase in planning time is expected. 
+
+C. Real-world experiments 
+
+To evaluate the performance of POMP in a real-world set-ting using sensor data, we use the processed rosbags released with Treescope. Since the Treescope dataset is comprised of sensor data recorded in an uncontrolled outdoor environment, it is a better evaluation tool than in-lab hardware experimenta-tion. The bags include LiDAR-inertial odometry and velocity-corrected point cloud sweeps produced by Fast-LIO [33]. The point clouds from the UAV Laser Scanning (ULS) sequences are captured with an Ouster OS1-64 LiDAR. Each bag is replayed as a stream and processed online. A lightweight front-end cache associates each incoming cloud with the nearest odometry and pose transform within a small time tolerance, then forwards the resulting frame to the mapping back-end. To better emulate on-robot operation, we replay each rosbag at real-time speed with timestamps governed by the same ROS time mechanism used at runtime and run the same on-robot processing stack. Each LiDAR sweep is processed as it arrives and matched to the closest odometry and pose transform within a small time tolerance, using a fixed synchronization timeout. When the processing rate briefly falls behind the sensor rate, we prevent unbounded latency growth by using bounded queues and retaining only the most recent sweeps; any sweep that cannot be time-synchronized is dropped. The synchronized frames are then forwarded directly to the map-ping back-end under the same timing and latency constraints as live operation. 
+
+1) Octree Construction: The per-sweep Octree construc-tion time of POMP is evaluated against that of the original Octree across different leaf-node sizes is evaluated (i.e., map resolutions). To align with the default setting in the OctoMap source code, we use the same 16-level tree with leaf resolution 
+
+r. This configuration yields a maximum spatial extent of r·215 .Although our method can adapt the tree depth based on the estimated scene size, we keep the depth fixed here for a fair comparison. As shown in Table X, we replay each rosbag at its nominal rate and measure per-sweep construction time over the full 13 
+
+TABLE IX EXPERIMENT C-3: P LANNING METRICS ACROSS RESOLUTIONS .
+
+VAT-0723U-03 VAT-0723U-04 
+
+Res. (m) Succ. (%) ↑ A* time (ms) ↓ JPS time (ms) ↓ Length (m) ↓ Succ. % ↑ A* time (ms) ↓ JPS time (ms) ↓ Length (m) ↓
+
+POMP OGM POMP OGM POMP OGM POMP OGM POMP OGM POMP OGM POMP OGM POMP OGM 0.2 90.60 % 88 .80% 52 .833 52.200 43 .766 42.787 15.466 15 .469 88.20 % 86 .00% 51 .005 50.810 41 .391 41 .391 15.015 15 .019 
+
+0.5 69.00 % 65 .00% 1.100 1.405 0.571 0.585 15.491 15 .507 73.60 % 69 .60% 1.053 1.355 0.579 0.591 14.594 14 .637 
+
+1.0 44.00 % 38 .40% 0.113 0.153 0.069 0.068 14.303 14 .389 42.80 % 37 .00% 0.124 0.161 0.074 0.076 15.207 15 .262 
+
+1.5 27.80 % 24 .20% 0.050 0.067 0.033 0.034 16.427 16 .740 26.60 % 20 .20% 0.048 0.053 0.032 0.033 16.024 16 .247 
+
+2.0 12.80 % 8.60% 0.041 0.029 0.018 0.018 16.950 18 .161 11.40 % 7.60% 0.037 0.024 0.015 0.015 13.689 14 .182 
+
+2.5 3.40 % 1.40% 0.016 0.019 0.012 0.009 21.576 23 .684 2.60 % 1.80% 0.011 0.014 0.009 0.007 13.604 13 .780 
+
+Note: Bold indicates the better value between POMP and OGM for each bag and resolution (success rate: higher; time and path length: lower). Success rate denotes the pathfinding rate, and length denotes the path length. TABLE X EXPERIMENT C-1: P ER -SWEEP OCTREE CONSTRUCTION TIME (MS )
+
+VAT-0723U-03 VAT-0723U-04 
+
+Res. (m) POMP OctoMap POMP OctoMap 0.2 1.536 ±0.008 6.513 ±0.098 1.521 ±0.021 6.526 ±0.078 
+
+0.5 1.333 ±0.009 3.433 ±0.051 1.350 ±0.012 3.559 ±0.064 
+
+1.0 1.289 ±0.007 2.601 ±0.043 1.305 ±0.016 2.941 ±0.063 
+
+1.5 1.264 ±0.008 2.428 ±0.030 1.261 ±0.012 2.657 ±0.059 
+
+2.0 1.255 ±0.011 2.291 ±0.046 1.240 ±0.011 2.643 ±0.040 
+
+2.5 1.233 ±0.006 2.194 ±0.050 1.239 ±0.008 2.597 ±0.056 
+
+Note: Lower mean and standard deviation between POMP and OctoMap are highlighted in bold, respectively. 
+
+playback. Each configuration is repeated 10 times, and we re-port the mean and standard deviation. Overall, POMP achieves lower runtime with reduced variability, and is typically about 
+
+2× faster than OctoMap, meeting the real-time requirements of a lightweight online mapping pipeline. Fig. 16 illustrates the Octree structures constructed from the raw point cloud at multiple resolutions. 
+
+2) Occupancy Grid Construction from Octree: The time taken to construct occupancy grids from the POMP octree and the original OctoMap octree is compared. For each setting, we run the conversion 500 times on the constructed Octree. As the mean and standard deviation in Table XI indicate, POMP achieves lower average conversion time and lower variability. 
+
+TABLE XI EXPERIMENT C-2: P ER -SWEEP MAPPING TIME (MS ). 
+
+VAT-0723U-03 VAT-0723U-04 
+
+Res. (m) POMP OctoMap POMP OctoMap 0.2 11.803 ±0.448 52 .364 ±1.643 13.245 ±0.426 59 .363 ±1.530 
+
+0.5 2.735 ±0.229 9.136 ±0.366 2.929 ±0.284 9.569 ±0.482 
+
+1.0 0.429 ±0.071 1.573 ±0.157 0.465 ±0.288 1.650 ±0.191 
+
+1.5 0.192 ±0.069 0.468 ±0.082 0.189 ±0.076 0.475 ±0.079 
+
+2.0 0.127 ±0.066 0.238 ±0.059 0.136 ±0.062 0.236 ±0.058 
+
+2.5 0.098 ±0.050 0.140 ±0.037 0.102 ±0.058 0.139 ±0.040 
+
+Note: Lower mean and standard deviation between POMP and OctoMap are highlighted in bold, respectively. 
+
+3) Navigability and Planning: We also repeat Experiments A-3 and A-4 for these data. Specifically, we compare (i) the navigability of the occupancy grids converted from the POMP Octree (Table XII) and (ii) the planning performance on these occupancy grids (Table IX) against occupancy grids obtained from original OctoMap. Planning performance is evaluated us-ing both A* and JPS, including pathfinding success rate, path length, and planning time. Since JPS is a pruned, accelerated variant of A*, it returns the same shortest-path length as A* on the same grid (when using the same connectivity and edge costs). Therefore, A* and JPS have identical path lengths in our experiments, and we do not report them separately. 
+
+TABLE XII EXPERIMENT C-4: P ER -SWEEP NAVIGABLE SPACE RATIO (%). 
+
+VAT-0723U-03 VAT-0723U-04 
+
+Res. (m) POMP OGM POMP OGM 0.2 94.17 % 93 .44% 94.11 % 93 .41% 
+
+0.5 84.20 % 82 .08% 84.02 % 81 .92% 
+
+1.0 66.38 % 62 .35% 65.23 % 61 .41% 
+
+1.5 50.42 % 45 .18% 49.13 % 43 .40% 
+
+2.0 35.01 % 27 .71% 32.94 % 26 .53% 
+
+2.5 23.50 % 15 .25% 24.00 % 18 .25% 
+
+As shown in Table XII, our maps preserve more navigable free space than the direct OGM method across resolutions; consequently, as reported in Table IX, POMP achieves a higher pathfinding success rate. The improvement holds at fine resolutions (where finding a path is usually easier) and at coarse resolutions (where planning often fails). At the resolutions that best match the scene and the planner, the improvement becomes greater, which is consistent with what our method is designed to do. VII. D ISCUSSION 
+
+In our mapping to planning pipeline, we re-partition a fixed-resolution occupancy grid map using OctoMap leaf bound-aries at depth d, then apply occupancy thresholding with a conservative safety margin and assign each cell’s navigability via Diagonal Examination (Fig. 6). The key intuition is that uniform partitioning improves coverage, making gaps near the grid resolution less likely to be missed. Given the scene scale, we can further choose an appropriate OctoMap tree depth to ensure sufficient spatial coverage while controlling memory and computation. 14      
+
+> Fig. 16. Visualization of the input point cloud VAT-0723U-03 and the resulting POMP Octree, from left to right with leaf sizes r= 0 .5m ,1.0m , and 2.0m .
+
+In implementation, map building is integrated into the planning pipeline, allowing mapping to be performed during planning. The Octree insertion and update operations, includ-ing the safety-state updates, are parallelized. The subsequent octree to OGM projection is also parallelized. With dense point clouds, POMP is typically faster than a naive point-wise serial loop that writes directly into an OGM, meeting the requirements of synchronous online operation. Compared with the serial Octree-to-OGM conversion in the original method, POMP’s octree to OGM conversion incurs little additional computational cost; the proposed region safety state update does not introduce excessive cost. In the serial baseline, each leaf node typically maps to a single OGM cell update; in POMP, each leaf node is split into four regions in 2D and eight in 3D, and navigability is written to the OGM via one-way diagonal pair updates (a diagonal pair of cells is updated together), requiring two pairs in 2D and four pairs in 3D. This procedure can be further accelerated via parallel execution, while atomic operations prevent race conditions under concurrent update. Moreover, given a desired OGM configuration (resolution, origin, and spatial bounds) based on the expected scene size, the corresponding octree placement (origin and extent) can be determined so that the octree is instantiated with the appropriate size, location, and depth to match the target OGM layout. We validate POMP through extensive benchmarks on di-verse real-world datasets, including LiDAR and reconstruction maps spanning outdoor urban scenes, indoor rooms, and forested environments. Additional tests use randomized scene configurations with diverse geometric combinations. Exper-iments cover point clouds of varying scales and densities, from sparse to dense, and include realistic rosbag replays that emulate online operation. Evaluation considers a broad set of metrics. Across the above scenes, multiple point cloud sizes, and multiple res-olutions, we measure OctoMap build time, octree to OGM projection time, and navigability differences relative to astandard OGM baseline. Planning performance is also reported across resolutions and scenarios, including pathfinding success rate, search time, and path length under multiple search-based planning methods, with an additional experiment evaluating the impact of the threshold on success rate. Beyond theoretical analysis, consistency between the pro-posed POMP build and the standard serial implementation is verified both analytically and empirically. In particular, we compare the resulting data structures and validate point cloud assignments at the node level to confirm equivalence. To demonstrate construction efficiency, we further benchmark against state-of-the-art tree based structure building methods, where our approach consistently achieves faster build time. VIII. CONCLUSIONS This article proposes a framework that refines free-space representation at a fixed occupancy-grid resolution without compromising map fidelity, while preserving the overall data structure and avoiding additional computational overhead. It expands the feasible planning space, improving search-based planners with higher success rates and shorter paths, especially in narrow passages, and is compatible with existing autonomy stacks that use a search-based planner as the front-end. In offline planning, POMP is applied to cluttered, known environ-ments to further enlarge feasible space, increasing pathfinding success rates and shortening paths. For online planning, POMP serves as a lightweight local mapping-and-planning layer that incrementally updates OGM occupancy within the current sensor field of view, and planning is performed on the resulting OGM, while leaving space outside the FoV unobserved and thus unknown, as initialized during OGM construction. The proposed framework builds on three core techniques. First, octree construction is accelerated via parallel, multi-threaded computation. Since concurrent updates in a hier-archical tree are non-trivial, compare-and-swap with atomic pointers ensures safe node creation and updates, while atomic operations stream leaf states and point cloud updates to a planner-facing occupancy grid without conflicts. Parallel octree construction together with atomic, conflict-free OGM updates yield mapping time comparable to a point-wise OGM insertion baseline, and becomes faster than that baseline as the point clouds get denser. Second, discretization accuracy is improved without further subdividing the tree. Region-level safety states are stored in a compact byte-level representation, avoiding the memory overhead of deeper trees while inducing a cell-level safety margin. This region-level encoding refines free-space represen-tation at a fixed resolution and improves search-based planning efficiency. 15 
+
+Third, a hybrid map couples mapping and planning. An Octree-backed representation is maintained alongside a planner-facing occupancy grid, enabling synchronous opera-tion and achieving higher feasibility and better path quality with lower mapping time than conventional fixed-resolution OGM pipelines. REFERENCES [1] A. Hornung, K. M. Wurm, M. Bennewitz, C. Stachniss, and W. Burgard, “Octomap: An efficient probabilistic 3D mapping framework based on octrees,” Auton. Robots , vol. 34, pp. 189–206, 2013. [2] R. A. Newcombe, S. Izadi, O. Hilliges, D. Molyneaux, D. Kim, A. J. Davison, P. Kohi, J. Shotton, S. Hodges, and A. Fitzgibbon, “Kinectfusion: Real-time dense surface mapping and tracking,” in Proc. IEEE Int. Symp. Mixed Augmented Reality , 2011, pp. 127–136. [3] M. Keller, D. Lefloch, M. Lambers, S. Izadi, T. Weyrich, and A. Kolb, “Real-time 3D reconstruction in dynamic scenes using point-based fusion,” in Proc. Int. Conf. 3D Vision (3DV) , 2013, pp. 1–8. [4] M. Qureshi, T. E. Ogri, Z. I. Bell, and R. Kamalapurkar, “Scalar field mapping with adaptive high-intensity region avoidance,” in Proc. IEEE Conf. Control Technol. Appl. , Newcastle upon Tyne, UK, Aug. 2024, pp. 388–393. [Online]. Available: https: //ieeexplore.ieee.org/document/10666509 [5] S. Thrun, “Probabilistic robotics,” Communications of the ACM , vol. 45, no. 3, pp. 52–57, 2002. [6] E. W. Dijkstra, “A note on two problems in connexion with graphs,” in 
+
+Edsger Wybe Dijkstra: his life, work, and legacy , 2022, pp. 287–290. [7] P. E. Hart, N. J. Nilsson, and B. Raphael, “A formal basis for the heuristic determination of minimum cost paths,” IEEE Trans. Syst. Sci. Cybern. ,vol. 4, no. 2, pp. 100–107, 1968. [8] A. Stentz, “Optimal and efficient path planning for partially-known environments,” in Proc. IEEE Int. Conf. Robot. Autom. , 1994, pp. 3310– 3317. [9] D. Harabor and A. Grastien, “Online graph pruning for pathfinding on grid maps,” in Proc. AAAI Conf. Artif. Intell. , vol. 25, no. 1, 2011, pp. 1114–1119. [10] J.-C. Latombe, Robot Motion Planning . Boston, MA: Kluwer Academic Publishers, 1991. [11] Z. Liu, P. van Oosterom, J. Balado, A. Swart, and B. Beers, “Data frame aware optimized octomap-based dynamic object detection and removal in mobile laser scanning data,” Alexandria Engineering Journal , vol. 74, pp. 327–344, 2023. [12] D. Duberg and P. Jensfelt, “UFOMap: An efficient probabilistic 3D mapping framework that embraces the unknown,” IEEE Robot. Autom. Lett. , vol. 5, no. 4, pp. 6411–6418, 2020. [13] L. Sun, Z. Yan, A. Zaganidis, C. Zhao, and T. Duckett, “Recurrent-OctoMap: Learning state-based map refinement for long-term semantic mapping with 3-d lidar data,” IEEE Robot. Autom. Lett. , vol. 3, pp. 3749–3756, 2018. [14] P. Chen, M. Li, Z. Wan, Y.-S. Hsiao, M. Yu, V. J. Reddi, and Z. Liu, “OctoCache: Caching voxels for accelerating 3D occupancy mapping in autonomous systems,” in Proc. ACM Int. Conf. Archit. Support Program. Lang. Oper. Syst. ACM, 2025, pp. 704–718. [Online]. Available: https://doi.org/10.1145/3676641.3716263 [15] Y. Kwon, D. Kim, I. An, and S.-e. Yoon, “Super rays and culling region for real-time updates on grid-based occupancy maps,” IEEE Trans. Robot. , vol. 35, no. 2, pp. 482–497, 2019. [16] H. Min, K. M. Han, and Y. J. Kim, “OctoMap-RT: Fast probabilistic volumetric mapping using ray-tracing GPUs,” IEEE Robot. Autom. Lett. ,vol. 8, no. 9, pp. 5696–5703, 2023. [17] Y. Cai, F. Kong, Y. Ren, F. Zhu, J. Lin, and F. Zhang, “Occupancy grid mapping without ray-casting for high-resolution LiDAR sensors,” IEEE Trans. Robot. , vol. 40, pp. 172–192, 2024. [18] H. Oleynikova, Z. Taylor, M. Fehr, R. Siegwart, and J. Nieto, “Voxblox: Incremental 3D euclidean signed distance fields for on-board mav planning,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. (IROS) , 2017, pp. 1366–1373. [19] L. Han, F. Gao, B. Zhou, and S. Shen, “FIESTA: Fast incremental euclidean distance fields for online motion planning of aerial robots,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. , 2019, pp. 4423–4430. [Online]. Available: https://ieeexplore.ieee.org/document/8968199 [20] Y. Pan, Y. Kompis, L. Bartolomei, R. Mascaro, C. Stachniss, and M. Chli, “Voxfield: Non-projective signed distance fields for online planning and 3D reconstruction,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. IEEE, 2022, pp. 5331–5338. [Online]. Available: https://ieeexplore.ieee.org/document/9981318 [21] B. Curless and M. Levoy, “A volumetric method for building complex models from range images,” in Proc. ACM SIGGRAPH , 1996, pp. 303– 312. [22] S. Liu, M. Watterson, K. Mohta, K. Sun, S. Bhattacharya, C. J. Taylor, and V. Kumar, “Planning dynamically feasible trajectories for quadrotors using safe flight corridors in 3-D complex environments,” IEEE Robot. Autom. Lett. , vol. 2, no. 3, pp. 1688–1695, 2017. [23] X. Zhou, Z. Wang, H. Ye, C. Xu, and F. Gao, “Ego-planner: An ESDF-free gradient-based local planner for quadrotors,” IEEE Robot. Autom. Lett. , vol. 6, no. 2, pp. 478–485, 2020. [24] S. Liu, Y. Mao, and C. A. Belta, “Safety-critical planning and control for dynamic obstacle avoidance using control barrier functions,” in Proc. Am. Control Conf. (ACC) , Denver, CO, USA, 2025, pp. 348–354. [25] S. Vanneste, B. Bellekens, and M. Weyn, “3DVFH+: Real-time three-dimensional obstacle avoidance using an Octomap,” in Proc. Int. Work-shop on Model-Driven Robot Software Engineering , no. 1319, 2014, pp. 91–102. [26] M. Nießner, M. Zollh¨ ofer, S. Izadi, and M. Stamminger, “Real-time 3D reconstruction at scale using voxel hashing,” ACM Transactions on Graphics , vol. 32, no. 6, pp. 1–11, 2013. [27] J. Reinders, Intel threading building blocks: outfitting C++ for multi-core processor parallelism . O’Reilly Media, Inc., 2007. [28] A. Elfes, “Using occupancy grids for mobile robot perception and navigation,” Computer , vol. 22, no. 6, pp. 46–57, 1989. [29] H. Moravec and A. Elfes, “High resolution maps from wide angle sonar,” in Proc. IEEE Int. Conf. Robot. Autom. , vol. 2, 1985, pp. 116–121. [30] Q. Hu, B. Yang, S. Khalid, W. Xiao, N. Trigoni, and A. Markham, “SensatUrban: Learning semantics from urban-scale photogrammetric point clouds,” Int. J. Comput. Vis. , vol. 130, no. 2, pp. 316–343, 2022. [31] J. Straub, T. Whelan, L. Ma, Y. Chen, E. Wijmans, S. Green, J. J. Engel, R. Mur-Artal, C. Ren, S. Verma, A. Clarkson, M. Yan, B. Budge, Y. Yan, X. Pan, J. Yon, Y. Zou, K. Leon, N. Carter, J. Briales, T. Gillingham, E. Mueggler, L. Pesqueira, M. Savva, D. Batra, H. M. Strasdat, R. De Nardi, M. Goesele, S. Lovegrove, and R. Newcombe, “The Replica dataset: A digital replica of indoor spaces,” arXiv preprint arXiv:1906.05797 , 2019. [32] D. Cheng, F. C. Ojeda, A. Prabhu, X. Liu, A. Zhu, P. C. Green, R. Ehsani, P. Chaudhari, and V. Kumar, “Treescope: An agricultural robotics dataset for lidar-based mapping of trees in forests and orchards,” arXiv:2310.02162, 2023. [33] W. Xu and F. Zhang, “FAST-LIO: A fast, robust LiDAR-Inertial odom-etry package by tightly-coupled iterated Kalman filter,” IEEE Robot. Autom. Lett. , vol. 6, no. 2, pp. 3317–3324, 2021.

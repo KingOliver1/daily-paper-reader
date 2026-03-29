@@ -1,0 +1,187 @@
+Title: Learning What Can Be Picked: Active Reachability Estimation for Efficient Robotic Fruit Harvesting
+
+URL Source: https://arxiv.org/pdf/2603.23679v1
+
+Published Time: Thu, 26 Mar 2026 00:16:28 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Learning What Can Be Picked: Active Reachability Estimation for Efficient Robotic Fruit Harvesting 
+
+Nur Afsa Syeda, Mohamed Elmahallawy ⋆, Luis de la Torre, and John Miller 
+
+Washington State University, Richland, WA 99354, USA 
+
+{nurafsa.syeda, mohamed.elmahallawy, luis.delatorre, jmiller16}@wsu.edu 
+
+Abstract. Agriculture remains a cornerstone of global health and economic sustainability, yet labor-intensive tasks such as harvesting high-value crops continue to face growing workforce shortages. Robotic harvesting systems of-fer a promising solution; however, their deployment in unstructured orchard environments is constrained by inefficient perception-to-action pipelines. In particular, existing approaches often rely on exhaustive inverse kinematics or motion planning to determine whether a target fruit is reachable, leading to unnecessary computation and delayed decision-making. Our approach com-bines RGB-D perception with active learning to directly learn reachability as a binary decision problem. We then leverage active learning to selectively query the most informative samples for reachability labeling, significantly reducing annotation effort while maintaining high predictive accuracy. Extensive exper-iments demonstrate that the proposed framework achieves accurate reachabil-ity prediction with substantially fewer labeled samples , yielding approximately 6–8% higher accuracy than random sampling and enabling label-efficient adap-tation to new orchard configurations. Among the evaluated strategies, entropy-and margin-based sampling outperform Query-by-Committee and standard uncertainty sampling in low-label regimes, while all strategies converge to comparable performance as the labeled set grows. These results highlight the effectiveness of active learning for task-level perception in agricultural robotics and position our approach as a scalable alternative to computation-heavy kinematic reachability analysis. Our code is available through https: //github.com/wsu-cyber-security-lab-ai/active-learning .
+
+Keywords: Apple harvesting system, Active Learning, Computer Vision, Im-age processing, Classification 
+
+# 1 Introduction 
+
+Agriculture is among the oldest and most vital economic activities sustaining human society, with fruit harvesting playing a central role in global food security and eco-nomic stability [16]. Among fruit crops, apples have attracted significant attention due to their high market value, widespread consumption, and labor-intensive harvest-ing requirements. USA is one of the world’s largest apple producers, with Washington State alone accounting for approximately 68% of national production in 2024 [22]. However, this success increasingly comes at the cost of rising production expenses, climate variability, environmental constraints, and, most critically, persistent labor  
+
+> ⋆
+
+Corresponding author. To appear in Proceedings of PAKDD 2026: The 30 th Pacific-Asia Conference on Knowl-edge Discovery and Data Mining.  
+
+> arXiv:2603.23679v1 [cs.RO] 24 Mar 2026 2Nur Afsa Syeda and Mohamed Elmahallawy
+
+shortages [21,23]. Specifically, labor availability has emerged as a dominant bottleneck in apple harvesting, which still relies heavily on manual hand-picking to preserve fruit quality. This process is time-consuming, physically demanding, and requires a large, seasonal workforce. The challenge is exacerbated by demographic shifts and increas-ingly restrictive immigration policies, which have significantly reduced the availability of skilled farm labor. As a result, apple producers face mounting pressure to adopt scalable, automated harvesting solutions that can operate reliably in unstructured orchard environments [19,7]. Robotic harvesting systems, enabled by advances in artificial intelligence, percep-tion, and manipulation, offer a promising pathway toward addressing these challenges. Early agricultural robots focused primarily on autonomous navigation, while subse-quent generations incorporated machine vision and robotic manipulators for tasks such as fruit detection, harvesting, pruning, and monitoring [20,15]. Notably, ex-isting research has played a pivotal role in advancing mechanized apple harvesting systems, establishing foundational contributions in robotic end-effector design, mo-tion analysis, and real-world field deployment [3]. Despite this progress, deploying robotic harvesters at scale remains difficult due to the complex interaction between perception, decision-making, and manipulation under real-world constraints. A key yet underexplored challenge lies in “reachability reasoning”–determining whether a detected fruit can be physically reached and harvested by a robotic arm before invoking computationally expensive motion planning or inverse kinematics (IK). Existing systems often attempt to solve full kinematic feasibility for each de-tected apple, resulting in unnecessary computation, delayed decisions, and reduced throughput, particularly in cluttered canopies with partial occlusions and variable lighting [6,5]. Moreover, acquiring large, fully labeled datasets that capture reach-ability across diverse orchard configurations is costly and impractical, limiting the adaptability of learning-based solutions [1]. In this work, we address these challenges by framing reachability estimation as a task-level decision problem rather than a byproduct of low-level kinematic planning. Specifically, we investigate two fundamental research questions: (i) can fruits be re-liably detected and localized from RGB-D imagery in dense orchard environments, and (ii) can reachability be learned efficiently with limited labeled data? To this end, we employ a YOLO-based object detection model to identify fruit (apple) candidates from aligned RGB-D images and propose an active learning–driven framework that selectively queries the most informative samples to learn reachability. In summary, our key contributions are: 
+
+– We propose a learning-based reachability estimation framework that enables robotic harvesters to determine fruit accessibility prior to invoking joint-level motion plan-ning or inverse kinematics. 
+
+– We integrate RGB-D perception with active learning to achieve label-efficient reach-ability prediction in unstructured orchard environments, significantly reducing an-notation costs. 
+
+– We systematically evaluate multiple active learning strategies and demonstrate that 
+
+entropy- and margin-based sampling consistently outperform uncertainty sampling and Query-by-Committee in low- and moderate-label regimes. Title Suppressed Due to Excessive Length 3
+
+– Through extensive experimental validation, we show that decision-level reachability reasoning reduces the number of inverse-kinematics feasibility checks required by filtering unreachable targets before planning, thereby eliminating IK evaluation for approximately 38% of detected candidates per frame. The Active learning improves reachability prediction accuracy by approximately 6-8% over random sampling and 2-4% over QBC and uncertainty sampling in low-label settings, positioning our approach as a scalable alternative to exhaustive kinematic reachability analysis. 
+
+# 2 Related Work 
+
+Significant prior work has advanced automation in agriculture by combining per-ception, learning, and robotic manipulation to reduce the reliance on manual labor. Early and recent efforts have produced a variety of systems for seeding, fruit de-tection, grasping, and end-effector design, demonstrating both the promise and the remaining challenges for large-scale deployment [25,14,24,12,9,2]. 
+
+Perception for Fruit Detection. A substantial line of research focuses on visual detection and segmentation of fruit in challenging orchard scenes. Kuznetsova et al. [10] demonstrated a real-time apple detection pipeline based on YOLOv3 with tailored pre- and post-processing steps to handle occlusions and overlapping fruit; their system reported detection times on the order of tens of milliseconds per instance. Similarly, dataset and RGB-D acquisition efforts (e.g., Zhang et al. [26]) have enabled more robust learning and evaluation in full-foliage conditions. 
+
+Robotic Harvesting and Manipulation. Research on robotic harvesting spans end-effector design, kinematic and dynamic analysis, and simulation-aided system evaluation. Prior studies have explored semi-automated shaking prototypes, soft end-effectors, and full-system field trials that analyze the physical interaction between manipulators and fruit [25,14,24]. Simulation and motion analysis have informed me-chanical design and planning heuristics [12]. 
+
+Active learning and Label Efficiency. Label scarcity is a pervasive issue for super-vised methods in agricultural settings. Active learning strategies, surveyed compre-hensively by Settles [17], selectively query labels to reduce annotation effort while pre-serving model performance. Foundational active learning methods include uncertainty-based sampling, Query-by-Committee (QBC) [18], and sequential selection algorithms for text and vision tasks [11]. Recent applied work confirms its utility in domain-specific annotation-scarce settings [13,4]. 
+
+Gaps and Motivation for Decision-Level Reachability. While prior work pro-vides strong solutions for fruit detection and for physical harvesting mechanisms, relatively little research addresses task-level reachability: a fast, reliable decision that answers whether a detected fruit is worth attempting (i.e., reachable) before invok-ing computationally expensive planners or executing risky arm motions. Existing pipelines typically rely on per-candidate inverse kinematics or full motion planning, which are costly and fragile in cluttered, partially observed canopies. Moreover, few works combine RGB-D perception with label-efficient learning strategies specifically targeted at reachability prediction. 
+
+Our Positioning. Motivated by these gaps, our work integrates RGB-D perception with active learning to learn a decision-level reachability predictor that (i) reduces the 4 Nur Afsa Syeda and Mohamed Elmahallawy 
+
+Fig. 1: Overview of the proposed reachability estimation framework. need for exhaustive kinematic checks, (ii) minimizes the amount of labeled reachability data required, and (iii) is robust to the occlusions and variability commonly found in orchards. The next section describes our YOLO-based detection pipeline, evaluated active learning strategies, and their integration into an efficient, scalable reachability module. Recent advances in foundation models for robotics, including vision-language-action models such as RT-2 [27] and OpenVLA [8], raise the question of whether large-scale pretrained policies might eventually include modular components such as reachability predictors. We view foundation models as complementary rather than competing approaches; unlike these resource-intensive systems, our module operates on a compact nine-dimensional feature vector with fewer than 1,000 labeled samples. 
+
+# 3 Methodology 
+
+This section describes our end-to-end methodology for learning decision-level reacha-bility in a robotic apple-harvesting system. Fig. 1 provides an illustration the overall framework of the proposed methodology, from RGB-D perception and 3D localization to active learning–based dataset construction and reachability classification. 
+
+– RGB-D acquisition: Capture synchronized RGB and depth images from orchard environments. 
+
+– Detection: Identify candidate apples in RGB images using a YOLO-based deep learning detector. 
+
+– Depth mapping: Map detected apple pixels to depth information, aggregating local patches to reduce noise and handle missing values. 
+
+– Coordinate transformation: Transform 3D candidate points from camera coor-dinates to the manipulator frame for actionable robot input. 
+
+– Dataset preparation: Compile labeled feature vectors combining RGB, depth, and geometric features for training reachability models. 
+
+– Classifier: Map extracted features to reachability predictions using a Random Forest classifier that maps the feature vector ϕ(parm ) to a binary reachability pre-diction. Title Suppressed Due to Excessive Length 5
+
+Fig. 2: Reachable envelope of the manipulator (blue shaded region) overlaid with apple coordinate distribution from field data in arm-frame coordinates (orange points). (a) Top view (b) Side view and (c) Front view 
+
+– Active learning: Iteratively select the most informative samples from the unla-beled pool to maximize labeling efficiency and improve model performance. Together, these components form a theoretical framework that tightly couples per-ception, geometric reasoning, and active learning, enabling a fast, accurate, and label-efficient reachability predictor suitable for robotic manipulation in orchard environ-ments. 
+
+3.1 System Overview 
+
+Fig. 3: Robotic apple-harvesting system (top) and corresponding 2D picking-sequence visualization (bottom) [6]. The field platform (Fig. 3) is a 5-DOF manipu-lator composed of two prismatic joints (cartesian motion along the orchard aisle and toward/away from the fruit wall) and three revolute joints. The end-effector is held at a fixed pitch (horizon-tal) during the picking sequence and is designed to grip and pull fruit while minimizing collisions with branches and neighboring fruit. Fig. 2 illustrates the reachable envelope of the manipulator, derived by forward kinemat-ics simulation over all joint variable combina-tions within their physical limits, overlaid with apple coordinates extracted from field data in the arm coordinate frame. As shown in Fig. 2, a substantial portion of detected apples fall out-side the reachable envelope. This partial overlap between the reachable workspace and the fruit distribution motivates a decision-level reachabil-ity module that can quickly determine whether a detected fruit falls within the manipulator’s reach before invoking kinematic evaluation, re-ducing unnecessary IK calls per frame. 6 Nur Afsa Syeda and Mohamed Elmahallawy 
+
+3.2 Data Collection and Preprocessing 
+
+Fig. 4: Representative RGB image of an apple (top) and the corre-sponding depth projection (bot-tom) from a full-foliage orchard dataset. RGB–depth image pairs were collected in com-mercial orchards across Washington State, USA, using a Kinect v2 sensor (RGB: 1920 × 1080 
+
+BMP; depth: 512 × 424 PNG). The dataset organized by date-stamped collection sessions. The dataset comprises 3,480 synchronized RGB– depth pairs, of which a working subset of 2,519 pairs was used for detection and subsequent 3D processing. Data collection spanned multiple days and naturally encompassed varying lighting conditions typical of field harvesting operations, including partial canopy shade and differing sun angles. Apple detection is performed by applying a YOLO-based model directly to each RGB im-age using a fixed confidence threshold of 0.5, without illumination-specific preprocessing. For each detected apple, we extract a small depth patch ( 5×5 pixels) centered at the corresponding mapped pixel and use the median depth value to suppress sensor noise and outliers. Fig. 4 shows a sample RGB image with corresponding depth projections. Detections near image boundaries or with invalid/zero depth values are discarded. 
+
+3.3 Perception and Pixel-to-Point Mapping 
+
+We detect candidate apples using a YOLO-based object detector (Ultralytics pre-trained model) applied to the RGB image. For each detection bounding box, we compute the bounding-box center (u, v ) in RGB pixel coordinates and map it to the depth image using the appropriate scale factors for resolution differences. Given the measured depth Z at the mapped pixel, we compute camera-frame coordinates 
+
+(Xc, Y c, Z c) via the pinhole camera model: 
+
+Xc = (u − cx) Zfx
+
+, Yc = (v − cy ) Zfy
+
+, Zc = Z, (1) where (cx, c y ) and (fx, f y ) are the camera principal point and focal lengths (intrinsic parameters). 
+
+3.4 Extrinsic Calibration and Transform to Manipulator Frame 
+
+To reason about reachability, we express each candidate point in the manipulator (arm) reference frame. We compute the rigid-body transform from camera to arm Title Suppressed Due to Excessive Length 7
+
+frame using a standard extrinsic calibration procedure (checkerboard/hand–eye cali-bration). Denote the rotation R ∈ R3×3 and translation t ∈ R3 from camera to arm frame. Then, the arm-frame coordinates parm are: 
+
+parm = R p c + t, pc = [ Xc, Y c, Z c]⊤. (2) In our deployment, the calibration translation (measured during the field study) was 
+
+t = [0 .76 , 0.44 , 0.485] ⊤ (meters). If the mounting provided negligible rotation, we approximate the rotation matrix as the 3 × 3 identity matrix, R ≈ I3×3; otherwise, we use the measured rotation matrix. 
+
+3.5 Reachability Labels and Dataset Split 
+
+To bootstrap supervised learning, we generate reachability labels using a deter-ministic kinematic feasibility check: for each candidate 3D point, we attempt to solve a constrained IK check for the manipulator (respecting joint limits, prismatic travel bounds, and a collision-avoidance margin). If the IK solver finds a feasible ap-proach pose for the end-effector that satisfies these constraints, the point is labeled 
+
+reachable ; otherwise, it is labeled unreachable . From the available data, we con-struct a labeled dataset of 1,000 samples (parm , y ), where y ∈ { 0, 1}. The labeled set is partitioned into an initial labeled pool L (80%) and a held-out test set (20%). An additional unlabeled pool U of approximately 24,000 candidate points was used for active learning queries. 
+
+3.6 Feature Representation and Classifier 
+
+Although the 3D coordinates are the primary input, reachability depends on more than the target position alone. For each candidate, we compute a compact feature vector combining geometric and perception cues: 
+
+ϕ(parm ) =  x, y, z, ∥parm ∥, θ az , θ el , σ Z , A bbox , D local 
+
+,
+
+where ∥parm ∥ is the Euclidean range to the point, θaz , θ el are azimuth/elevation angles relative to the arm base, σZ is the depth variance in the 5 ×5 patch (occlusion/noise proxy), Abbox is the normalized bounding-box area, and Dlocal is a local point-density descriptor computed from nearby depth pixels. These features capture both kinematic distance and local scene complexity and are supplied to a binary classifier. In our experiments (Section 4), we use a Random Forest classifier, though MLPs or gradient-boosted trees can also be used. 
+
+3.7 Pool-based Active Learning 
+
+To address label scarcity, we use a pool-based active learning loop. Starting from a small labeled set L and a large unlabeled pool U, the loop iteratively: (i) Trains the reachability classifier on L;(ii) Ranks the instances in U according to a query criterion; (iii) Selects the top b instances for labeling; (iv) Adds the newly labeled instances to L; (v) Updates the model with the expanded labeled set. 8 Nur Afsa Syeda and Mohamed Elmahallawy 
+
+3.8 Query Strategies 
+
+We consider several standard, theory-driven active learning query strategies: 
+
+– Random sampling: A baseline that selects instances uniformly from U.
+
+– Uncertainty sampling: It selects instances for which the classifier’s predicted probability of the most likely class is lowest. 
+
+– Margin sampling: Offering greater robustness than plain uncertainty in binary tasks. 
+
+– Entropy sampling: Taking the full label distribution into account. 
+
+– Query-by-Committee (QBC): Selects instances maximizing disagreement among an ensemble of classifiers. For the IK labeling oracle, we use the deterministic feasibility check described above. This allows us to obtain ground-truth reachability labels without human annotation and enables large-scale, simulation-style experiments in the field. 
+
+3.9 Training and Evaluation Protocol 
+
+We adopt an incremental training strategy in which classifiers are updated after each active learning batch using the labeled set L. Model performance is assessed using standard classification metrics, including accuracy, precision, recall, F1-score, and the area under the ROC curve (AUC). We also introduce the concept of labeling efficiency ,which characterizes how rapidly model performance improves relative to the number of labeled samples acquired. The efficiency benefit of the proposed framework lies in the reduction of IK invocations rather than the per-candidate speed of the classifier. The trained classifier filters unreachable candidates prior to kinematic evaluation, reducing the number of IK calls required per frame. 
+
+# 4 Performance Evaluation 
+
+4.1 Experimental Setup Implementation details. The pipeline is implemented in Python using the Ultr-alytics YOLO library for detection and a Random Forest classifier for reachability classification, using the scikit-learn default configuration withhin the modAL active learning framework. Depth information is processed by applying a median filter on 5×5 patches and discarding invalid values. Active learning is performed using modAL ,with an initial labeled seed of |L| = 800 , an unlabeled pool of |U| ≈ 24 ,000 , and batch size b = 50 .This implementation realizes the components of a novel pipeline that (i) tightly couples RGB-D perception with geometric feature extraction, (ii) transforms per-ception outputs into the manipulator frame through principled calibration, and (iii) leverages label-efficient active learning to yield a fast, accurate reachability predictor for cluttered orchard deployment. 
+
+Implementation Procedure. For each configuration of initial labeled size (10, 30, 50) and query budget (50, 100), the classifier was trained incrementally and evaluated on the held-out test set after each batch. Title Suppressed Due to Excessive Length 9
+
+Evaluation metrics. We evaluate our approach on a held-out test set using standard classification metrics:Accuracy, Precision,Recall, F1-score. Additionally, we report the area under the ROC curve (AUC) and labeling efficiency curves, which plot test accuracy versus the number of labeled samples acquired. 
+
+Computational Efficiency. To quantify the reduction in IK invocations achieved by the proposed classifier, we evaluated the fraction of targets filtered as unreachable across the test set. The trained classifier (entropy sampling, (ninitial = 50 , n queries =100) ) classified 38% of test candidates as unreachable, eliminating the need for IK evaluation on those candidates entirely. The proposed classifier thereby reduces the total number of kinematic evaluations required per frame, which grows significantly with system complexity and planning overhead. 
+
+4.2 Results and Discussion Comparison of Active Learning and Random Sampling. Fig. 5 compares the learning curves of active learning (uncertainty sampling) and random sampling for 50 and 100 queries, respectively. Solid lines represent active learning, while dashed lines represent random sampling. 
+
+Fig. 5: Comparison of learning curves for uncertainty sampling active learning over 50 queries (top) and 100 queries (bottom). With a small initial labeled set (size 10), both methods show low and unstable accuracy. As the initial labeled set increases to 30 or 50, active learning generally outperforms random sampling, with the advantage most pronounced in early query iterations. With 100 queries, active learn-ing maintains higher accuracy across all initial label sizes, especially in early stages. The occasional accuracy dip with more queries is attributable to poorly calibrated prob-ability estimates at small labeled set sizes, which can cause uncertainty-based strategies to tem-porarily select noisy boundary samples. 
+
+Performance of Different Query Strate-gies. To further investigate the efficiency of ac-tive learning, we evaluated four query strategies: uncertainty sampling, entropy sampling, mar-gin sampling, and query-by-committee (QBC). Fig. 6 illustrates that all strategies converge as the number of queries increases from 50 to 100. Notably, even with a small initial labeled set of size 10, entropy and margin sampling achieve up to 94% test accuracy, while QBC and uncertainty sampling reach approx-imately 91–93%, demonstrating the effectiveness of active learning in maximizing information gain from limited labels. With very few labeled samples, entropy sampling consistently outperforms other strategies, reaching 94% accuracy with an initial set of 10 samples and 50 queries, increasing to 95% with 100 queries. Margin sampling shows the largest improvement 10 Nur Afsa Syeda and Mohamed Elmahallawy 
+
+Fig. 6: Comparison of active learning query strategies over different numbers of queries (50 vs. 100). (a) init=10, (b) init=30, (c) init=50 for 50 queries (top) and 100 queries (bottom). for slightly larger initial sets; for instance, when the initial labeled set is 30, it reaches 97.5% accuracy for both 50 and 100 queries. QBC generally matches uncertainty sampling but slightly underperforms with small initial labeled sets, likely due to limited committee diversity early on. Increasing the number of queries from 50 to 100 provides diminishing yet measur-able improvements across all strategies, suggesting that additional samples provide incremental but meaningful information for the classifier. With larger initial labeled sets, strategy performance converges, showing advanced query strategies are most beneficial when labeled data is scarce. These results highlight that entropy and margin sampling are particularly effective in low-label regimes, efficiently guiding the model toward high accuracy with minimal labeling effort. QBC can be a viable alternative but may require larger initial labeled sets to achieve comparable performance. Table 1: Accuracy comparison of QBC, Entropy, Margin, and Uncertainty strate-gies.                         
+
+> Query Init. QBC Entropy Margin Uncert.
+> 50 10 91 94 92.5 93.5 30 91.5 94 97.5 94 50 96.5 96.5 97 96.5 100 10 97.5 95 95.5 96 30 96.5 99 97.5 98 50 96.5 95 94.5 96
+
+Overall Comparison Across Strate-gies. Table 1 summarizes the performance of all evaluated active learning strategies, including QBC, uncertainty sampling, en-tropy sampling, and margin sampling, across varying initial labeled set sizes and query counts. For smaller labeled sets, entropy and margin sampling consistently achieve the highest accuracy, highlighting their ability Title Suppressed Due to Excessive Length 11 
+
+to select the most informative samples in low-data regimes. Uncertainty sampling and QBC also perform well but show slightly higher variability with very small initial labeled sets, reflecting sensitivity to limited data. 
+
+Fig. 7: Qualitative results of the reachability classifier on a real or-chard image. Cyan boxes indicate reachable apples; purple boxes in-dicate unreachable ones. Confi-dence scores are shown for each detection. As both the initial labeled set size and the number of queries increase, the variance in ac-curacy across all strategies decreases. In these higher-data scenarios, the differences between strategies become negligible, indicating that all approaches converge toward similar performance when sufficient labeled information is available. 
+
+Qualitative Evaluation. Fig. 7 shows the qual-itative output of the framework on a represen-tative orchard image. Apples in the central re-gion are correctly classified as reachable (cyan), while those at the image periphery with greater lateral offset from the arm origin are classified as unreachable (magenta), with confidence scores above 0.70 across all detections. 
+
+# 5 Conclusion 
+
+We presented a learning-based reachability estimation framework that combines RGB-D perception in real orchard environments with active learning to efficiently determine fruit reachability for a robotic harvesting system. The experimental results showed that the active learning outperformed the baseline random sampling strategy. Further investigation demonstrate that entropy and margin based query selection strategies were more effective than QBC and uncertainty sampling in the low label regime. All strategies performance began to converge when more data label became available. 
+
+# References       
+
+> 1. Albahar, M.: A survey on deep learning and its impact on agriculture: Challenges and opportunities. Agriculture 13 (3) (2023) 2. Coll-Ribes, G., Torres-Rodríguez, I.J., Grau, A., Guerra, E., Sanfeliu, A.: Accurate de-tection and depth estimation of table grapes and peduncles for robot harvesting, com-bining monocular depth estimation and cnn methods. Computers and Electronics in Agriculture 215 , 108362 (2023) 3. De Kleine, M.E., Karkee, M.: A semi-automated harvesting prototype for shaking fruit tree limbs. Transactions of the ASABE 58 (6), 1461–1470 (2015) 4. Deng, C., Ji, X., Rainey, C., Zhang, J., Lu, W.: Integrating machine learning with human knowledge. iScience 23 (11) (2020) 5. Heng, W., et al.: Simulation as a tool in designing and evaluating a robotic apple har-vesting system. IFAC-PapersOnLine 51 (7), 135–140 (2018) 6. Hohimer, C.J., Wang, H., Bhusal, S., Miller, J., Mo, C., Karkee, M.: Design and field evaluation of a robotic apple harvesting system with a 3d-printed soft-robotic end-effector. Transactions of the ASABE 62 (2), 405–414 (2019)
+
+12 Nur Afsa Syeda and Mohamed Elmahallawy 7. Kaleem, A., et al.: Development challenges of fruit-harvesting robotic arms: A critical review. AgriEngineering 5(4), 2216–2237 (2023) 8. Kim, M.J., Pertsch, K., Karamcheti, S., Xiao, T., Balakrishna, A., Nair, S., Rafailov, R., Foster, E., Lam, G., Sanketi, P., et al.: Openvla: An open-source vision-language-action model. arXiv preprint arXiv:2406.09246 (2024) 9. Kumar, P., Ashok, G.: Design and fabrication of smart seed sowing robot. Materials Today: Proceedings 39 , 354–358 (2021) 10. Kuznetsova, A., et al.: Using yolov3 algorithm with pre- and post-processing for apple detection in fruit-harvesting robot. Agronomy 10 (7), 1016 (2020) 11. Lewis, D., Gale, W.: A sequential algorithm for training text classifiers. In: Proceedings of the ACM SIGIR Conference on Research and Development in Information Retrieval. pp. 3–12. ACM/Springer (1994) 12. Li, Z., Yuan, X., Yang, Z.: Design, simulation, and experiment for the end effector of a spherical fruit picking robot. International Journal of Advanced Robotic Systems 20 (6), 17298806231213442 (2023) 13. Messaoud, M.B., et al.: A multi-label active learning approach for mobile app user review classification. In: International Conference on Knowledge Science, Engineering and Management. pp. 805–816. Springer, Cham (2019) 14. Navas, E., et al.: Soft gripper for small fruits harvesting and pick and place operations. Frontiers in Robotics and AI 10 , 1330496 (2024) 15. Navone, A., Martini, M., Chiaberge, M.: Autonomous robotic pruning in orchards and vineyards: A review. Smart Agricultural Technology 12 , 101283 (2025) 16. Pawlak, K., Kołodziejczak, M.: The role of agriculture in ensuring food security in developing countries: Considerations in the context of the problem of sustainable food production. Sustainability 12 (13), 5488 (2020) 17. Settles, B.: Active learning literature survey. Tech. Rep. Computer Sciences Technical Report 1648, University of Wisconsin–Madison, Madison, WI, USA (2009) 18. Seung, H.S., et al.: Query by committee. In: Proceedings of the Fifth Annual Workshop on Computational Learning Theory. pp. 287–294 (1992) 19. Simnitt, S., Martin, P., Castillo, M.: Advancements in apple picking: An industry ad-dresses tight farm labor markets (2023), amber Waves, U.S. Department of Agriculture, Economic Research Service. 20. Syal, A., Garg, D., Sharma, S.: Apple fruit detection and counting using computer vision techniques. In: 2014 IEEE International Conference on Computational Intelligence and Computing Research. pp. 1–6 (2014) 21. United States Department of Agriculture, Economic Research Service: Farm labor. ht tps://www.ers.usda.gov/topics/farm-economy/farm-labor (2025) 22. United States Department of Agriculture, National Agricultural Statistics Service: Press release. https://www.nass.usda.gov/Statistics_by_State/Washington/Publicati ons/Current_News_Release/2024/FR08.pdf (2024) 23. Win, M.T., Rutledge, Z., Maredia, M.K.: Labor shortages and farmer adaptation strate-gies. Applied Economic Perspectives and Policy 47 (3), 896–913 (2025) 24. Yin, C., et al.: Design, development, integration and field evaluation of a dual robotic arm mango harvesting robot. Journal of Field Robotics (2025) 25. Zhang, K., et al.: An automated apple harvesting robot—from system design to field evaluation. Journal of Field Robotics 41 (7), 2384–2400 (2024) 26. Zhang, X., Karkee, M., Zhang, Q.: Full-foliage apple canopies in modern fruiting wall architecture (rgb-d images) (2023) 27. Zitkovich, B., et al.: Rt-2: Vision-language-action models transfer web knowledge to robotic control. In: Conference on Robot Learning. pp. 2165–2183. PMLR (2023)
