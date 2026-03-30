@@ -6,29 +6,32 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-03-29
-- 运行时间：2026-03-29 19:29:43 UTC
+- 最新运行日期：2026-03-30
+- 运行时间：2026-03-30 19:36:52 UTC
 - 运行状态：成功
-- 本次总论文数：2
-- 精读区：0
-- 速读区：2
+- 本次总论文数：3
+- 精读区：3
+- 速读区：0
 
 ### 今日简报（AI）
-今日聚焦自主导航的并行建图优化与农业机器人的智能采摘策略。
-推荐关注 Parallel OctoMapping 对大规模路径规划的加速，以及通过主动学习提升果实采摘的可达性预估。
-建议深入了解并行计算如何赋能实时环境建模，并关注主动感知在复杂作业场景中的应用。
-- 详情：[/202603/29/README](/202603/29/README)
+今日聚焦机器人协同与人形奔跑，深度解析异构系统协作及强化学习驱动的高性能运动控制。
+重点推荐实现异构机器人共同导航的“Triple-Zero”框架，以及让类人机器人兼顾速度与操控性的动态重定向 RL 技术。
+建议关注强化学习如何突破复杂地形下的多机协作与人形机器人运动极限。
+- 详情：[/202603/30/README](/202603/30/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Can a Robot Walk the Robotic Dog: Triple-Zero Collaborative Navigation for Heterogeneous Multi-Agent Systems](/202603/30/2603.21723v2-can-a-robot-walk-the-robotic-dog-triple-zero-collaborative-navigation-for-heterogeneous-multi-agent-systems)  
+   标签：评分：10.0/10、query:robot
+   evidence：涉及人形和四足机器人协作导航的路径规划
+2. [Chasing Autonomy: Dynamic Retargeting and Control Guided RL for Performant and Controllable Humanoid Running](/202603/30/2603.25902v1-chasing-autonomy-dynamic-retargeting-and-control-guided-rl-for-performant-and-controllable-humanoid-running)  
+   标签：评分：10.0/10、query:robot
+   evidence：用于人形机器人跑步和运动的动态重定向与强化学习
+3. [Partial Motion Imitation for Learning Cart Pushing with Legged Manipulators](/202603/30/2603.26659v1-partial-motion-imitation-for-learning-cart-pushing-with-legged-manipulators)  
+   标签：评分：9.0/10、query:robot
+   evidence：学习足式机器人的稳健运动与移动操作
 
 ### 速读区论文标签
-1. [Parallel OctoMapping: A Scalable Framework for Enhanced Path Planning in Autonomous Navigation](/202603/29/2603.22508v1-parallel-octomapping-a-scalable-framework-for-enhanced-path-planning-in-autonomous-navigation)  
-   标签：评分：7.0/10、query:robot
-   evidence：用于增强自主导航路径规划的高效建图框架
-2. [Learning What Can Be Picked: Active Reachability Estimation for Efficient Robotic Fruit Harvesting](/202603/29/2603.23679v1-learning-what-can-be-picked-active-reachability-estimation-for-efficient-robotic-fruit-harvesting)  
-   标签：评分：6.0/10、query:robot
-   evidence：非结构化环境下的感知到动作流水线与可达性评估
+- 本次无速读推荐。
 
 
 <div class="dpr-home-promo-card">
