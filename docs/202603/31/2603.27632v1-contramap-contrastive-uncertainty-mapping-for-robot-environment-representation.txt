@@ -1,0 +1,307 @@
+Title: ContraMap: Contrastive Uncertainty Mapping for Robot Environment Representation
+
+URL Source: https://arxiv.org/pdf/2603.27632v1
+
+Published Time: Tue, 31 Mar 2026 01:22:56 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# ContraMap: Contrastive Uncertainty Mapping for Robot Environment Representation 
+
+Chi Cuong Le Weiming Zhi 
+
+Abstract — Reliable robot perception requires not only pre-dicting scene structure, but also identifying where predictions should be treated as unreliable due to sparse or missing observations. We present ContraMap, a contrastive continuous mapping method that augments kernel-based discriminative maps with an explicit uncertainty class trained using synthetic noise samples. This formulation treats unobserved regions as a contrastive class, enabling joint environment prediction and spatial uncertainty estimation in real time without Bayesian inference. Under a simple mixture-model view, we show that the probability assigned to the uncertainty class is a monotonic function of a distance-aware uncertainty surrogate. Experi-ments in 2D occupancy mapping, 3D semantic mapping, and tabletop scene reconstruction show that ContraMap preserves mapping quality, produces spatially coherent uncertainty esti-mates, and is substantially more efficient than Bayesian kernel-map baselines. 
+
+I. I NTRODUCTION 
+
+Reliable robot operation depends on scene representations that are both continuous and uncertainty-aware. Classical grid-based methods, such as occupancy grids [1], discretise space into fixed cells, which limits spatial resolution and scalability. Modern continuous formulations instead model occupancy or semantics directly over continuous space using Gaussian Processes or kernel-feature methods [2], [3]. These representations support high-fidelity mapping and efficient spatial querying, but they typically either omit uncertainty or rely on Bayesian inference, whose computational cost can become prohibitive for large-scale or real-time deployment. The core challenge is not only to predict occupancy or semantics continuously, but also to represent where the map should abstain from confidence in sparsely observed or unobserved space, without incurring the cost of posterior inference. This is particularly important in robotics, where overconfident predictions in occluded or unexplored regions can degrade downstream planning and decision-making. The quality of the map along with estimates of it’s uncertainty can be leveraged for further downstream motion generation [4], [5], [6]. Here, We introduce ContraMap , Contrastive Uncer-tainty Mapping , a continuous kernel-based mapping method that models unobserved space as an explicit uncertainty class. ContraMap augments a standard softmax mapping model with synthetic contrastive samples labelled as “uncertain”, enabling the model to jointly predict environment structure and a spatial uncertainty score. In occupancy mapping, this captures the transition between free, occupied, and unob-served space; in semantic mapping, it highlights ambiguous  
+
+> W. Zhi is with the School of Computer Science and the Australian Centre for Robotics, University of Sydney, Australia. Occluded/High uncertainty
+> Scene
+> Input point cloud Output ContraMap
+
+Fig. 1: For robust robot operation, scene representations should pro-vide not only spatially consistent mapping but also a measure of un-certainty across the environment. ContraMap augments continuous classification-based mapping with an additional uncertainty output, enabling joint environment representation and direct uncertainty prediction at any queried location. The model reconstructs scene structure while assigning high uncertainty to occluded or weakly observed regions, such as the space behind the table. 
+
+or weakly supported regions around objects. The method re-tains the linear-time optimisation and inference efficiency of discriminative kernel maps while avoiding Bayesian posterior inference. The main contributions of this work are: 1) A contrastive formulation for continuous uncertainty-aware mapping that represents unobserved regions as an explicit uncertainty class within a kernel-based discriminative map. 2) A theoretical characterisation showing that, under a simple mixture-model assumption, the probability as-signed to the uncertainty class is a monotonic function of a distance-aware uncertainty surrogate. 3) Experimental validation across 2D occupancy map-ping, 3D semantic mapping, and tabletop scene re-construction showing competitive mapping quality and substantial efficiency gains over Bayesian kernel-map baselines. The paper is organized as follows. Section II discusses re-lated previous studies. In Section III, we review the Bayesian methods used in representing different kind of environments, and review about noise contrastive estimation, which is an important cornerstone of our approach. Next, Section IV present an overview of the proposed method. After that, we present theoretical and empirical insight into our proposed approach. Our experiments demonstrate the effectiveness of proposed strategy are shown in Section VI. Finally, Section VII concludes our paper. II. R ELATED WORKS 
+
+Continuous Environment Mapping: Continuous envi-ronment representations have evolved from Gaussian Process Occupancy Maps (GPOM) [2], which provide principled     
+
+> arXiv:2603.27632v1 [cs.RO] 29 Mar 2026 Fig. 2: Predictive uncertainty for a Gaussian Process (GP) and neural-network baselines on three toy datasets. Orange /Magenta points are in-distribution training samples, and Red points are out-of-distribution samples. Background shading indicates relative uncertainty (brighter = higher, darker = lower). Our method best matches the GP “gold standard”: it stays confident near observed data and becomes uncertain as inputs move away from the training distribution.
+
+Bayesian spatial reasoning but suffer from cubic computa-tional complexity, limiting its scalability in large-scale or 3D environments. To address these inefficiencies, Hilbert Maps 
+
+[3], [7] leverage kernel approximations with a simple soft-max classifier to construct continuous maps in linear time, while Bayesian Hilbert Maps (BHMs) [8], [9] further enable uncertainty estimation by maintaining posterior distributions over model parameters through variational inference. Re-cently, V-PRISM [10] introduced a multiclass formulation for mapping tabletop scenes, jointly modeling semantic segmen-tation, and predictive uncertainty. While Hilbert Maps based methods achieve high accuracy in occupancy and semantic prediction, they tend to produce overconfident estimates in sparsely observed or entirely unobserved regions, which undermines reliability during autonomous operation. On the other hand, Bayesian formulations [8], [10], [11] mitigate this issue by modeling uncertainty through posterior vari-ance, but introducing extensive inference and optimization costs again, which can hinder their real-time deployment in large-scale environments. 
+
+Uncertainty Estimation in Neural Networks: Quantify-ing predictive uncertainty is vital for the safe deployment of learning-based systems in real-world scenarios. Spectral-normalized Neural Gaussian Processes (SNGP) [12] encour-ages predictive uncertainty to increase as inputs move away from the training data by bounding hidden-layer sensitiv-ity via spectral normalization. Monte Carlo Dropout (MC Dropout) [13] interprets stochastic dropout at inference time as an approximate Bayesian inference mechanism, while 
+
+Deep Ensembles [14] provide a strong non-Bayesian alter-native by aggregating multiple independently trained models to capture predictive ambiguity. However, as illustrated in Figure 2, many of these methods do not consistently produce reliable uncertainty estimation. In particular, despite explicit regularization for distance awareness, SNGP can still exhibit high-confidence predictions in regions far from the observed data. 
+
+Out-of-Distribution Detection: Out-of-Distribution (OOD) detection aims to identify inputs that are different from the training distribution, which is a critical safety concern for deep neural networks (DNNs). Because DNNs are typically trained under a closed-set assumption (test samples follow the same distribution as training data), exposure to distribution shifts in real-world environments can lead to unreliable and overconfident predictions [15], [16]. To address this issue, prior works has explored classification-with-rejection and open-set recognition frameworks, which explicitly model the presence of unknown or ambiguous inputs through the rejection rule [17], [18]. Other methods have explored looking at diffusion models to detect OOD samples [19], [20]. In the context of environment mapping, we observe that unobserved spatial regions naturally play a role similar to OOD inputs. Our method explicitly samples noise to represent these unobserved regions and treats them as an additional ”uncertain” class during training. This formulation aligns with classification-with-rejection principles, enabling the model to allocate probability mass to out-of-distribution class instead of forcing overconfident assignments to known classes. Furthermore, building on this perspective, we theoretically show that the probability assigned to the ”uncertain” class is a monotonic function of a distance-aware uncertainty measure. III. P RELIMINARIES 
+
+Modern robotic mapping methods represent spatial struc-ture as a continuous function rather than a fixed grid, allowing occupancy or semantic information to be queried at any location in space. Given training samples X =(xi, y i)Ni=1 , where xi ∈ Rd is a spatial coordinate and yi
+
+denotes occupancy or class labels, these models predict the Training data setup  
+
+> Negative sampling
+> Adding noise
+> Feature vector projection
+> Model training
+> Simple Softmax Classifier Environment Mapping
+> Uncertainty Estimation
+> Results Observed data
+> (C+1)-th class
+
+Fig. 3: Overview of ContraMap . Our method employs a softmax classifier network with an additional output node to jointly represent the environment and estimate uncertainty. Observed data (e.g., LiDAR scan or segmented point cloud) are augmented with negative samples and noise, where the noise is labeled as an additional (C + 1) -th or ”uncertain” class. The augmented data are then projected into a feature vector space using a set of reference points, forming the training dataset Dtrain . The model is trained on this dataset using a first-order optimization method. Once trained, we can query the model at arbitrary locations in the environment to obtain either environment mapping results or uncertainty estimates via the additional ”uncertain” node. 
+
+probability of each label using kernel features that encode local spatial correlations. Each point is projected into a feature vector 
+
+ϕ(x)⊤ = [ k(x, h1), k (x, h2), . . . , k (x, hH )] , (1) where {hi}Hi=1 are reference points (kernel centres) and 
+
+k(·, ·) is typically a Gaussian kernel 
+
+k(x, h) = exp( −γ∥x − h∥2), (2) with bandwidth γ controlling the spatial smoothness. This mapping allows simple linear models on ϕ(x) to represent complex, non-linear structures, making kernel-based meth-ods an efficient and interpretable foundation for continuous occupancy and semantic mapping. 
+
+A. Bayesian Kernel-based Mapping 
+
+A Bayesian view treats the model weights as random vari-ables, allowing both the mean prediction and its uncertainty to be inferred. For binary occupancy, the likelihood is 
+
+P (y = 1 | x, w) = σ(w⊤ϕ(x)) , (3) where w is given a Gaussian prior p(w) = N (μ0, Σ0). The predictive distribution marginalises over the posterior 
+
+P (y = 1 | x∗, X) = 
+
+Z
+
+σ(w⊤ϕ(x∗)) p(w | X) dw, (4) providing both occupancy probability and predictive vari-ance. For multi-class segmentation, the formulation extends to a softmax likelihood with weight matrix W ∈ RC×H ,enabling simultaneous reasoning over multiple object cat-egories. In both cases, the posterior covariance Σ captures spatial correlations and confidence but requires repeated in-version of an H ×H matrix. This operation scales as O(H3),making Bayesian inference computationally expensive for dense or large-scale maps. 
+
+B. Motivation 
+
+While Bayesian kernel-based mapping offers a princi-pled measure of uncertainty, its cubic cost prevents real-time deployment in robotic settings where both scale and responsiveness are critical. Moreover, parameter uncertainty does not always correspond directly to spatial uncertainty, especially in partially observed or occluded regions. These challenges motivate ContraMap , which preserves the efficiency and spatial continuity of kernel-based models but learns uncertainty explicitly as a predictive quantity. By introducing an additional “uncertain” class and training with contrastive supervision between observed and synthetic noise samples, ContraMap enables joint prediction and uncertainty estimation without Bayesian inference, achieving real-time uncertainty-aware mapping. IV. M ETHOD OVERVIEW 
+
+Bayesian extensions of Hilbert Maps (HMs) [8], [10] provide a principled means of modeling uncertainty, but their reliance on covariance matrix inversion leads to cubic scaling with the number of hinge points, making them unsuitable for real-time deployment. Our goal is to design a lightweight alternative that both preserves the efficiency of HMs and captures uncertainty. 
+
+A. Noise Contrastive Estimation to Uncertainty Modeling 
+
+Noise Contrastive Estimation (NCE) [21], [22] offers a useful perspective: model parameters can be estimated by training a classifier to distinguish data samples x ∈ X drawn from pInD (·| θ) against noise samples ˜x ∈ ˜X drawn from 
+
+pnoise (·). The objective is to maximize 
+
+J(θ) = 1
+
+|X|
+
+X
+
+> x∈X
+
+ln[ h(x; θ)] + 1
+
+| ˜X|
+
+X 
+
+> ˜x∈˜X
+
+ln[1 − h(˜ x; θ)] , (5) where h(u; θ) is the posterior probability that u originates from the data distribution. Importantly, this objective is equivalent to the log-likelihood of a logistic regression classifier discriminating between real and noise samples. Thus, NCE establishes a direct connection between density estimation and supervised classification. We leverage this connection to reinterpret uncertainty modeling: rather than inferring full Bayesian posteriors over parameters, we treat ambiguous or unseen regions as “noise” and explicitly intro-duce them as a separate prediction class. 
+
+B. Efficient Hilbert Maps with an Uncertainty Class 
+
+Building on HMs, which use logistic regression to model occupancy, we extend the sigmoid formulation to a softmax classifier model that includes an additional class for uncer-tainty. Here, we assume that we have a segmented point cloud and seek to assign each segmentation mask a label, then, learn a continuous representation encapsulating this. Concretely, the model is parameterized by a weight matrix 
+
+W ∈ R(C+1) ×H , where C is the number of standard classes (C = 2 for 2D mapping, i.e., occupied/free). To train W,we construct an augmented dataset: 
+
+D = {(xi, y i)}ni=1 ∪ { (x∗ 
+
+> j
+
+, y ∗ 
+
+> j
+
+= C + 1) }mj=1 , (6) where (xi, y i) are the original samples and {(x∗ 
+
+> j
+
+, y ∗ 
+
+> j
+
+=
+
+C + 1) } are noise points randomly sampled from the en-vironment, labeled as the (C + 1) -th “uncertain” class. Training then reduces to optimizing the standard cross-entropy loss over D, which can be done efficiently using gradient descent. The resulting model outputs occupancy probabilities for known classes while the (C + 1) -th node provides an explicit estimate of uncertainty. This design retains the scalability and efficiency of HMs while avoiding the cubic computational burden of Bayesian variants. V. F ROM NOISE TO AN UNCERTAINTY INDICATOR 
+
+Our classifier is trained with an explicit extra label (C+1) 
+
+representing noise or none-of-the-above inputs. At test time, this allows the model to either: (i) explain a query using one of the C in-distribution classes, or (ii) allocate probability mass to the uncertainty class when the query lies away from the support of the observed data. In this sense, the additional output should be interpreted primarily as a learned distance-aware OOD score over continuous space. The goal of this section is therefore not to claim calibrated uncertainty in a strict probabilistic sense, but to justify why the softmax probability on the (C + 1) -th node, pC+1 (x),provides a meaningful uncertainty ordering . In particular, we show that under a simple mixture-model view, pC+1 (x)
+
+is a monotonic function of a distance-aware uncertainty surrogate. 
+
+Key idea: If we train on a mixture of (a) in-distribution data and (b) broadly spread noise labeled as (C + 1) , then a well-trained softmax classifier approximates the Bayes posterior for the noise component. In this case, pC+1 (x) be-comes (approximately) the probability that x came from the noise process rather than the in-distribution process. Since in-distribution density typically decays as we move away from the data manifold, this posterior naturally increases 
+
+with distance-to-data, which is also how many uncertainty measures behave. 
+
+Distance to the in-distribution: Let XInD be the in-distribution training set. We quantify how far a test input x
+
+lies from the in-distribution support via the expected distance 
+
+d(x) = Ex′∼pInD 
+
+∥x − x′∥X
+
+, (7) where ∥ · ∥ X is the distance metric induced by the input space. 
+
+A simple generative picture: To interpret the uncertainty node, we consider a stylised mixture model in which training examples are drawn from: 
+
+p(x, y ) = αInD pInD (x, y ) + αnoise pnoise (x, y = C + 1) ,
+
+(8) and the noise inputs are approximately uniform in the input space, i.e., pnoise (x) ≈ n0. Also assume the in-distribution marginal density decreases as we move away from the data, meaning pInD (x) ≈ g(d(x)) , with g positive and non-increasing. 
+
+What does the (C + 1) softmax learn? For a sufficiently well-trained softmax classifier, the (C + 1) output approx-imates the Bayes posterior probability [23] that x was generated by the noise component: 
+
+pC+1 (x) ≈ αnoise pnoise (x)
+
+αInD pInD (x) + αnoise pnoise (x) . (9) Plugging in pnoise (x) ≈ n0 and pInD (x) ≈ g(d(x)) gives 
+
+pC+1 (x) ≈ αnoise n0
+
+αInD g(d(x)) + αnoise n0
+
+. (10) Because g(·) is non-increasing, the denominator shrinks as 
+
+d(x) grows, so pC+1 (x) is non-decreasing in the distance-to-data d(x). In other words, the farther we move from the training support, the more the classifier assigns a higher probability to the noise class. 
+
+Connecting to an uncertainty measure: Many standard uncertainty measures are also distance-aware, i.e., there exists a non-decreasing function h such that 
+
+U (x) = h(d(x)) . (11) This is known to hold, for example, for Gaussian Processes with RBF kernels where predictive variance increases with distance from the training data [12]. Combining (10) and (11), we obtain an (input-dependent) monotone relationship: 
+
+pC+1 (x) ≈ φ(U (x)) , (12) for some non-decreasing function φ (implicitly given by composing the distance-to-noise-posterior mapping with the inverse of h). Under these assumptions, the output probability of the 
+
+(C + 1) -th class is a monotonic transformation of an input-dependent uncertainty measure. This does not imply that 
+
+pC+1 (x) is a calibrated uncertainty estimate in the strict probabilistic sense; rather, it shows that the score preserves the relative ordering of uncertainty and can therefore serve as a useful spatial uncertainty indicator. VI. E XPERIMENTS 
+
+To demonstrate the effectiveness of the proposed method, we conduct a comprehensive set of experiments evaluating predictive uncertainty, mapping accuracy, and scalability across both 2D and 3D robotic environments. Specifically, we provide qualitative uncertainty analysis and quantitative comparisons against Hilbert Maps, Bayesian Hilbert Maps, V-PRISM, and 3D Hilbert Maps, as well as an evaluation on hinge point count and scalability. All experiments are run on a NVIDIA Tesla P100 GPU. 
+
+A. Qualitative evaluation of predictive uncertainty 
+
+To qualitatively evaluate uncertainty estimation behav-ior, we first conducted experiments on three standard toy classification datasets: Two Ovals, Two Moons, and Two Circles. These datasets feature increasingly complex decision boundaries and are commonly used to analyze uncertainty. Following the setup in prior work on uncertainty estimation [12], we compare our approach against a Gold Standard Gaussian Process (GP), MC Dropout [13], Deep Ensem-bles [14], DNN-GP and SNGP [12]. As these methods are not designed for environment mapping, the comparison focuses exclusively on uncertainty estimation behavior, rather than quantitative classification accuracy. Uncertainty in our method is derived directly through the (C +1) -th node in the output layer, while the compared methods infer uncertainty implicitly from their predictive distributions. As shown in Figure 2, the Gold Standard GP exhibits low uncertainty in the vicinity of training samples and increasing uncertainty as predictions move farther from the observed data. Among the compared methods, our approach most closely matches this behavior across all three datasets. In our results, uncertainty remains low near the data manifold and increases smoothly in regions that are sparsely sampled or entirely unobserved, including areas containing out-of-distribution points. This behavior of our model stems from the structure inherited from Hilbert Maps [3]. By projecting inputs into a high-dimensional space using hinge points, the model can effectively separate complex class geometries. In addition, we introduce uniformly sampled noise labeled as an ex-plicit ”uncertain” class during training. These samples act as negative evidence across the input space, enabling the model to identify regions that lack sufficient training evi-dence. Consequently, unlike methods that derive uncertainty implicitly from the predictive class distribution (e.g., entropy or variance), uncertainty in our approach is governed by distance from the training distribution rather than ambiguity between in-distribution classes, and no elevated uncertainty is observed along boundaries between well-separated classes. 
+
+B. Compare to HMs and BHMs in occupancy mapping 
+
+This experiment empirically evaluates the proposed method in terms of accuracy, training time, and inference time; and compares it with Hilbert Maps (HMs) [3] and Bayesian Hilbert Maps (BHMs) [8] in occupancy mapping. We also demonstrate the ability of our approach to capture uncertainty by extracting outputs for each class in the training dataset D, particularly the (C + 1) -th class. 
+
+1) Settings: Experiments are conducted on multiple datasets from the Radish repository [24], each is split into training and testing sets with a 9:1 ratio. HMs and BHMs are trained using the observed training data X derived directly from Radish datasets, while our softmax model is trained on an augmented dataset D formed by combining X with randomly sampled noise from the environment. In this occupancy mapping task, points in X are labeled as c = 1 (occupied) or c = 0 (unoccupied). To construct 
+
+D, we generate a noise set ˜X with | ˜X| = |X| by uniformly sampling points across the landscape and labeling them as 
+
+c = 2 , representing an additional uncertainty class. Thus, 
+
+D = X ∪ ˜X contains three classes, and the softmax model has three output nodes. For feature computation, the hinge     
+
+> (a) Our (b) HMs [3] (c) BHMs [8]
+> Fig. 4: Occupancy mapping results of each method on Intel dataset.
+> (a) Free Space (b) Occupied Space (c) Uncertainty in Space
+> Fig. 5: Results extracted from each output of the softmax model.
+
+points {hi}Hi=1 are chosen evenly across the landscape, with 
+
+H determined by the map size. Performance is evaluated using the Area Under the Re-ceiver Operating Characteristic Curve (AUC) [25], together with average training and inference times. The AUC is computed from predictions on the testing set. For inference, evenly spaced query points are generated to cover each map; these points are batch-processed by each model to produce occupancy maps, and inference times are recorded. 
+
+2) Results Analysis: Table I shows the accuracy and runtime of each method on different datasets from Radish [24], along with the number of features used for each dataset. From Table I, both our method and HMs require substan-tially lower training and inference times than BHMs, while achieving comparable mapping accuracy in terms of AUC. This demonstrates the efficiency of parameter learning via gradient descent compared to Bayesian approaches. Since the proposed method and HMs employ simple softmax and logistic regression models, they can be trained effectively using first-order gradient-based optimization, and inference is fast because it only involves forward computation. In terms of runtime, HMs are marginally faster than our method, likely because logistic regression is slightly lighter than softmax model; however, the difference is negligible. The mapping quality is illustrated in Figure 4. Since our method uses a softmax model with three output nodes, the displayed occupancy map is obtained by dividing the output of class 1 (probability of being occupied) by that of class 0
+
+(probability of being unoccupied). The results show that our method produces maps with precision comparable to HMs and BHMs. To further analyze the model, we separately extract the outputs of each node. Figure 5 presents these results on the Intel dataset, showing that each node clearly captures its corresponding class. From Figure 5a, confidently un-occupied regions are highlighted, while Figure 5b outlines the occupied areas. Notably, Figure 5c shows the output of the uncertainty class learned from noise, demonstrating that the additional class effectively models ambiguity. As TABLE I: The performance of our method in comparison to Hilbert Map [3] and Bayesian Hilbert Map [8] on the Radish datasets [24].                                                                                                             
+
+> Datasets Hilbert Maps [3] Bayesian Hilbert Maps [8] Our Belgioioso
+> (#features = 8400) AUC ↑0.9904 ( ±0.0003) 0.9901 ( ±0.0003) 0.9901 ( ±0.0003) Training time (s) ↓2.2609 ( ±0.0279) 722.6140 ( ±2.5651) 3.2367 ( ±0.0231) Inference time (s) ↓0.4258 ( ±0.0014) 231.3024 ( ±0.0746) 0.4681 ( ±0.0022)
+> Edmonton
+> (#features = 8800) AUC ↑0.9754 ( ±0.0005) 0.9734 ( ±0.0005) 0.9767 ( ±0.0004)
+> Training time (s) ↓1.8345 ( ±0.0371) 789.5725 ( ±1.7593) 2.2733 ( ±0.0245) Inference time (s) ↓0.6997 ( ±0.0016) 405.7368 ( ±0.0842) 0.7630 ( ±0.0011)
+> Fhw
+> (#features = 5940) AUC ↑0.9608 ( ±0.0014) 0.9583 ( ±0.0014) 0.9603 ( ±0.0013) Training time (s) ↓1.6850 ( ±0.0467) 326.7038 ( ±0.8631) 1.9292 ( ±0.0125) Inference time (s) ↓0.2186 ( ±0.0127) 75.1121 ( ±0.0267) 0.2358 ( ±0.0008)
+> Intel
+> (#features = 5600) AUC ↑0.9644 ( ±0.0009) 0.9688 ( ±0.0007) 0.9631 ( ±0.0008) Training time (s) ↓1.9923 ( ±0.2506) 288.2842 ( ±1.7646) 2.5446 ( ±0.0206) Inference time (s) ↓0.1977 ( ±0.0030) 65.4582 ( ±0.1118) 0.2164 ( ±0.0049)
+> Mexico
+> (#features = 7500) AUC ↑0.9726 ( ±0.0006) 0.9709 ( ±0.0007) 0.9731 ( ±0.0006)
+> Training time (s) ↓1.7175 ( ±0.0415) 566.5886 ( ±1.2325) 2.0832 ( ±0.0271) Inference time (s) ↓0.5305 ( ±0.0042) 251.3564 ( ±0.1505) 0.5786 ( ±0.0034)
+
+TABLE II: Quantitative comparison against 3D Hilbert Maps (HMs) on the SemanticKITTI dataset. Experiments were conducted on the initial scan of 10 distinct sequences. Bold indicates the statistically better result ( p < 0.05 ).                        
+
+> Metric HMs Our
+> mIoU ↑0.8096 ±0.0515 0.8412 ±0.0394
+> Training Time (s) ↓32.6278 ±1.5994 35.9025 ±1.7746 Inference Time (s) ↓203.6160 ±8.2965 203.7221 ±8.3205
+
+TABLE III: Quantitative comparison against 3D Hilbert Maps (HMs) on the SceneNet dataset. The evaluation was performed across 60 distinct indoor scenes (rooms). Bold indicates the sta-tistically better result ( p < 0.05 ).                        
+
+> Metric HMs Our
+> mIoU ↑0.6622 ±0.1234 0.6694 ±0.1231
+> Training Time (s) ↓32.0929 ±22.6771 35.9777 ±25.5202 Inference Time (s) ↓32.2525 ±2.6430 32.2989 ±2.6393
+
+observed in Figure 5c, regions confidently classified as class 
+
+0 or 1 exhibit low uncertainty, whereas unobserved regions, where noise samples are more likely drawn, show high uncertainty. Taken together, the above experiments suggest that our method can perform occupancy mapping accurately with a small runtime, while also be able to explicitly estimate the uncertainty in the environment. 
+
+C. Compare against 3D Hilbert Maps in 3D environments mapping 
+
+Following the previous experiments, we further com-pare our method against 3D Hilbert Maps (HMs) [7] on two benchmarks, SemanticKITTI [26] and SceneNet [27], to evaluate performance in both large-scale outdoor and indoor environments. Experiments on SemanticKITTI are conducted using the initial scan of 10 distinct sequences, while SceneNet evaluation spans 60 independent indoor scenes (rooms). We report mIoU, training time, and infer-ence time to assess not only semantic accuracy but also computational efficiency. In particular, this experiment aims to examine whether extending the original HM formulation with an additional uncertain output node, introduced to enable uncertainty-aware semantic mapping, can preserve or improve semantic accuracy while maintaining practical efficiency. Qualitative comparisons of semantic mapping results with 3D HMs are illustrated in Figures 6 and 7. As shown in Tables II and III, our method consistently achieves higher mIoU than 3D HMs on both datasets. This indicates that incorporating the ”uncertain” class does not degrade semantic performance; instead, it leads to more 
+
+Ground Truth HMs Results Our Results 
+
+Fig. 6: Reconstruction results on SceneNet dataset. 
+
+accurate semantic predictions. A plausible explanation is that augmenting the training data with the ”uncertain” class encourages the classifier to better separate in-distribution semantic classes from ambiguous or out-of-distribution re-gions. This results in clearer decision boundaries between positive classes and non-semantic or noisy observations, which is particularly beneficial in sparse or noisy 3D sensing scenarios. In terms of time efficiency, our method incurs a small training-time overhead, while inference time remains nearly identical to that of 3D HMs. This overhead is expected, as both approaches employ a softmax classifier, but our model includes one additional output node to explicitly estimate uncertainty and needs to train on a larger augmented dataset including noise, which slightly increase the number of pa-rameters and optimization cost. Nevertheless, the resulting training and inference times remain highly efficient and well within practical limits. In return for this marginal cost, our method enables uncertainty-aware semantic mapping, which is valuable for downstream tasks such as exploration, planning, and decision-making, while preserving and even improving semantic accuracy. 
+
+D. Compare to V-PRISM in representing tabletop scenes 
+
+In the next experiment, we investigate the ability of pro-posed method in handling the multiclass mapping problem in tabletop scenes scenario, and compare to the recent study V-PRISM [10]. Settings: Following [10], 100 scenes containing Ground Truth HMs Results Our Results 
+
+Fig. 7: Reconstruction results on SemanticKITTI dataset. TABLE IV: The performance of our proposed method compared to V-PRISM [10] on YCB dataset.                      
+
+> V-PRISM [10] Our
+> IoU ↑0.4994 ( ±0.0878) 0.4854 ( ±0.0805) Chamfer (m) ↓0.0126 ( ±0.026) 0.0124 ( ±0.031) Training time (s) ↓11.2826 ( ±5.6768) 9.3533 ( ±2.1653)
+> Reconstructing time (s) ↓229.5563 ( ±100.0576) 3.7560 ( ±1.1183)
+
+up to 10 objects each are generated from the YCB dataset [28] to form the training and testing data. We also adopt the hinge-point generation mechanism of V-PRISM [10], which has been shown to be effective for tabletop mapping. When constructing the training set D for our method, we observed that sampling excessive noise in tabletop scenes degrades performance. Unlike occupancy mapping, the ob-served data are distributed across more classes; using the same amount of noise as in the previous setting would create a strong imbalance between sampled noise and samples in each class, hindering learning of the true data distribution. Therefore, we set the noise ratio to 2.5% of the size of the actual training data. Additionally, due to the smaller noise ratio, noise samples are preferentially drawn near objects to increase the likelihood of capturing uncertain regions, such as occluded areas. Similar to [10], the metrics used to assess performance are the intersection over union (IoU) and the Chamfer distance. We used the same process to calculate the Chamfer distance as in V-PRISM. In addition, we also report the average training and mesh reconstructing times of each method to compare their processing speed. 
+
+Results Analysis: The performance and runtime of our method and V-PRISM [10] are reported in Table IV, while the third and fifth columns of Figure 8 illustrate representa-tive examples of the reconstructed scenes. The results from Table IV together with examples showed in Figure 8 state that our method achieves comparable accuracy to V-PRISM in representing the tabletop scene, with V-PRISM attaining a slightly higher average IoU score, whereas our method yields a marginally better Chamfer distance. However, in terms of time efficiency, our method surpasses V-PRISM, especially in scene reconstruction. This once again claims the substantial runtime advantage of our approach compared to a Bayesian-based method. With regard to uncertainty quantification, we show the result of the additional node, which corresponds to the ”uncertain” class, in the fourth column of Figure 8. Our results V-PRISM’s results RGB images Point Cloud 
+
+Fig. 8: Representative scene reconstructions. Col. 1: RGB. Col. 2: segmented point cloud. Col. 3: our reconstructed mesh. Col. 4: our uncertainty (softmax auxiliary head; lighter = higher). Col. 5: V-PRISM mesh. Col. 6: V-PRISM uncertainty heatmap (lighter = higher). Following [10], Cols. 4 and 6 show uncertainty on a 2D scene slice (bottom = nearer the camera). Object boundaries from the top-view projection are overlaid for spatial context. 224 360 648 1400 5600             
+
+> Number of Hinge Points
+> 0.75
+> 0.80
+> 0.85
+> 0.90
+> 0.95
+> AUC
+> AUC vs Hinge Points
+> 224 360 648 1400 5600
+> Number of Hinge Points
+> 10 0
+> 10 1
+> 10 2
+> Time (s)
+> Training Time vs Hinge Points
+> 224 360 648 1400 5600
+> Number of Hinge Points
+> 10 1
+> 10 0
+> 10 1
+> Time (s)
+> Inference Time vs Hinge Points
+> Our (0 hidden layers) Our (1 hidden layer) Our (2 hidden layers) BHMs
+
+Fig. 9: Effect of hinge point count on performance (Intel dataset). Results are shown for our methods with varying numbers of hidden layers and for BHMs .
+
+The uncertain areas with respect to the occluded or partially observed sections of the scenes are highlighted correctly. 
+
+E. Impact of hinge points count and Scaling ability of proposed method 
+
+In this part, we are going to empirically study the impact of hinge point count H, as well as the scalability of our method and Bayesian-based method when H increases. We run occupancy mapping experiments on Intel dataset with different numbers of hinge points and recorded accuracy indicated by the AUC score, as well as the run time of our method and BHMs. The results are illustrated in Figure 9. The results suggest that if we do not use enough hinge points to calculate features, or, in other words, if the number of features is insufficient, both methods cannot learn the environment landscape effectively. An increase in the number of hinge points leads to higher AUC scores. However, with BHMs, this comes at the cost of a dramatic rise in runtime, whereas, for our method, the runtime grows only modestly with the hinge point count. This emphasizes that our method scales much better than the Bayesian method, and is more practical to deploy in real world, especially for representing vast environments. As a softmax classifier can be considered as a lite version of a neural network with no hidden layers, we also carried out experiments which add 1 and 2 hidden layers to our model to investigate whether extending to an advanced architecture can substantially improve our method or not. The results reported in Figure 9 indicate that adding more hidden layers can help the model perform exceptionally well even with only a small amount of initial features. This can be explained by the hidden layers provide the ability to learn hidden features in the middle of the training process, hence, reducing the need to start with a sufficient number of features at the input layer. It is worth noting that adding one or two hidden layers incurs only a slight increase in training and inference time. This observation supposes that our method can be further enhance for more accurate results, while still keeping the fast runtime and the uncertain estimation capability. VII. C ONCLUSION AND FUTURE WORK 
+
+This study proposes a straightforward yet effective ap-proach for uncertainty estimation while maintaining accu-rate environment representation. Our method is inspired by noise contrastive estimation, utilizing noise samples as an additional ”uncertain” class and learning it through a lightweight softmax classifier with an extra output node. Em-pirical results show that the proposed framework can produce accurate environment maps while simultaneously identifying uncertain regions, all with exceptionally low computational overhead. The uncertainty estimates produced by our model not only contribute to more reliable robot perception, but also enable active perception strategies, where robots prioritize exploration of poorly observed regions to improve mapping efficiency. In the future, we plan to investigate adaptive or scene-aware strategies for generating contrastive noise samples, as our experiments indicate that the choice of noise generation can significantly affect both the learned map and the resulting uncertainty estimation. REFERENCES [1] A. Elfes, “Sonar-based real-world mapping and navigation,” IEEE Journal on Robotics and Automation , 1987. [2] S. T. O’Callaghan and F. T. Ramos, “Gaussian process occupancy maps,” International Journal Robotics Research , 2012. [3] F. Ramos and L. Ott, “Hilbert maps: Scalable continuous occupancy mapping with stochastic gradient descent,” International Journal Robotics Research , 2016. [4] W. Zhi, T. Lai, L. Ott, and F. Ramos, “Diffeomorphic transforms for generalised imitation learning,” in Learning for Dynamics and Control Conference, L4DC , 2022. [5] W. Zhi, I. Akinola, K. van Wyk, N. Ratliff, and F. Ramos, “Global and reactive motion generation with geometric fabric command se-quences,” in IEEE International Conference on Robotics and Automa-tion, ICRA , 2023. [6] W. Zhi, T. Lai, L. Ott, E. V. Bonilla, and F. Ramos, “Learning efficient and robust ordinary differential equations via invertible neural networks,” in International Conference on Machine Learning, ICML ,2022. [7] V. Guizilini and F. Ramos, “Towards real-time 3d continuous occu-pancy mapping using hilbert maps,” Int. J. Robotics Res. , vol. 37, no. 6, pp. 566–584, 2018. [8] R. Senanayake and F. Ramos, “Bayesian hilbert maps for dynamic continuous occupancy mapping,” in Conference on Robot Learning ,2017. [9] W. Zhi, L. Ott, R. Senanayake, and F. Ramos, “Continuous occupancy map fusion with fast bayesian hilbert maps,” in International Confer-ence on Robotics and Automation (ICRA) , 2019. [10] H. Wright, W. Zhi, M. Johnson-Roberson, and T. Hermans, “V-PRISM: probabilistic mapping of unknown tabletop scenes,” in 
+
+IEEE/RSJ International Conference on Intelligent Robots and Systems, IROS 2024 , 2024. [11] W. Zhi, R. Senanayake, L. Ott, and F. Ramos, “Spatiotemporal learning of directional uncertainty in urban environments with kernel recurrent mixture density networks,” IEEE Robotics and Automation Letters ,2019. [12] J. Z. Liu, Z. Lin, S. Padhy, D. Tran, T. Bedrax-Weiss, and B. Lak-shminarayanan, “Simple and principled uncertainty estimation with deterministic deep learning via distance awareness,” in Advances in Neural Information Processing Systems , 2020. [13] Y. Gal and Z. Ghahramani, “Dropout as a bayesian approximation: Representing model uncertainty in deep learning,” in Proceedings of the 33nd International Conference on Machine Learning, ICML 2016, New York City, NY, USA, June 19-24, 2016 , vol. 48, 2016, pp. 1050– 1059. [14] B. Lakshminarayanan, A. Pritzel, and C. Blundell, “Simple and scalable predictive uncertainty estimation using deep ensembles,” in 
+
+Advances in Neural Information Processing Systems 30: Annual Con-ference on Neural Information Processing Systems 2017, December 4-9, 2017, Long Beach, CA, USA , 2017, pp. 6402–6413. [15] S. Mohseni, M. Pitale, J. Yadawa, and Z. Wang, “Self-supervised learning for generalizable out-of-distribution detection,” Proceedings of the AAAI Conference on Artificial Intelligence , 2020. [16] S. Vernekar, A. Gaurav, T. Denouden, B. Phan, V. Abdelzad, R. Salay, and K. Czarnecki, “Analysis of confident-classifiers for out-of-distribution detection,” CoRR , 2019. [17] Z. Cheng, X. Zhang, and C. Liu, “Unified classification and rejection: A one-versus-all framework,” Mach. Intell. Res. , 2024. [18] W. Liu, X. Wang, J. D. Owens, and Y. Li, “Energy-based out-of-distribution detection,” in Advances in Neural Information Processing Systems , 2020. [19] M. S. Graham, W. H. Pinaya, P.-D. Tudosiu, P. Nachev, S. Ourselin, and J. Cardoso, “Denoising diffusion models for out-of-distribution detection,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Workshops , 2023. [20] H. Cheng, T. Zheng, Z. Ma, T. Zhang, M. Johnson-Roberson, and W. Zhi, “Dose3: Diffusion-based out-of-distribution detection on se (3) trajectories,” IEEE Robotics and Automation Letters , 2026. [21] M. Gutmann and A. Hyv¨ arinen, “Noise-contrastive estimation of unnormalized statistical models, with applications to natural image statistics,” J. Mach. Learn. Res. , 2012. [22] M. Gutmann and A. Hyv¨ arinen, “Noise-contrastive estimation: A new estimation principle for unnormalized statistical models,” in 
+
+Proceedings of the Thirteenth International Conference on Artificial Intelligence and Statistics , ser. Proceedings of Machine Learning Research, Y. W. Teh and M. Titterington, Eds., vol. 9. Chia Laguna Resort, Sardinia, Italy: PMLR, 13–15 May 2010, pp. 297–304. [Online]. Available: https://proceedings.mlr.press/v9/gutmann10a.html [23] I. J. Goodfellow, Y. Bengio, and A. Courville, Deep Learning . Cam-bridge, MA, USA: MIT Press, 2016. [24] A. Howard and N. Roy, “The robotics data set repository (radish),” 2003. [Online]. Available: http://radish.sourceforge.net/ [25] A. P. Bradley, “The use of the area under the roc curve in the evaluation of machine learning algorithms,” Pattern Recognition , vol. 30, no. 7, pp. 1145–1159, 1997. [26] J. Behley, M. Garbade, A. Milioto, J. Quenzel, S. Behnke, C. Stach-niss, and J. Gall, “Semantickitti: A dataset for semantic scene un-derstanding of lidar sequences,” in 2019 IEEE/CVF International Conference on Computer Vision, ICCV 2019, Seoul, Korea (South), October 27 - November 2, 2019 , 2019, pp. 9296–9306. [27] J. McCormac, A. Handa, S. Leutenegger, and A. J. Davison, “Scenenet RGB-D: can 5m synthetic images beat generic imagenet pre-training on indoor segmentation?” in IEEE International Conference on Com-puter Vision, ICCV 2017, Venice, Italy, October 22-29, 2017 , 2017, pp. 2697–2706. [28] B. Calli, A. Singh, A. Walsman, S. Srinivasa, P. Abbeel, and A. M. Dollar, “The YCB object and model set: Towards common benchmarks for manipulation research,” in 2015 International Conference on Advanced Robotics (ICAR) , 2015, pp. 510–517.

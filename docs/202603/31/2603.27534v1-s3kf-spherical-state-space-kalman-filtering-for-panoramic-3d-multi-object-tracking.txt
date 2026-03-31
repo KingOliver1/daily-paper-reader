@@ -1,0 +1,573 @@
+Title: S3KF: Spherical State-Space Kalman Filtering for Panoramic 3D Multi-Object Tracking
+
+URL Source: https://arxiv.org/pdf/2603.27534v1
+
+Published Time: Tue, 31 Mar 2026 01:12:55 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# S3KF : Spherical State-Space Kalman Filtering for Panoramic 3D Multi-Object Tracking 
+
+Zhongyuan Liu, Shaonan Yu, Jianping Li, Member, IEEE , Pengfei Wan, Xinhang Xu, Pengfei Wang, Maggie Y. Gao, and Lihua Xie, Fellow, IEEE 
+
+Fig. 1. System overview of the proposed 3D panoramic multi-object tracking framework. A fisheye camera array provides panoramic 2D detections, while an actively rotating LiDAR supplies full 360 ◦ depth coverage. Both modalities are fused in a geometry-consistent state representation on the unit sphere S3 using a two-degree-of-freedom tangent-plane parameterization. This formulation eliminates projection singularities of panoramic imagery and unifies 2D and 3D tracking. 
+
+Abstract —Panoramic multi-object tracking is impor-tant for industrial safety monitoring, wide-area robotic perception, and infrastructure-light deployment in large workspaces. In these settings, the sensing system must provide full-surround coverage, metric geometric cues, and stable target association under wide field-of-view distortion and occlusion. Existing image-plane trackers are tightly coupled to the camera projection and become unreliable in panoramic imagery, while conventional Euclidean 3D formulations introduce redundant directional parameters and do not naturally unify angular, scale, and depth es-timation. In this paper, we present S3KF , a panoramic 3D multi-object tracking framework built on a motorized rotating LiDAR and a quad-fisheye camera rig. The key idea is a geometry-consistent state representation on the unit sphere S2, where object bearing is modeled by atwo-degree-of-freedom tangent-plane parameterization and jointly estimated with box scale and depth dynamics. Based 
+
+This work was supported by NTUitive Gap Fund (NGF-2025-17006). Z. Liu is with CertaintyX. S. Yu, J. Li, P. Wan, X. Xu and L. Xie are with the School of Electrical and Electronic Engineering, Nanyang Technological University, Singapore. P. Wang is with ST Engineering, Singapore. M. Gao is with the School of Civil and Environmental Engineering, Nanyang Technological University, Singapore. (e-mail: zyliu@certaintyx.sg; SHAONAN001@e.ntu.edu.sg; jianping.li@ntu.edu.sg; pengfei008@e.ntu.edu.sg; XU0021NG@e.ntu.edu.sg; pengfei.wang@stengg.com; elhxie@ntu.edu.sg). (Z. Liu and S. Yu contributed equally. J. Li is the corresponding author.) 
+
+on this state, we derive an extended spherical Kalman filtering pipeline that fuses panoramic camera detections with LiDAR depth observations for multimodal tracking. We further establish a map-based ground-truth generation pipeline using wearable localization devices registered to a shared global LiDAR map, enabling quantitative evalua-tion without motion-capture infrastructure. Experiments on self-collected real-world sequences show decimeter-level planar tracking accuracy, improved identity continuity over a 2D panoramic baseline in dynamic scenes, and real-time onboard operation on a Jetson AGX Orin platform. These results indicate that the proposed framework is a practical solution for panoramic perception and industrial-scale multi-object tracking.The project page can be found at https://kafeiyin00.github.io/S3KF/. 
+
+Index Terms —Panoramic perception, multi-object track-ing, sensor fusion, spherical geometry, Kalman filtering, industrial safety monitoring. 
+
+I. I NTRODUCTION 
+
+Panoramic 3D perception is increasingly required in in-dustrial monitoring, field robotics, and wide-area autonomous systems, where targets must be tracked over the full surround-ing scene rather than within a narrow forward-facing field of view [1]–[5]. In factories, warehouses, and construction sites, reliable tracking of workers and moving equipment is 
+
+> arXiv:2603.27534v1 [cs.RO] 29 Mar 2026
+
+directly related to collision prevention, hazard awareness, and safe human–robot coexistence [6], [7]. A practical system for such environments must therefore provide full-surround sensing, metric geometric awareness, and embedded real-time operation under clutter, occlusion, and frequent viewpoint changes. Meeting these requirements with a single sensing modality remains difficult. Camera-only systems provide rich appear-ance cues but lack reliable metric depth, which makes asso-ciation fragile when objects overlap or undergo large scale changes [8]. Fixed-FoV LiDARs offer accurate geometry, yet their limited coverage introduces blind spots that interrupt full-surround tracking. A motorized rotating LiDAR can recover panoramic depth coverage from a single unit [9], while a multi-camera rig supplies dense visual observations. However, simply combining these sensors does not resolve the represen-tation problem at the core of panoramic tracking. Most tracking-by-detection pipelines model object states directly in the image plane, for example with pixel centers and box velocities. This choice works well for perspective imagery, but becomes problematic for fisheye or equirectangular views, where projection distortion is highly nonuniform and singular behavior appears near the poles [10]–[12]. On the other hand, Euclidean 3D formulations represent target direction with three parameters plus a unit-norm constraint, which is redundant for bearing estimation and can complicate filtering and fusion [13]. In addition, many practical MOT systems still treat depth and physical scale as auxiliary cues rather than as first-class state variables, limiting robustness when appearance is ambiguous or temporarily missing. This paper addresses the above limitations with a unified panoramic tracking framework, S3KF , that couples a rotating LiDAR and a quad-fisheye camera rig with a geometry-consistent state space on the unit sphere S2. Instead of tracking in the distorted image plane, we represent object bearing by a two-degree-of-freedom tangent-plane parame-terization and jointly model directional motion, object scale, and depth dynamics. This representation avoids image-space singularities, removes redundant directional coordinates, and provides a common interface for panoramic 2D and depth-augmented 3D tracking. Built on this state, we formulate an extended spherical Kalman filtering pipeline that fuses camera detections and LiDAR depth observations while preserving the underlying geometry of the bearing state. Beyond the filtering formulation, we also address a prac-tical bottleneck in evaluating panoramic 3D human tracking systems. Accurate ground truth is difficult to obtain in large real environments without motion-capture infrastructure. To support quantitative evaluation, we establish a map-based trajectory acquisition pipeline in which wearable localization devices register online LiDAR scans to a shared global map, producing globally consistent reference trajectories for multi-ple targets. Our main contributions are fourfold:  
+
+> •
+
+We develop a panoramic sensing platform that integrates a motorized rotating LiDAR with a quad-fisheye cam-era rig, providing synchronized full-surround geometric and appearance observations for embedded multi-object tracking.  
+
+> •
+
+We propose a geometry-consistent spherical state repre-sentation for panoramic tracking, in which target bearing is parameterized on S2 by two tangent-plane coordinates and jointly modeled with scale and depth dynamics.  
+
+> •
+
+We derive an extended spherical Kalman filtering frame-work that fuses panoramic image detections and LiDAR depth cues in a unified state-space model, supporting stable association and state estimation under wide-angle distortion and occlusion.  
+
+> •
+
+We establish a map-based ground-truth generation pipeline with wearable localization devices in a shared global LiDAR map, enabling infrastructure-light quanti-tative evaluation of panoramic 3D human tracking in large indoor and outdoor environments. By jointly modeling direction, scale, and depth, our frame-work stabilizes association across large FoV changes and occlusions, while depth aggregation from the rotating LiDAR provides accurate metric information. 
+
+II. R ELATED WORKS 
+
+A. Hardware Systems for Panoramic Perception 
+
+Panoramic perception has long been pursued in robotics via omnidirectional imaging and multi-camera rigs, leverag-ing central panoramic models on the sphere [14], [15] and practical calibration toolchains [16], [17]. While camera-only systems provide wide FoV and rich appearance cues, depth remains ambiguous in texture-poor or low-light scenes. In contrast, modern LiDAR systems deliver metrically accurate 3D geometry and robustness to illumination, with datasets such as KITTI and nuScenes promoting 360 ◦ sensor suites and full-surround perception [18], [19]. To reduce blind spots without duplicating sensors, mo-torized (rotating) LiDARs mount a multi-beam scanner on a rotary stage, achieving panoramic coverage from a single unit. Recent works demonstrate SLAM/odometry feasibility with such actuated configurations, including tightly-coupled or self-calibrating pipelines and observability-aware control for motor speed scheduling [20], [21]. Meanwhile, multi-LiDAR platforms emphasize reliability via coverage and online ex-trinsic calibration [22], offering complementary evidence that panoramic 3D sensing can be realized either by sensor multi-plicity or by actuation. Despite these advances, integrating a motorized LiDAR with a multi-camera rig specifically for robust panoramic multi-object tracking remains underexplored. Prior works on omni-directional tracking formulate estimation on the unit sphere for single-camera setups [23], and 3D MOT baselines focus on association and evaluation rather than panoramic hardware design [13], [24]. Our platform combines a rotating LiDAR with a quad-camera rig to deliver synchronized, full-coverage depth and appearance. 
+
+B. Geometric State Representation for Tracking 
+
+Conventional multi-object tracking frameworks typically parameterize targets either in the 2D image plane or in 3D Eu-clidean space. In the former case, trackers such as ByteTrack represent objects using bounding-box centers and velocities in pixel coordinates [10]. Other approaches reformulate tracking as point estimation, such as CenterTrack [25], which represents each object by a keypoint and its displacement across frames. While effective for perspective cameras, these image-space states are tied to the projection model and cannot be directly generalized to panoramic imagery, where equirectangular rep-resentations suffer from severe distortions and singularities at the poles [11]. In the latter case, 3D trackers often describe directions by Euclidean position vectors, which requires ex-plicit unit-norm constraints and introduces redundant degrees of freedom that complicate filtering [13]. In this work, we propose a geometry-consistent state rep-resentation directly on the unit sphere S2, where object di-rections are expressed with a two-degree-of-freedom tangent-plane parameterization. This formulation eliminates the over-parameterization of Euclidean models and avoids the sin-gularities inherent in image-plane tracking. Moreover, the spherical representation provides a unified interface between 2D and 3D domains, enabling seamless extension from image-based to depth-augmented tracking within a single state-space framework. 
+
+C. Ground Truth Generation for 3D Tracking 
+
+Reliable ground-truth trajectories are essential for quanti-tative evaluation of 3D tracking systems. Existing datasets typically obtain reference trajectories using three main strate-gies: motion-capture systems and high-precision positioning sensors. Indoor benchmarks commonly rely on optical motion-capture systems, such as Vicon or OptiTrack, which provide millimeter-level accuracy through external infrared camera arrays. Datasets including TUM RGB-D [26] and EuRoC MAV [27] adopt this approach to obtain highly accurate poses for visual–inertial odometry evaluation. However, motion-capture systems require extensive infrastructure deployment and are limited to controlled indoor environments, making them unsuitable for large-scale outdoor multi-person tracking. For outdoor scenarios, centimeter-level positioning can be achieved using RTK-GNSS receivers [28], which are widely used in autonomous driving datasets such as KITTI [18] and nuScenes [19]. Although GNSS provides globally referenced trajectories, its accuracy degrades significantly under occlu-sion, multipath interference, or urban canyon environments, and wearable deployment on multiple human subjects is often impractical due to antenna placement constraints. An alternative paradigm is to generate ground truth through map-based localization [5]. Building upon this paradigm, our work employs a map-matching-based ground-truth genera-tion framework using a pre-built LiDAR global map. Each wearable localization device independently registers its online LiDAR observations to the shared map, producing globally consistent 6-DoF trajectories without external infrastructure or inter-device calibration. Compared with motion-capture or GNSS-based solutions, this approach enables accurate, repeat-able, and scalable ground-truth acquisition for outdoor multi-person 3D tracking under realistic deployment conditions.                                          
+
+> Fig. 2. Hardware of the proposed panoramic sensing system. TABLE I NOTATION USED IN THE SPHERICAL TRACKING FORMULATION .
+> Symbol Description
+> S2Unit sphere used to represent object bear-ing directions.
+> gk∈S2Object bearing vector at time step k.
+> ¯gk∈S2Reference bearing used to define the local tangent space.
+> T¯gkS2Tangent space of S2at ¯gk.
+> Bk= [ b1,k ,b2,k ]Orthonormal basis spanning T¯gkS2.
+> wk= [ w1,k , w 2,k ]⊤Local tangent-plane coordinates of the bearing state.
+> xkFull target state vector.
+> ˆxk|k−1,ˆxk|kPredicted and corrected state estimates.
+> Pk|k−1,Pk|kCovariances of the predicted and corrected state estimates.
+> F,QState transition matrix and process noise covariance.
+> zk,H,RMeasurement vector, observation matrix, and measurement noise covariance.
+
+III. S3KF : S PHERICAL STATE -S PACE KALMAN 
+
+FILTERING 
+
+A. Problem Statement and Notation 
+
+The hardware of the proposed panoramic 3D sensing system can be found in Fig.2. It is composed of a rotating LiDAR and a quad-fisheye camera. The workflow of the proposed method is shown in the Fig.3. We address multi-object tracking in panoramic imagery augmented with depth sensing. Each object direction can be naturally represented as a point on the unit sphere 
+
+S2 = {g ∈ R3 | ∥ g∥ = 1 }, (1) where gk ∈ S2 denotes the true bearing vector of the object at time step k. Because S2 is a nonlinear manifold, we employ a local tangent parameterization for filtering as shown in Fig.4. Specifically, ¯gk ∈ S2 is the current reference estimate of the direction, and the tangent plane at this point is 
+
+T¯gk S2 = {v ∈ R3 | ¯g⊤ 
+
+> k
+
+v = 0 }. (2) We construct an orthonormal basis Bk = [ b1,k , b2,k ] ∈ R3×2
+
+spanning this tangent space, where b1,k , b2,k are unit vectors satisfying b⊤ 
+
+> i,k
+
+¯gk = 0 and b⊤
+
+> 1,k
+
+b2,k = 0 . Local 2D coordinates 
+
+(w1,k , w 2,k ) are defined relative to the tangent basis Bk, and Fig. 3. Workflow of the proposed panoramic 3D multi-object tracking.      
+
+> Fig. 4. g∈S2denotes the true bearing vector of the object. Because
+> S2is a nonlinear manifold, we employ a local tangent parameterization for filtering.
+
+can be obtained from the difference between the reference direction ¯gk and the actual direction gk on S2. For complete-ness, the explicit log/exp mapping formulas are provided in AppendixA. For state estimation, we denote by ˆxk|k−1 and ˆxk|k the prior (predicted) and posterior (corrected) state vectors, respectively, with covariances Pk|k−1, Pk|k. This notation allows us to track directions on S2 while performing inference in the locally Euclidean space T¯gk S2.
+
+B. State Representation 
+
+Traditional trackers such as ByteTrack represent objects with image-plane coordinates and bounding-box size. How-ever, panoramic cameras introduce nonlinear distortions, and depth sensing provides complementary 3D information [29]. We therefore propose an extended spherical state representa-tion: 
+
+xk =
+
+
+
+w1,k w2,k ˙w1,k ˙w2,k 
+
+ℓk ˙ℓk hk ˙hk
+
+dk ˙dk
+
+
+
+> ⊤
+
+∈ R10 . (3) In Eq. (3), (w1,k , w 2,k ) are tangent-plane coordinates of the spherical direction, ( ˙ w1,k , ˙w2,k ) are their velocities, ℓk is the bounding-box aspect ratio, hk is the image-plane box height, 
+
+( ˙ℓk, ˙hk) are the corresponding scale velocities, and (dk, ˙dk)
+
+denote the target depth and depth velocity. This design keeps the box-scale states directly observable from image detections while allowing metric depth to be fused from LiDAR in the same state-space model. 
+
+C. Motion Model 
+
+We assume constant-velocity dynamics for all components: 
+
+xk+1 = Fx k + qk, qk ∼ N (0, Q), (4) with block-diagonal transition 
+
+F = diag (Fpos , Fℓ, Fh, Fd), (5) where each block is constant velocity (CV): 
+
+Fcv =
+
+1 ∆t
+
+0 1
+
+
+
+. (6) Specifically, Fpos = diag (Fcv , Fcv ) for (w1, w 2), and 
+
+Fℓ, Fh, Fd are 2 × 2 CV blocks for ℓ, h, d . The prediction step is 
+
+ˆxk|k−1 = Fˆxk−1|k−1, (7) 
+
+Pk|k−1 = FP k−1|k−1F⊤ + Q. (8) 
+
+D. Measurement Model 
+
+We fuse panoramic camera detections and depth observa-tions. 1) Direction measurement: A detection ˜gk ∈ S2 is pro-jected to the tangent plane at ¯gk:
+
+pk = ( I − ¯gk ¯g⊤ 
+
+> k
+
+)˜ gk, θk = arccos(¯ g⊤ 
+
+> k
+
+˜gk). (9) With ˆpk = pk/∥pk∥, the log-map is 
+
+ξk = θk ˆpk, (10) and its projection in Bk yields (z1,k , z 2,k ).
+
+2) Bounding box and depth.: Panoramic image detections provide the box aspect ratio and image-plane height (ℓdet  
+
+> k
+
+, h det  
+
+> k
+
+),while the rotating LiDAR provides a depth observation dobs  
+
+> k
+
+for the matched target. 
+
+Combined observation.: For compact notation, when synchronized image and LiDAR observations are available at the same instant, the joint measurement vector is written as 
+
+zk = z1,k z2,k ℓdet  
+
+> k
+
+hdet  
+
+> k
+
+dobs 
+
+> k
+
+⊤ ∈ R5, (11) related to the state as 
+
+zk = Hx k + rk, (12) with 
+
+H =
+
+
+
+1 0 0 0 0 0 0 0 0 00 1 0 0 0 0 0 0 0 00 0 0 0 1 0 0 0 0 00 0 0 0 0 0 1 0 0 00 0 0 0 0 0 0 0 1 0
+
+ , rk ∼ N (0, R).
+
+(13) In implementation, image and LiDAR measurements are gen-erally asynchronous. We therefore apply sequential updates with modality-specific observation vectors: 
+
+zk,img = z1,k z2,k ℓdet  
+
+> k
+
+ddet 
+
+> k
+
+ , (14) 
+
+zk,lidar = hobs  
+
+> k
+
+dobs 
+
+> k
+
+⊤ , (15) with the corresponding observation matrices 
+
+Himg =
+
+
+
+1 0 0 0 0 0 0 0 0 00 1 0 0 0 0 0 0 0 00 0 0 0 1 0 0 0 0 00 0 0 0 0 0 0 0 1 0
+
+ , (16) 
+
+Hlidar =
+
+0 0 0 0 0 0 1 0 0 00 0 0 0 0 0 0 0 1 0
+
+
+
+, (17) Here, we can get ddet  
+
+> k
+
+and dobs  
+
+> k
+
+by through the following formula. 
+
+α = πh det 
+
+> k
+
+2himg height 
+
+(18) 
+
+ddet  
+
+> k
+
+= 0.5 × ˆhk
+
+tan (0 .5α) (19) 
+
+ˆα = π ˆhk
+
+2himg height 
+
+(20) 
+
+hobs  
+
+> k
+
+= 2 × dobs  
+
+> k
+
+tan (0 .5ˆ α) (21) 
+
+ˆhk represents the estimated value of the object’s height at time k. α represents the vertical field of view angle occupied by the height of the object relative to the origin of the carrier coordinate system. 
+
+E. Kalman Filter Update and Algorithm 
+
+Given the CV prediction (ˆ xk|k−1, Pk|k−1) and an available measurement from modality m ∈ { img , lidar }, the correction follows the standard Kalman update on the locally Euclidean state: 
+
+Sk,m = HmPk|k−1H⊤ 
+
+> m
+
++ Rm, (22) 
+
+Kk,m = Pk|k−1H⊤
+
+> m
+
+S−1
+
+> k,m
+
+, (23) 
+
+ˆxk|k = ˆ xk|k−1 + Kk,m 
+
+ zk,m − Hm ˆxk|k−1
+
+, (24) 
+
+Pk|k = ( I − Kk,m Hm)Pk|k−1. (25) When synchronized image and LiDAR measurements are both available, the above update can be applied once with the joint observation (zk, H, R); otherwise, image and LiDAR updates are performed sequentially in timestamp order. After update, we reconstruct the direction on the sphere by the exponential map with the updated local coordinates ( ˆ w1,k , ˆw2,k ), renor-malize to unit length, and recompute the tangent basis Bk
+
+at ¯gk (Appendix A). The velocity components in the tangent space are parallel-transported from the temporary basis via 
+
+Tk = B⊤ 
+
+> k
+
+Btmp  
+
+> k
+
+to avoid spurious rotation of the local frame. 
+
+1) Measurement gating and association: Following ByteTrack-style data association [10], we first gate detections by the Mahalanobis distance in the measurement space, 
+
+D2 
+
+> m
+
+= ( zk,m − Hm ˆxk|k−1)⊤S−1
+
+> k,m
+
+(zk,m − Hm ˆxk|k−1), with a χ2 threshold at the desired confidence. For panoramic imagery, we optionally combine this with a spherical IoU computed from the direction and angular box size [11], and with a depth-consistency check using the LiDAR subwindow variance. The final association cost is a weighted sum of the gated Mahalanobis distance and the complementary cues (spherical IoU / depth), and the Hungarian algorithm is used to produce a one-to-one matching [13]. Unmatched high-score detections spawn tentative tracks, while unmatched tracks are kept alive for a short patience window (track recycling), consistent with [10]. 
+
+2) Noise modeling and numerical safeguards: The mea-surement covariance R is block-diagonal for the joint update, and its modality-specific submatrices define Rimg and Rlidar .The (z1, z 2) block comes from propagating pixel noise through camera intrinsics and the spherical log map (Appendix A; see [15] for spherical geometry), the (ℓ, h ) block comes from detector scale uncertainty (optionally conditioned on latitude to mitigate equirectangular distortions [11]), and the d block is the robust depth variance from deskewed rotating-LiDAR returns. We clamp tiny eigenvalues of Sk,m and symmetrize 
+
+Pk|k to ensure positive semi-definiteness. For very small angular displacements ( ∥wk∥ → 0), we use the first-order exp-map approximation from Appendix A to avoid numerical issues. Algorithm 1 Extended Spherical Kalman Filter for Panoramic MOT 
+
+Require: Previous (ˆ xk−1|k−1, Pk−1|k−1, ¯gk−1, Bk−1); per-camera detections {(˜ gi,k , ℓ det 
+
+> i,k
+
+, h det 
+
+> i,k
+
+, score i,k )}; deskewed LiDAR returns; timestep ∆t 
+
+> 1:
+
+Predict ˆxk|k−1 = Fˆxk−1|k−1, Pk|k−1 =
+
+FP k−1|k−1F⊤ + Q 
+
+> 2:
+
+Compute ¯gpred  
+
+> k
+
+from ˆw1:2 ,k |k−1 and Bk−1; build temporary basis Btmp  
+
+> k
+> 3:
+
+For each camera detection, compute spherical log-map zdir ,k = [z1,k , z 2,k ]⊤ and form zk, img =[z1,k , z 2,k , ℓ det  
+
+> k
+
+, h det  
+
+> k
+
+]⊤ 
+
+> 4:
+
+Aggregate LiDAR depth dobs  
+
+> k
+
+in the spatio-temporal gate aligned with ¯gpred  
+
+> k
+
+and form zk, lidar = [ dobs  
+
+> k
+
+]⊤ 
+
+> 5:
+
+Gate detections by Mahalanobis distance; compute com-posite cost (add spherical IoU/depth) and run Hungarian matching [10], [13]  
+
+> 6:
+
+For each matched track: apply the image update 
+
+(zk, img , Himg , Rimg ) and, when available, the LiDAR up-date (zk, lidar , Hlidar , Rlidar ) 
+
+> 7:
+
+Reproject to sphere: ¯gk = Exp ¯gpred 
+
+> k
+
+  ˆwk|k
+
+; normalize; update basis Bk 
+
+> 8:
+
+Parallel-transport velocities with Tk = B⊤ 
+
+> k
+
+Btmp  
+
+> k
+
+; handle unmatched (spawn/recycle) as in [10]  
+
+> 9:
+
+return Updated (ˆ xk|k, Pk|k, ¯gk, Bk)
+
+3) Algorithm: This pipeline (Algorithm.1) preserves spher-ical geometry for direction estimation (avoiding image-space singularities [11], [15]), incorporates ByteTrack-style box dynamics [10], and fuses rotating-LiDAR depth to stabilize association and metric scale in panoramic scenes. 
+
+IV. M AP -MATCHING BASED GROUND TRUTH 
+
+GENERATION FOR 3D T RACKING 
+
+A. Hardware and System Configuration 
+
+To enable rapid human localization in open outdoor environ-ments, we design a mobile localization system that requires no pre-deployed base stations and supports fast deployment for multi-object positioning. The system consists of an arbitrary number of wearable localization devices (as shown the left in Fig.5) and a WiFi router. Each localization device integrates a LiDAR sensor and a compact onboard computing unit, pro-viding independent perception and computation capabilities. During operation, the localization device is worn or mounted on top of a person’s head (as shown the middle in Fig.5). The device continuously perceives the surround-ing environment using LiDAR and performs self-localization based on a pre-built global map, thereby obtaining the spatial position of the human carrier. All devices are connected to the same WiFi network to maintain data communication and time synchronization, ensuring consistent spatial–temporal references and accurate multi-device localization results. Compared with traditional approaches that rely on fixed in-frastructure, the proposed system features flexible deployment, minimal initialization requirements, and strong scalability, allowing multiple devices to operate simultaneously within a unified localization framework.  
+
+> Fig. 5. The hardware of the localization system for each agent. Each person is wearing a LiDAR and a wireless module, which will be used to generate ground-truth trajectory.
+
+B. 3D Tracking Ground-truth Generation 
+
+To generate reliable 3D tracking ground truth without rely-ing on external motion-capture systems, we establish a unified global coordinate frame based on a high-quality LiDAR point cloud map as shown the right in Fig.5. Specifically, our rotating LiDAR system is first used to construct a global point cloud map of the experimental environment using a tightly-coupled LiDAR–inertial odometry pipeline [5]. During this mapping stage, the sensing area is kept free of dynamic objects to ensure geometric consistency and map completeness. All wearable localization devices (as shown in Fig.5) sub-sequently perform online localization by registering their real-time LiDAR scans to this pre-built global map. Localization is achieved through point cloud matching in the shared map coordinate system, yielding full 6-DoF poses for each device. Since all devices localize against the same static reference map, their estimated trajectories are naturally expressed in a common global frame without requiring inter-device calibra-tion. The map-based localization accuracy was evaluated inde-pendently, and the planar positioning error is within 3 cm under both indoor and outdoor conditions [5]. This level of precision provides sufficiently accurate reference trajectories for quantitative evaluation of the proposed tracking system. By separating the mapping and localization stages, the data generation pipeline avoids cumulative drift during exper-iments, improves repeatability across trials, and enables scal-able multi-person trajectory acquisition without infrastructure constraints. 
+
+V. E XPERIMENTS 
+
+A. Implementation Details 
+
+All experiments were conducted onboard an NVIDIA Jetson AGX Orin embedded platform running Ubuntu 20.04 with ROS 1. The system was implemented in C++ using Eigen for numerical computation and OpenCV for image processing. The perception module, including human detection and depth projection, runs on the onboard GPU to ensure real-time performance. The extended spherical Kalman filter is executed on the CPU at 30 Hz, providing continuous state estimation and temporal smoothing of the tracked targets. This heterogeneous computation design enables stable real-time operation on fully onboard hardware without external computation resources. 
+
+B. Evaluation Metrics 
+
+To quantitatively evaluate tracking accuracy, we compare the estimated human trajectories with reference trajectories obtained from the global-map-based localization system de-scribed in the previous section. Since the LiDAR sensor is mounted above the participant’s head, the estimated pose corresponds to a head-centered reference point rather than the human body centroid. As a result, vertical motion along the z-axis is influenced by body posture variations and mounting offsets. To avoid introducing bias from these effects, we evaluate tracking accuracy only on the horizontal plane. Specifically, we compute the root mean squared error (RMSE) between the estimated trajectory and the reference trajectory in the x–y plane. This metric reflects the practical tracking accuracy in terms of planar position and motion direction while remaining robust to vertical disturbances. 
+
+C. Evaluation in Real-world Environment 
+
+We evaluate the proposed tracker in a real-world outdoor ex-perimental environment with three participants moving freely within the sensing area. Each participant wears a localization device described previously, allowing synchronized acquisition of reference trajectories and tracking results. Following the evaluation protocol, we report the 2D RMSE on the horizontal plane ( x–y). The detailed tracking errors for three independent trials (Seq1–Seq5) are summarized in Table II. The specific error curves are shown Fig. 6.                          
+
+> TABLE II TRACKING RMSE ( M)FOR THREE PERSONS IN THE EXPERIMENT ENVIRONMENT (2D ON X –Y).
+> Sequence Person 1 Person 2 Person 3 Seq1 0.082 0.108 0.109 Seq2 0.219 0.160 0.2 Seq3 0.172 0.131 0.175 Seq4 0.386 0.282 0.206 Seq5 0.218 0.162 0.208
+> Mean 0.215 0.167 0.180
+
+Across all trials, the proposed method achieves consistent decimeter-level tracking accuracy. Averaging over all partici-pants and sequences yields an overall mean RMSE of 0.187 m, with errors ranging from 0.167 m to 0.215 m across different subjects. The five experimental sequences correspond to different motion conditions. In Seq1, all participants remain stationary, providing a baseline evaluation under static condi-tions. In Seq2, participants move along clockwise trajectories around the sensing area, introducing continuous motion and pose changes. In Seq3, participants follow counterclockwise trajectories with similar spatial coverage but different motion patterns. Seq4 presents a more challenging scenario where two 
+
+> Fig. 6. Tracking errors in experiment environment.
+
+participants move clockwise while one moves counterclock-wise at higher speeds than in Seq2 and Seq3. Meanwhile, frequent mutual occlusions occur during the motion. The combination of faster motion and partial occlusions increases observation uncertainty and data association difficulty, which explains the larger tracking errors observed in this sequence. In Seq5, all three participants perform faster radial back-and-forth motions toward the sensing device compared with Seq2 and Seq3. This motion pattern produces rapid depth variations and stronger dynamic changes, increasing the difficulty of state estimation. Despite these challenges, the tracking errors re-main within a reasonable range, demonstrating the robustness of the proposed method under fast dynamic motion. As shown in Table II, Seq1 achieves the smallest tracking error due to the absence of motion-induced uncertainty, while larger errors appear in dynamic sequences due to faster motion, occlusions, and the inherent system processing latency, which increases temporal misalignment between sensing and state estimation. Overall, the results demonstrate that the proposed system maintains stable multi-person tracking performance across static, dynamic, fast-motion, and occlusion-rich scenarios, while the spherical-state representation effectively suppresses noise and preserves trajectory consistency during complex human motions. 
+
+D. Deployment on Aerial and Ground Platforms 
+
+To assess the cross-platform generalization and robustness of the proposed framework, we deploy the panoramic sensing system on both ground and aerial robotic platforms, as illus-trated in Fig. 7 and Fig. 8. These experiments validate that the spherical state-space formulation is not tied to a specific carrier platform, but instead provides a platform-agnostic perception backbone. 
+
+Ground deployment. The sensing module was mounted on a quadruped robot and evaluated in both indoor and outdoor environments. The robot traversed scenes containing static and moving targets, including pedestrians and cyclists. Despite Fig. 7. Evaluation on the robot dog in real-world outdoor environment. (a) Objects standing. (b) Objects moving clockwise. (c) Objects moving counter-clockwise. (d) Objects suddenly changed moving direction. 
+
+> Fig. 8. Evaluation on the drone in real-world outdoor environment. (a) Objects standing. (b) Objects moving clockwise. (c) Objects moving counter-clockwise. (d) Objects suddenly changed moving direction.
+
+ego-motion disturbances and rapid viewpoint changes, the tracker maintained stable object identities and smooth 3D trajectories. The full-surround perception capability, enabled by the rotating LiDAR and panoramic camera array, ensured consistent coverage even when targets moved behind the robot or across large angular spans. 
+
+Aerial deployment. The same sensing system was further integrated onto a UAV platform, where tracking experiments were conducted under hovering and low-altitude flight con-ditions. Compared to ground deployment, aerial motion in-troduces additional challenges, including increased vibration, altitude variation, and larger perspective changes. Neverthe-less, the proposed spherical filtering framework preserved di-rectional consistency on S2 and maintained stable multimodal fusion, demonstrating robustness against rapid ego-motion and dynamic scene changes. Across all tested sequences, no evident tracking loss was observed. Object identities remained stable throughout long-duration recordings, even when targets moved across large angular spans, temporarily left the camera field of view, or experienced partial occlusions. In particular, when subjects crossed distortion-prone regions of the panoramic projection or underwent sudden motion changes, the tracker maintained con-tinuous trajectories without abrupt jumps or identity switches. Furthermore, no divergence or oscillatory behavior was ob-served in the estimated 3D positions. Trajectories exhibit smooth temporal evolution, consistent depth estimation, and coherent motion patterns aligned with visual observations. When temporary occlusions occurred, the predicted motion model allowed tracks to persist and re-associate correctly once the targets reappeared, indicating stable filtering and reliable data association. 
+
+E. Discussion 
+
+The core novelty of this work lies in the geometry-consistent state formulation defined directly on the unit sphere S2.Instead of parameterizing object motion in the distorted image plane or enforcing unit-norm constraints in Euclidean 3D, object bearings are represented using a two-degree-of-freedom tangent-plane model. This design preserves intrinsic spherical geometry while enabling linear-Gaussian inference in a locally Euclidean space. Compared with conventional 2D trackers such as Byte-Track [10], which model object states purely in pixel coordi-nates, the proposed formulation avoids projection singularities inherent to panoramic imagery (e.g., distortion near poles in equirectangular projections). As a result, direction estimation remains numerically stable across the full 360 ◦ field of view, especially when objects traverse large angular ranges or cross distortion boundaries. To quantitatively evaluate the benefit of the proposed geometry-consistent state representation, we compare the num-ber of identity switches (denoted as max ID in our implemen-tation) with those of ByteTrack. The evaluation is conducted on four self-collected panoramic sequences, each containing three participants moving around the sensing platform. The four sequences cover both carrier types and operating en-vironments: Ground-Outdoor (quadruped platform, outdoor), 
+
+Ground-Indoor (quadruped platform, indoor), Aerial-Outdoor 
+
+(UAV platform, outdoor), and Aerial-Indoor (UAV platform, indoor). The quantitative results are reported in Table III.              
+
+> TABLE III COMPARISON OF IDENTITY SWITCHES (MAX ID) ON FOUR PANORAMIC TRACKING SEQUENCES .
+> Sequence ByteTrack (2D) Proposed tracker Ground-Outdoor 26 3Ground-Indoor 18 3Aerial-Outdoor 27 3Aerial-Indoor 27 7
+
+Table III shows that the proposed tracker consistently re-duces identity switches across all four sequences. In aggregate, the total number of identity switches decreases from 98 for ByteTrack to 16 for the proposed method. The reduction is particularly pronounced in Ground-Outdoor , Ground-Indoor ,and Aerial-Outdoor , where the number of switches drops to only three in each sequence. These results indicate that the spherical-state formulation improves identity consistency when targets traverse large angular ranges, pass through distortion-prone regions of the panoramic image, or experience partial occlusion. The improvement is comparatively smaller in the Aerial-Indoor sequence (27 → 7). We attribute this mainly to intermittent detector failures rather than to the tracking model itself: the lower body of one participant is occasionally missed by the YOLO detector, which causes abrupt variations in the observed bounding-box geometry and subsequently increases the probability of temporary track fragmentation. Even under this more challenging condition, the proposed method still substantially outperforms the ByteTrack baseline. Overall, the results support the claim that the proposed spherical-state representation improves tracking robustness across both ground and aerial platforms, as well as indoor and outdoor environments. By preserving directional continuity on 
+
+S2 and incorporating depth into a unified state-space model, the proposed framework achieves more stable trajectory es-timation and better identity preservation in panoramic multi-object tracking. Finally, the proposed state formulation provides a unified interface between 2D and 3D tracking. When only directional information and bounding box dynamics are used, the frame-work behaves as a geometry-consistent panoramic 2D tracker. When LiDAR-derived depth is incorporated, it naturally ex-tends to metric 3D multi-object tracking. This flexibility suggests that the spherical state-space model can serve as a general foundation for panoramic perception systems across heterogeneous sensing platforms. 
+
+VI. C ONCLUSION 
+
+We presented a panoramic multi-object tracking framework that integrates a motorized rotating LiDAR with a quad-camera rig and introduces a geometry-consistent state representation on the unit sphere. By parameterizing object direction with a two-degree-of-freedom tangent-plane model, our approach avoids the singularities of image-plane tracking and the re-dundancy of Euclidean 3D representations, while providing a unified interface for both 2D and 3D applications. Inspired by ByteTrack, we further extended the state to include bounding-box aspect ratio, box height, and their velocities, together with depth and depth velocity obtained from LiDAR, enabling principled fusion of multimodal cues in an extended spherical Kalman filter. Experiments demonstrate that the proposed sys-tem achieves robust panoramic tracking under wide fields of view, occlusion, and appearance ambiguity, while maintaining geometric consistency and real-time performance. Future work will explore tighter coupling with low-level rotating-LiDAR odometry, appearance embedding for long-term identity preservation, and scaling the framework to larger multi-robot systems with panoramic sensing. 
+
+APPENDIX ALOG /E XP MAPPING ON S2
+
+For completeness, we provide explicit formulas to convert between the global unit direction gk ∈ S2, its local 2D coordinates wk ∈ R2, and the reference direction ¯gk ∈ S2
+
+with tangent basis Bk = [ b1,k , b2,k ].
+
+A. From Global to Local (Log Map) 
+
+Given ¯gk, gk ∈ S2, define the angular displacement 
+
+θk = arccos  ¯g⊤ 
+
+> k
+
+gk
+
+, θk ∈ [0 , π ]. (26) Project gk onto the tangent plane: 
+
+pk =  I − ¯gk ¯g⊤
+
+> k
+
+gk, ˆpk = pk
+
+∥pk∥ . (27) The tangent displacement is 
+
+ξk = θk ˆpk ∈ T¯gk S2, (28) and the local 2D coordinates are 
+
+wk =
+
+w1,k 
+
+w2,k 
+
+
+
+= B⊤ 
+
+> k
+
+ξk. (29) 
+
+B. From Local to Global (Exp Map) 
+
+Given wk ∈ R2, let 
+
+θk = ∥wk∥, uk = Bkwk
+
+θk
+
+, if θk > 0. (30) The exponential map reconstructs the unit direction: 
+
+gk = Exp ¯gk (Bkwk) = ¯ gk cos θk + uk sin θk. (31) For θk ≈ 0, a first-order approximation is sufficient: 
+
+gk ≈ ¯gk + Bkwk, gk ← gk
+
+∥gk∥ . (32) These mappings provide a consistent conversion between global directions on the sphere and their local 2D coordinates, which is essential for the spherical Kalman filter formulation described in the main text. 
+
+REFERENCES 
+
+[1] R. Jin, Y. Gao, Y. Wang, Y. Wu, H. Lu, C. Xu, and F. Gao, “Gs-planner: A gaussian-splatting-based planning framework for active high-fidelity reconstruction,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2024, pp. 11 202–11 209. [2] Y. Liao, S. Kang, J. Li, Y. Liu, Y. Liu, Z. Dong, B. Yang, and X. Chen, “Mobile-seed: Joint semantic segmentation and boundary detection for mobile robots,” IEEE Robotics and Automation Letters , vol. 9, no. 4, pp. 3902–3909, 2024. [3] A. Singh, “Surround-view vision-based 3d detection for autonomous driving: A survey,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) Workshops , October 2023, pp. 3243–3252. [4] Y. Wen, Y. Zhao, Y. Liu, F. Jia, Y. Wang, C. Luo, C. Zhang, T. Wang, X. Sun, and X. Zhang, “Panacea: Panoramic and controllable video generation for autonomous driving,” 2023. [5] J. Li, T.-M. Nguyen, M. Cao, S. Yuan, T.-Y. Hung, and L. Xie, “Graph optimality-aware stochastic lidar bundle adjustment with progressive spatial smoothing,” IEEE Transactions on Intelligent Transportation Systems , 2025. [6] X. Zhou, X. Xu, W. Liang, Z. Zeng, S. Shimizu, L. T. Yang, and Q. Jin, “Intelligent small object detection for digital twin in smart manufac-turing with industrial cyber-physical systems,” IEEE Transactions on Industrial Informatics , vol. 18, no. 2, pp. 1377–1386, 2021. [7] J. Wan, J. Li, M. Imran, D. Li et al. , “A blockchain-based solution for enhancing security and privacy in smart factory,” IEEE Transactions on Industrial Informatics , vol. 15, no. 6, pp. 3652–3660, 2019. [8] T. Fischer, Y.-H. Yang, S. Kumar, M. Sun, and F. Yu, “CC-3DT: Panoramic 3d object tracking via cross-camera fusion,” in 6th Annual Conference on Robot Learning , 2022. [Online]. Available: https://openreview.net/forum?id=nBnHXevkjZ [9] J. Li, X. Xu, Z. Liu, S. Yuan, M. Cao, and L. Xie, “Aeos: Active environment-aware optimal scanning control for uav lidar-inertial odom-etry in complex scenes,” ISPRS Journal of Photogrammetry and Remote Sensing , vol. 232, pp. 476–491, 2026. [10] Y. Zhang, P. Sun, Y. Jiang, D. Yu, Z. Yuan, P. Luo, W. Liu, and X. Wang, “Bytetrack: Multi-object tracking by associating every detection box,” in European Conference on Computer Vision (ECCV) . Springer, 2022, pp. 1–21. [11] Z. Sun, M. Chen, Y. Wang, Z. Wang, and Y. Wang, “Smm-pod: Panoramic 3d object detection via spherical multi-stage multi-modal fusion,” Remote Sensing , vol. 17, no. 12, p. 2089, 2024. [12] J. Ong, B.-T. Vo, B.-N. Vo, D. Y. Kim, and S. Nordholm, “A bayesian filter for multi-view 3d multi-object tracking with occlusion handling,” 
+
+IEEE Transactions on Pattern Analysis and Machine Intelligence ,vol. PP, pp. 1–1, 10 2020. [13] X. Weng, J. Wang, D. Held, and K. Kitani, “3d multi-object tracking: A baseline and new evaluation metrics,” in IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2020. [14] C. Geyer and K. Daniilidis, “A unifying theory for central panoramic systems and practical applications,” in European Conference on Com-puter Vision (ECCV) , ser. LNCS 1842, 2000, pp. 445–461. [15] ——, “Catadioptric projective geometry,” International Journal of Com-puter Vision , vol. 45, no. 3, pp. 223–243, 2001. [16] D. Scaramuzza, A. Martinelli, and R. Siegwart, “A toolbox for easily calibrating omnidirectional cameras,” in IEEE/RSJ International Con-ference on Intelligent Robots and Systems (IROS) , 2006. [17] K. Koide, S. Oishi, M. Yokozuka, and A. Banno, “General, single-shot, target-less, and automatic lidar-camera extrinsic calibration toolbox,” 05 2023, pp. 11 301–11 307. [18] A. Geiger, P. Lenz, and R. Urtasun, “Are we ready for autonomous driving? the kitti vision benchmark suite,” in IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 2012, pp. 3354– 3361. [19] H. Caesar, V. Bankiti, A. H. Lang et al. , “nuscenes: A multimodal dataset for autonomous driving,” in IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2020. [20] J. Li, Z. Liu, X. Xu, J. Liu, S. Yuan, F. Xu, and L. Xie, “Limo-calib: On-site fast lidar-motor calibration for quadruped robot-based panoramic 3d sensing system,” arXiv preprint arXiv:2502.12655 , 2025. [21] J. Li, X. Xu, J. Liu, K. Cao, S. Yuan, and L. Xie, “Ua-mpc: Uncertainty-aware model predictive control for motorized lidar odometry,” IEEE Robotics and Automation Letters , 2025. [22] J. Jiao, H. Ye, Y. Zhu, and M. Liu, “Robust odometry and mapping for multi-lidar systems with online extrinsic calibration,” IEEE Transactions on Robotics , 2021, t-RO, early access in 2021. [23] I. Markovi´ c, F. Chaumette, and I. Petrovi´ c, “Moving object detection, tracking and following using an omnidirectional camera on a mobile robot,” in IEEE International Conference on Robotics and Automation (ICRA) , 2014. [24] X. Wang, C. Fu, J. He, S. Wang, and J. Wang, “Strongfusionmot: A multi-object tracking method based on lidar-camera fusion,” IEEE Sensors Journal , vol. PP, pp. 1–1, 01 2022. [25] X. Zhou, V. Koltun, and P. Kr¨ ahenb¨ uhl, Tracking Objects as Points , 10 2020, pp. 474–490. [26] J. Sturm, N. Engelhard, F. Endres, W. Burgard, and D. Cremers, “A benchmark for the evaluation of rgb-d slam systems,” IEEE/RSJ International Conference on Intelligent Robots and Systems , pp. 573– 580, 2012. [27] M. Burri, J. Nikolic, P. Gohl, T. Schneider, J. Rehder, S. Omari, M. Achtelik, and R. Siegwart, “The euroc micro aerial vehicle datasets,” 
+
+The International Journal of Robotics Research , vol. 35, no. 10, pp. 1157–1163, 2016. [28] P. D. Groves, Principles of GNSS, Inertial, and Multisensor Integrated Navigation Systems . Artech House, 2013. [29] C. Geyer and K. Daniilidis, “A unifying theory for central panoramic systems and practical applications.” 01 2000, pp. 445–461.

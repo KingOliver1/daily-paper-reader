@@ -1,0 +1,776 @@
+Title: Cost-Matching Model Predictive Control for Efficient Reinforcement Learning in Humanoid Locomotion
+
+URL Source: https://arxiv.org/pdf/2603.28243v1
+
+Published Time: Tue, 31 Mar 2026 01:54:31 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Cost-Matching Model Predictive Control for Efficient Reinforcement Learning in Humanoid Locomotion 
+
+Wenqi Cai 1, Kyriakos G. Vamvoudakis 2, S´ ebastien Gros 3, and Anthony Tzes 1
+
+Abstract — In this paper, we propose a cost-matching approach for optimal humanoid locomotion within a Model Predictive Control (MPC)-based Reinforcement Learning (RL) framework. A parameterized MPC formulation with centroidal dynamics is trained to approximate the action-value function obtained from high-fidelity closed-loop data. Specifically, the MPC cost-to-go is evaluated along recorded state–action trajectories, and the parameters are updated to minimize the discrepancy between MPC-predicted values and measured returns. This formulation enables efficient gradient-based learning while avoiding the computational burden of repeatedly solving the MPC problem during training. The proposed method is validated in simulation using a commercial humanoid platform. Results demonstrate improved locomotion performance and robustness to model mismatch and external disturbances compared with manually tuned baselines. 
+
+I. I NTRODUCTION 
+
+Humanoid robotics has advanced rapidly in recent years. Humanoid locomotion poses particular challenges due to in-termittent contacts, high degrees of freedom, and strict safety constraints, while also requiring robustness to disturbances and modeling errors [1]. Model Predictive Control (MPC) has emerged as a domi-nant paradigm for humanoid locomotion because it provides a systematic mechanism to encode task objectives and enforce constraints through online optimization. To satisfy real-time requirements, many MPC pipelines rely on simplified or reduced-order models that enable lightweight computation and high update rates [ 2]. However, such simplified models may neglect important effects present during high-fidelity execution (e.g., contact realization, inertial coupling, and actuator or tracking-stack abstractions). Consequently, robust performance often relies heavily on expert tuning of cost weights and terminal penalties [ 3]. Alternatively, richer formulations that tighten kinematic consistency or incorporate more detailed dynamics [ 4] can improve fidelity but typically increase computational complexity and complicate real-time deployment [ 5]. In practice, this trade-off is often addressed using predictive–reactive hierarchies, where an MPC planner   
+
+> 1Wenqi Cai and Anthony Tzes are with the Electrical Engineering Program, New York University Abu Dhabi (NYUAD), 129188, UAE. Email: wenqi.cai@nyu.edu; anthony.tzes@nyu.edu
+> 2Kyriakos G. Vamvoudakis is with the School of Aerospace Engineer-ing, Georgia Institute of Technology, Atlanta, GA 30332, United States. Email: kyriakos@gatech.edu
+> 3S´ebastien Gros is with the Department of Engineering Cybernetics, Norwegian University of Science and Technology (NTNU), Trondheim, Norway. Email: sebastien.gros@ntnu.no This work was supported in part by: a) NSF under grant Nos. SLES-
+> 2415479 , CPS-2227185 , b) NASA ULI under grant No. 80 NSSC 25 M7104 ,and c) the NYUAD Center for AI and Robotics, funded by Tamkeen under the NYUAD Research Institute Award CG010.
+
+generates reference trajectories that are executed by a higher-rate tracking module [ 6]. While effective for real-time operation, this architectural separation can amplify systematic planning–execution mismatches and make performance sen-sitive to cost design and tuning, particularly when operating with short horizons [7]. Reinforcement Learning (RL) has demonstrated strong capability in learning robust locomotion behaviors directly from data with efficient runtime execution [ 8]. However, humanoid locomotion represents a challenging learning regime. Training from scratch is often sample-inefficient and sensitive to reward design and curriculum choices, and successful deployments typically rely on large-scale simulation pipelines with additional mechanisms to mitigate sim-to-real discrepancies (e.g., domain randomization [ 9]and system identification [ 10 ]). Furthermore, purely learned policies do not naturally enforce hard safety and contact constraints [ 11 ]. These limitations have motivated control– learning formulations that connect RL with adaptive optimal control concepts and provide explicit convergence or stability analyses under disturbances [ 12 ], [ 13 ]. In this direction, MPC– learning hybrids aim to retain constrained optimization for deployment while leveraging learning to improve performance under model mismatch and uncertainty [14], [15]. In this context, this work builds upon our prior MPC-based Reinforcement Learning (MPC-RL) framework—initiated in [ 16 ] and further developed in subsequent works (e.g., [ 17 ], [18 ], [ 19 ])—which treats a parameterized MPC as a structured value/action-value function approximator or policy approxima-tor. Within this framework, the predictive model, cost function, and constraints of the MPC are parameterized, and closed-loop behavior is improved by adjusting these parameters using RL signals. This approach allows learning to operate within the MPC structure, thereby preserving constraint handling and interpretability [ 20 ]. However, a key limitation arises in complex, time-critical humanoid locomotion stacks: standard gradient-based MPC-RL methods typically require repeatedly solving the MPC optimization within the learning loop, making training prohibitively expensive when the MPC itself is already operating near real-time computational limits. Motivated by this challenge, we propose Cost-Matching MPC (CM-MPC), an efficient learning procedure that pre-serves the MPC-RL perspective while avoiding solve-in-the-loop training. The central idea is to learn the MPC parameters θ by minimizing the discrepancy between an MPC surrogate cost-to-go QMPC  
+
+> θ
+
+and a measured long-horizon return Qmeas computed from closed-loop trajectories. Rather than differentiating through repeated MPC solves, QMPC  
+
+> θ
+
+is 
+
+> arXiv:2603.28243v1 [cs.RO] 30 Mar 2026
+
+evaluated by rolling out the parameterized predictive model along recorded action segments and accumulating parame-terized stage costs, together with differentiable penalties for state-constraint violations. This formulation enables efficient gradient-based learning while maintaining deployment as a standard constrained receding-horizon MPC controller. 
+
+Contributions. The contributions of this work are twofold. First, we introduce a cost-matching learning framework that extends our prior MPC-RL formulation while substantially reducing the computational burden during training by eliminat-ing the need for repeated MPC solves in the learning loop. The proposed framework is generic and can be applied to systems formulated as Optimal Control Problems (OCPs). Second, we demonstrate the approach on humanoid locomotion by developing a constrained OCP formulation based on centroidal dynamics and validating the learning procedure in high-fidelity simulation. An open-source implementation of the framework is also provided at https://github.com/R ISC-NYUAD/humanoid_mpc_cost_matching .II. P ROBLEM FORMULATION 
+
+Consider humanoid locomotion control within a hierarchi-cal control architecture [ 21 ]. In this architecture, an upper-level nonlinear MPC planner operates at a lower frequency and generates reference commands, while a high-frequency Proportional Derivative (PD)-type tracking controller maps the MPC commands to joint torques (from u to ˜u), as shown in Fig. 1. 
+
+Fig. 1: Cost-Matching MPC-RL framework for humanoids. In this work, we shall focus on the learning-based parame-terization of the MPC layer, while the low-level tracking controller is treated as a fixed module. Fig. 1 provides an overview of the proposed CM-MPC framework for humanoids, and the remaining components are introduced in the subsequent sections. 
+
+A. Centroidal Dynamics 
+
+A complete centroidal dynamics model is adopted in this work, building on the OCS2 centroidal formulation [ 22 ], [ 21 ]. Let I denote the inertial (world) frame and B the base frame attached to the robot trunk. The generalized coordinates of the robot are defined as q = [ p⊤ 
+
+> b
+
+, θ⊤ 
+
+> b
+
+, q⊤ 
+
+> j
+
+]⊤ ∈ R6+ nj , where 
+
+pb ∈ R3 denotes the base position in I, θb ∈ R3 represents the base orientation (ZYX Euler angles), and qj ∈ Rnj
+
+denotes the joint angles. The state x ∈ R12+ nj := h⊤ 
+
+> lin
+
+h⊤ 
+
+> ang
+
+q⊤⊤ concate-nates the centroidal momentum h and the configuration q,where hlin , hang ∈ R3 denote the linear and angular momenta expressed in I. The control input u ∈ R12+ nj consists of the contact wrenches for the left ( L) and right ( R) feet together with the joint velocities u := w⊤ 
+
+> c,L
+
+w⊤ 
+
+> c,R
+
+v⊤
+
+> j
+
+⊤ , where 
+
+wc,i = [ f ⊤
+
+> c,i
+
+, m⊤
+
+> c,i
+
+]⊤ ∈ R6 represents the contact force and moment exerted at the i-th foot ( i ∈ { L, R }), and vj ∈ Rnj
+
+denotes the commanded joint velocity. The system dynamics ˙x = f dyn (x, u) is 
+
+˙hlin = X
+
+> i∈{ L,R }
+
+f c,i + M g, (1a) 
+
+˙hang = X
+
+> i∈{ L,R }
+
+rc,i (q) × f c,i + mc,i , (1b) 
+
+˙q = Ξ(q) v⊤ 
+
+> b
+
+ω⊤ 
+
+> b
+
+v⊤
+
+> j
+
+⊤ , (1c) where M denotes the total mass and g is the gravitational acceleration. The vector rc,i denotes the moment arm from the Center of Mass (CoM) to the contact point of foot i, expressed in the inertial frame I. The matrix Ξ(q) maps generalized ve-locities to the configuration derivative ˙q. These transformation-related quantities can be efficiently computed using rigid-body algorithms provided by the Pinocchio library [ 23 ]. The base velocity variables (vb, ωb) are determined by the centroidal momentum h and the joint velocities vj through 
+
+h = A(q)
+
+
+
+vb
+
+ωb
+
+vj
+
+ = Ab(q)
+
+vb
+
+ωb
+
+
+
++ Aj (q)vj , where A(q)
+
+is the Centroidal Momentum Matrix (CMM) [ 24 ], which captures the inertial coupling between base and limb motions. The matrices Ab and Aj denote the corresponding block partitions of the CMM. The base velocity can therefore be obtained as 
+
+vb
+
+ωb
+
+
+
+= Ab(q)−1 (h − Aj (q)vj ), ensuring that the kinematic evolution remains consistent with the centroidal momentum dynamics. 
+
+B. Constraints 
+
+The feasible state–input set is defined through equality and inequality constraints. To distinguish phase-dependent constraints, let Pst and Psw denote the sets of stance and swing phases, respectively. 1) Inequality Constraints:  
+
+> •
+
+Joint Limits. The joint configurations are restricted by mechanical limits: qmin  
+
+> j
+
+≤ qj ≤ qmax  
+
+> j
+
+. 
+
+> •
+
+Foot Collision. To prevent self-collision, the minimum distance between the left and right feet, computed using Signed Distance Fields (SDF) Φsdf , must maintain a safety margin dsafe : Φsdf (q) ≥ dsafe . 
+
+> •
+
+Friction Cone. To avoid foot slippage, the contact force for any active foot must lie within the friction cone: q f xc,i 
+
+2 +  f yc,i 
+
+2 ≤ μf zc,i , ∀i ∈ P st . 
+
+> •
+
+Center of Pressure (CoP). To maintain contact stability with foot dimensions (dx, d y ), the CoP must remain within the support region: |mxc,i |≤ dy f zc,i , |myc,i |≤ dxf zc,i , ∀i ∈ P st .
+
+2) Equality Constraints:  
+
+> •
+
+Zero Velocity. During stance, the foot maintains rigid ground contact and the linear velocity of the foot contact frame is constrained to zero: vc,i = Jc,i (q) ˙ q = 0, ∀i ∈Pst , where Jc,i (q) denotes the contact Jacobian.  
+
+> •
+
+Zero Wrench. Feet in the swing phase are contact-free, and their contact wrench must vanish: wc,i = 0, ∀i ∈ P sw . 
+
+> •
+
+Normal Velocity Tracking. The normal ( z-axis) velocity of the swing foot is constrained to follow a reference profile 
+
+vz 
+
+> ref
+
+to ensure accurate landing: vzc,i = vz 
+
+> ref
+
+(t), ∀i ∈ P sw .
+
+C. Optimal Control Objective 
+
+Humanoid locomotion is formulated as a constrained OCP over a finite prediction horizon N . Given the centroidal dynamics and feasibility constraints, the planner seeks an optimal control sequence that minimizes 
+
+JMPC := T (xN ) +  
+
+> N−1
+
+X
+
+> i=0
+
+L(xi, ui), (2) where L(·) and T (·) denote the stage and terminal costs, respectively. The stage cost is composed of 
+
+L = Ltrac + Lbase + Lcom + Lswin + Ltorq , (3) capturing reference tracking, dynamic stability, and physical plausibility. Specifically:  
+
+> •
+
+We enforce tracking of the reference state trajectory xref 
+
+while regularizing the control effort: Ltrac = ∥x −
+
+xref ∥2
+
+> Q
+
++∥u − uref ∥2
+
+> R
+
+. 
+
+> •
+
+A task-space kinematic penalty is imposed on a base-attached frame to regularize upper-body motion: Lbase =
+
+∥ebase (x, u)∥2 
+
+> Qbase
+
+, where ebase ∈ R18 collects the task-space tracking errors. This term mitigates upper-body oscil-lations and promotes an upright posture during locomotion.  
+
+> •
+
+To improve balance robustness, the horizontal CoM position is regularized toward the midpoint of the active foot contacts: Lcom = ∥pxy 
+
+> com
+
+(q) − pxy 
+
+> mid
+
+(q)∥2
+
+> Qcom
+
+, where pxy 
+
+> com
+
+denotes the CoM position projected onto the horizontal plane, and pxy  
+
+> mid
+
+:= 12 (pxy c,L (q) + pxy c,R (q)) denotes the midpoint between the left and right foot contacts.  
+
+> •
+
+To regulate foot clearance and landing orientation, devia-tions of the swing-foot pose and twist from their references are penalized: Lswin = P 
+
+> i∈P sw
+
+∥esw ,i (x, u)∥2
+
+> Qsw
+
+, where 
+
+esw ,i ∈ R18 denotes the task-space tracking error of the swing-foot frame relative to its reference trajectory.  
+
+> •
+
+To discourage contact force distributions that gener-ate large joint torques, the contact wrench is regular-ized through the induced generalized torques: Ltorq =
+
+P 
+
+> i∈P st
+
+Jc,i (q)⊤wc,i 
+
+> 2
+> Qtorq
+
+, where Jc,i (q) denotes the contact Jacobian. The terminal cost is defined as a quadratic penalty on the terminal state, 
+
+T (xN ) = xN − xref 
+
+> N
+> 2
+> Qf
+
+. (4) The above OCP provides a structured mechanism for generating feasible locomotion behaviors. Nevertheless, model mismatch and unmodeled effects can lead to suboptimal MPC policies and degraded closed-loop performance. To address this issue, the next section introduces a data-driven adaptation of the MPC parameterization using rollout data collected during execution. III. C OST -M ATCHING MPC-B ASED 
+
+REINFORCEMENT LEARNING 
+
+We present the cost-matching method using the general Markov decision process (MDP) notation in order to em-phasize that the proposed approach applies to any problem that can be formulated as a constrained OCP and for which real-world data is available. 
+
+A. Parameterized MPC as a Q Function 
+
+Consider a discounted infinite-horizon MDP with state 
+
+s ∈ S , action a ∈ A , stage cost L(s, a), and discount factor γ ∈ (0 , 1] . The objective is to minimize the expected discounted cumulative cost. To obtain a structured and differentiable approximation of the optimal policy and its associated action-value function, we employ a finite-horizon parameterized model predictive control (MPC) scheme as a function approximator. The parameter vector θ ∈ Rp jointly parameterizes the predictive model and cost functions of the MPC, enabling data-driven adaptation in the presence of model mismatch and uncertainties. 
+
+a) Parameterized MPC scheme: Given a measured state 
+
+s, the horizon-N parameterized MPC problem is 
+
+min   
+
+> x,u
+
+Tθ (xN ) +  
+
+> N−1
+
+X
+
+> i=0
+
+Lθ (xi, ui), (5a) 
+
+s.t. ∀ i = 0 , . . . , N − 1
+
+xi+1 = f θ (xi, ui), g(ui) ≤ 0, (5b) 
+
+h(xi, ui) ≤ 0, c(xi, ui) = 0, (5c) 
+
+hf (xN ) ≤ 0, cf (xN ) = 0, (5d) 
+
+x0 = s. (5e) The predictive model f θ , stage cost Lθ , and terminal cost 
+
+Tθ are parameterized and adapted through learning. 
+
+b) MPC-induced action-value function: To enable learn-ing without repeatedly solving the optimization problem, we define the MPC-induced action-value along given actions recorded from the real system. For a length-N action segment 
+
+a0: N −1 := {a0, . . . , aN −1}, the predicted rollout is 
+
+x0 = s, xi+1 = f θ (xi, ai), i = 0 , . . . , N − 1. (6) Note that even when the recorded actions are feasible on the real system, the predicted trajectory generated by (6) may violate state-related constraints due to model mismatch. Consequently, constraint-violation penalties are incorporated directly into the rollout-based value evaluation. Define the per-stage and terminal violation residuals 
+
+ri := 
+
+[hθ (xi, ai)] +
+
+cθ (xi, ai)
+
+
+
+, rN := 
+
+"
+
+[hf 
+
+> θ
+
+(xN )] +
+
+cf 
+
+> θ
+
+(xN )
+
+#
+
+, (7) where [·]+ denotes the element-wise operator [y]+ =max( y, 0) . Let the weights W , W f ≻ 0, and define 
+
+ϕ(ri) := ∥ri∥2 
+
+> W
+
+, ϕf (rN ) := ∥rN ∥2  
+
+> Wf
+
+. (8) The MPC-induced action-value function is then defined as 
+
+QMPC  
+
+> θ
+
+(s, a0: N −1) := Tθ (xN ) + ϕf (rN )+  
+
+> N−1
+
+X
+
+> i=0
+
+
+
+Lθ (xi, ai) + ϕ(ri)
+
+
+
+, (9) where {xi} and {ri} are generated by (6) and (7) . Impor-tantly, (9) can be evaluated through forward rollout and cost accumulation, and is differentiable with respect to θ, without requiring the solution of (5) during training. 
+
+B. Action-Value Evaluation via Data Rollouts 
+
+Consider a dataset of trajectories collected from the real environment D = {(sk, ak, ℓ k)}M −1 
+
+> k=0
+
+, where (M ≫ N )
+
+denotes the trajectory length and ℓk = L(sk, ak) is the observed stage cost. The trajectories need not be optimal. For each time index k, we define the measured discounted return-to-go along the recorded trajectory as 
+
+Qmeas (sk, ak) :=  
+
+> M−k−1
+
+X
+
+> i=0
+
+γi L(sk+i, ak+i). (10) This quantity represents the long-term cost accumulated by the system under the executed actions. In the proposed framework, 
+
+Qmeas serves as the learning target, while QMPC  
+
+> θ
+
+provides a finite-horizon, model-based approximation evaluated along the same recorded action segment. The discrepancy between these quantities primarily reflects a systematic mismatch between the real system and the parameterized predictive model. Given an index k, we compute QMPC  
+
+> θ
+
+by initializing (6) at x0 = sk and rolling out the parameterized model over the recorded action segment (ak, . . . , ak+N −1). This estimate is compared with Qmeas , which accumulates the discounted costs along the measured trajectory from k to M −1.From an RL perspective, QMPC  
+
+> θ
+
+and Qmeas represent two evaluations of the action-value at the same anchor state sk
+
+for the executed action segment: a finite-horizon model-based surrogate and the measured rollout return. While typically M ≫ N , the discount factor γ in Qmeas and the terminal shaping Tθ (xN ) in QMPC compensate for the horizon mismatch. Discounting attenuates far-future costs, while the terminal term summarizes the residual cost-to-go beyond the prediction horizon. This observation highlights the importance of terminal cost design in short-horizon MPC and motivates learning its relative weight to align the surrogate with long-term performance. 
+
+C. Cost-Matching Objective and Gradient 
+
+The key idea behind the learning objective is to adjust 
+
+θ such that the MPC-induced value QMPC  
+
+> θ
+
+evaluated along recorded action segments matches the long-term return Qmeas 
+
+observed on the real system. Given the dataset D and the measured returns (10) , the cost-matching objective is 
+
+min  
+
+> θ
+
+L(θ) := ED
+
+h
+
+(QMPC  
+
+> θ
+
+− Qmeas )2i
+
+. (11) The expectation in (11) is approximated using empirical averages over mini-batches. For a fixed recorded action segment, QMPC  
+
+> θ
+
+is obtained via the forward rollout (6) and accumulation of the cost and penalty terms in (9) . Therefore, 
+
+∇θ QMPC  
+
+> θ
+
+can be computed by differentiating through the rollout recursion and the corresponding cost and penalty evaluations. The loss gradient is 
+
+∇θ L(θ) = ED
+
+2( QMPC  
+
+> θ
+
+− Qmeas )∇θ QMPC 
+
+> θ
+
+ . (12) Since training does not require solving (5) , gradient evaluation reduces to differentiating a length-N rollout and scales linearly with the horizon length N . The parameters are updated using a first-order optimization method, 
+
+θ ← θ − α∇θ L(θ), (13) with step size α > 0. After convergence, the learned parameters θ⋆ define a structured MPC controller deployed online by solving (5) in a receding-horizon fashion. 
+
+D. Convergence of Cost Matching 
+
+The cost-matching update (13) is a stochastic optimization of (11) . The following theorem establishes convergence to a first-order stationary point under standard smoothness and bounded-variance assumptions. 
+
+Assumption 1. For each sample ξ = ( s, a0: N −1, Q meas ),define qξ (θ) := QMPC  
+
+> θ
+
+(s, a0: N −1). Assume that qξ (θ) is continuously differentiable in θ, and that there exist constants 
+
+BQ, G Q, L Q > 0 such that, for all samples ξ and all θ, θ′,
+
+|qξ (θ) − Qmeas |≤ BQ, ∥∇ qξ (θ)∥≤ GQ,
+
+∥∇ qξ (θ) − ∇ qξ (θ′)∥≤ LQ∥θ − θ′∥.
+
+Moreover, the mini-batch gradient estimator b∇L (θ) used in 
+
+(13) is unbiased and has bounded variance, i.e., 
+
+E[ b∇L (θ) | θ] = ∇L (θ), E
+
+b∇L (θ) − ∇L (θ) 2
+
+θ
+
+
+
+≤ σ2.
+
+□
+
+Theorem 1 (Convergence of cost matching) . Suppose that Assumption 1 holds and the loss L in (11) has Lipschitz-continuous gradient with constant LL = 2( G2 
+
+> Q
+
++ BQLQ).Let the parameter sequence {θj } be generated by θj+1 =
+
+θj − α b∇L (θj ), with a constant step size 0 < α ≤ 1/L L.Then, for any K ≥ 1,
+
+1
+
+K
+
+> K−1
+
+X
+
+> j=0
+
+E∥∇L (θj )∥2 ≤ 2( L(θ0) − L inf )
+
+αK + αL Lσ2,where Linf := inf θ L(θ). In the full-batch case ( σ = 0 ), 
+
+L(θj ) is monotonically nonincreasing and ∇L (θj ) → 0 as 
+
+j → ∞ .Proof. For a single sample ξ, the gradient of the squared matching error is 
+
+∇(qξ (θ) − Qmeas )2 = 2( qξ (θ) − Qmeas )∇qξ (θ).
+
+By Assumption 1, this gradient is Lipschitz with constant 
+
+2( G2 
+
+> Q
+
++ BQLQ), hence ∇L is also Lipschitz with the same constant. Using the standard descent lemma [ 25 ] for smooth objectives, we have 
+
+L(θj+1 ) ≤ L (θj )−α∇L (θj )⊤ b∇L (θj )+ LLα2
+
+2 ∥ b∇L (θj )∥2.
+
+Taking the conditional expectation and using the unbiased and bounded-variance assumptions yields 
+
+E[L(θj+1 )] ≤ E[L(θj )] − α
+
+2 E[∥∇L (θj )∥2] + LLα2
+
+2 σ2,
+
+where the factor 1/2 follows from α ≤ 1/L L. Summing this inequality from j = 0 to K − 1 gives the stated bound. The full-batch case follows by setting σ = 0 . ■
+
+Theorem 1 shows that the proposed cost-matching update converges to a first-order stationary set of (11) under Assump-tion 1, which is compatible with our setting since training is performed over a bounded rollout buffer. 
+
+E. Constraints and Feasibility 
+
+The treatment of constraints differs between the learning and deployment phases. During training, the MPC-induced action-value function (9) incorporates state-related constraints through differentiable penalty terms based on the violation measures defined in (8) . This soft-penalty formulation allows constraint violations to be evaluated along data-driven rollouts without requiring the predicted trajectory to remain feasible, which is essential when the parameterized model does not perfectly capture the true system dynamics. After training, the learned parameters θ⋆ define a structured MPC controller that is deployed by solving the constrained optimization problem (5) in a receding-horizon manner. In this phase, input and state constraints are enforced as hard constraints, thereby ensuring feasibility and safety in closed-loop operation. Because the learning process shapes the MPC model and cost to match the long-term performance of the real system, the resulting controller benefits from both data-driven adaptation and the constraint-handling guarantees inherent to MPC. This separation—soft constraint handling during learning and hard constraint enforcement during online MPC execution—enables efficient gradient-based training while preserving the safety and feasibility guarantees of MPC at runtime. IV. I NSTANTIATION ON HUMANOID LOCOMOTION 
+
+This section instantiates the general cost-matching frame-work introduced in Section III for the humanoid locomotion OCP described in Section II. Rollouts are collected from real-world execution, and the MPC-induced value is evaluated by replaying the logged MPC commands in the parameterized predictive model initialized at the measured state. We next describe the model and cost parameterizations adopted in this locomotion setting. 
+
+A. Parameterized Model and Objective 
+
+The predictive model f θ used in (6) is obtained by discretizing the centroidal dynamics (1) . To account for systematic mismatch between the predictive model and the real system, we parameterize the centroidal momentum propagation using learnable gains: 
+
+˙hlin = θhl ⊙ X
+
+> i∈{ L,R }
+
+f c,i + M g, (14a) 
+
+˙hang = θha ⊙ X
+
+> i∈{ L,R }
+
+
+
+rc,i (q) × f c,i + mc,i 
+
+
+
+, (14b) where θhl ∈ R3 
+
+> >0
+
+and θha ∈ R3 
+
+> >0
+
+are included in θ.This parameterization preserves the centroidal dynamics structure while absorbing systematic discrepancies caused by imperfect contact wrench realization, unmodeled compliance, and abstraction effects introduced by the low-level tracking controller. The parameterized stage cost retains the decomposi-tion in (3) as Lθ = Ltrac (θ) + Lbase (θ) + Lcom (θ) + 
+
+Lswin (θ) + Ltorq (θ), and the terminal cost is defined as Tθ (xN ) = ∥xN − xref  
+
+> N
+
+∥2 
+
+> Qf(θ)
+
+. Quadratic weights are parameterized through diagonal scalings as Qθ =diag( θq ), Rθ = diag( θr ), Qf θ = diag( θq f ), where 
+
+θq , θr , θq f ∈ R12+ nj 
+
+> ≥0
+
+are learnable vectors. The weight matrices Qbase (θ), Qcom (θ), Qsw (θ), and Qtorq (θ) are parameterized analogously. 
+
+B. Cost-Matching Training Loop 
+
+Training is performed on-policy using the parameterized MPC controller. At iteration j, the parameter vector θj defines a closed-loop locomotion policy obtained by solving (5) in a receding-horizon manner. Trajectories are collected by executing the resulting commands through the fixed low-level tracking module within a high-fidelity simulator. From the recorded trajectories, and for each sampled index k,we compute the measured return Qmeas  
+
+> k
+
+(data length M )and the rollout-based surrogate QMPC   
+
+> θj,k
+
+(data length N ). The parameters are then updated by minimizing the squared discrepancy between these quantities, as summarized in Algorithm 1. 
+
+C. Implications for Locomotion Control 
+
+For bipedal locomotion, this instantiation yields several practical benefits. 
+
+(i) Mitigating short-horizon bias. By matching QMPC  
+
+> θ
+
+to long-horizon returns, the learned stage and terminal shaping terms effectively act as a tail-cost approximation, mitigating the short-horizon bias inherent in real-time humanoid MPC. 
+
+(ii) Compensating model mismatch. The learned param-eters adapt both the prediction model and the objective to systematic discrepancies between the planning model and high-fidelity execution, including modeling inaccuracies and abstraction effects introduced by the tracking controller. Algorithm 1 On-policy Cost-Matching Training for Hu-manoid Locomotion.                                                                                                    
+
+> 1: Input: initial parameters θ0, discount γ, stepsize α
+> 2: for j= 0 ,1,2, . . . do
+> 3: Data collection. Run the closed-loop controller induced by (5) with θjfor Msteps through the full execution stack, and log Dj={(sk,ak, ℓ k)}M−1
+> k=0 with ak:= ukand ℓk:=
+> L(sk,ak).
+> 4: Sample a mini-batch of indices B ⊂ { 0, . . . , M −1}.
+> 5: for each k∈ B do
+> 6: Measured return. Compute Qmeas
+> k=PM−k−1
+> i=0 γiL(sk+i,ak+i)via (10).
+> 7: MPC-side rollout. Set x0:= skand propagate for i=0, . . . , N −1:xi+1 =fθj(xi,ak+i).
+> 8: Surrogate value. Evaluate QMPC
+> θj,k :=
+> QMPC
+> θj(sk,ak:k+N−1)via (9).
+> 9: end for
+> 10: Form L(θj) = 1
+> |B|
+> P
+> k∈B (QMPC
+> θj,k −Qmeas
+> k)2.
+> 11: Update θj+1 ←θj−α∇θL(θj).
+> 12: end for
+
+(iii) Robustness to disturbances. When trajectories are collected under external disturbances, the measured returns reflect the recovery behaviors of the system. Consequently, the learned MPC objective is implicitly tuned toward policies that improve disturbance rejection under the same constrained MPC structure. 
+
+(iv) Policy improvement. Although the update minimizes a value discrepancy rather than directly maximizing return, improving the fidelity of the MPC internal cost-to-go makes the receding-horizon minimizer of the surrogate objective more consistent with the true long-term performance, thereby yielding improved closed-loop policies. 
+
+(v) Training efficiency. Each update differentiates through a length-N rollout without repeatedly solving the MPC optimization problem within the learning loop, resulting in a computational cost that scales linearly with N .V. S IMULATION STUDIES AND ANALYSIS 
+
+This section evaluates the proposed cost-matching MPC (CM-MPC) on a commercial humanoid platform (Unitree G1) using the locomotion stack described in Section II. In the following experiments, we compare two controllers operating under identical MPC horizon length, constraints, and tracking stack: (i) a manually tuned baseline using the initial parameters θ0, and (ii) the learned CM-MPC controller using the converged parameters θ⋆.
+
+A. Cost-Matching Diagnostics 
+
+The learning objective is to reduce the discrepancy be-tween the MPC-induced surrogate cost-to-go QMPC  
+
+> θ
+
+and the measured long-horizon return Qmeas collected from closed-loop executions. Figure 2 reports the validation mean squared error (MSE) of this value mismatch across training rounds. The mismatch decreases rapidly during the early training iterations and gradually converges as learning progresses. The block-wise evolution of θ provides insights into the mechanisms underlying this improvement. In particular, the terminal cost weights ( Qf ) increase significantly throughout training, effectively acting as an implicit tail-cost approxima-tion that compensates for the inherent myopia of the finite-horizon MPC formulation. Concurrently, torque-regularization parameters increase, which suppresses impulsive control actions, while swing-foot tracking weights decrease slightly. This reshaping of the cost landscape prevents overly strict kinematic tracking and instead allows the solver greater flexibility to prioritize whole-body balance and compliant behavior under uncertainties. 
+
+Fig. 2: Closed-loop validation of the value mismatch 
+
+MSE  QMPC  
+
+> θ
+
+− Qmeas  across training rounds (shaded region: 
+
+10 −90 % across seeds). At each training round, 50 trajectories are collected ( 600 steps per trajectory), and the cost-matching objective is optimized using 2000 gradient updates with dis-count factor γ = 0 .985 . The inset summarizes the normalized block-wise evolution of θ, illustrating how learning reshapes the MPC objective. Figure 3 provides complementary diagnostics at the sample level. The figure shows the density of QMPC  
+
+> θ
+
+versus Qmeas 
+
+before training and after convergence. After learning, the root-mean-square error (RMSE) between the two values decreases and the residual distribution tightens, indicating improved consistency between the MPC surrogate value and the measured return. Together, these diagnostics confirm that the learned parameters significantly improve the fidelity of the MPC internal cost-to-go approximation.  
+
+> (a) Round 0 ( θ0). (b) Converged ( θ⋆).
+
+Fig. 3: Value-matching diagnostics on a fixed evaluation set: density plot of QMPC  
+
+> θ
+
+versus Qmeas .
+
+B. Robustness Evaluation under Disturbances 
+
+To assess whether the improved surrogate value represen-tation translates into better closed-loop behavior, we evaluate both the baseline MPC and the learned CM-MPC under a scripted disturbance benchmark applied to the Unitree G1 humanoid. As illustrated in Figure 4, the disturbance profile consists of three lateral force pulses fext ,y = 18 N with duration 0.10 s 
+
+applied at t = {12 .00 , 12 .75 , 13 .55 } s (P1/2/4), and one yaw torque pulse mext ,z = 8 N m with duration 0.06 s at t =13 .05 s (P3). This mixed force–torque sequence excites both linear and angular momentum channels without modifying the nominal reference trajectories. Consequently, differences in post-disturbance recovery can be attributed to the objective and model reshaping induced by the learned parameters θ.
+
+Fig. 4: Simulation snapshots of the humanoid during locomo-tion under a time-scheduled disturbance benchmark consisting of lateral force pulses fext ,y and a yaw-torque pulse mext ,z .Figure 5 shows a representative rollout comparing the baseline controller and CM-MPC. From top to bottom, the plots report the tracking error ∥x − xref ∥, control effort 
+
+∥u∥, control jitter ∥ ˙u∥ (discrete-time input difference), linear momentum error ∥hlin − hlin ,ref ∥, and angular momentum error ∥hang − hang ,ref ∥.Compared with the baseline controller, CM-MPC settles earlier to the pre-disturbance error band and produces smoother corrective actions, as evidenced by reduced control effort ∥u∥ and lower control jitter ∥ ˙u∥ during the recovery phase. At the same time, the momentum tracking errors do not consistently decrease: ∥hlin − hlin ,ref ∥ remains broadly comparable, and ∥hang − hang ,ref ∥ may increase during parts of the transient. This behavior reflects a deliberate trade-off induced by the learned parameters θ⋆. By relaxing strict tracking penalties (e.g., reduced swing-foot tracking weights) while increasing actuation regularization (larger R /torque-related weights), CM-MPC allocates its limited control authority under constraints toward stabilizing whole-body motion and rejecting disturbances, rather than enforcing exact momentum reference tracking at every instant. 
+
+C. Comprehensive Statistical Analysis 
+
+To validate the observed improvements statistically, Table I summarizes results over six disturbance trials (mean ± std). The learned CM-MPC improves nominal tracking while reducing high-percentile control effort, indicating that the learned parameters θ produce a better trade-off between tracking accuracy and control smoothness under the same constrained MPC structure. More importantly, the post-push recovery metrics show consistent improvements. The 
+
+Post-Push RMS decreases, while the Post-Push Peak 
+
+and IAE (Integral Absolute Error) are reduced by 4.80% 
+
+and 6.82% , respectively, indicating smaller overshoot and less accumulated deviation following the disturbance. The 
+
+Settling Time improves by 31 .25% under the same threshold-and-hold criterion, reflecting faster return to the pre-disturbance performance band. Momentum metrics remain largely comparable, with a minor trade-off in linear momen-tum error ( −0.99% ). This observation is consistent with the qualitative analysis in Figure 5, where the learned controller prioritizes faster stabilization and smoother actuation during transient recovery rather than enforcing strict reference momentum tracking. TABLE I: Comprehensive Evaluation of Metrics (Mean ±
+
+Std) over Six Trials.                                                                                                                                    
+
+> Metric Baseline CM-MPC Impr. (%)
+> Overall Tracking
+> RMS Error ( ∥e∥2)1.022 ±0.012 1.009 ±0.016 +1.29 Peak Error ( ∥e∥∞)1.620 ±0.021 1.597 ±0.045 +1.41
+> Control Effort & Smoothness
+> Max Effort ( ∥u∥99% )472.7 ±4.3 447.8 ±7.1 +5.26
+> Max Jitter ( ∥˙u∥99% ) [ 10 4]5.66 ±0.00 5.60 ±0.03 +1.10
+> Momentum Analysis
+> Lin. Mom. ( ∥hlin ∥2)0.468 ±0.011 0.467 ±0.011 +0.35 Ang. Mom. ( ∥hang ∥2)0.048 ±0.001 0.048 ±0.001 +1.18 Lin. Mom. Err. ( ∥hlin −href lin ∥2)0.372 ±0.010 0.376 ±0.010 -0.99 Ang. Mom. Err. ( ∥hang −href ang ∥2)0.048 ±0.001 0.048 ±0.001 +1.18
+> Post-Push Recovery
+> Post-Push RMS ( ∥epost ∥2)1.026 ±0.010 1.014 ±0.015 +1.17 Post-Push Peak ( ∥epost ∥∞)1.539 ±0.030 1.465 ±0.020 +4.80
+> Integral Abs. Err. (IAE) 0.547 ±0.033 0.510 ±0.030 +6.82
+> Settling Time ( ts)0.053 ±0.010 0.037 ±0.010 +31.25
+> ⋇Post-push recovery metrics. Let epost (t)≜∥x(t)−xref (t)∥evaluated over the post-push window t∈[tpush end , t push end +Tpost ]. Define
+> Post-Push RMS =∥epost ∥2,Post-Push Peak =∥epost ∥∞, and
+> IAE =Rmax( epost −¯epre ,0) dt (where ¯epre is the pre-push baseline).
+> Settling Time tsis the first time after tpush end that epost (t)remains within a pre-push threshold for a fixed hold duration.
+
+Overall, the simulation results demonstrate that the cost-matching procedure effectively minimizes the discrepancy between QMPC  
+
+> θ
+
+and Qmeas throughout training. The opti-mized parameters θ⋆ lead to improved disturbance rejection characterized by faster recovery, reduced control effort, and smoother actuation, while simultaneously compensating for modeling discrepancies in the simplified centroidal dynamics through data-driven adaptation. VI. C ONCLUSION 
+
+This paper presents a cost-matching framework for learning the parameters of a constrained centroidal MPC controller for humanoid locomotion. By matching the MPC surrogate Fig. 5: Representative closed-loop response under the disturbance benchmark. Left: full-horizon signals. Right: zoom around the push interval. The gray bands indicate push windows. The dashed horizontal line indicates the settle threshold computed from pre-disturbance statistics, and the “settled” marker indicates the first time the error remains below this threshold. cost-to-go to measured long-horizon returns from closed-loop rollouts, the method avoids repeated MPC solves in the learning loop. Simulations show improved value consistency and enhanced robustness to model mismatch and external disturbances, suggesting that cost matching is a practical and computationally efficient way to shape long-horizon locomotion behavior while retaining standard constrained MPC deployment. REFERENCES [1] W. Li, G. Yang, J. Wu, C. Pan, L. Sheng, and Q. Zhang, “A comprehensive review on humanoid robots: perspectives from academia and industry,” Engineering Information Technology & Electronic Engineering , vol. 27, no. 2, p. 250105, 2026. [2] Y.-M. Chen, J. Hu, and M. Posa, “Beyond inverted pendulums: Task-optimal simple models of legged locomotion,” IEEE Transactions on Robotics , vol. 40, pp. 2582–2601, 2024. [3] S. Katayama, M. Murooka, and Y. Tazaki, “Model predictive control of legged and humanoid robots: models and algorithms,” Advanced Robotics , vol. 37, no. 5, pp. 298–315, 2023. [4] M. Y. Galliker, N. Csomay-Shanklin, R. Grandia, A. J. Taylor, F. Farshidian, M. Hutter, and A. D. Ames, “Planar bipedal locomotion with nonlinear model predictive control: Online gait generation using whole-body dynamics,” in 2022 IEEE-RAS 21st International Conference on Humanoid Robots (Humanoids) , 2022, pp. 622–629. [5] Z. Gu, J. Li, W. Shen, W. Yu, Z. Xie, S. McCrory, X. Cheng, A. Shamsah, R. Griffin, C. K. Liu et al. , “Humanoid locomotion and manipulation: Current progress and challenges in control, planning, and learning,” arXiv preprint arXiv:2501.02116 , 2025. [6] K. Zhang, Y. Yin, J. Wu, L. Jiang, and Y.-a. Yao, “Gravity-compensated model predictive control and whole-body optimization for humanoid locomotion,” Journal of Mechanisms and Robotics , vol. 18, no. 3, p. 031007, 2026. [7] J. Carpentier and P.-B. Wieber, “Recent progress in legged robots locomotion control,” Current Robotics Reports , vol. 2, no. 3, pp. 231– 238, 2021. [8] J. Peters, S. Vijayakumar, and S. Schaal, “Reinforcement learning for humanoid robotics,” in Proceedings of the third IEEE-RAS international conference on humanoid robots , 2003, pp. 1–20. [9] T. Haarnoja, B. Moran, G. Lever, S. H. Huang, D. Tirumala, J. Humplik, M. Wulfmeier, S. Tunyasuvunakool, N. Y. Siegel, R. Hafner et al. ,“Learning agile soccer skills for a bipedal robot with deep reinforcement learning,” Science Robotics , vol. 9, no. 89, p. eadi8022, 2024. [10] Y. Li, J. Li, W. Fu, and Y. Wu, “Learning agile bipedal motions on a quadrupedal robot,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) , 2024, pp. 9735–9742. [11] H. Zhang, L. He, and D. Wang, “Deep reinforcement learning for real-world quadrupedal locomotion: a comprehensive review,” Intelligence & Robotics , vol. 2, no. 3, pp. 275–297, 2022. [12] A. S. Chen and K. G. Vamvoudakis, “Robot learning optimal control via an adaptive critic reservoir,” in 2025 IEEE 64th Conference on Decision and Control (CDC) , 2025, pp. 3842–3847. [13] W. Gao, Y. Wang, and K. G. Vamvoudakis, “Output-feedback learning-based adaptive optimal control of nonlinear systems,” Automatica , vol. 187, p. 112875, 2026. [14] Z. Zhang, X. Chang, H. Ma, H. An, and L. Lang, “Model predictive control of quadruped robot based on reinforcement learning,” Applied Sciences , vol. 13, no. 1, p. 154, 2022. [15] K. G. Vamvoudakis, Y. Wan, F. L. Lewis, and D. Cansever, Handbook of reinforcement learning and control . Springer, 2021. [16] S. Gros and M. Zanon, “Data-driven economic NMPC using rein-forcement learning,” IEEE Transactions on Automatic Control , vol. 65, no. 2, pp. 636–648, 2019. [17] M. Zanon and S. Gros, “Safe reinforcement learning using robust MPC,” IEEE Transactions on Automatic Control , vol. 66, no. 8, pp. 3638–3652, 2020. [18] W. Cai, A. B. Kordabad, and S. Gros, “Energy management in resi-dential microgrid using model predictive control-based reinforcement learning and shapley value,” Engineering Applications of Artificial Intelligence , vol. 119, p. 105793, 2023. [19] W. Cai, A. B. Kordabad, H. N. Esfahani, A. M. Lekkas, and S. Gros, “MPC-based reinforcement learning for a simplified freight mission of autonomous surface vehicles,” in 2021 60th IEEE Conference on Decision and Control (CDC) , 2021, pp. 2990–2995. [20] W. Cai, S. Sawant, D. Reinhardt, S. Rastegarpour, and S. Gros, “A learning-based model predictive control strategy for home energy management systems,” IEEE Access , vol. 11, pp. 145 264–145 280, 2023. [21] J.-P. Sleiman, F. Farshidian, M. V. Minniti, and M. Hutter, “A unified MPC framework for whole-body dynamic locomotion and manipulation,” IEEE Robotics and Automation Letters , vol. 6, no. 3, pp. 4688–4695, 2021. [22] F. Farshidian et al. , “OCS2: An open source library for optimal control of switched systems,” [Online]. Available: https://github.com/leggedr obotics/ocs2. [23] J. Carpentier, G. Saurel, G. Buondonno, J. Mirabel, F. Lamiraux, O. Stasse, and N. Mansard, “The Pinocchio C++ library – A fast and flexible implementation of rigid body dynamics algorithms and their analytical derivatives,” in IEEE International Symposium on System Integrations (SII) , 2019. [24] D. E. Orin, A. Goswami, and S.-H. Lee, “Centroidal dynamics of a humanoid robot,” Autonomous robots , vol. 35, no. 2, pp. 161–176, 2013. [25] Y. Nesterov, Introductory lectures on convex optimization: A basic course . Springer Science & Business Media, 2013, vol. 87.
