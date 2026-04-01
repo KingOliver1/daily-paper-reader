@@ -1,0 +1,726 @@
+Title: Interacting Multiple Model Proprioceptive Odometry for Legged Robots
+
+URL Source: https://arxiv.org/pdf/2603.29383v1
+
+Published Time: Wed, 01 Apr 2026 00:40:27 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+> JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2025 1
+
+# Interacting Multiple Model Proprioceptive Odometry for Legged Robots 
+
+Wanlei Li, Zichang Chen, Shilei Li, Xiaogang Xiong, Yunjiang Lou . 
+
+Abstract —State estimation for legged robots remains chal-lenging because legged odometry generally suffers from limited observability and therefore depends critically on measurement constraints to suppress drift. When exteroceptive sensors are unreliable or degraded, such constraints are mainly derived from proprioceptive measurements, particularly leg kinematics and contact information. However, most existing proprioceptive odometry methods rely on an idealized point-contact assumption, which is often violated during real locomotion on complex terrain. Consequently, the effectiveness of proprioceptive constraints may be significantly reduced, resulting in degraded estimation accu-racy. To address these limitations, we propose an interacting mul-tiple model (IMM)-based proprioceptive odometry framework for legged robots. By incorporating multiple contact hypotheses within a unified probabilistic framework, the proposed method enables online mode switching and probabilistic fusion under varying contact conditions. Extensive simulations and real-world experiments demonstrate that the proposed method achieves superior pose estimation accuracy over state-of-the-art methods while maintaining comparable computational efficiency. 
+
+Index Terms —Legged Robots, Proprioceptive Sensors, Inter-acting Multiple Model. 
+
+I. I NTRODUCTION 
+
+# LEGGED robots have been widely deployed in complex and unstructured environments due to their ability to traverse uneven terrain. To achieve reliable locomotion in such environments, accurate state estimation is essential. Conse-quently, a wide range of state estimation algorithms have been developed using different sensing modalities [1]–[5]. These ap-proaches typically rely on either proprioceptive sensors, such as inertial measurement units (IMU), joint encoders, torque and force sensors, or exteroceptive sensors, including cameras, LiDAR, and global positioning systems (GPS) systems. Although fusing proprioceptive and exteroceptive sensors can significantly improve estimation accuracy, exteroceptive measurements are often degraded or unavailable in real-world scenarios. For example, vision-based sensors are sensitive to reflective or transparent surfaces, lighting variations, motion blur, and environmental occlusions. These limitations motivate the development of state estimation methods that rely solely on proprioceptive sensing, which provides a robust baseline when exteroceptive information is absent or corrupted. 
+
+*This work was supported partially by the National Key Research and Development Program of China (2020YFB1313900) The authors are with the Shenzhen Key Lab for Advanced Motion Con-trol Technology and Modern Automation Equipment and the Guangdong Provincial Key Laboratory of Intelligent Morphing Mechanisms and Adaptive Robots, School of Intelligence Science and Engineering, College of Artificial Intelligence, Harbin Institute of Technology Shenzhen, Shenzhen 518055, China. 
+
+Among proprioceptive sensing modalities, IMUs and joint encoders form the foundation of most proprioceptive odometry (PO) methods for legged robots. Existing PO approaches mainly include optimization-based [1], [2], learning-based [6], [7], and filtering-based frameworks. Among them, filtering-based methods [4], [8] are particularly attractive for real-time legged locomotion because they offer a favorable balance between estimation accuracy and computational efficiency. However, their effectiveness depends strongly on the validity of the assumed foot-ground contact model. Most existing proprioceptive odometry methods rely on a static point-contact assumption. In practice, foot-ground interactions are often non-ideal and time-varying under com-plex terrain conditions. The robot foot may deviate from the idealized point-contact behavior, and slippage may occur under insufficient friction or external disturbances. As a re-sult, the proprioceptive constraints constructed from a single fixed contact model become unreliable, significantly degrading estimation accuracy. These limitations motivate the use of a multiple-hypothesis estimation framework that can infer and fuse different contact conditions in a unified probabilistic manner. To address these challenges, this paper proposes an inter-acting multiple model (IMM)-based proprioceptive odometry framework for legged robots. The proposed method enables online inference and probabilistic fusion of multiple contact hypotheses under varying foot-ground interaction conditions. In addition, a rolling-aware estimation design is introduced by incorporating foot velocity into the estimator state, allowing the estimator to better account for contact-induced motion deviations using only proprioceptive sensing. The main con-tributions of this work are summarized as follows:  
+
+> •
+
+We formulate proprioceptive odometry for legged robots under dynamic foot–ground interaction as a multiple-contact hypothesis estimation problem, and develop an IMM-based filtering framework for online contact-mode inference and fusion.  
+
+> •
+
+We propose a rolling-aware state augmentation by incor-porating foot velocity into the estimator state, enabling explicit modeling of contact-induced motion deviations using only proprioceptive measurements.  
+
+> •
+
+Extensive simulations and real-world experiments demon-strate that the proposed rolling-aware multi-model esti-mator improves accuracy and robustness under slippery and challenging contact conditions, while outperform-ing state-of-the-art proprioceptive methods at comparable computational cost.  
+
+> arXiv:2603.29383v1 [cs.RO] 31 Mar 2026 JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2025 2
+
+The remainder of this paper is organized as follows: Sec. II reviews related work; Sec. III introduces the proposed propri-oceptive odometry; Sec. IV presents experimental validation; and Sec. V summarizes our contributions. II. R ELATED WORK 
+
+For legged robot state estimation, a widely adopted ap-proach is to fuse inertial and kinematic information using low-cost proprioceptive sensors such as IMU and joint encoders. In this context, proprioceptive odometry (PO) has emerged as a dominant paradigm, enabling continuous state estimation using only inertial and kinematic measurements. For example, Bloesch et al. [8] proposed an Extended Kalman filter (EKF)-based state estimator for quadruped robots, which incorporates leg kinematics and contact constraints into the observation model. This framework was later implemented on the MIT Cheetah 3 robot using a linear Kalman filter formulation [9]. Although these approaches demonstrate observability of the body position, velocity, roll, and pitch, their convergence may be slow due to linearization errors and mismatched error distributions. Hartley et al. [4] later reformulated the estimator as an invariant extended Kalman filter (IEKF), deriving the estimation equations directly on the Lie group manifold and significantly improving consistency and convergence proper-ties. More recently, similar estimation principles have been extended to learning-based approaches [6], [7]. However, such methods typically rely on large-scale training datasets and lack guaranteed robustness in previously unseen scenarios. To enhance robustness and long-term accuracy, another line of research introduces exteroceptive sensors, such as cameras and LiDAR, which provide additional environmen-tal constraints. For example, Wisth et al. [1] developed a tightly coupled visual–inertial–leg odometry system based on factor graphs, incorporating kinematic velocity measurements. In subsequent work [2], LiDAR sensing was further inte-grated into the framework, enabling reliable state estimation across diverse and challenging terrains. However, as mentioned above, these exteroceptive sensors may be sensitive to environ-mental conditions in degenerate scenarios, potentially leading to decreased accuracy or even complete failure in challenging environments. As a result, purely proprioceptive state estima-tion remains an essential and indispensable solution for legged robots operating in such conditions. However, kinematic–inertial methods based solely on pro-prioceptive sensing typically assume that the contact location of a stance foot remains static throughout the stance phase. This assumption is often violated in practice due to dynamic foot–ground contact, leading to link deformation and slippage, which are major sources of leg odometry drift [10]. To address errors induced by link deformation, several works explicitly account for kinematic model uncertainties within the estimation framework. For instance, Agrawal et al. [11] incorporated uncertainty in the kinematic chain to reduce estimation errors caused by structural deformation. Similarly, [12] proposed an online link calibration approach to mitigate positional drift arising from time-varying kinematic parameters under dynamic contact conditions. In addition to link deformation, foot–ground slip further violates the static contact assumption and degrades state es-timation accuracy. To mitigate this issue, Bloesch et al. [3] proposed a UKF that fuses IMU and kinematic velocity measurements, where a Mahalanobis-distance threshold on the filter innovation is used to reject unreliable velocity observa-tions. This idea was later extended by Kim et al. [13], who instead used a tunable threshold on the estimated contact foot velocity. Wisth et al. [2] modeled dynamic contact as a bias term in the linear velocity measurement from leg odometry. Yang et al. [14] further investigated rolling contact effects by embedding multiple IMUs along the leg to measure the an-gular velocity induced by foot rolling, although this approach requires additional sensing hardware. To handle systems with switching dynamics, the interacting multiple model (IMM) framework has been widely applied in robotics and other dynamic systems [15], [16]. By maintaining multiple candidate models and recursively updating their posterior probabilities online, IMM enables effective adaptation to time-varying system behaviors. However, such multi-model strategies have rarely been explored in proprioceptive odometry for legged robots, where foot-ground interaction conditions may switch among different contact modes. Despite recent advances, most existing methods still rely on heuristic thresholds, single-model assumptions, or additional sensing to handle contact-induced disturbances, without explicitly modeling multiple contact modes within a unified probabilistic framework. III. IMM-B ASED STATE ESTIMATION FRAMEWORK 
+
+A. Sensors and Measurement Models 1) IMU: The IMU measurements, comprising angular ve-locity ωωωimu and acceleration aimu , are assumed to be directly measured in the body frame and modeled as follows                      
+
+> ˜ωωωimu =ωωωimu +bω+nω,˙bω=nbω
+> ˜aimu =aimu +ba+na,˙ba=nba.(1)
+
+Here, ˜ωωωimu ∈ R3 and ˜ aimu ∈ R3 represent raw measurements affected by additive Gaussian noise and bias terms. The angular velocity measurement ˜ωωωimu is corrupted by noise nω
+
+and a bias bω . Similarly, the acceleration measurement ˜ aimu 
+
+is corrupted by noise na and a bias ba. The biases ba and 
+
+bω are modeled as Brownian motions with their derivatives represented as Gaussian noise processes: specifically, nba for acceleration bias and nbω for angular velocity bias. 
+
+2) Forward Kinematics and Encoders: We define φφφ l ∈ R3,
+
+l ∈ { 1, . . . , 4}, as the joint angle vector of the l-th leg. Given the known forward kinematics, the position of the l-th foot expressed in the body frame is given by         
+
+> f=ζ(φφφl)∈R3,(2)
+
+where ζ (·) denotes the forward kinematics function. Taking the time derivative yields the foot linear velocity in the body frame, v f = ˙f = J(φφφ l ) ˙φφφ l , where J(φφφ l ) ∈ R3×3 is the corre-sponding Jacobian matrix, and ˙φφφ l denotes the joint angular velocity. The foot position expressed in the inertial frame is              
+
+> fw=p+Gf =p+Gζ(φφφl),(3) JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2025 3X
+> Y
+> Slippage Rolling
+
+r
+
+> Slippage Rolling
+
+r 
+
+> Fig. 1. Illustration of rolling and slippery contacts between the robot foot and the ground. As the robot moves along the X axis, the foot exhibits forward rolling motion about the foot-end radius r.
+
+where p and G ∈ SO (3) denote the position and orientation of the robot body in the inertial frame, respectively. Let vwf = ˙fw denote the foot velocity in the inertial frame. Under the conventional no-slip point-contact assumption, the stance foot is assumed to be stationary with respect to the ground, i.e., vwf = 0. Differentiating (3) yields the standard kinematic velocity constraint 
+
+v = − G ωωω×ζ (φφφ l ) + J(φφφ l ) ˙φφφ l
+
+ , (4) 
+
+where (·)× denotes the skew-symmetric operator, v is the linear velocity of the robot body expressed in the inertial frame, and ωωω is the body angular velocity. However, the zero-velocity point-contact assumption is of-ten insufficient to explain the observed stance-foot kinematics in practice. Even without significant slip, the finite foot-ground contact geometry induces rolling motion of the stance foot relative to the ground, as illustrated in Fig. 1. To relax the zero-velocity constraint, we adopt a rolling-contact model and express the stance-foot velocity in the inertial frame as 
+
+vwf = ωωω f × r, (5) 
+
+where ωωω f is the foot angular velocity computed from the leg kinematics using the rotational part of the geometric Jacobian [17], and r ∈ R3 is the radius vector from the foot rotation center to the contact point, determined by the foot geometry. 
+
+Remark 1. The model in (5) is a simplified approximation of rolling contact. It is generally accurate on flat terrain, but may become less accurate on uneven terrain or in practical scenarios involving foot deformation, or surface irregularities. Nevertheless, it remains preferable to the conventional zero-velocity point-contact assumption, since it explicitly captures rolling-induced stance-foot motion. 
+
+However, rolling contact alone cannot explain slip under low friction or abrupt disturbances, where the stance foot may exhibit additional stochastic translational motion, as shown in Fig. 1. Since rolling and slip induce markedly different uncertainty levels and residual structures, a single contact hypothesis is inadequate. We therefore adopt an IMM frame-work to probabilistically switch among contact modes within a unified estimation architecture. 
+
+B. State Definitions 
+
+The pipeline of the proposed state estimation algorithm and the corresponding frames are illustrated as in Fig. 2. First, we I(B)        
+
+> RF
+> LF
+> LH
+> RH
+> W
+> I(B)
+> RF
+> LF
+> LH
+> RH
+> W
+> Model 1:Rolling Contact
+> Joint
+> Encoders
+> Joint
+> Encoders
+> Interacting Multiple Model State Estimation Framework
+> Pose Pose
+> Error -State KF 1
+> Model Probability Update
+> Interacting Mixed Input
+> (State & Covariance)
+> Model 2:Slippery Contact
+> Error -State KF 2
+> Interacting Mixed Output
+> (State & Covariance)
+> IMU IMU IMU IMU
+> ……
+> Fig. 2. Overview of the proposed IMM-based proprioceptive state estimation framework. The framework fuses IMU and joint encoders measurements and instantiates two parallel error-state Kalman filters corresponding to rolling and slippery contact models, whose mode probabilities and fused state provide accurate and robust pose. The reference frames are defined as follows: the inertial frame Wis fixed to Earth, and the body frame Baligns with the IMU frame I. The four feet are labeled as Left Front (LF), Right Front (RF), Left Hind (LH), and Right Hind (RH).
+
+define the robot’s state, denoted as x, as 
+
+x =  p v G f1 · · · f4 v f 1 · · · v f 4 ba bω
+
+⊤ , (6) 
+
+where the dimension of robot state is dim (x) = 39, p ∈ R3
+
+and v ∈ R3 denote the robot’s position and linear velocity in the inertial frame, respectively. The rotation matrix G ∈ R3×3
+
+describes the rotation from the IMU frame to the inertial frame. The contact foot positions fl ∈ R3 and foot velocities 
+
+v f l ∈ R3 for l = 1, . . . 4 are also expressed in the inertial frame, whereas ba ∈ R3 and bω ∈ R3 denote the accelerometer and gyroscope biases, respectively, defined in the IMU frame. By following the ESKF method [8], the error state δ x can be represented as 
+
+δ x = ( δ p δ v δ Θ δ f1 · · · δ f4 δ v f 1 · · · δ v f 4 δ ba δ bω )⊤. (7) 
+
+The orientation state G, which possesses three degrees of freedom, requires special treatment in covariance represen-tation. Consequently, its covariance is expressed as a 3 × 3matrix. Correspondingly, the orientation error is defined as a three-dimensional rotation vector δ Θ ∈ R3. Let ˆ G denote the estimated rotation; then, the error rotation δ Θ is given by 
+
+G = ˆG ⊞ δ Θ, δ Θ = G ⊟ ˆG (8) 
+
+where ⊞ and ⊟ represent the relation between the original state and the error state, as defined in [18]. 
+
+C. Proposed IMM Proprioceptive Odometry 
+
+This section presents the proposed proprioceptive odometry framework for dynamic foot-ground interactions. We first define a rolling-aware ESKF by augmenting the foot velocity in the state and introducing a rolling-consistent kinematic update. We then extend this estimator to an IMM framework, where different contact conditions, especially slippage, are captured through mode-dependent foot velocity uncertainty. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2025 4
+
+1) Prediction Step: All mode-conditioned filters share the same nominal propagation model. For each contact mode 
+
+i ∈ { 1, . . . , M}, the prediction step follows the standard ESKF framework, while the nominal continuous-time dynamics are identical across modes. Its nominal dynamics are given by 
+
+˙p = ˆv, ˙v = ˆGˆa + g, ˙G = ˆG( ˆωωω)×
+
+˙fl = v f l , ˙v f l = nv f , ˙ba = nba , ˙bω = nbω
+
+(9) 
+
+where g is the gravity vector, and nv f denotes the foot velocity noise. The terms ˆωωω and ˆ a are the IMU measurements for angular velocity and acceleration with biases removed 
+
+ˆωωω = ˜ωωωimu − bω , ˆa = ˜aimu − ba. (10) 
+
+Based on (9), the linearized continuous-time error state dy-namics for mode i are given by 
+
+δ ˙x(i) = Aδ x(i) + Bww(i). (11) 
+
+where A and Bw are the error-state transition and process noise input matrices, respectively, w(i) = ( na, nω , n(i)  
+
+> vf
+
+, nba , nbω )⊤ de-notes the process noise vector for mode i. Although the nominal system dynamics are identical across modes, the process noise statistics differ through the foot velocity noise, reflecting distinct contact conditions. To handle discrete-time IMU measurements, we propagate the nominal state using fourth-order Runge–Kutta numerical integration of (9). For each mode i, the discrete-time state transition matrix and process noise covariance are computed as 
+
+ΓΓΓk−1 = exp 
+
+Z tk
+
+> tk−1
+
+A(τ) dτ
+
+
+
+,
+
+Q(i) 
+
+> k−1
+
+= 
+
+> Ztk
+> tk−1
+
+ΓΓΓ(tk, τ)BwQ(i)Bw⊤ΓΓΓ(tk, τ)⊤ dτ,
+
+(12) 
+
+where Q(i) = E[w(i)w(i)⊤] is the continuous-time noise covari-ance for mode i.Accordingly, the predicted error-state covariance for mode 
+
+i is propagated as 
+
+P(i) 
+
+> k|k−1
+
+= ΓΓΓk−1P(i)
+
+> k−1|k−1
+
+ΓΓΓ⊤ 
+
+> k−1
+
++ Q(i)
+
+> k−1
+
+. (13) 
+
+This shared propagation model provides a set of mode-conditioned prior estimates, which are subsequently processed by the rolling-aware update and the IMM interaction mecha-nism. 
+
+2) Update Step: The update step incorporates kinematic measurements derived from joint encoders and forward kine-matics. For reference, under the conventional point-contact assumption, the stance foot is assumed to be stationary with respect to the ground. The corresponding measurement model at time step k is constructed as 
+
+˜yk =
+
+ ζ (φφφ )
+
+−J(φφφ ) ˙φφφ − ⌊ ωωω⌋× ζ (φφφ )
+
+
+
+(14) 
+
+The associated measurement function h(ˆxk) is defined as 
+
+hpc (ˆxk) = 
+
+ ˆGT (ˆfk − ˆpk)
+
+ˆGT ˆvk
+
+
+
+(15) 
+
+resulting measurement residual ˜ yk −hpc (ˆxk) enforces two kine-matic constraints: (i) consistency between the relative body-foot position and forward kinematics, and (ii) the body linear velocity constraint under the stationary-contact assumption. However, this model neglects rolling-induced contact motion and may become inconsistent when the foot undergoes rolling during stance. In the proposed estimator, the point-contact model is used only to motivate the source of inconsistency. All mode-conditioned filters in the proposed framework employ the following rolling-aware measurement model. For spherical feet, the contact point can exhibit deterministic nonzero ve-locity due to rolling, as characterized by (5). To account for this effect, we augment the update with rolling-consistent constraints by explicitly introducing the foot-end velocity state ˆv f ,k. The corresponding measurement function is defined as 
+
+hr (ˆxk) = 
+
+
+
+ˆGT (ˆfk − ˆpk)
+
+ˆGT (ˆvk − ˆv f , k)
+
+ˆv f , k − ωωω f ,k × r
+
+ . (16) 
+
+where ωωω f ,k denotes the foot angular velocity defined in (5), which is computed from leg kinematics without external sensing [19]. Compared with the point-contact update, (16) explicitly models foot velocity and constrains it through rolling kinematics, thereby mitigating rolling-induced modeling bias and improving estimation consistency during the stance phase. 
+
+3) IMM Framework: The prediction and update models in Secs. III-C1 and III-C2 define a rolling-aware proprioceptive state estimator for a single contact mode. This estimator remains valid when the stance foot follows rolling-consistent kinematics, but may become overconfident when terrain vari-ations induce slippage. To preserve estimation consistency under such conditions, we embed the rolling-aware ESKF into an IMM framework, as shown in Fig. 2. All mode-conditioned filters differ only in the process noise associated with foot velocity, defined as Q(i)  
+
+> vf
+
+= αiQv f with αi ≥ 1, where 
+
+αi = 1 corresponds to nominal rolling, and αi > 1 represents weakened constraint confidence under varying degrees of slippage. 
+
+Remark 2. In the proposed IMM design, different contact modes are distinguished through different process noise levels associated with the foot velocity state, rather than through different measurement functions. The reason is that slippage does not fundamentally alter the proprioceptive measurement structure, but primarily increases the uncertainty of the foot motion relative to the nominal rolling assumption. Therefore, the effect of slip is more naturally captured at the process level by enlarging the foot velocity process noise covariance. 
+
+At each time step, the posterior estimates from the previous step are first mixed to initialize the mode-conditioned filters. Let μ( j) 
+
+> k−1
+
+denote the posterior probability of mode j, and let 
+
+ΠΠΠ = [ π ji ] be the Markov transition matrix. The predicted mode probability and mixed probability are 
+
+¯μ(i) 
+
+> k−1
+
+=
+
+> M
+
+## ∑
+
+> j=1
+
+π ji μ( j)
+
+> k−1
+
+, μ( j|i) 
+
+> k−1
+
+= π ji μ( j)
+
+> k−1
+
+∑M 
+
+> ℓ=1
+
+πℓi μ(ℓ)
+
+> k−1
+
+(17) 
+
+The mixed initial state and covariance are then obtained as 
+
+ˆx0,(i) 
+
+> k−1|k−1
+
+=
+
+> M
+
+## ∑
+
+> j=1
+
+μ( j|i) 
+
+> k−1
+
+ˆx( j)
+
+> k−1|k−1
+
+, (18) JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2025 5
+
+P0,(i) 
+
+> k−1|k−1
+
+=
+
+> M
+
+## ∑
+
+> j=1
+
+μ( j|i)
+
+> k−1
+
+
+
+P( j) 
+
+> k−1|k−1
+
++ ∆ˆx( j,i) 
+
+> k−1
+
+∆ˆx( j,i)⊤
+
+> k−1
+
+
+
+, (19) 
+
+where ∆ˆx( j,i) 
+
+> k−1
+
+= ˆx( j) 
+
+> k−1|k−1
+
+− ˆx0,(i)
+
+> k−1|k−1
+
+. For compactness, the IMM mixing and fusion equations are written in vector form, while the orientation component is handled in the actual implemen-tation using the error-rotation formulation in (8). Initialized by {ˆx0,(i)
+
+> k−1|k−1
+
+, P0,(i)
+
+> k−1|k−1
+
+}, each mode-conditioned ESKF then executes the shared propagation model and the shared rolling-aware update model. Since the model structure is identical across modes, mode discrimination is driven solely by the different predicted uncertainties induced by Q(i)  
+
+> vf
+
+.After the update, the mode probability is corrected using the innovation likelihood. For mode i, the innovation and its covariance are 
+
+r(i) 
+
+> k
+
+= ˜yk − hr
+
+
+
+ˆx(i)
+
+> k|k−1
+
+
+
+, S(i) 
+
+> k
+
+= H(i) 
+
+> k
+
+P(i)
+
+> k|k−1
+
+H(i)
+
+> k
+> ⊤
+
++ Rk. (20) 
+
+where H(i) 
+
+> k
+
+is the measurement Jacobian evaluated at ˆ x(i)
+
+> k|k−1
+
+.Assuming Gaussian measurement noise, the likelihood is 
+
+Λ(i) 
+
+> k
+
+= 1
+
+q
+
+(2π)n|S(i) 
+
+> k
+
+|
+
+exp 
+
+
+
+− 12 r(i)⊤ 
+
+> k
+
+S(i)−1 
+
+> k
+
+r(i)
+
+> k
+
+
+
+, (21) 
+
+where n is the dimension of the rolling-aware measurement vector. The posterior mode probability is 
+
+μ(i) 
+
+> k
+
+= Λ(i) 
+
+> k
+
+¯μ(i)
+
+> k−1
+
+∑M 
+
+> ℓ=1
+
+Λ(ℓ) 
+
+> k
+
+¯μ(ℓ)
+
+> k−1
+
+. (22) 
+
+Finally, the fused posterior estimate is obtained by 
+
+ˆxk|k =
+
+> M
+
+## ∑
+
+> i=1
+
+μ(i) 
+
+> k
+
+ˆx(i)
+
+> k|k
+
+, Pk|k =
+
+> M
+
+## ∑
+
+> i=1
+
+μ(i)
+
+> k
+
+
+
+P(i) 
+
+> k|k
+
++ ∆ˆx(i) 
+
+> k
+
+∆ˆx(i)⊤
+
+> k
+
+
+
+. (23) 
+
+Remark 3. Although the proposed IMM framework can in principle accommodate more contact modes, these additional modes mainly correspond to a finer discretization of the noise scale. In practice, however, closely related modes may not be reliably distinguishable from the available proprioceptive measurements, while increasing the number of modes also leads to higher computational cost. Therefore, a two-mode realization is adopted in this work, consisting of a nominal rolling mode and a slip mode with inflated foot velocity noise, which is generally sufficient for practical applications. 
+
+IV. E XPERIMENTS 
+
+To evaluate the performance of the proposed framework, experiments were conducted in both simulations and real-world settings using the AlienGo quadruped robot under a trot gait. The robot integrates IMUs and joint encoders. The open-source Pinocchio library [19] was utilized to model the kinematics of the legged robot. To evaluate the proposed framework, we compared IMM-PO with several representative baselines, including the KF [9], ESKF [8], invariant extended Kalman filter (IEKF) [4], ESKF-VB [20], KalmanNet [21], and ESKF-R, which denotes the single-model rolling-aware ESKF without IMM-based mode adaptation. ESKF-VB employs a variational Bayesian scheme to account for time-varying process noise covariance, (1) Flat Surface  
+
+> (3) Uneven Terrain
+> (2) Slippery
+> (4) Slope
+> Low friction area
+> Fig. 3. Some snapshots of the four simulation scenarios are presented, including flat surface, slippery, uneven terrain, and slope environments.
+
+while KalmanNet uses a recurrent neural network to learn the Kalman gain. The training details and error analysis of KalmanNet are provided in []. To ensure a fair comparison, all methods were implemented within a unified evaluation pipeline and tested under the same experimental conditions. In particular, all model-based methods were executed on the same computer equipped with an Intel Core i7-11700F CPU at 2.50 GHz, and consistent parameter settings were used across methods wherever applicable to eliminate implementation bias. Estimation performance was assessed using the absolute trajectory error (ATE) and relative pose error (RPE) metrics [22] to examine various algorithmic properties. The RPE was computed over a fixed distance, with results quantified via the root mean square error (RMSE). Error metrics are expressed in radian (rad) for attitude and meters (m) for position. The symbol “–” in Tables indicates runs for which the KalmanNet baseline failed to produce stable full-trajectory estimates and therefore could not be evaluated reliably using the same metric protocol. 
+
+A. Simulation 
+
+The quadruped robot simulation platform was developed within the Gazebo environment [23], where the legged con-troller was deployed for operation. Ground truth data were ob-tained using Gazebo’s plugin. The algorithms were evaluated across four distinct scenarios—flat surface, uneven terrain, slippery, and slope environments—as indicated in Fig. 3. In the flat surface scenario, the robot followed various trajectories, including straight line, circular, and curve paths. The trajectory details, including lengths and durations, are as follows:  
+
+> •
+
+Flat Surface Scenario – Straight line : a forward straight line motion of ap-proximately 9 m, completed in 37 s. 
+
+– Circular : circular trajectory with a radius of approx-imately 1 m, completed in 38 s. 
+
+– Curve : sinusoidal path spanning 7 m, completed in 30 s.  
+
+> •
+
+Slippery Scenario : 5 m completed in 19 s, crossing two low-friction patches ( ηx = 0.7, ηy = 0.055) that cause dominant lateral slip in the y direction, with nominal friction elsewhere. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2025 6
+
+• Uneven Terrain Scenario : 10 m square-shaped traversal over uneven terrain, completed in 70 s. 
+
+• Slope Scenario : 20 m trajectory consisting of three segments: 17 ◦uphill slope, 17 ◦downhill slope, and flat surface completed in 82 s. On the flat surface, we first evaluate Straight line motion along the X direction. The resulting trajectory estimates are compared in the left panel of Fig. 4. The right panel of Fig. 4 further shows the foot velocity along the X axis. During the stance phase, the foot velocity is not strictly zero, which is consistent with the rolling-contact, and the estimated velocity closely matches the ground truth. Quantitative results in Table I show that incorporating the rolling effect (ESKF-R) significantly reduces the position errors compared with IEKF, with ATE and RPE reduced by 43.1% and 43.5%, respectively. Building upon ESKF-R, the proposed IMM-PO achieves fur-ther reductions of 17.3% in ATE and 17.8% in RPE. To further assess robustness under more complex motions, we additionally evaluate Circular and Sinusoidal trajectories. For the Circular trajectory, the quantitative comparison in Table I shows that the proposed method reduces the position ATE by approximately 70% and 50% compared with IEKF and ESKF-R, respectively. Meanwhile, the attitude errors remain consistently smaller throughout the motion. In particular, the proposed method achieves an additional reduction of approx-imately 5% in attitude ATE compared with IEKF, together with moderate improvements in attitude RPE relative to ESKF-R. Similar performance trends are also observed for the 
+
+Sinusoidal trajectory. Overall, these results demonstrate the improved estimation accuracy and robustness of the proposed method under both simple and complex motions. KalmanNet performs more reliably when the testing condi-tions remain close to its training distribution. This limitation is more pronounced in quadruped proprioceptive state esti-mation, which is a high-dimensional and strongly coupled recursive task with contact switching, rolling contact, and slip-related uncertainties. As also discussed in [24], learning-based filtering becomes increasingly challenging as the system complexity and distribution shift grow. Consequently, once the learned gain becomes inaccurate under unseen contact or terrain conditions, the estimation error accumulates through recursive propagation and may eventually lead to unstable or divergent trajectory estimates. This interpretation is also con-sistent with the real-world results, where KalmanNet remains stable on the short flat-ground sequence but diverges on the longer and more challenging terrain sequence. To simulate dynamic contact under slippery conditions, we introduce a low-friction region along the Y direction, as illustrated in panel (2) of Fig. 3. The corresponding estimated trajectories and attitude errors are presented in Fig. 5. As shown in the left panel, the proposed method generates a trajectory that more closely agrees with the ground truth, effectively mitigating the drift caused by slipping along the Y direction. In addition, the position error along the Z direction is significantly reduced. This improvement is likely due to the proposed method’s enhanced robustness to vertical impact disturbances arising at foot touchdown during intermittent foot-ground contact, as indicated by the red dotted line in 
+
+Fig. 4. Overall performance comparison in Straight line trajectory. Left :Estimated trajectories obtained by different methods are compared with the ground truth. Right : The foot velocity during the contact phase is non-zero, which is consistent with the rolling-contact assumption; the darker shaded background indicates the contact phase. 
+
+Fig. 5. Estimated trajectories and attitude errors in the slippery scenario. 
+
+Fig. 8. The right panel further shows the attitude errors over time, demonstrating that the proposed method consistently achieves smaller deviations. To further evaluate robustness under more complex terrains and contact conditions, we additionally conduct experiments on the uneven terrain and slope scenarios, as shown in panels (3) and (4) of Fig. 3. These settings introduce richer contact variations, making state estimation more challenging. Quanti-tatively, the results in Table I show that the proposed method consistently achieves lower ATE and RPE in both scenarios. Although the rolling model is only an approximation in such cases, it still provides a more informative nominal contact description than the conventional zero-velocity assumption, while the IMM mechanism further mitigates residual mismatch through online adaptation of contact confidence. 
+
+TABLE I AVERAGE ATE AND 1 M ETER RPE IN SIMULATION SCENES                                                                                                                                                                                  
+
+> Scenes KF ESKF ESKF-VB Kalman-Net IEKF ESKF-R IMM-PO
+> Flat Surface
+> Straight line ATE pos 0.7054 0.6414 0.6458 -0.4333 0.2466 0.2039
+> ATE att 0.0076 0.0028 0.0028 -0.0029 0.0027 0.0020
+> RPE pos 0.1400 0.1278 0.1287 -0.0865 0.0489 0.0402
+> RPE att 0.0035 0.0028 0.0028 -0.0032 0.0029 0.0028
+> Circular ATE pos 0.4225 0.3935 0.3964 -0.2596 0.2320 0.1832
+> ATE att 0.1751 0.1745 0.1747 -0.1723 0.1699 0.1673
+> RPE pos 0.1914 0.1881 0.1888 -0.1645 0.1441 0.1441
+> RPE att 0.0544 0.0551 0.0551 -0.0553 0.0543 0.0503
+> Curve ATE pos 0.4359 0.4292 0.4225 -0.2494 0.1550 0.0768
+> ATE att 0.0475 0.0478 0.0478 -0.0476 0.0458 0.0457
+> RPE pos 0.1394 0.1383 0.1391 -0.0955 0.0670 0.0571
+> RPE att 0.0498 0.0491 0.0491 -0.0493 0.0489 0.0470 Slippery
+> ATE pos 0.3318 0.3149 0.3168 -0.2030 0.1378 0.0614
+> ATE att 0.0082 0.0051 0.0050 -0.0059 0.0053 0.0041
+> RPE pos 0.1501 0.1442 0.1449 -0.1002 0.0728 0.0453
+> RPE att 0.0060 0.0070 0.0069 -0.0077 0.0066 0.0058 Uneven Terrain
+> ATE pos 1.1015 1.0676 1.0744 -0.6513 0.7595 0.2720
+> ATE att 0.2610 0.1952 0.1941 -0.2012 0.1770 0.1562
+> RPE pos 0.2454 0.2543 0.2549 -0.1795 0.2188 0.1554
+> RPE att 0.0615 0.0606 0.0603 -0.0542 0.0623 0.0451 Slope
+> ATE pos 1.5647 1.3706 1.3724 -1.1540 1.0528 0.5068
+> ATE att 0.0576 0.0520 0.0506 -0.0613 0.0939 0.0339
+> RPE pos 0.2728 0.2690 0.2689 -0.3721 0.2579 0.1343
+> RPE att 0.0259 0.0102 0.0101 -0.0283 0.0198 0.0055 JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2025 7(1) Flat surface (2) Complex terrain
+> Low friction Uneven terrain
+
+Fig. 6. Some snapshots of the two real experiment scenarios are presented, including flat surface, and complex terrain. Scene 1: Flat surface Scene 2: Complex terrain 
+
+Fig. 7. Estimated trajectories in the flat surface and complex terrain. 
+
+B. Real Experiments 
+
+To further assess the performance of the proposed method, experiments were conducted using the AlienGo quadruped robot as the hardware platform. The robot navigated in the indoor flat surface and complex terrain, as indicated in Fig. 3. In Scene 1, the robot traversed a straight line trajectory of 2.5 m in 12 s. In Scene 2, the robot followed a trajectory of 4.5 m in 28 s over complex terrain with more challenging contact conditions. The ground truth data of the robot were obtained using a motion capture system with a positional accuracy of approximately 0.1 mm. The estimated trajectories are shown in Fig. 7. In Scene 1 (flat surface), which corresponds to a relatively short sequence, all model-based methods remain stable, and KalmanNet is also able to track the trajectory without divergence. Never-theless, the proposed IMM-PO achieves the smallest overall position drift. In Scene 2 (complex terrain), which involves a longer sequence and more challenging contact conditions, the advantage of IMM-PO becomes more evident. In this case, the estimation error of KalmanNet accumulates significantly and eventually leads to divergence, whereas the proposed method better accommodates contact uncertainty and produces estimates that more closely match the ground truth. The quantitative results in Table II further confirm these ob-servations. Compared with the baseline methods, the proposed IMM-PO consistently yields the lowest ATE and RPE in both position and attitude, demonstrating that the proposed rolling-aware multi-model design is effective not only in simulation but also in real-world deployment. 
+
+C. Ablation Study and Computational Cost 
+
+To assess the impact of dynamic adjustment of contact model, we conduct an ablation study in a slippery scenario containing four low-friction patches. Two patches are con-figured with (ηx = 0.7, ηy = 0.15), while the other two 
+
+TABLE II AVERAGE ATE AND 1 M ETER RPE IN REAL SCENES                                                                
+
+> Scenes KF ESKF ESKF-VB Kalman-Net IEKF ESKF-R IMM-PO
+> Flat surface
+> ATE pos 0.163 0.132 0.111 0.113 0.085 0.142 0.076
+> ATE att 0.018 0.020 0.020 0.038 0.080 0.020 0.011
+> RPE pos 0.141 0.117 0.099 0.107 0.081 0.128 0.069
+> RPE att 0.020 0.021 0.021 0.041 0.074 0.022 0.018 Complex terrain
+> ATE pos 0.363 0.323 0.273 -0.227 0.284 0.102
+> ATE att 0.089 0.067 0.067 -1.559 0.072 0.043
+> RPE pos 0.161 0.148 0.126 -0.102 0.124 0.054
+> RPE att 0.051 0.048 0.047 -0.997 0.049 0.021 contact switch
+> slip in contact
+
+Fig. 8. Temporal evolution of mode switching in IMM-PO and the ground truth foot velocity along the Y-axis. The darker shaded regions indicate the contact phase. 
+
+use ( ηx = 0.7, ηy = 0.05), producing different slip severities mainly along the Y direction. We compare the following esti-mators: ESKF-R, an ESKF with rolling-contact modeling and fixed contact confidence; ESKF-L, an ESKF using enlarged process noise to mimic higher uncertainty under slip; IMM (no interaction), a two-model variant where the two filters run independently and are combined by simple averaging without IMM interaction/mixing; IMM-T, a three-mode IMM designed for normal contact, mild slip, and severe slip; and IMM-PO, our proposed two-mode IMM for normal and slippery contact that incorporates adaptive contact confidence adjustment. Table III summarizes the estimation accuracy of all vari-ants. ESKF-R yields moderate performance, but struggles in slippery environments because it uses a rolling-contact model with fixed contact confidence, making it less adaptive to time-varying contact conditions. ESKF-L uses larger process noise to handle slip-induced uncertainty, but this conservative setting weakens the contact constraint during normal phases and leads to the largest overall errors. IMM (no interaction) benefits from model diversity, yet remains limited in handling transitions between contact regimes because the model probabilities are not interactively updated. Among all two-mode variants, IMM-PO achieves the best accuracy, reducing ATE pos from 0.2645 m to 0.1759 m and RPE pos from 0.0708 m to 0.0506 m relative to ESKF-R. Although IMM-T further reduces the errors to 0.1531 m and 0.0469 m, respectively, the additional gain over IMM-PO is relatively modest, suggesting that the proposed two-mode design already captures the dominant contact uncertainty in the considered scenario. Fig. 8 provides a mechanistic explanation for these results. The red circled regions correspond to contact-switching events, where impact at foot transition causes abrupt variations in foot-end velocity and temporarily redistributes the mode probabil-ities. The purple circled regions, by contrast, correspond to slip events within the contact phase, where sustained abnormal foot velocity drives the estimator toward the slip-related mode. This distinction is important: the proposed IMM-PO does JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2025 8                                         
+
+> TABLE III ABLATION STUDY IN SLIPPERY CONDITION : A VERAGE ATE AND 1METER RPE Method ESKF-R ESKF-L IMM (no interaction) IMM-PO (two-model) IMM-T (three-model) ATE pos 0.2645 0.6163 0.2889 0.1759 0.1531 ATE att 0.0122 0.0148 0.0150 0.0080 0.0064 RPE pos 0.0708 0.1883 0.0741 0.0506 0.0469 RPE att 0.0060 0.0064 0.0069 0.0055 0.0050 TABLE IV AVERAGE RUNTIME IN SIMULATION SCENARIOS
+> Method ESKF-R ESKF-L IMM (no interaction) IMM-PO (two-model) IMM-T (three-model) Runtime (ms) 0.49 0.49 1.00 1.00 1.53
+
+not react only to large slip events, but also to transient disturbances caused by foot switching. Therefore, the temporal evolution in Fig. 8 shows that IMM-PO can adapt its model confidence online according to different sources of contact-induced uncertainty, rather than relying on a fixed confidence level throughout the motion. This adaptive behavior explains why IMM-PO outperforms both ESKF-R and ESKF-L, and also why it is superior to IMM (no interaction), where multiple models exist but are not probabilistically mixed according to their measurement consistency, not only under slip but also in other complex and time-varying contact scenarios. In addition to estimation accuracy, computational efficiency is critical for real-time deployment. Table IV shows that ESKF-R and ESKF-L require 0.49 ms per step, while both IMM (no interaction) and IMM-PO require 1.00 ms, and IMM-T increases the runtime to 1.53 ms. Thus, IMM-PO approx-imately doubles the runtime of the single-model estimators, but still remains within the millisecond range. By comparison, IMM-T incurs noticeably higher cost while providing only marginal additional improvement over IMM-PO, as summa-rized in Table III. Therefore, the proposed two-mode IMM-PO offers a more favorable trade-off between estimation accuracy and computational efficiency. 
+
+D. Detailed Analysis of the KalmanNet Baseline 
+
+To better understand the behavior of the learning-based baseline, we provide additional implementation details and error analysis for KalmanNet. In our task, quadruped pro-prioceptive state estimation involves high-dimensional and strongly coupled dynamics together with time-varying foot-ground interactions. Under such conditions, directly apply-ing the standard KalmanNet training pipeline yields limited training and testing performance, suggesting that the original formulation is insufficient for this challenging setting. KalmanNet employs a two-layer recurrent neural network to estimate the Kalman gain from filtering-related features, rather than directly regressing the robot state. While this design preserves the recursive correction structure of the Kalman filter, it also makes the update quality strongly dependent on the recurrent hidden state. In quadruped proprioceptive odometry, the estimator must cope with long-horizon tempo-ral dependencies, contact-mode transitions, and time-varying disturbances. Under these conditions, a compact recurrent representation may be insufficient to fully capture the complex evolution of foot–ground interaction, leading to biased gain prediction and degraded closed-loop stability, especially on long real-world trajectories. More importantly, unlike model-based estimators with explicit mode-dependent contact un-certainty, KalmanNet adapts the correction implicitly through learned recurrent features, which limits its robustness when rolling and slipping behaviors alternate over time. To improve generalization under limited real-world data, several training enhancements were introduced, including pla-nar yaw augmentation, random horizontal translation perturba-tion, curriculum learning, and learning-rate scheduling. These strategies enlarge the effective data coverage and improve robustness to unseen initial orientations and spatial offsets. In addition to the standard position and attitude losses, we further introduce an eigenvalue-based regularization term to explicitly constrain the recursive stability of the learned filter: 
+
+L = λpLpos + λrLrot + λeLeig , (24) where Lpos and Lrot denote the position and attitude losses, respectively, and Leig penalizes unstable closed-loop modes. This additional term is motivated by the fact that trajectory-level supervision alone does not explicitly regulate the long-horizon recursive behavior of the estimator. For a recurrent filtering architecture such as KalmanNet, even small correction biases may accumulate over time and eventually lead to noticeable drift or divergence. To motivate this regularization, we analyze the linearized closed-loop error propagation. Let ek denote the posterior estimation error at step k. The prediction error can be written as 
+
+e− 
+
+> k
+
+= Fkek−1 + Gkwk−1, (25) where Fk is the state-transition Jacobian, Gk is the process-noise input matrix, and wk−1 is the process noise. The inno-vation is given by 
+
+rk = Hke− 
+
+> k
+
++ vk, (26) where Hk is the measurement Jacobian and vk is the measure-ment noise. Using the Kalman-style correction ek = e− 
+
+> k
+
+− Kkrk,the posterior error dynamics become 
+
+ek = e− 
+
+> k
+
+− Kk(Hke− 
+
+> k
+
++ vk)= ( I − KkHk)e− 
+
+> k
+
+− Kkvk
+
+= ( I − KkHk)Fkek−1 + ( I − KkHk)Gkwk−1 − Kkvk.
+
+(27) Accordingly, the deterministic part of the closed-loop error propagation is governed by 
+
+Acl ,k = ( I − KkHk)Fk. (28) This expression shows that the learned gain Kk not only affects the instantaneous correction, but also directly shapes the recursive stability of the estimator through the closed-loop matrix Acl ,k. If the dominant eigenvalues of Acl ,k have excessively large magnitudes, the estimation error may be progressively amplified over time, even when the local cor-rection remains accurate. Based on this observation, Leig is introduced to penalize unstable spectra of Acl ,k and encourage more contractive closed-loop error dynamics. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2025 9
+
+To further alleviate the training difficulty associated with long recursive horizons, curriculum learning was adopted by progressively increasing the sequence length during training. This strategy allows the network to first learn short-term correction behavior and local dynamics before handling more challenging long-range temporal dependencies. In addition, a learning-rate scheduling strategy with a prescribed minimum threshold was employed to reduce optimization oscillation and mitigate occasional training collapse when the sequence length becomes large. The difficulty of long-sequence learning is not only due to deeper temporal recursion, but also due to the coupling between gain prediction and state evolution: an inaccurate gain at an early stage perturbs the subsequent state estimate, which in turn changes later network inputs and may further amplify the deviation. The training configuration is as follows. The network is a two-layer LSTM with hidden size 512 and dropout 0 .1. The maximum sequence length is 1440, the curriculum step is 16, the batch size is 8, and each curriculum stage is trained for 100 epochs, followed by 1000 post-training epochs on the full sequence length. AdamW is used with an initial learning rate of 3 × 10 −4, weight decay 10 −2, StepLR decay factor 0 .999, and minimum learning rate 2 × 10 −5. The loss weights are 
+
+λp = 1, λr = 10 −2, and λe = 10 −6, and the random seed is set to 42. The elapsed training time of the reported model is 33607 .007 s, which is approximately 9 .34 h. Table V summarizes the quantitative results on both real-world and simulated trajectories. On Real Trajectory 1, KalmanNet achieves moderate ATE and RPE, indicating that it remains effective on relatively short real-world segments. In contrast, on Real Trajectory 2, the position ATE rises dramati-cally to 129 .229533 m, whereas the position RPE remains only 0.639412 m. This discrepancy suggests that local short-range corrections are still partially effective, but the accumulated global drift becomes severe over long horizons, as shown in Fig. 9. By comparison, all three simulation trajectories exhibit relatively low ATE and RPE, indicating that short and cleaner sequences are substantially easier for the learned estimator to handle. To further analyze this behavior, the spectral radius is plotted in Fig. 10. At the beginning of the trajectory, its value remains close to 1. The threshold value of 1 is not chosen heuristically; it is the standard discrete-time stability boundary. When ρ(Acl ,k) < 1, the local linearized error dynamics are contractive in the Schur-stability sense, and perturbations tend to decay across recursive updates. Once ρ(Acl ,k) approaches or exceeds 1, the error is no longer guaranteed to shrink and may instead be amplified over time. Therefore, the horizontal line at 1 provides a direct visual reference for whether the learned closed-loop error propagation remains locally stable. Overall, the enhanced training strategy improves the robust-ness and generalization of KalmanNet on short sequences, par-ticularly in simulation and short real-world runs. However, the pronounced gap between local RPE and global ATE on long real-world trajectories indicates that the current model can preserve short-range consistency while still lacking sufficient robustness for long-horizon proprioceptive state estimation under complex foot-ground interactions.       
+
+> TABLE V ATE AND RPE ON REAL -WORLD AND SIMULATED TRAJECTORIES .
+
+Trajectories ATE pos ATE att RPE pos RPE att Real Trajectory 1 0.110725 0.048998 0.108907 0.042364 Real Trajectory 2 129.229533 1.135793 0.639412 0.139805 Sim Trajectory 1 0.066238 0.164789 0.061778 0.146810 Sim Trajectory 2 0.013150 0.042157 0.014958 0.042249 Sim Trajectory 3 0.018418 0.018459 0.019600 0.022116  
+
+> Fig. 9. Representative XY trajectory comparison on a long real-world sequence. Although KalmanNet preserves local trajectory consistency over short segments, accumulated drift leads to significant global error over long horizons.
+
+V. C ONCLUSIONS 
+
+This paper presented an IMM-based proprioceptive odome-try for legged robots under dynamic foot-ground interactions. Unlike conventional point-contact formulations, the proposed method distinguishes rolling-induced structured contact mo-tion from slip-induced uncertainty. Specifically, a rolling-aware ESKF was developed by augmenting the foot velocity in the state and introducing a rolling-consistent kinematic update, and was further integrated into an IMM framework for online adaptation of contact confidence through mode-dependent foot velocity uncertainty. The proposed framework was validated in both simulation and real-world experiments. The results show that explicit rolling modeling reduces the bias caused by the conventional zero-velocity contact assumption, while IMM-based multi-model inference improves robustness under slip and uncertain terrain interactions. Overall, the proposed estimator consistently outperformed representative proprioceptive baselines under challenging contact conditions with comparable computational cost. REFERENCES [1] D. Wisth, M. Camurri, and M. Fallon, “Robust legged robot state esti-mation using factor graph optimization,” IEEE Robotics and Automation Letters , vol. 4, no. 4, pp. 4507–4514, 2019. [2] D. Wisth, M. Camurri, and M. Fallon, “Vilens: Visual, inertial, lidar, and leg odometry for all-terrain legged robots,” IEEE Transactions on Robotics , vol. 39, no. 1, pp. 309–326, 2023. [3] M. Bloesch, C. Gehring, P. Fankhauser, M. Hutter, M. A. Hoepflinger, and R. Siegwart, “State estimation for legged robots on unstable and slippery terrain,” in 2013 IEEE/RSJ International Conference on Intel-ligent Robots and Systems , 2013, pp. 6058–6064. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2025 10 
+
+Fig. 10. Evolution of the closed-loop stability indicator along the trajectory. The deterioration of the stability metric over time suggests increasingly unstable recursive behavior. [4] R. Hartley, M. Ghaffari, R. M. Eustice, and J. W. Grizzle, “Contact-aided invariant extended kalman filtering for robot state estimation,” The International Journal of Robotics Research , vol. 39, no. 4, pp. 402–430, 2020. [5] S. Piperakis, M. Koskinopoulou, and P. Trahanias, “Nonlinear state estimation for humanoid robot walking,” IEEE Robotics and Automation Letters , vol. 3, no. 4, pp. 3347–3354, 2018. [6] R. Buchanan, M. Camurri, F. Dellaert, and M. Fallon, “Learning inertial odometry for dynamic legged robot state estimation,” in Conference on robot learning . PMLR, 2022, pp. 1575–1584. [7] T.-Y. Lin, R. Zhang, J. Yu, and M. Ghaffari, “Legged robot state estimation using invariant kalman filtering and learned contact events,” 
+
+arXiv preprint arXiv:2106.15713 , 2021. [8] M. Bloesch, M. Hutter, M. A. Hoepflinger, S. Leutenegger, C. Gehring, C. D. Remy, and R. Siegwart, “State estimation for legged robots-consistent fusion of leg kinematics and imu,” Robotics , vol. 17, pp. 17–24, 2013. [9] G. Bledt, M. J. Powell, B. Katz, J. Di Carlo, P. M. Wensing, and S. Kim, “Mit cheetah 3: Design and control of a robust, dynamic quadruped robot,” in 2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2018, pp. 2245–2252. [10] S. Fahmi, G. Fink, and C. Semini, “On state estimation for legged locomotion over soft terrain,” IEEE Sensors Letters , vol. 5, no. 1, pp. 1–4, 2021. [11] V. Agrawal, S. Bertrand, R. Griffin, and F. Dellaert, “Proprioceptive state estimation of legged robots with kinematic chain modeling,” in 
+
+2022 IEEE-RAS 21st International Conference on Humanoid Robots (Humanoids) , 2022, pp. 178–185. [12] S. Yang, Z. Zhang, Z. Fu, and Z. Manchester, “Cerberus: Low-drift visual-inertial-leg odometry for agile locomotion,” in 2023 IEEE In-ternational Conference on Robotics and Automation (ICRA) , 2023, pp. 4193–4199. [13] J.-H. Kim, S. Hong, G. Ji, S. Jeon, J. Hwangbo, J.-H. Oh, and H.-W. Park, “Legged robot state estimation with dynamic contact event information,” IEEE Robotics and Automation Letters , vol. 6, no. 4, pp. 6733–6740, 2021. [14] S. Yang, Z. Zhang, B. Bokser, and Z. Manchester, “Multi-imu propri-oceptive odometry for legged robots,” in 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2023, pp. 774– 779. [15] Y. Bar-Shalom, X. Li, and T. Kirubarajan, Estimation with Applications to Tracking and Navigation: Theory, Algorithms and Software . Estima-tion with Applications to Tracking and Navigation: Theory, Algorithms and Software, 2004. [16] S. Li, D. Shi, X. Lyu, J. Tang, and L. Shi, “Bias-variancetrade-off in kalman filter-based disturbance observers,” arXiv preprint arXiv:2410.05061 , 2024. [17] K. M. Lynch and F. C. Park, Modern Robotics: Mechanics, Planning, and Control . Cambridge University Press, 2017. [18] D. He, W. Xu, and F. Zhang, “Symbolic representation and toolkit de-velopment of iterated error-state extended kalman filters on manifolds,” 
+
+IEEE Transactions on Industrial Electronics , vol. 70, no. 12, pp. 12 533– 12 544, 2023. [19] J. Carpentier, G. Saurel, G. Buondonno, J. Mirabel, F. Lamiraux, O. Stasse, and N. Mansard, “The pinocchio c++ library : A fast and flexible implementation of rigid body dynamics algorithms and their analytical derivatives,” in 2019 IEEE/SICE International Symposium on System Integration (SII) , 2019, pp. 614–619. [20] Y. Huang, Y. Zhang, Z. Wu, N. Li, and J. Chambers, “A novel adaptive kalman filter with inaccurate process and measurement noise covariance matrices,” IEEE Transactions on Automatic Control , vol. 63, no. 2, pp. 594–601, 2018. [21] G. Revach, N. Shlezinger, X. Ni, A. L. Escoriza, R. J. G. van Sloun, and Y. C. Eldar, “Kalmannet: Neural network aided kalman filtering for partially known dynamics,” IEEE Transactions on Signal Processing ,vol. 70, pp. 1532–1547, 2022. [22] J. Sturm, N. Engelhard, F. Endres, W. Burgard, and D. Cremers, “A benchmark for the evaluation of rgb-d slam systems,” in 2012 IEEE/RSJ International Conference on Intelligent Robots and Systems , 2012, pp. 573–580. [23] N. Koenig and A. Howard, “Design and use paradigms for gazebo, an open-source multi-robot simulator,” in 2004 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) (IEEE Cat. No.04CH37566) , vol. 3, 2004, pp. 2149–2154 vol.3. [24] L. Hohmeyer, M. Popescu, I. Bergonzani, D. Mronga, and F. Kirchner, “Inekformer: A hybrid state estimator for humanoid robots,” in 2025 IEEE International Conference on Advanced Robotics (ICAR) . IEEE, 2025, pp. 833–840.

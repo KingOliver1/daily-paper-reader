@@ -1,0 +1,217 @@
+Title: Bootstrap Perception Under Hardware Depth Failure for Indoor Robot Navigation
+
+URL Source: https://arxiv.org/pdf/2603.28890v1
+
+Published Time: Wed, 01 Apr 2026 00:04:37 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Bootstrap Perception Under Hardware Depth Failure for Indoor Robot Navigation 
+
+Nishant Pushparaju, Vivek Mattam, Aliasghar Arab ∗
+
+Abstract —We present a bootstrap perception system for indoor robot navigation under hardware depth failure. In our corridor data, the time-of-flight camera loses up to 78% of its depth pixels on reflective surfaces, yet a 2D LiDAR alone cannot sense obstacles above its scan plane. Our system exploits a self-referential property of this failure: the sensor’s surviving valid pixels calibrate learned monocular depth to metric scale, so the system fills its own gaps without external data. The architecture forms a failure-aware sensing hierarchy, conservative when sensors work and filling in when they fail: LiDAR remains the geometric anchor, hardware depth is kept where valid, and learned depth enters only where needed. In corridor and dynamic pedestrian evaluations, selective fusion increases costmap obstacle coverage by 55–110% over LiDAR alone. A compact distilled student runs at 218 FPS on a Jetson Orin Nano and achieves 9/10 navigation success with zero collisions in closed-loop simulation, matching the ground-truth depth baseline at a fraction of the foundation model’s cost. 
+
+Index Terms —depth estimation, sensor fusion, knowledge dis-tillation, costmap, indoor navigation 
+
+I. I NTRODUCTION 
+
+Indoor robots are built around range sensors that are reliable until the scene violates their assumptions. A 2D LiDAR cap-tures stable angular structure, but only on a single plane. Time-of-flight (ToF) cameras give direct metric depth; however, pol-ished floors, glass doors, and the reflective surfaces common in warehouses, manufacturing, and logistics cause them to return invalid measurements. While a 3D LiDAR would solve the vertical coverage problem, its cost, weight, and power exceed the budget of compact indoor platforms; the 2D LiDAR plus camera combination is the dominant configuration in this deployment class [1], [2]. In the corridor data used in this paper, an Orbbec Femto Bolt returns invalid depth ( d=0 or 
+
+d> 5 m) on a per-pixel mean of 45% across 12 384 frames from a 410 s corridor recording, computed by classifying every pixel with zero return or range beyond the sensor’s 5 m indoor validity cutoff as invalid. In a separate high-invalidity segment of the same corridor, dominated by polished floors and glass doors, invalidity rises to a mean of 78% across 459 frames. The sensor remains active, yet the geometry available to the navigation stack becomes incomplete. In our tested deployment setting, this was a persistent failure mode rather than an occasional outlier. We address this with a bootstrap perception system. We call it bootstrap because the failing sensor’s surviving valid pixels provide the calibration signal that converts learned relative depth into metric depth, so the system fills its own gaps instead of degrading to LiDAR alone. LiDAR remains the geometric anchor; hardware depth is used where valid; learned monocular depth fills only the invalid regions; and semantics are added only where geometry alone is insufficient. The stack is conservative when sensors work and fills in when they do not. To our knowledge, using a degraded depth sensor’s own surviving pixels to calibrate learned depth at runtime — and filling that sensor’s dead pixels with the calibrated output, without offline data or external ground truth — has not been previously demonstrated. We evaluate in three settings. First, we test whether learned depth adds obstacle coverage in a university corridor where polished floors and glass cause severe active-depth failure (§IV-B). Second, we test whether learned depth adds above-plane obstacle evidence on LILocBench [3], a public long-term indoor localization benchmark with moving pedestrians, used here for costmap evaluation (§IV-C). Third, we ask whether a compact distilled student can replace the foundation model for embedded navigation, and bound its near-range safety (§IV-D). Platform deployment constraints are reported first. The contributions are: 1) A bootstrap perception architecture where LiDAR, hard-ware depth, learned monocular depth, and optional seman-tics enter the local costmap in a deliberate hierarchy, not as independent modules. 2) A systems evaluation: in corridor replay, LiDAR+depth increases occupied obstacle cells by 55%; on dynamic LILocBench, by 110% over LiDAR alone. A corridor-specialized student matches the ground-truth-depth base-line on the reported Gazebo corridor metrics, achieving 9/10 success with zero collisions. 3) A distillation ablation from teacher to compact student, showing that corridor specialization is viable but requires accepting generalization and near-range safety tradeoffs. All real-world data was collected by teleoperation. The evaluation combines offline replay on recorded sensor data with closed-loop Gazebo simulation. II. R ELATED WORK 
+
+Monocular depth estimation. Recent monocular depth models have made dense geometry available from a sin-gle RGB frame. MiDaS [4] established strong mixed-dataset transfer. Depth Anything [5]–[7] scaled that idea with larger encoders and larger unlabeled corpora. On benchmark datasets, supervised methods such as AdaBins [8], BTS [9], and Pix-elFormer [10] remain strong references. Dense monocular geometry is now achievable across many scene types, but  
+
+> arXiv:2603.28890v1 [cs.RO] 30 Mar 2026 Fig. 1. Depth fusion under worst-case ToF failure (20% valid pixels). The hardware sensor retains only a sparse stippled pattern; DA3-Small supplies dense depth estimates in the regions where the hardware sensor fails. Even at 80% pixel failure, the fused output combines surviving hardware depth with learned depth to produce a dense depth estimate for costmap construction.
+
+a deployment question remains open: once an active-depth sensor becomes locally unreliable, how should learned depth enter a navigation stack, and what evidence shows that it improves the geometry available to the planner? 
+
+Depth in navigation systems. Depth has long been used for mapping, traversability, and embodied navigation. Gupta et al. [11] build ego-centric metric maps from predicted depth for visual navigation; Chaplot et al. [12] use depth to construct top-down occupancy maps for active exploration; ViPlanner [13] learns traversability costs from semantic depth. Predicted depth can clearly support spatial reasoning, but the cited systems all assume either ground-truth depth or a healthy active sensor. How learned depth changes a real local costmap when the active depth sensor itself is degraded is less well documented. The closest prior work occupies adjacent but distinct prob-lem settings. LiDAR-guided depth completion [14] densifies sparse 3D LiDAR using camera guidance, assuming both sensors are healthy; it does not model per-pixel ToF invalidity or substitute a learned signal selectively. Transparent-obstacle detection [15] identifies glass and reflective surfaces via Li-DAR intensity profiles but does not substitute a learned depth estimate in the navigation costmap. Recent monocular-depth integration into Nav2 [16] uses camera depth as a full LiDAR replacement, not a selective fallback. Prior work either re-places the primary range source entirely, assumes both sensors are healthy, or targets a different obstacle modality. The policy studied here (keeping LiDAR as the SLAM anchor, using hardware ToF depth where valid, and selectively inserting learned monocular depth only in per-pixel-invalid regions of the local costmap) is not directly addressed in any of these lines of work. None of the cited approaches use the degraded sensor’s own surviving pixels to calibrate and fill its dead regions at runtime — the self-calibrating mechanism central to this work. 
+
+Efficient edge perception and distillation. 
+
+EfficientViT [17] and EfficientViT-SAM [18] show that dense prediction and mask refinement can be run within embedded budgets. Kendall-style multi-task weighting [19] and berHu depth losses [20] remain practical tools for compact student training. Compact runtime perception is therefore plausible, but the question of when a specialist should replace a stronger general model is less studied. The student study in this paper addresses that deployment boundary directly by comparing general indoor performance, corridor specialization, and near-range safety instead of only reporting standalone benchmark gains. III. S YSTEM OVERVIEW 
+
+A. Deployment Setting 
+
+The system is deployed on a compact indoor robot plat-form equipped with an Orbbec Femto Bolt (1280 ×720 RGB, 640 ×576 ToF depth), a 2D LiDAR, and a Jetson Orin Nano 8 GB for inference. ROS2 Humble with Nav2 [1] and SLAM Toolbox [21] provides navigation and localization. The sensing stack has four layers. LiDAR supplies stable planar geometry and remains the primary spatial reference. Hardware depth gives direct metric measurements when the observed surface is measurable, but when it becomes locally unreliable, monocular depth fills the gap with dense estimates. Where geometry alone is not sufficient, semantics add class-dependent obstacle refinement. Heavy teacher models remain off-board: DA3-Large [7] provides depth supervision and SAM2-Large [22] generates instance masks that are mapped to the six semantic classes (floor, wall, person, furniture, glass, other) via YOLOv8 [23] detection labels. Both run on server-side GPUs for offline label generation only. Two deployable learned-depth paths share the same sensing role on the robot: DA3-Small as the general-purpose foundation model, and a compact distilled student for specialized corridor deployment. The paper evaluates both; the strongest general-purpose costmap evidence is from DA3-Small, while the student is validated through offline metrics and closed-loop simulation. 
+
+B. Failure-Aware Sensing Hierarchy 
+
+The system is organized as a sensing hierarchy. When the standard sensors are reliable, the stack uses them conserva-tively. When those sensors become incomplete, the system fills the missing regions with learned depth without discarding the stable parts of the sensing stack. This supports both failure modes studied in the paper: reflective-surface degradation in corridor sensing and scan-plane incompleteness in dynamic scenes. The data flow is summarized in Fig. 2. Operationally, the system performs five steps. It first fil-ters active-depth measurements for validity. It then calibrates monocular depth into metric form. The resulting depth map is reprojected into 3D and filtered to the collision-relevant height band before publication as obstacle evidence. LiDAR and learned depth are fused at the costmap level. Finally, semantic cues may refine obstacle inflation radii, assigning a wider safety margin around moving pedestrians than around static walls, or explicitly marking glass surfaces that are transparent to LiDAR and invisible to fixed inflation. 
+
+C. Embedded Constraint 
+
+Embedded compute constrains the design. The Jetson mea-surements (Table I) show that DA3-Small, YOLOv8 [23], and event-triggered segmentation refinement fit within roughly 6.5 GB. This is sufficient for runtime deployment, but leaves little headroom once the rest of the autonomy stack is active. That constraint drives two design choices: selective use of semantics (triggered, not always-on) and exploration of the compact student path for narrow environments where domain-specific specialization may justify a lower runtime cost. 
+
+D. Depth Calibration, Fusion, and Costmap Construction 
+
+Let ˆd(u, v ) denote the monocular depth predicted at pixel 
+
+(u, v ), dtof (u, v ) the active-depth measurement, and c(u, v ) ∈
+
+[0 , 1] the per-pixel confidence reported by the Femto Bolt sen-sor (derived from the IR return amplitude; low values indicate specular reflection or absorption). Both DA3-Small and the student output relative depth; metric units are recovered by a per-frame scale factor computed via median alignment against the live ToF depth: 
+
+d(u, v ) = s · ˆd(u, v ), s = median c(u,v )≥τ, 
+
+> ˆd(u,v )>ϵ
+
+dtof (u, v )ˆd(u, v )
+
+!
+
+,
+
+(1) with confidence threshold τ =0 .5 and ϵ=10 −3 m to exclude degenerate predictions. This is the bootstrap: the same sensor whose failure motivates learned-depth substitution supplies the valid pixels that anchor it to metric scale. Even when 78% of pixels are invalid, the remaining 22% (roughly 81 000 pixels on a 640 ×576 frame) suffice for a stable median. In the corridor data the per-frame scale factor s has a coefficient of variation below 8% across the 459-frame worst-case segment; the median is robust to outlier ToF returns and to the spatial distribution of surviving pixels. Because surviving pixels span the sensor’s full observed depth range (floor, wall, and object returns from 0.05 to 5 m), the median is not dominated by a single depth band. The calibration requires no offline data and adapts on every frame. Below ∼5% valid coverage the scale estimate becomes unreliable; this boundary was not reached in the tested data. The runtime fusion rule is 
+
+dfused (u, v ) = 
+
+(
+
+dtof (u, v ), c(u, v ) ≥ τ and dmin < d tof < d max 
+
+d(u, v ), otherwise ,
+
+(2) with τ =0 .5, dmin =0 .05 m, dmax =5 .0 m. Hardware depth is kept where valid; learned depth fills the rest. Fused depth values are back-projected into 3D using the camera intrinsic matrix K and transformed into the robot base frame via the extrinsic TBC . Only points within the height band 
+
+[hmin , h max ] = [0 .05 , 2.0] m enter the costmap. The resulting point set is published as a ROS PointCloud2 and fused with LiDAR-derived obstacle evidence in the local costmap. 
+
+E. Compact Student Training Objective 
+
+The compact student predicts both depth and segmentation from RGB. Training uses a supervision rule that mirrors the runtime fusion: 
+
+dtarget (u, v ) = 
+
+(
+
+dtof (u, v ), c(u, v ) ≥ τdteach (u, v ), c(u, v ) < τ, (3) where dteach is the teacher depth (DA3-Large). The range check (dmin , dmax ) from Eq. 2 is applied during target construction but omitted from the notation for brevity. In NYU training, all ground-truth pixels satisfy the confidence thresh-old, so the target reduces to direct supervision; in corridor settings the student inherits teacher supervision exactly where the active sensor is least reliable. The loss combines three terms: a berHu depth loss [20] 
+
+Ld (L1-like on small errors, quadratic on large errors; more stable than SILog in the compact-model runs), a segmentation cross-entropy Ls, and an edge-aware smoothness regularizer 
+
+Lsmooth that preserves sharp depth boundaries at glass, wall, and furniture transitions. Depth and segmentation weights are set by clamped Kendall uncertainty weighting [19] so that neither task dominates: 
+
+L = 12 e− log σ2 
+
+> d
+
+Ld+e− log σ2 
+
+> s
+
+Ls+ 12 log σ2
+
+> d
+
++ 12 log σ2 
+
+> s
+
++λeLsmooth ,
+
+(4) with log σ2 
+
+> d
+
+and log σ2 
+
+> s
+
+clamped to [−2, 2] during optimization to prevent task collapse, and λe=0 .1.The student uses an EfficientViT-B1 encoder (5.31M param-eters) with two lightweight decoders sharing skip connections at 1/4, 1/8, and 1/16 resolution. Each decoder applies three transposed-convolution stages with skip fusion, producing depth (1-channel, ReLU) and segmentation (6-class: floor, wall, person, furniture, glass, other) at 240 ×320 , bilinearly upsampled to input size. Training uses AdamW ( lr=10 −3,encoder 0.1×, weight decay 10 −4) with cosine annealing for 200 epochs on NYU (batch 16) or 50 epochs for corridor fine-tuning (batch 128). The encoder is frozen for the first 5 epochs. Gradient norms are clipped at 1.0. Input is 240 ×320 
+
+RGB with ImageNet normalization. Deployment augmentation (V5 onward) adds random rotation ( ±10 ◦), scale jitter (0.85– 1.15), Gaussian blur, JPEG compression artifacts, and random cutout to close the domain gap between NYU training and on-robot inference. IV. E XPERIMENTS AND RESULTS 
+
+We evaluate in three settings preceded by platform deploy-ment (§IV-A): corridor costmap recovery under active-depth failure (§IV-B), dynamic obstacle recovery on a public pedes-trian benchmark (§IV-C), and compact student deployment for embedded navigation (§IV-D). All real-world data was collected by teleoperation and replayed offline. 
+
+Datasets. Three datasets are used. (1) Corridor : a 410 s teleoperated traverse of a university building with polished floors and glass-walled conference rooms, recorded with an Orbbec Femto Bolt (1280 ×720 RGB, 640 ×576 ToF depth) at ∼30 FPS (12 384 frames). A 459-frame high-invalidity Fig. 2. System architecture. LiDAR remains the primary geometric reference, hardware depth is used where valid, learned monocular depth replaces unreliable active-depth regions, and optional semantics refine obstacle footprint only when needed. Heavy teachers remain off-board. Dashed orange paths are optional. 
+
+segment dominated by worst-case reflective surfaces is used for offline ablation. (2) LILocBench [3]: the dynamics_0 
+
+sequence, a public benchmark recording of a building lobby with moving pedestrians, replayed at 0.7 × real-time for com-plete frame evaluation (DA3-Small’s 21 FPS suffices for online costmap updates). (3) NYU Depth V2 [24]: the standard 795-train / 290-validation labeled split for general-purpose student evaluation and teacher distillation. 
+
+A. Platform Deployment 
+
+Table I reports four runtime configurations on the Jetson platform. DA3-Small alone reaches 21.9 FPS at 5.1 GB. The full event-triggered stack (DA3 + YOLOv8 + SAM2) reaches 21.8 FPS within 6.5 GB. The compact student (P4) runs at 218 FPS and 2.7 GB, 10 × faster than DA3-Small at half the memory. A full-stack depth sensing system can therefore remain usable under a constrained runtime budget, and a distilled student can assume the depth-sensing role at a fraction of the cost when the environment is known. End-to-end pipeline latency (camera callback through costmap update) adds ROS serialization, fusion, and back-                              
+
+> TABLE I PERCEPTION STACK CONFIGURATIONS ON JETSON ORIN NANO . P1 = DA3
+> ONLY ; P2 = DA3 + YOLO V8; P3 = FULL STACK WITH EVENT -TRIGGERED SEMANTIC REFINEMENT ; P4 = E FFICIENT VIT-B1 STUDENT (TRT FP16).
+> FPS Depth YOLO SAM RAM
+> P1 (DA3) 21.9 47 ms ––5.1 GB P2 (DA3+YOLOv8) 19.2 45 ms 23 ms –5.7 GB P3 (full, evt) 21.8 39 ms 18 ms on-demand 6.5 GB P4 (student TRT) 218 4.6 ms ––2.7 GB
+
+projection overhead; the DA3 path (P1) sustains ∼21 FPS end-to-end, while the student path (P4) is limited by the camera frame rate (30 FPS), not by inference. The 6.5 GB ceiling of the full stack motivates the student study in §IV-D. 
+
+B. Corridor Costmap Recovery 
+
+The corridor is the most direct test of the system: active-depth failure is persistent here. We evaluate seven configu-rations that vary the obstacle source and inflation strategy across Nav2’s ObstacleLayer and InflationLayer :TABLE II OFFLINE CORRIDOR COSTMAP ABLATION (459-FRAME HIGH -INVALIDITY SEGMENT , MEAN ± STD ). I OU AND FPR USE THE LIDAR-ONLY BASELINE (B ASE ) AS REFERENCE ; THAT BASELINE IS ITSELF INCOMPLETE                                  
+
+> (78% INVALID PIXELS ), SO STRUCTURE ADDED BY LEARNED DEPTH IN INVALID REGIONS REGISTERS AS FALSE POSITIVE . S EE §IV-B TEXT FOR INTERPRETATION .
+> IoU Det. % FPR % Clear. (m) Infl. (m) ms
+> Base 1.00 100 0.0 .249 ±.007 .090 16 ±6A1 1.00 100 0.0 .249 ±.007 .178 ±.005 63 ±27 A2 .379 ±.106 100 5.2 ±2.7 .171 ±.051 .090 87 ±26 A3 .379 ±.106 100 5.2 ±2.7 .171 ±.051 .178 ±.005 134 ±42 A4 .279 ±.102 76.7 ±9.9 5.2 ±2.7 .175 ±.059 .165 ±.021 133 ±42 A5 .379 ±.106 100 5.2 ±2.7 .171 ±.051 .192 ±.003 206 ±61 A6 .279 ±.102 76.7 ±9.9 5.2 ±2.7 .175 ±.059 .197 ±.003 190 ±56
+
+Base/A1 use sensor-only depth with fixed (0.09 m) or corridor-width inflation; A2/A3 add DA3-Small learned depth with the same two inflation strategies; A4 uses DA3-only (no hardware depth) with corridor inflation; A5/A6 use sensor+DA3 or DA3-only with class-aware inflation (YOLOv8-driven per-class radii: person > glass > furniture > wall). The offline ablation (Table II) shows that the additive LiDAR+depth configurations preserve baseline detection rate while increasing obstacle evidence. A2, A3, and A5 maintain 100% detection while introducing learned depth. The DA3-only variants (A4, A6) are weaker, consistent with the system design; these serve as the depth-replacement baseline, confirm-ing that learned depth must complement LiDAR, not replace it, to be reliable. IoU and FPR are computed against the LiDAR-only sensor map as the reference baseline. Because that baseline is itself incomplete (78% dead pixels in this segment), any structure filled by learned depth in those invalid regions counts as a false positive under this metric. The drop in IoU when depth is added is therefore expected: the new costmap contains more obstacle cells than the reference, so the union grows while the intersection stays similar. A lower IoU reflects richer coverage, not degraded accuracy. The metrics characterize how much obstacle evidence learned depth adds relative to an incomplete reference. Class-aware inflation (A5, A6) improves inflation precision through per-class radii but does not improve detection rate or FPR relative to A2/A4. The 2.4 × latency increase (206 ms versus 87 ms for A2) limits its use to scenarios where per-class safety margins are required; it is not recommended as a default configuration. When the student is active, the segmentation head adds no inference cost (it shares the depth encoder), so per-class radii can be enabled selectively for routes with frequent pedestrian traffic. The false-positive behavior is more informative than the raw 5.2% suggests. An audit separates that occupancy into three sources: 34.6% arises in sensor-invalid regions where learned depth fills the exact gaps that motivate the system, 49.3% corresponds to free-space hallucination by the learned model, and 18.1% comes from inflation artifacts (Fig. 4). The decomposition matters: just under half of the flagged     
+
+> Fig. 3. Depth fusion on a representative corridor frame (43% valid ToF pixels). Top: RGB input showing polished floor and glass doors, sparse sensor depth with large invalid regions, and DA3-Small depth prediction. Bottom: V9 corridor-specialist student, and both fused outputs (sensor+DA3, sensor+V9). Learned depth fills the floor and glass regions where the ToF sensor returns zero depth.
+> Fig. 4. False-positive source decomposition (DA3-Small, n=459 corridor frames). Sensor-invalid fill (34.6%) represents structure added in ToF dead-pixel regions; hallucination (49.3%) is free-space false occupancy; inflation artifacts (18.1%) arise from Nav2 inflation of false cells.
+
+occupancy is genuine hallucination, not legitimate gap-fill. The net benefit is increased obstacle coverage in sensor-invalid regions; it is not uniformly improved geometric accuracy. The live replay result is shown in Table III. In the corridor, LiDAR+depth increases occupied cells from 2295 to 3546, a 55% increase over LiDAR alone. LiDAR+sensor depth also helps, but less strongly, because the active sensor is degraded in the same scene. Qualitatively, learned depth fills regions where the active sensor returns effectively infinite depth, adding obstacle evidence for chairs, doorways, and surfaces behind glass. Fig. 1 shows the worst case; Fig. 3 shows typical failure rates. Fig. 5 shows the resulting live Nav2 costmap. Beyond coverage gains, the replay reveals an unexpected stability benefit. Learned depth is often assumed to add frame-to-frame flicker, but here the opposite holds: adding it reduces normalized occupancy jitter from 0.61% (LiDAR-only) to 0.43% (LiDAR+depth) and centroid drift from 0.7 mm to 0.5 mm per frame across the 459-frame high-invalidity segment. Why? The ToF sensor’s dead-pixel pattern fluctuates between frames: pixels that return valid depth on one frame Fig. 5. Live Nav2 costmap during corridor replay. Left: hardware depth (top, mostly invalid) and RGB camera (bottom). Right: costmap overlay showing DA3-Small depth contributions (green) and V9 student depth (blue). Learned depth detects chairs and tables visible through the glass wall where the ToF sensor returns invalid depth. TABLE III LIVE COSTMAP REPLAY IN THE CORRIDOR AND ON LIL OC BENCH . L = LIDAR, S = HARDWARE DEPTH , D = LEARNED MONOCULAR DEPTH , DYN                                          
+
+> =DYNAMIC INFLATION . O CC . = OCCUPIED CELLS (GRID RESOLUTION
+> 0.05 M/CELL ).
+> Corridor LILocBench Config Occ. (cells) Std ∆Occ. (cells) Std ∆
+> L2295 ±312 —957 ——L+S 3061 ±308 +33% 1106 ±285 +16% L+D 3546 ±283 +55% 2000 ±431 +110%
+> D†1461 ±159 −36% 3053 ±643 +219% L+D+dyn 3740 ±326 +63% 2115 ±368 +122%
+> †D-only loses 36% in corridor (no LiDAR anchor under ToF failure) but gains 219% in LILocBench (healthy ToF, depth adds vertical extent). This asymmetry motivates the L+D hierarchy.
+
+may return zero on the next, causing obstacle cells to appear and vanish. DA3-Small’s temporally smooth dense prediction stabilizes the regions where the ToF signal is intermittent. 
+
+C. Dynamic Obstacle Recovery (LILocBench) 
+
+Here the problem is different: the 2D LiDAR is geomet-rically stable but sees only a single horizontal slice through moving pedestrians. A person’s legs may register on the scan plane, but the torso, arms, and head (which define the full collision envelope) are invisible to a 2D sensor mounted at ankle height. Learned depth contributes the vertical extent that LiDAR structurally cannot observe. In Table III, LiDAR+depth increases occupied cells from 957 to 2000 (+110% over LiDAR alone). Depth-only reaches 3053 (+219%), the highest absolute count in either dataset. This asymmetry with the corridor results (where D-only drops 36%) is expected: in LILocBench the ToF sensor is not failing, so there is no reflective-surface penalty; the depth model sees full pedestrian geometry that LiDAR simply cannot, while in the corridor the depth model must compensate for active-sensor failure with less reliable learned estimates. The combination L+D captures both LiDAR’s angular precision and depth’s vertical coverage, which suggests that it pro-vides the most operationally useful costmap across the two datasets. Although D-only reaches a higher raw cell count           
+
+> Fig. 6. LILocBench dynamics_0 at t=89 .7s. (a) RGB: pedestrian at close range. (b) LiDAR-only: 896 occupied cells (leg-height structure only). (c) LiDAR+depth: 1 919 occupied cells (+114%), capturing pedestrian body extent above the 2D scan plane. Grid: 120 ×120 at 0.05 m/cell ( 6m×6mlocal window); 0.7 ×playback to match inference throughput.
+
+in LILocBench, it lacks the geometric anchoring that LiDAR provides. Fig. 6 shows a representative frame. Learned depth fills the pedestrian body above the scan plane, increasing occupied cells from 896 to 1 919 in a single frame. The additional cells correspond to torso and shoulder structure that would otherwise be invisible to the costmap. 
+
+D. Compact Student for Navigation 
+
+The full DA3 stack consumes 6.5 GB and runs at 21.8 FPS, leaving little headroom on an 8 GB device. At 218 FPS and 2.7 GB, the compact student frees over 3 GB for the autonomy stack. Whether a model this small can still produce depth good enough for navigation in a known environment is the practical question. Table IV reports a systematic ablation of six de-sign decisions organized in two phases. Phase 1 builds the general-purpose student cumulatively: switching from MobileNetV3-Small to EfficientViT-B1 reduces NYU RMSE from 1.160 m to 0.774 m; adding deployment augmentation brings it to 0.572 m; adding SUN [25]/DIODE [26] pretraining reaches 0.510 m. None of these general improvements reduce LILocBench RMSE below 1.3 m. Phase 2 tests three domain-adaptation strategies from the best general checkpoints. Mixed-domain training (NYU and corridor data combined) preserves general performance (0.592 m) but does not reduce LILocBench RMSE. Pure corri-dor fine-tuning closes the domain gap, reaching 0.445 m from the augmented checkpoint and 0.382 m from the pretrained checkpoint, but causes catastrophic forgetting (NYU RMSE degrades to 1.3–1.6 m). The pretrained warm-start produces the strongest corridor specialist, outperforming both the earlier fine-tune and the foundation baseline (DA3-Small, 0.596 m). The ablation reveals a clear tradeoff: corridor specialization can beat DA3-Small on LILocBench RMSE (0.382 m versus 0.596 m), but only by sacrificing general performance. Mixed training (V8) does not bridge this gap. The student there-fore suits fixed routes in known buildings where short of-fline retraining is acceptable and the deployment environment matches the fine-tuning data. Outside that scope, DA3-Small remains the safer choice. TABLE IV STUDENT DISTILLATION ABLATION . P HASE 1 BUILDS THE GENERAL -PURPOSE STUDENT CUMULATIVELY ; P HASE 2 TESTS DOMAIN -ADAPTATION STRATEGIES FROM THE BEST PHASE 1
+
+> CHECKPOINTS
+
+. LIL OC RMSE IS EVALUATED ON LIL OC BENCH 
+
+> D Y N A M I C S
+
+_0 .                                      
+
+> Design Decision NYU RMSE mIoU LILoc RMSE
+> Phase 1: General-purpose student (cumulative)
+> V3 MNv3-S, berHu+CE, Kendall (baseline) 1.160 m 39.3% —V4 + EfficientViT-B1 backbone 0.774 m 51.0% 1.373 m V5 + deployment augmentation 0.572 m 63.7% 2.186 m V6 + SUN/DIODE pretraining 0.510 m 50.5% 2.158 m
+> Phase 2: Domain adaptation strategies
+> V7 Corridor FT from V5 1.315 m †47.5% †0.445 m ‡
+> V8 Mixed NYU+corridor from V5 0.592 m 62.9% 2.266 m V9 Corridor FT from V6 1.553 m †31.6% †0.382 m ‡
+> DA3-S Foundation baseline (DA3-Small) 0.513 m §—0.596 m
+> †After corridor FT; NYU performance degrades (catastrophic forgetting). ‡Evaluated on LILocBench dynamics_0
+> (RealSense D455); not directly comparable to Femto Bolt corridor data. §290-image NYU validation with per-image median scaling. MNv3-S = MobileNetV3-Small. All V4–V9 use EfficientViT-B1 (5.31M params).
+
+TABLE V NEAR -RANGE DEPTH ACCURACY IN THE 0.3–1.0 M CORRIDOR BAND .
+
+Model RMSE MAE AbsRel δ < 1.25 
+
+Foundation (DA3-Small) 0.158 m 0.087 m 0.169 70.7% General student (V4) 1.434 m 1.389 m 2.918 0.0% Corr. FT from V5 (V7) 1.982 m 1.499 m 2.882 0.0% Corr. FT from V6 (V9) 1.642 m 1.252 m 2.440 8.83% 
+
+1) Near-Range Safety Bound: The 0.3–1.0 m range is where depth errors translate directly into collisions: an obstacle at 0.5 m that the model places at 1.5 m will not enter the costmap’s inflation radius. Table V reports depth accuracy in this band on corridor data. DA3-Small reaches 0.158 m RMSE with δ < 1.25 of 70.7%, meaning roughly 71% of near-range pixels have less than 25% depth error, the only result here credible for autonomous near-range navigation. The general student and the corridor specialist from the augmented checkpoint both achieve δ < 1.25 of effectively 0%, placing almost no pixels within 25% of the correct depth. The strongest corridor specialist improves to δ < 1.25 = 8 .83% (RMSE = 1.642 m), better than the earlier variants but still far below the foundation model. This gap is the primary barrier to deploying the student for autonomous navigation without a safety supervisor. Concretely, δ< 1.25 = 8 .83% means that at 0.5 m range, roughly 91% of pixels have more than 25% depth error: an obstacle at 0.5 m could be placed at 0.63 m or beyond in the costmap, outside typical inflation radii. The student can become a strong fixed-route specialist, but near-range reliability requires a safety supervisor for general deployment outside fixed routes. 
+
+2) Closed-Loop Simulation: We tested whether the corridor-specialized student (V9, TensorRT FP16) produces depth sufficient for planner-level operation in an idealized setting. A 12 m narrow corridor (1.2 m passable width) with 
+
+TABLE VI CLOSED -LOOP GAZEBO SIMULATION (NARROW CORRIDOR , 10 SEEDS PER PROFILE ). TTG = TIME -TO -GOAL .
+
+Depth Source Success TTG (s) Collisions Path (m) 
+
+Ground truth 9/10 17.8 ±0.9 0 12.20 ±0.01 Corridor student (TRT) 9/10 18.0 ±0.4 0 12.20 ±0.01 
+
+walls on both sides forms the simulated environment. Model Predictive Path Integral (MPPI) control drives the robot using the student’s depth-derived costmap as the sole obstacle source (no LiDAR in this test). Gazebo provides synthetic ground-truth depth free of reflective-surface failures; this provides an upper-bound reference against the student. Ten random seeds per depth source vary the initial pose noise (Table VI). The corridor student matches the ground-truth baseline: same success rate, zero collisions, near-identical path length and time-to-goal (0.2 s difference). The single failure in each profile is a recovery timeout: MPPI enters a local costmap minimum near the goal and the robot stops rather than collides. This failure mode is identical for both depth sources, confirming it is a planner limitation, not a depth-quality issue. Despite its weaker near-range accuracy (Table V), the student produces depth sufficient for collision-free corridor traversal in this simulated setting. Gazebo lacks reflective surfaces, ToF failure, and lighting variation, so the result bounds task feasibility rather than real-world performance. V. C ONCLUSION 
+
+When a ToF camera loses most of its depth pixels, the sur-viving valid measurements can still anchor learned monocular depth to metric scale. We demonstrated this self-calibrating property for navigation costmap construction: the degraded sensor both motivates and calibrates the learned substitute at runtime, without offline data or external ground truth. The sensing hierarchy built on it raises costmap obstacle coverage by 55% in a reflective corridor and 110% on a public pedes-trian benchmark relative to LiDAR alone, without discarding hardware depth where it remains reliable. A distilled corridor specialist matches ground-truth navigation in simulation at 218 FPS and 2.7 GB, though its near-range accuracy limits unsupervised general deployment. Three findings emerge from these results. First, selective learned-depth substitution, triggered by hardware failure in-stead of running always on, improves costmap obstacle cov-erage relative to LiDAR alone in the tested settings. Learned-depth fill also reduces costmap flicker caused by intermittent ToF dead pixels. Second, the sensing hierarchy itself is the contribution: failure-aware ordering preserves hardware depth where valid and fills only where it fails, enabling conservative behavior under reliable sensing and recovery under degraded sensing. Third, knowledge distillation to a compact student is viable for fixed-route deployment, with the deployment bound-ary set by near-range safety: DA3-Small ( δ< 1.25 = 70 .7% ,RMSE 0.158 m) remains the recommended general runtime; the corridor student ( δ< 1.25 = 8 .83% , RMSE 1.642 m) is best viewed as a fixed-route specialist, suitable where the route is known, retraining is acceptable, and an external safety layer is available. Closed-loop hardware deployment and evaluation in indus-trial settings (warehouse floors, manufacturing lines) where the same reflective-surface failures occur remain future work. Code and data will be made publicly available. REFERENCES [1] S. Macenski, F. Martin, R. White, and J. G. Clavero, “The marathon 2: A navigation system,” in 2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, Oct. 2020, pp. 2718–2725. [Online]. Available: http://dx.doi.org/10.1109/IROS45743. 2020.9341207 [2] E. Guizzo and E. Ackerman, “The TurtleBot3 teacher,” IEEE Spectrum ,vol. 54, no. 8, p. 26, Aug. 2017. [3] N. Trekel, T. Guadagnino, T. L¨ abe, L. Wiesmann, P. Aguiar, J. Behley, and C. Stachniss, “Benchmark for Evaluating Long-Term Localization in Indoor Environments Under Substantial Static and Dynamic Scene Changes,” in 2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2025. [4] R. Ranftl, K. Lasinger, D. Hafner, K. Schindler, and V. Koltun, “Towards robust monocular depth estimation: Mixing datasets for zero-shot cross-dataset transfer,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 44, no. 3, pp. 1623–1637, 2022. [5] L. Yang, B. Kang, Z. Huang, X. Xu, J. Feng, and H. Zhao, “Depth anything: Unleashing the power of large-scale unlabeled data,” in 2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) . IEEE, 2024, pp. 10 371–10 381. [6] L. Yang, B. Kang, Z. Huang, Z. Zhao, X. Xu, J. Feng, and H. Zhao, “Depth anything v2,” in Advances in Neural Information Processing Systems (NeurIPS) , vol. 37, 2024. [7] H. Lin, S. Chen, J. H. Liew, D. Y. Chen, Z. Li, G. Shi, J. Feng, and B. Kang, “Depth anything 3: Recovering the visual space from any views,” arXiv:2511.10647, 2025. [8] S. F. Bhat, I. Alhashim, and P. Wonka, “AdaBins: Depth estimation using adaptive bins,” in 2021 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) . IEEE, 2021, pp. 4009–4018. [9] J. H. Lee, M.-K. Han, D. W. Ko, and I. H. Suh, “From big to small: Multi-scale local planar guidance for monocular depth estimation,” arXiv:1907.10326, 2019. [10] A. Agarwal and C. Arora, “Attention attention everywhere: Monocular depth prediction with skip attention,” in 2023 IEEE/CVF Winter Con-ference on Applications of Computer Vision (WACV) . IEEE, 2023, pp. 5861–5870. [11] S. Gupta, J. Davidson, S. Levine, R. Sukthankar, and J. Malik, “Cog-nitive mapping and planning for visual navigation,” in 2017 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) .IEEE, 2017, pp. 7272–7281. [12] D. S. Chaplot, D. Gandhi, S. Gupta, A. Gupta, and R. Salakhutdinov, “Learning to explore using active neural SLAM,” in 8th International Conference on Learning Representations (ICLR) , 2020. [13] P. Roth, J. Nubert, F. Yang, M. Mittal, and M. Hutter, “ViPlanner: Visual semantic imperative learning for local navigation,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 5243–5249. [14] Y. Tao, M. Popovi´ c, Y. Wang, S. T. Digumarti, N. Chebrolu, and M. Fal-lon, “3D LiDAR reconstruction with probabilistic depth completion for robotic navigation,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2022, pp. 5339–5346. [15] K. Weerakoon, A. J. Sathyamoorthy, M. Elnoor, A. Zore, and D. Manocha, “TOPGN: Real-time transparent obstacle detection using LiDAR point cloud intensity for autonomous navigation,” arXiv:2408.05608, 2024. [16] J. M. Louw, J. Verster, and J. Dickens, “Practical implementation of Depth Anything V2 as a LiDAR alternative in robotics navigation,” 
+
+MATEC Web of Conferences , vol. 417, p. 04003, 2025. [17] H. Cai, C. Gan, and S. Han, “EfficientViT: Lightweight multi-scale attention for high-resolution dense prediction,” in 2023 IEEE/CVF International Conference on Computer Vision (ICCV) . IEEE, 2023. [18] Z. Zhang, H. Cai, and S. Han, “EfficientViT-SAM: Accelerated segment anything model without performance loss,” in 2024 IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition (CVPR) . IEEE, 2024. [19] A. Kendall, Y. Gal, and R. Cipolla, “Multi-task learning using uncer-tainty to weigh losses for scene geometry and semantics,” in 2018 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) . IEEE, 2018. [20] I. Laina, C. Rupprecht, V. Belagiannis, F. Tombari, and N. Navab, “Deeper depth prediction with fully convolutional residual networks,” in 2016 Fourth International Conference on 3D Vision (3DV) . IEEE, 2016, pp. 239–248. [21] S. Macenski and I. Jambrecic, “SLAM toolbox: SLAM for the dynamic world,” Journal of Open Source Software , vol. 6, no. 61, p. 2783, 2021. [22] N. Ravi, V. Gabeur, Y.-T. Hu, R. Hu, C. Ryali, T. Ma, H. Khedr, R. R¨ adle, C. Rolland, L. Gustafson, E. Mintun, J. Pan, K. V. Alwala, N. Carion, C.-Y. Wu, R. Girshick, P. Doll´ ar, and C. Feichtenhofer, “SAM 2: Segment anything in images and videos,” arXiv:2408.00714, 2024. [23] G. Jocher, A. Chaurasia, and J. Qiu, “Ultralytics YOLOv8,” https: //github.com/ultralytics/ultralytics, 2023. [24] N. Silberman, D. Hoiem, P. Kohli, and R. Fergus, “Indoor segmentation and support inference from RGBD images,” in 2012 European Confer-ence on Computer Vision (ECCV) . Springer, 2012, pp. 746–760. [25] S. Song, S. P. Lichtenberg, and J. Xiao, “SUN RGB-D: A RGB-D scene understanding benchmark suite,” in 2015 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) . IEEE, 2015, pp. 567–576. [26] I. Vasiljevic, N. Kolkin, S. Zhang, R. Luo, H. Wang, F. Z. Dai, A. Dundar, and G. Shakhnarovich, “DIODE: A dense indoor and outdoor depth dataset,” in NeurIPS 2019 Workshop on 3D Scene Generation ,2019.

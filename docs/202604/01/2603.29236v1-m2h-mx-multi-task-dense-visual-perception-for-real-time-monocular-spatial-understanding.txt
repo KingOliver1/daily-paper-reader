@@ -1,0 +1,359 @@
+Title: M2H-MX: Multi-Task Dense Visual Perception for Real-Time Monocular Spatial Understanding
+
+URL Source: https://arxiv.org/pdf/2603.29236v1
+
+Published Time: Wed, 01 Apr 2026 00:29:38 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+> PREPRINT VERSION. 1.0 1
+
+# M2H-MX: Multi-Task Dense Visual Perception for Real-Time Monocular Spatial Understanding 
+
+U.V.B.L. Udugama, George Vosselman, and Francesco Nex 
+
+Abstract —Monocular cameras are attractive for robotic per-ception due to their low cost and ease of deployment, yet achieving reliable real-time spatial understanding from a single image stream remains challenging. While recent multi-task dense prediction models have improved per-pixel depth and semantic estimation, translating these advances into stable monocular mapping systems is still non-trivial. This paper presents M2H-MX, a real-time multi-task per-ception model for monocular spatial understanding. The model preserves multi-scale feature representations while introducing register-gated global context and controlled cross-task interaction in a lightweight decoder, enabling depth and semantic predictions to reinforce each other under strict latency constraints. Its outputs integrate directly into an unmodified monocular SLAM pipeline through a compact perception-to-mapping interface. We evaluate both dense prediction accuracy and in-the-loop system performance. On NYUDv2, M2H-MX-L achieves state-of-the-art results, improving semantic mIoU by 6.6% and reducing depth RMSE by 9.4% over representative multi-task baselines. When deployed in a real-time monocular mapping system on ScanNet, M2H-MX reduces average trajectory error by 60.7% compared to a strong monocular SLAM baseline while producing cleaner metric-semantic maps. These results demonstrate that modern multi-task dense prediction can be reliably deployed for real-time monocular spatial perception in robotic systems. 
+
+Index Terms —Dense Prediction, Multi-task Learning, Real-Time Perception, Monocular SLAM, Semantic Mapping 
+
+I. I NTRODUCTION 
+
+# MONOCULAR cameras are an attractive sensing modal-ity for robotics: they are inexpensive, lightweight, and easy to deploy. However, extracting reliable spatial understand-ing from a single image stream remains difficult. Monocular systems must infer geometry and semantics under strong ambiguity while operating within the strict runtime constraints of real-time mapping and planning. As a result, many deployed systems still rely on RGB-D or LiDAR sensing, or on percep-tion models that are too heavy for efficient monocular use. In practice, deploying monocular perception inside a run-ning mapping loop imposes three often-overlooked constraints. First, predictions must arrive with low and predictable latency to avoid starving the mapping backend. Second, frame-to-frame stability is critical, as inconsistent depth or semantics can degrade tracking and map fusion. Third, the perception module must integrate through a fixed interface, without requiring changes to the underlying SLAM system. This work 
+
+Working paper M2H-MX. U.V.B.L. Udugama, George Vosselman, and Francesco Nex are with the Department of Earth Observation Science, University of Twente, 7522 NH Enschede, The Netherlands. Corresponding author: U.V.B.L. Udugama (b.udugama@utwente.nl). Email: george.vosselman@utwente.nl; f.nex@utwente.nl.    
+
+> DROID-SLAM [7] Go-SLAM [8] Ours GT
+
+Fig. 1. Qualitative monocular mapping comparison on ScanNet scene0000 00. Compared with DROID-SLAM and Go-SLAM, integrating M2H-MX produces cleaner geometry and more consistent semantic structure in the downstream map. 
+
+explicitly targets these constraints in the design and evaluation of the perception model. Recent advances in dense visual prediction, particularly multi-task learning, have substantially improved monocular depth estimation and semantic segmentation by exploiting complementary task cues [1]–[4]. At the same time, struc-tured spatial representations such as metric–semantic maps and scene graphs have become increasingly important for downstream reasoning in robotic systems [5], [6]. Despite this progress, bridging modern dense prediction models with practical, real-time monocular mapping systems remains an open challenge. This paper addresses this gap by focusing on the perception-to-mapping interface. We present M2H-MX , a real-time multi-task perception model designed for monocular spatial under-standing under fixed system constraints. Rather than modifying SLAM algorithms, M2H-MX provides dense geometric and semantic predictions that can be consumed directly by an existing monocular SLAM pipeline, without backend changes and within a strict runtime budget. M2H-MX preserves strong multi-scale feature representa-tions while introducing lightweight mechanisms for global context conditioning and controlled cross-task interaction. These choices allow depth and semantic predictions to re-inforce each other while maintaining low latency and stable inference behavior. We evaluate M2H-MX both as a stan-dalone perception model and as part of a running monocular mapping system, directly measuring how improvements in dense prediction quality translate into downstream mapping accuracy and trajectory stability. 
+
+Contributions.  
+
+> •
+
+M2H-MX , a real-time multi-task perception model tai-lored for monocular spatial understanding under strict   
+
+> arXiv:2603.29236v1 [cs.CV] 31 Mar 2026 2PREPRINT VERSION. 1.0
+> Fig. 2. Overview of the M2H-MX architecture. A monocular RGB image is processed by a DINOv3 backbone with LoRA adaptation applied to the final transformer blocks. Backbone features are reassembled by token reassembly (TR) and organized into a multi-scale pyramid via explicit spatial resampling. At each pyramid level, a Register-Gated Mamba (RGM) block injects global scene context from backbone register tokens while performing efficient long-range feature propagation. Task Adaptors (TA) generate task-specific features at each scale, which are fused through a Cross-Task Mixer (CTM) to enable controlled exchange between related tasks. Multi-Scale Convolutional Attention (MSCA) then refines the fused representations using depthwise spatial attention. Lightweight task heads produce dense predictions for depth, semantics, and optional normals and edges.
+
+runtime constraints.  
+
+> •
+
+A compact perception-to-mapping interface enabling seamless integration into an unmodified monocular SLAM pipeline.  
+
+> •
+
+System-level evaluation demonstrating that improved dense multi-task prediction leads to measurable gains in real-time monocular mapping performance. II. R ELATED WORK 
+
+Dense multi-task learning has become a common approach for monocular scene understanding, as jointly predicting ge-ometry and semantics allows complementary task cues to be shared across representations. Early methods such as PAD-Net [1] and MTI-Net [2] introduced structured feature exchange between depth and semantic segmentation, while transformer-based models such as InvPT [3] demonstrated the benefits of global context modeling for dense prediction. More recent work has explored efficiency-oriented designs that balance accuracy and computational cost, including state-space and sequence-based decoders such as MTMamba [4]. Within this line of research, M2H [9] showed that controlled cross-task interaction can improve monocular depth and semantic prediction while maintaining real-time performance. However, most existing multi-task models are evaluated primarily in isolation and are not explicitly designed for integration into a real-time monocular mapping pipeline. In parallel, metric-semantic mapping systems combine geo-metric and semantic information to support higher-level spatial reasoning. Frameworks such as Kimera [5] and Hydra [6] produce structured spatial representations, including scene graphs, but typically assume depth sensing. Recent extensions to monocular input, such as Mono-Hydra [10], replace depth sensors with learned perception modules, making overall sys-tem performance strongly dependent on the quality, stability, and runtime behavior of dense monocular perception. This work follows this direction by examining how advances in real-time multi-task dense prediction translate into improved performance within a monocular mapping framework. III. M ETHODOLOGY 
+
+A. M2H-MX Network 1) Overview: Given an RGB image It ∈ R3×H×W , M2H-MX predicts dense geometric and semantic quantities: 
+
+{ ˆY qt }q∈K = M2H -MX( It),
+
+K = {depth , sem , norm , edge }.
+
+Depth and semantics are used during monocular mapping, while normals and edges serve as optional auxiliary outputs. As shown in Fig. 2, the network consists of three com-ponents: (1) a DINOv3 backbone with a hierarchical feature adapter (HFA) and parameter-efficient LoRA adaptation, (2) a register-gated multi-scale decoder, and (3) task heads with controlled cross-task interaction (CTM) and spatial refinement (MSCA). The design emphasizes strong shared representations while focusing computation on cross-task interactions that are critical in real-time monocular systems. 
+
+Design rationale. Each component of M2H-MX is chosen to satisfy a deployment constraint. LoRA enables task adaptation with minimal trainable parameters while keeping the founda-tion backbone stable. Register tokens provide a compact global context signal that can be reused across decoder scales at neg-ligible cost. Register-gated Mamba decoding performs long-range feature propagation with predictable runtime. Finally, AUTHOR et al. : M2H-MX: MULTI-TASK DENSE VISUAL PERCEPTION FOR REAL-TIME MONOCULAR SPATIAL UNDERSTANDING 3
+
+CTM followed by MSCA concentrates computation on cross-task exchange and spatial refinement where it most benefits downstream mapping. 
+
+2) Backbone, LoRA Adaptation, and Hierarchical Feature Adapter: The backbone produces hidden states at selected layers L:
+
+{Hℓ}ℓ∈L = DINOv3( It).
+
+To adapt the foundation model to dense prediction while preserving generalization, all backbone weights are frozen and Low-Rank Adaptation (LoRA) modules are applied only to the last 12 transformer blocks (layers 13–24), targeting the QKV and MLP projections. For a linear projection W , LoRA introduces a low-rank update 
+
+W ′ = W + αBA, 
+
+where only the low-rank matrices A and B are learned. Patch tokens are reshaped into spatial feature maps and projected to a common channel dimension: 
+
+F ℓ = reshape( Hℓ
+
+> patch
+
+), eF ℓ = W ℓ ∗ F ℓ.
+
+The hierarchical feature adapter (HFA) constructs a coarse-to-fine pyramid: 
+
+¯p4 = ϕ4( eF ℓ4 ), ¯ps = ϕs
+
+  eF ℓs + Up(¯ ps+1 ), s ∈ { 3, 2, 1},
+
+followed by explicit resampling: 
+
+p4 = ¯ p4,p5 = ψ5(Pool( p4)) ,p3 = ψ3(Up( p4)) ,p2 = ψ2(Up( p3)) .
+
+In addition to patch tokens, the backbone outputs R register tokens at the final layer. These are pooled to form a global register vector: 
+
+r = Wr
+
+ 1
+
+R
+
+> R
+
+X
+
+> j=1
+
+hℓ5
+
+> reg ,j
+
+ .
+
+This compact vector captures scene-level context and is reused across all decoder scales. 
+
+3) Register-Gated Multi-Scale Decoder: Let 
+
+k ∈ {5, 4, 3, 2} denote pyramid scales, sk the shared decoder state, and fk,t the task-specific feature for task t.The decoder performs a top-down update: 
+
+xk = pk + Up( sk+1 ), qk = reshape( xk) ∈ R(Hk Wk )×C .
+
+Global context is injected via a register-driven channel gate: 
+
+gk = σ(Ak(r)) , ¯qk = qk ⊙ gk.
+
+The gated sequence is refined using a Mamba block followed by a feed-forward network: 
+
+q′ 
+
+> k
+
+= qk + Dk(Mamba k(LN(¯ qk))) ,q′′  
+
+> k
+
+= q′ 
+
+> k
+
++ Dk(FFN k(LN( q′
+
+> k
+
+))) ,sk = reshape −1(q′′  
+
+> k
+
+).   
+
+> Fig. 3. Register-Gated Mamba (RGM) block used at each decoder scale. A global register vector generates a channel-wise gate gthrough a Lin-ear+Sigmoid projection, which modulates reshaped feature tokens. The gated features are then processed by Layer Normalization (LN) followed by a Mamba block and a feed-forward network (FFN), each applied with residual connections.
+
+Task adaptor branches Bk,t (Conv 3×3 + GN + GELU) produce task features: 
+
+fk,t = Bk,t (sk) + Up( fk+1 ,t ),
+
+which are fused across scales: 
+
+ˆfk,t = fk,t + Up( ˆfk+1 ,t ), ht = Pt( ˆf2,t ).
+
+Intuition. Mamba efficiently models long-range dependen-cies, while the register gate anchors each decoder scale to global scene context, improving robustness under monocular ambiguity (Fig. 3). 
+
+4) Cross-Task Mixing and MSCA Refinement: Cross-Task Mixing (CTM) injects complementary cues from related tasks 
+
+Ct ⊆ K \ { t}:
+
+ztj = Π j (hj ) ⊙  1 + σ(Gj (hj )) ,ut = Conv  [ht, {ztj }j∈C t ].
+
+CTM performs gated aggregation, allowing auxiliary tasks to modulate the target task without enforcing symmetric interac-tions. The mixed representation is refined using Multi-Scale Con-volutional Attention (MSCA): 
+
+mt 
+
+> 0
+
+= DW 5×5(ut),mt 
+
+> 1
+
+= mt 
+
+> 0
+
++ DW 1×κ(mt
+
+> 0
+
+),mt 
+
+> 2
+
+= mt 
+
+> 1
+
++ DW κ×1(mt
+
+> 1
+
+),at = σ(W1×1 ∗ mt
+
+> 2
+
+),
+
+˜ht = ut + at ⊙ ut.
+
+CTM →MSCA is applied to semantic, normal, and edge heads, while depth uses a dedicated bin-based head (Fig. 4). 
+
+5) Task Heads and Training Objectives: a) Bin-Based Depth Head.: Depth is predicted using adaptive bins with residual refinement: 
+
+w = softmax( Ww ∗ GAP( ˜hd)) ,ei = dmin + ( dmax − dmin )
+
+> i
+
+X
+
+> j=1
+
+wj , ci = 12 (ei−1 + ei),4 PREPRINT VERSION. 1.0  
+
+> Fig. 4. Combined module visualization: (a) Cross-Task Mixing (CTM) for gated cross-task feature injection, and (b) Multi-Scale Convolutional Attention (MSCA) for residual refinement.
+
+pb = softmax( Wb ∗ ˜hd),Dc =
+
+> Nb
+
+X
+
+> i=1
+
+pb,i ci,
+
+ˆD = Dc + Wo ∗ ˜hd.
+
+b) Other Heads.: Semantics uses a lightweight convolu-tional head: 
+
+ˆS = Conv 1×1
+
+
+
+δ Conv 3×3(˜hs)
+
+.
+
+Normals and edges follow the same interface: 
+
+ˆN = NormHead( ˜hn), ˆE = σ(EdgeHead( ˜he)) .
+
+c) Loss Functions and Uncertainty-Based Balancing.: 
+
+Each task uses a task-specific loss with intermediate supervi-sion: 
+
+Lt = Lmain  
+
+> t
+
++
+
+> 5
+
+X
+
+> k=2
+
+αk,t Laux  
+
+> k,t
+
+.
+
+We further apply optional consistency constraints: 
+
+Lcons = λdn Ldn ( ˆD, ˆN ) + λse ∥σ( ˆE) − ϕ( ˆS)∥1.
+
+Multi-task losses are balanced using learned uncertainty parameters: 
+
+Ltotal = X
+
+> t∈K active
+
+ 12σ2
+
+> t
+
+Lt + log σt
+
+
+
++ Lcons .
+
+Together, these components produce dense geometric– semantic outputs that integrate directly into a real-time monoc-ular mapping pipeline. 
+
+B. System Integration and Scope 
+
+Fig. 5 illustrates how M2H-MX is deployed within acomplete monocular SLAM pipeline. At runtime, M2H-MX replaces the perception front-end and outputs dense depth and semantic predictions, which are consumed by a fixed RGB-D inertial odometry front-end and a Mono-Hydra-based mapping  
+
+> Fig. 5. System overview showing M2H-MX deployed as a perception front-end to a fixed monocular SLAM pipeline: Mono-Hydra. M2H-MX runs on the GPU and predicts dense depth and semantic labels from monocular RGB input. These outputs are consumed by an RGB-D inertial odometry module and a Mono-Hydra-based mapping backend running on the CPU.
+
+backend for camera tracking, optimization, and scene graph construction [10]. Predicted depth is fused with RGB to form RGB-D frames for odometry. All state-estimation and mapping components are treated as fixed and are not modified in this work; therefore, system-level improvements reported in Sec. IV can be attributed solely to the proposed perception model. IV. E XPERIMENTS 
+
+The experimental evaluation addresses three questions: (i) does M2H-MX improve dense multi-task prediction quality, (ii) do these improvements translate into measurable gains in a running monocular SLAM system, and (iii) which architectural components are responsible for these gains. 
+
+A. Datasets and Metrics 
+
+We evaluate dense perception performance on NYUDv2 and Cityscapes, and system-level behavior in a running monoc-ular SLAM pipeline on ScanNet. NYUDv2 and Cityscapes represent standard indoor and outdoor benchmarks for joint semantic and depth estimation, while ScanNet enables evalu-ation under realistic deployment conditions. Reported metrics include semantic mIoU, depth or disparity RMSE, and Abso-lute Trajectory Error (ATE) for SLAM evaluation. 
+
+B. Implementation Details and Evaluation Protocol 
+
+All experiments use the M2H-MX-L configuration with a DINOv3-ViT-L backbone, decoder width C=256 , Mamba state size 32 , four register tokens, and 64 depth bins. LoRA adaptation is applied to the final 12 backbone blocks ( r=16 ,
+
+α=32 , dropout 0.05 ), while all other backbone parameters remain frozen. Input resolution follows the standard protocol of each dataset. For NYUDv2, all four heads (depth, semantics, normals, edges) are active. For Cityscapes evaluation and ScanNet deployment, only depth and semantics are enabled. ScanNet experiments use a model trained on the ScanNet25k subset, AUTHOR et al. : M2H-MX: MULTI-TASK DENSE VISUAL PERCEPTION FOR REAL-TIME MONOCULAR SPATIAL UNDERSTANDING 5                                         
+
+> TABLE I NYUD V2DEPTH AND SEMANTICS RESULTS .Method Semseg mIoU ↑Depth RMSE ↓
+> TaskPrompter [11] 55.30 0.5152 MQTransformer [12] 54.84 0.5325 MTMamba [4] 55.82 0.5066 InvPT-B |MTPD-C [3], [13] 54.86 0.5150 MLoRE [14] 55.96 0.5076 MTMamba++ [15] 57.01 0.4818 SwinMTL [16] 58.14 0.5179 M2H [9] 61.54 0.4196 M2H-MX-B 61.80 0.4170
+> M2H-MX-L (Ours) 65.60 0.3800
+> TABLE II CITYSCAPES SEMANTIC AND DISPARITY RESULTS .Method Semseg mIoU ↑Disparity RMSE ↓
+> MTI-Net [2] 59.85 5.06 InvPT [3] 71.78 4.67 TaskPrompter [11] 72.41 5.49 MTMamba [4] 78.00 4.66 MTMamba++ [15] 79.13 4.63
+> M2H-MX-L (Ours) 82.28 3.89
+
+on which it achieves 76.10 mIoU and 0.2210 depth RMSE. Runtime evaluation is performed inside an asynchronous SLAM loop with GPU-based perception and CPU-based state estimation and mapping. 
+
+C. Dense Perception Benchmarks 
+
+We begin by measuring dense prediction quality on standard benchmarks to verify that M2H-MX improves per-frame depth and semantic estimates. We then evaluate the same model inside a running monocular SLAM pipeline to test whether these gains translate into improved trajectory accuracy and mapping behavior. Finally, we perform ablation study to iden-tify which design blocks contribute most. Table I summarizes NYUDv2 results compared against representative multi-task learning baselines. M2H-MX-L improves both semantic and geometric accuracy, achieving the highest mIoU and the lowest depth RMSE among all compared methods. Relative to the prior SOTA model, M2H-MX-L improves semantic mIoU by +4 .06 points ( 61 .54 → 65 .60 ) while reduc-ing depth RMSE by approximately 9.4% (0.4196 → 0.3800 ). These gains indicate that the proposed register-gated decoding and controlled cross-task interaction improve both prediction quality and cross-task consistency. Table II reports Cityscapes results. Compared with the strongest baseline, MTMamba++, M2H-MX-L improves se-mantic mIoU by +3 .15 points ( 79 .13 → 82 .28 ) while reducing disparity RMSE from 4.63 to 3.89 . This demonstrates that the proposed design generalizes beyond indoor datasets and remains effective in large-scale outdoor scenes. 
+
+D. Real-Time System Evaluation in SLAM 
+
+While dense benchmark performance is necessary, the pri-mary objective of M2H-MX is stable deployment in a real-                                
+
+> TABLE III PARAMETER AND GFLOP S ANALYSIS ON NYUD V2.
+> Method #P (M) GFLOPs
+> Reported baselines
+> TaskPrompter [11] 373.00 416 SwinMTL [16] 87.38 65 MTMamba++ [15] 315.00 524 M2H [9] 81.00 488
+> M2H-MX variants (this work)
+> M2H-MX-B (4 heads) 134.26 322.67 M2H-MX-L (2 heads) 332.03 371.76 M2H-MX-L (4 heads) 353.53 491.91
+> TABLE IV AVERAGE ATE [ CM ]ON SELECTED SCAN NET SEQUENCES (LOWER IS BETTER ). Method Avg. ATE [cm]
+> RGB-D baselines
+> iMAP [17] 56.21 NICE-SLAM [18] 13.05 DROID-SLAM (VO) [7] 11.59 DROID-SLAM [7] 7.15 Go-SLAM [8] 7.02
+> Monocular methods
+> DROID-SLAM (VO) [7] 63.61 DROID-SLAM [7] 52.60 Go-SLAM [8] 17.59
+> Mono-Hydra stack [10] (with M2H-MX) 6.91
+
+time monocular SLAM system. Table III reports both model-level profiling and integrated loop behavior. Perception runs asynchronously on the GPU, while odometry and mapping execute on the CPU. Despite the additional task heads and cross-task refinement, the system sustains a stable end-to-end frame rate of 15 –20 Hz, confirming that the perception module can be consumed by the mapping backend without violating real-time constraints. To evaluate downstream impact, Table IV reports average ATE on selected ScanNet sequences. Replacing the monocular perception front-end with M2H-MX reduces trajectory error substantially. Compared with monocular Go-SLAM in the same setup, the integrated system reduces average ATE from 
+
+17 .59 cm to 6.91 cm, a 60 .7% improvement. This result indicates that improved per-frame depth and semantic quality directly translates into more stable camera tracking and map construction. 
+
+E. Ablation Study: Feature Quality vs. Decoder Complexity 
+
+Table V shows that M2H-MX gains arise from a deliberate balance between strong backbone features and lightweight decoding. Removing CTM and MSCA causes a 2.07 -point drop in mIoU and higher depth RMSE, confirming that controlled cross-task exchange followed by spatial refinement is necessary. Removing register-gated decoding further de-grades performance, highlighting the importance of efficient global context injection without heavy attention. Backbone ablations reveal the strongest effect: replacing DINOv3 with DINOv2 [19] or ConvNeXt [20] leads to large drops, indicat-ing that the decoder depends critically on feature quality. With its improved dense-feature stability via Gram Anchoring [21], 6 PREPRINT VERSION. 1.0 
+
+TABLE V ABLATION RESULTS ON NYUD V2 RELATIVE TO M2H-MX-L.                                         
+
+> Variant mIoU ↑RMSE ↓∆mIoU ∆RMSE M2H-MX-L 65.60 0.3800 ––
+> Component ablations
+> w/o CTM & MSCA 63.53 0.4619 -2.07 +0.0819 +CTM 63.55 0.4705 -2.05 +0.0905 +MSCA 63.53 0.4575 -2.07 +0.0775 w/o RGM 64.44 0.4346 -1.16 +0.0546 w/o reg. feed 64.22 0.4473 -1.38 +0.0673
+> Different backbones
+> DINOv2-L 56.79 0.5131 -8.81 +0.1331 ConvNeXt-L 38.83 0.6940 -26.77 +0.3140
+
+DINOv3 enables M2H-MX to prioritize strong foundation representations over aggressive decoder refinement, unlike earlier attention-heavy designs such as M2H [9]. V. C ONCLUSION 
+
+This paper presented M2H-MX, a real-time multi-task per-ception model designed for monocular spatial understanding in robotic systems. Rather than redesigning SLAM, we asked a practical system-level question: how much can a carefully engineered perception front-end improve a running monocular mapping system when everything else is kept fixed? M2H-MX combines a frozen foundation-model backbone with lightweight adaptation, register-gated multi-scale de-coding, and controlled cross-task interaction. These design choices improve depth and semantic prediction accuracy while preserving stable, low-latency inference behavior. Crucially, these gains carry over to deployment: when integrated into the monocular spatial SLAM pipeline, M2H-MX substantially reduces trajectory error and produces cleaner metric–semantic maps. The results highlight an important insight for robotics: advances in dense multi-task perception can translate directly into system-level improvements, provided that model design is guided by runtime constraints and integration requirements. We hope this work encourages closer alignment between perception model development and the needs of deployed robotic systems. Future work will explore broader task com-binations, cross-dataset generalization, and how richer multi-task representations can support long-term spatial reasoning and interaction. REFERENCES [1] D. Xu, W. Ouyang, X. Wang, and N. Sebe, “Pad-net: Multi-tasks guided prediction-and-distillation network for simultaneous depth estimation and scene parsing,” in Proceedings of the IEEE conference on computer vision and pattern recognition , 2018, pp. 675–684. [2] S. Vandenhende, S. Georgoulis, and L. Van Gool, “Mti-net: Multi-scale task interaction networks for multi-task learning,” in European conference on computer vision . Springer, 2020, pp. 527–543. [3] H. Ye and D. Xu, “Inverted pyramid multi-task transformer for dense scene understanding,” in European Conference on Computer Vision .Springer, 2022, pp. 514–530. [4] B. Lin, W. Jiang, P. Chen, Y. Zhang, S. Liu, and Y.-C. Chen, “Mtmamba: Enhancing multi-task dense scene understanding by mamba-based de-coders,” in European Conference on Computer Vision . Springer, 2024, pp. 314–330. [5] A. Rosinol, M. Abate, Y. Chang, and L. Carlone, “Kimera: an open-source library for real-time metric-semantic localization and mapping,” in 2020 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2020, pp. 1689–1696. [6] N. Hughes, Y. Chang, and L. Carlone, “Hydra: A real-time spatial perception system for 3d scene graph construction and optimization,” 
+
+arXiv preprint arXiv:2201.13360 , 2022. [7] Z. Teed and J. Deng, “DROID-SLAM: Deep Visual SLAM for Monoc-ular, Stereo, and RGB-D Cameras,” Advances in neural information processing systems , 2021. [8] Y. Zhang, F. Tosi, S. Mattoccia, and M. Poggi, “Go-slam: Global optimization for consistent 3d instant reconstruction,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) ,October 2023. [9] U. Udugama, G. Vosselman, and F. Nex, “M2h: Multi-task learning with efficient window-based cross-task attention for monocular spatial perception,” in 2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2025, pp. 8067–8072. [10] ——, “Mono-hydra real-time 3d scene graph construction from monoc-ular camera input with imu,” ISPRS Annals of Photogrammetry, Remote Sensing and Spatial Information Sciences , vol. 1, pp. 439–445, 2023. [11] H. Ye and D. Xu, “Taskprompter: Spatial-channel multi-task prompting for dense scene understanding,” in The Eleventh International Conference on Learning Representations (ICLR) , 2023. [Online]. Available: https://openreview.net/forum?id=-CwPopPJda [12] Y. Xu, X. Li, H. Yuan, Y. Yang, and L. Zhang, “Multi-task learning with multi-query transformer for dense prediction,” IEEE Transactions on Circuits and Systems for Video Technology , vol. 34, no. 2, pp. 1228– 1240, 2024. [13] Y. Shang, D. Xu, G. Liu, R. R. Kompella, and Y. Yan, “Efficient multi-task dense predictor via binarization,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2024, pp. 15 899–15 908. [14] Y. Yang, P.-T. Jiang, Q. Hou, H. Zhang, J. Chen, and B. Li, “Multi-task dense prediction via mixture of low-rank experts,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,2024, pp. 27 927–27 937. [15] B. Lin, W. Jiang, P. Chen, S. Liu, and Y.-C. Chen, “Mtmamba++: Enhancing multi-task dense scene understanding via mamba-based de-coders,” IEEE Transactions on Pattern Analysis and Machine Intelli-gence , 2025. [16] P. Taghavi, R. Langari, and G. Pandey, “Swinmtl: A shared architecture for simultaneous depth estimation and semantic segmentation from monocular camera images,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2024, pp. 4957–4964. [17] E. Sucar, S. Liu, J. Ortiz, and A. Davison, “iMAP: Implicit mapping and positioning in real-time,” in Proceedings of the International Conference on Computer Vision (ICCV) , 2021. [18] Z. Zhu, S. Peng, V. Larsson, W. Xu, H. Bao, Z. Cui, M. R. Oswald, and M. Pollefeys, “Nice-slam: Neural implicit scalable encoding for slam,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2022. [19] M. Oquab, T. Darcet, T. Moutakanni, H. Vo, M. Szafraniec, V. Khalidov, P. Fernandez, D. Haziza, F. Massa, A. El-Nouby, M. Assran, N. Ballas, W. Galuba, R. Howes, P.-Y. Huang, S.-W. Li, I. Misra, M. Rabbat, V. Sharma, G. Synnaeve, H. Xu, H. Jegou, J. Mairal, P. Labatut, A. Joulin, and P. Bojanowski, “Dinov2: Learning robust visual features without supervision,” 2024. [Online]. Available: https://arxiv.org/abs/2304.07193 [20] Z. Liu, H. Mao, C.-Y. Wu, C. Feichtenhofer, T. Darrell, and S. Xie, “A convnet for the 2020s,” 2022. [Online]. Available: https://arxiv.org/abs/2201.03545 [21] O. Sim´ eoni, H. V. Vo, M. Seitzer, F. Baldassarre, M. Oquab, C. Jose, V. Khalidov, M. Szafraniec, S. Yi, M. Ramamonjisoa, F. Massa, D. Haziza, L. Wehrstedt, J. Wang, T. Darcet, T. Moutakanni, L. Sentana, C. Roberts, A. Vedaldi, J. Tolan, J. Brandt, C. Couprie, J. Mairal, H. J´ egou, P. Labatut, and P. Bojanowski, “DINOv3,” 2025. [Online]. Available: https://arxiv.org/abs/2508.10104
