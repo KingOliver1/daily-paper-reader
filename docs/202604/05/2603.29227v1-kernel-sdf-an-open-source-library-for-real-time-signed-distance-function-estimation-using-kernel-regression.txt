@@ -1,0 +1,1007 @@
+Title: Kernel-SDF: An Open-Source Library for Real-Time Signed Distance Function Estimation using Kernel Regression
+
+URL Source: https://arxiv.org/pdf/2603.29227v1
+
+Published Time: Wed, 01 Apr 2026 00:33:06 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# Kernel-SDF: An Open-Source Library for Real-Time Signed Distance Function Estimation using Kernel Regression 
+
+Zhirui Dai 1,* Tianxing Fan 1,* Mani Amani 1 Jaemin Seo 2
+
+Ki Myung Brian Lee 1 Hyondong Oh 2 Nikolay Atanasov 1
+
+Abstract —Accurate and efficient environment representation is crucial for robotic applications such as motion planning, manipulation, and navigation. Signed distance functions (SDFs) have emerged as a powerful representation for encoding distance to obstacle boundaries, enabling efficient collision-checking and trajectory optimization techniques. However, existing SDF re-construction methods have limitations when it comes to large-scale uncertainty-aware SDF estimation from streaming sensor data. Voxel-based approaches are limited by fixed resolution and lack uncertainty quantification, neural network methods require significant training time, while Gaussian process (GP) methods struggle with scalability, sign estimation, and uncertainty calibra-tion. In this letter, we develop an open-source library, Kernel-SDF, which uses kernel regression to learn SDF with calibrated uncertainty quantification in real-time. Our approach consists of a front-end that learns a continuous occupancy field via kernel regression, and a back-end that estimates accurate SDF via GP regression using samples from the front-end surface boundaries. Kernel-SDF provides accurate SDF, SDF gradient, SDF uncer-tainty, and mesh construction in real-time. Evaluation results show that Kernel-SDF achieves superior accuracy compared to existing methods, while maintaining real-time performance, making it suitable for various robotics applications requiring reliable uncertainty-aware geometric information. 
+
+I. I NTRODUCTION 
+
+Geometric environment representations play a key role for many robot autonomy capabilities, including mapping, localization, motion planning, manipulation, and navigation. An ideal representation should meet several requirements: 1) accuracy to reflect the environment structure, 2) compu-tational efficiency to allow real-time processing of streaming sensor information, 3) scalability to capture large environ-ments, 4) robustness to noise, 5) uncertainty quantification to support risk-aware decision making, 6) differentiability to sup-port gradient-based optimization, 7) adaptability to dynamic environments, and 8) compatibility with different sensors. Various effective representations have been proposed in the literature: occupancy data structures [1], point clouds [2]–[4], meshes [5], [6], and implicit functions such as signed distance function (SDF) [7]–[24] and neural radiance field (NeRF) [25]. Among these, SDFs have attracted attention due to their ability to provide the distance to the nearest obstacles, which is useful for mapping [7], [24] and motion planning [26], [27].                  
+
+> *Equal contribution
+> 1Department of Electrical and Computer Engineering, University of California, San Diego, La Jolla, CA 92093 USA. Email: {zh-dai,t2fan,mamai5250,kmblee,natanasov}@ucsd.edu
+> 2Department of Mechanical Engineering, Korea Advanced Institute of Science and Technology (KAIST), Daejeon 34051, Republic of Korea. Email: {jam.seo,h.oh}@kaist.ac.kr
+> (a) Signed distance function (b) Reconstructed mesh
+
+Fig. 1: Example of SDF estimation, visualized as a heatmap in (a), and mesh reconstruction in (b) of a large-scale environment, obtained using Kernel-SDF. 
+
+Furthermore, differentiable SDF methods can be used to define safety constraints in navigation [28] and manipulation [29]. Various methods have been proposed to learn SDFs from range sensors, such as LiDAR or depth camera. Voxel-based methods [7], [8], [10], [15] often focus only on truncated SDF (TSDF) estimation but some [8], [10], [30], [31] are able to reconstruct non-truncated (Euclidean) SDF on a discrete grid. These methods maintain a dense discrete approximation of (T)SDF with fixed resolution, which leads to a trade-off between accuracy and computational efficiency and prevents differentiability. In contrast, neural network methods [9], [17]– [19], [21], [24] learn SDF as a continuous function, avoiding an explicit grid representation and providing accurate and differentiable approximations. However, these methods are not suitable for online learning due to the significant training time needed to converge to a good SDF estimate. Gaussian process (GP) methods [11], [12], [22], [23] are non-parametric and capable of estimating accurate Euclidean SDF. However, existing GP methods scale poorly with in-creasing environment sizes, lack robust sign estimation, and report variance estimates that are inconsistent with actual SDF prediction errors. To enable scalability, octree [12] and OpenVDB [23] data structures are used to split the training data into smaller chunks for training multiple GPs. To provide consistent sign and variance estimates, GMMGP [22] uses an SDF prior from a hierarchical Gaussian mixture model but this prior provides increasingly larger errors as the query position moves further away from the surface. In this letter, we develop an open-source library, Kernel-SDF, for SDF estimation, meeting the aforementioned require-ments for an effective geometric representation and addressing the limitations of the existing GP methods. To achieve this, Kernel-SDF maintains an octree data structure to split the estimation process into smaller areas, estimates the occupan-cy/sign in each octant using a Bayesian Hilbert map (BHM) 
+
+> arXiv:2603.29227v1 [cs.RO] 31 Mar 2026
+
+[32], and reconstructs SDF via GP regression from the BHM surface samples. Thus, the library is organized as a surface estimation front-end, performing BHM occupancy estimation, and an SDF prediction back-end, preforming GP regression. The front-end learns a continuous occupancy field for robust sign estimation and provides surface point samples via the marching cubes algorithm [33]. The back-end uses the surface point samples to train SDF GPs in each octant with integrated uncertainty quantification. We introduce several optimizations to ensure real-time performance and map consistency: spa-tial partitioning and priority-queue-based updates for efficient computation and BHM weight synchronization to maintain consistency across neighboring local maps. Kernel-SDF provides accurate SDF, SDF gradient, SDF uncertainty, and mesh construction in real time (see Fig. 1). In summary, our contributions include: 1) an open-source C++ implementation 1 for 2D/3D SDF learning, featuring Python and ROS1/ROS2 interfaces with extensive real-time testing; 2) a highly-optimized kernel regression method for real-time SDF learning via two components: BHM front-end for continuous occupancy learning and uncertainty-aware surface extraction, and GP back-end for SDF and SDF gradient prediction with uncertainty; 3) five strategies to achieve efficiency and robustness: octree-based partitioning for local region learning, op-timized data processing for rapid training set generation, weight synchronization for map consistency, adaptive scaling for GP stability, and priority-queue-based updates to balance accuracy with responsiveness. II. R ELATED WORK 
+
+SDF learning methods can be categorized as voxel-based, neural-net-based, and Gaussian-process-based. 
+
+A. Voxel Methods 
+
+Many methods have been proposed to learn SDF using a grid [34]. KinectFusion [7] pioneered real-time 3D reconstruc-tion using depth sensors based on projective TSDF. Follow-up works, such as Voxblox [8], extended this to Euclidean SDF by breadth-first-search (BFS) integration from the occupied voxels. However, projective TSDF estimates the true SDF as distance along camera rays, which is inaccurate, and BFS integration introduces additional errors. FIESTA [10] inte-grates SDF estimation with an occupancy map, replacing the BFS-based distance with the distance to the nearest occupied voxel. VoxField [16] formulates non-projective TSDF, though its accuracy relies on the quality of estimated surface nor-mals and SDF gradients. A common limitation among these methods is the use of fixed-resolution grids, which restricts scalability in larger environments. VDBblox [30] and nvblox [31] address scalability by using OpenVDB [35] or GPU-based voxel hashing. However, voxel-based methods lack uncertainty quantification and are usually not differentiable. 
+
+> 1Link will be available after acceptance.
+
+B. Neural Network Methods 
+
+Neural network methods offer differentiability by design and can achieve highly accurate SDF reconstruction, as shown by DeepSDF [9]. DeepSDF uses an MLP with latent features to learn SDF of objects. NeuS [13] and NeuS2 [18] combine SDF with neural radiance fields (NeRF) [25] to jointly learn SDF and rendering. PIN-SLAM [21] and MISO [24] imple-ment simultaneous localization and mapping (SLAM) based on an SDF map encoded using neural features. H 2-Mapping [19] uses a voxel SDF prior and a neural TSDF residual, which are co-optimized with volumetric rendering. However, most neural network methods do not meet real-time requirements for operating in novel environments due to their significant training time. Although some works, like H 2-Mapping [19] and PIN-SLAM [21], achieve neural SDF learning online, they sacrifice the SDF accuracy very much. 
+
+C. Gaussian Process Methods 
+
+GP methods are suitable for online SDF learning but face challenges related to the high computational cost of kernel matrix inversion as the environment scale increases. To mit-igate this, GPIS [11] employs octree-based data partitioning and trains multiple GPs for each local partition. However, its SDF estimates quickly revert to the zero-mean prior away from the surface. Log-GPIS [12] observes an important connection between the heat kernel and the unsigned distance function, and formulates unsigned distance field GP regression in log space. However, the log transformation does not consider sign information and distorts variance estimation, causing uncertainty to explode far from the surface. Furthermore, the surface estimation in Log-GPIS is sensitive to sensor noise and dynamic environmental changes. VDB-GPDF [23] improves surface estimation through OpenVDB TSDF fusion but does not provide sign estimates or reliable uncertainty quantification. To overcome these limitations, we introduce a continuous occupancy field front-end in Kernel-SDF based on BHM [32], [36], which provides robust sign prediction and accurate surface estimation, even in dynamic or noisy environments. Our GP back-end, then, learns SDF from the surface samples and formulates an uncertainty estimate that respects the SDF errors to deliver precise SDF and gradient predictions with reliable uncertainty quantification. III. PROBLEM STATEMENT Consider a robot equipped with a depth camera or LiDAR sensor operating in an n-dimensional environment ( n = 2 , 3)with occupied space O ⊂ Rn. The sensor provides point cloud measurements Pt ⊂ Rn of O from known (or estimated) sensor positions pt ∈ Rn and orientations Rt ∈ SO (n) at time steps t. Using this data, our objective is to learn an SDF representation of the occupied space O:
+
+d(x) = 
+
+(
+
+min y∈∂O ∥x − y∥2 , x̸ ∈ O ,
+
+− min y∈∂O ∥x − y∥2 , x ∈ O . (1) Note that the surface ∂O of the occupied space can be recovered as the zero-level set of the SDF d(x). Also, the SDF gradient is of unit norm whenever differentiable: 
+
+d(x) = 0 , ∀x ∈ ∂O and ∥∇ d(x)∥2 = 1 , a.e. x ∈ O . (2) We focus on estimating d(x) using the streaming point cloud measurements Pt and the associated sensor poses (pt, Rt).IV. K ERNEL -SDF Our approach, Kernel-SDF, consists of a surface estimation front-end using BHM [32] (Sec. IV-A) and an SDF prediction back-end using GP regression [37] (Sec. IV-B). Both BHMs and GPs are kernel regression methods that support continu-ous representations with uncertainty quantification. However, directly applying kernel regression over the entire environment is computationally expensive and impractical for real-time applications. Kernel-SDF addresses this by partitioning the environment into multiple local regions, defined by an octree data structure, and applying kernel regression within each region with additional optimization techniques. Fig. 2 provides an overview of Kernel-SDF. 
+
+A. Surface Estimation Front-End 
+
+In this section, we review Bayesian Hilbert map (BHM) [32] and describe our extensions to achieve efficient updates, sign prediction, and surface point extraction. 1) Review of Bayesian Hilbert Map : BHM learns a contin-uous log-odds field l(x) using kernel regression in the Hilbert space. The log-odds l(x) at position x is the ratio between the probabilities of being occupied and being free. BHM uses linear regression to learn the log-odds field, l(x) = w⊤ϕ(x),with weights w and features ϕ(x). To obtain the features, a query position x is mapped into Hilbert space using an RBF kernel k(·, ·) evaluated with respect to a set of hinged points 
+
+{˜xi}Mi=1 organized in a grid structure: 
+
+ϕ(x) = [ k(x, ˜x1), · · · , k (x, ˜xM ), 1] ⊤. (3) The key step is to estimate the weights w, which are main-tained as a Gaussian random variable w ∼ N (μ, Σ).Given a point cloud P, we generate a dataset DBHM =
+
+{xk, y k}Kk=1 ⊂ R3 × {− 1, 1} by sampling free-space samples, 
+
+xk, y k = −1, along each segment between the sensor position 
+
+p and the hit point x ∈ P and adding the hit points as occupied samples, xk = x, y k = 1 . Given DBHM , BHM uses expectation maximization (EM) [32] to update the weights mean μ and covariance Σ and predict the log-odds as l(x) = μ⊤ϕ(x).2) Octree of BHMs : Since the number of hinged points, 
+
+M , scales with scene size, the BHM updates become computa-tionally prohibitive. We address this by partitioning the scene using an octree data structure. A local BHM is maintained only for octants containing occupied voxels, which significantly reduces the number of necessary hinged points. To generate the dataset DBHM , we prune rays outside the local BHM’s viewing frustum and sample only within its specific bounding box (Fig. 2a). To accelerate computation, we assume independent hinged point weights, reducing the covariance Σ to a diagonal matrix. This enables element-wise operations for the EM updates, drastically lowering complexity. Finally, we use a sparse representation of ϕ(x), exploiting the that the RBF kernel k(x, ˜x) vanishes when x is far from ˜x.To maintain consistency between local BHMs, we overlap neighboring BHMs by a margin equal to the hinged point  
+
+> Fig. 2: Overview of Kernel-SDF. The front-end estimates surface points and normals from point cloud observations using BHM and the marching cubes algorithm. The surface points are used as training data for the back-end, which learns SDF and its gradient using multiple GPs organized in an octree data structure.
+> (a) Sample generation for BHMs (b) Weight sync between BHMs
+> Fig. 3: (a) Sample generation for BHMs. For each ray that hits within or intersects with the sampling region, we generate occupied and free samples for updating the BHM. (b) Weight sync between neighboring BHMs. Managed weights are synced to unmanaged weights
+
+spacing. When generating DBHM , we extend the sampling area to ensure boundary weights are sufficiently updated (Fig. 2a). We use a weight sync strategy to ensure global consistency. As shown in Fig. 2b, hinged point weights are categorized into: core weights (unique to the local BHM), managed weights (owned locally but shared), and unmanaged weights (owned by a neighbor). Periodically syncing managed weights to their unmanaged counterparts ensures consistent occupancy predictions and accelerates convergence by broadcasting local geometry to the neighbors. 3) Sign Prediction : The SDF sign of a near-surface position 
+
+x∗ can be predicted by the BHM as: 
+
+s(x∗) = 
+
+(
+
++1 , l(x∗) < τ, 
+
+−1, l(x∗) ≥ τ, (4) where τ is a threshold (ideally 0) learned from data. Empirical evidence (Fig. 4) shows τ varies with sensor viewing direction Fig. 4: Surface points colored by their log-odds values from BHM. The ground has lower log-odds than the walls. 
+
+(e.g., ground vs. walls). Thus, we update τ online using a moving average of the log-odds from K hit samples: 
+
+τ ← (1 − α)τ + αK
+
+> K
+
+X
+
+> k=1
+
+l(xk), α ∈ (0 , 1] , (5) where α ∈ (0 , 1] is the learning rate. 4) Online Mesh Extraction and Surface Point Uncer-tainty Estimation : To recover surface points {xi}i at the τ -level set of l(x), we use the marching cubes algorithm [33] on a grid of BHM log-odds values. We process only grid cells containing point cloud points and their neighbors. The uncertainty for each point xi is computed as: 
+
+σ2 
+
+> xi
+
+= β(τ − l(xi)) 2/∥∇ l(xi)∥22, (6) where β > 0 is a hyperparameter and τ is updated via (5). We derive (6) via a first-order Taylor expansion of l(x∗) at the extracted point xi relative to the true surface point x∗:
+
+l(x∗)
+
+| {z } 
+
+> τ
+
+≈ l(xi) + ∇l(xi)
+
+| {z } 
+
+> ∇l
+> ⊤
+
+(x∗ − xi
+
+| {z }
+
+> δx
+
+), (7) and assuming the error δx aligns primarily with the gradient direction, i.e., δx ≈ ∇ l/ ∥∇ l∥2δx. Intuitively, uncertainty rises when l(xi) deviates from τ (higher surface extraction error) or when the gradient is small (flat and noise-sensitive field). Hence, (6) reflects how confident the front-end is about each point, which allows the back-end to weight each point’s con-tribution during SDF learning and uncertainty quantification. 
+
+B. SDF Prediction Back-End 
+
+In this section, we review the log-GP method for unsigned distance function estimation, extend it to other kernels types to improve its numerical stability, and introduce a softmin SDF uncertainty quantification approach. 
+
+1) Log-GP for Unsigned Distance Estimation: Given the front-end sign prediction s(x) in (4), we decompose the SDF as d(x) = s(x)·u(x), where u(x) ≥ 0 is an unsigned distance function (UDF). Thus, the back-end only needs to learn the UDF u(x). Varadhan’s formula [38] reveals that the UDF is related to short-time heat diffusion: 
+
+u(x) = lim 
+
+> t→0
+
+{− √t log v(x, t )}, (8) where v(x, t ) is the solution to the heat equation ∂v/∂t = ∆ v
+
+with boundary condition v(x, t ) = 1 for x ∈ ∂O. Log-GPIS [12] shows that GP regression of f (x) = exp( −λu (x))          
+
+> TABLE I: Kernel functions and their nonlinear transforms.
+> Kernel k(r)r( ˆf)
+> RBF exp  −r2/2l2q
+> −2l2log ˆf
+> Matérn 3/2
+> 
+> 1 + √3r/l
+> 
+> exp
+> 
+> −√3r/l
+> 
+> −llog ˆf / √3
+
+with Matérn 3/2 kernel can approximate (8) well when the kernel scale √3/λ is small. The UDF can be recovered as 
+
+u(x) ≈ − log E[f (x)] /λ . The GP f (x) is trained on the dataset of surface points Dsurf = {xi, σ 2 
+
+> i
+
+}Ni=1 with labels 
+
+f (xi) = exp( −λ · 0) = 1 . The posterior mean and variance of 
+
+f (x∗) at a query point x∗ are given by: 
+
+ ˆf (x∗)
+
+∇ ˆf (x∗)
+
+
+
+=
+
+ k⊤∗
+
+∇⊤ 
+
+> x∗
+
+k∗
+
+
+
+(K + Σ)−11,
+
+V[ ˆf (x∗)] = k(x∗, x∗) − k⊤∗ (K + Σ)−1k∗,
+
+(9) where k∗ ∈ RN and K ∈ RN ×N are calculated by the kernel: 
+
+k∗,i = k(xi, x∗) 1 ≤ i ≤ N, (10) 
+
+Kij = k(xi, xj ) 1 ≤ i ≤ N, 1 ≤ j ≤ N, (11) and Σii = σ2 
+
+> i
+
+. The UDF gradient can also be obtained as 
+
+∇u(x) = −∇ ˆf (x)/∥∇ ˆf (x)∥2.Returning to the octree data structure, each octant with a BHM also maintains a log-GP for SDF estimation. We ensure inter-GP consistency by collecting surface points within expanded bounding boxes larger than the BHM sampling box and fusing predictions from the K nearest GPs via 
+
+ˆu(x∗) = min k uk (x∗).
+
+2) Extension to Other Kernels: While the Mate´ rn 3/2 kernel is standard for log-GP, we show that more efficient kernels like RBF can be used by identifying the posterior mean 
+
+ˆf as a softmin-like function. For a noiseless two-point dataset 
+
+{x1, x2}, the posterior ˆf (x∗) in (9) simplifies to: 
+
+ˆf∗ = ( k(x∗, x1) + k(x∗, x2)) / (1 + k(x1, x2)) . (12) For small kernel scale, k12 = k(x1, x2) ≈ 0, we have: 
+
+log ˆf∗ ≈ log( k∗1 + k∗2) ≈ log (max( k∗1, k ∗2)) , (13) which shows that the log-GP posterior mean is approximately a softmin function. This allows recovering the UDF via kernel-specific nonlinear transforms r( ˆf ), as detailed in Table I. We pick the RBF kernel for its superior computational efficiency. While larger λ (smaller kernel scale) improves the approxi-mation of (8), it triggers numerical underflow of k(x∗, xi). To address this, we introduce a scaling factor γ and rewrite (9): 
+
+" ˆf ′(x∗)
+
+∇ ˆf ′(x∗)
+
+#
+
+=
+
+ k′⊤ ∗
+
+∇⊤ 
+
+> x∗
+
+k′∗
+
+
+
+(K + Σy )−11, (14) where k′∗,i = k′(xi, x∗) = γk (∥xi − x∗∥2). γ > 0 can be merged into the exponent. By setting γ based on the distance d = ∥x∗ − x1∥2, we effectively normalize the kernel values and prevent underflow. We set γ = ed2/(2 l2)
+
+for the RBF kernel or γ = e√3d/l for the Matérn 3/2 kernel. Then, the corresponding inverse transformations r( ˆf ′)
+
+is adjusted to r( ˆf ′) =
+
+q
+
+−2l2 log ˆf ′ + d2 for RBF and 
+
+r( ˆf ′) = − l√3 log ˆf ′ + d for Matérn 3/2 kernel. 3) Consistent Uncertainty Quantification via Softmin-based Fusion: Standard variance propagation via first-order approximation, V[ ˆd] ≈ (r′)2 V[ ˆf ], fails in log-GP because 
+
+V[ ˆf ] → 1 and |r′| → ∞ as x∗ moves away from Dsurf , causing 
+
+V[ ˆd] → ∞ . To provide a meaningful uncertainty estimate, we leverage the softmin property of the log-GP posterior and propagate surface point uncertainties σ2 
+
+> i
+
+directly through a softmin formulation. Assuming a deterministic sign prediction, we approximate the UDF u(x∗) using a softmin over Dsurf :
+
+u(x∗) ≈ h(x∗, {xi}Ni=1 ) = s⊤z, (15) where zi = ∥xi − x∗∥2 and si = e−αz i /PNi e−αz i , α > 0.The variance of u(x∗) and ∇u(x∗) are then obtained by the first-order approximation: 
+
+V[u(x∗)] ≈
+
+> N
+
+X
+
+> i=1
+
+∥∇ xi h∥22 σ2 
+
+> i
+
+, (16) 
+
+V[∇ku(x∗)] ≈
+
+> N
+
+X
+
+> i=1
+
+∇xi gk(x∗, {xi}Ni=1 ) 22 σ2 
+
+> i
+
+, (17) where ∇xi h = −si(αs⊤z − αz i + 1)( x∗ − xi)/z i, g(x∗,
+
+{xi}Ni=1 ) = ∇x∗ h(x∗, {xi}Ni=1 ). This approach ensures that the uncertainty in the surface point locations are directly prop-agated to the uncertainty in the SDF and gradient prediction. 
+
+C. Priority Queue Based Update 
+
+Beyond the core BHM and GP optimizations, we also use priority-queue-based update to improve the efficiency. Frequent sensor measurements make running surface extrac-tion, updating GP training data buffer, and GP training after every BHM update computationally wasteful. To optimize performance, we delay these processes until necessary us-ing a three-queue priority system shown in Fig. 2. To stay responsive, frequently queried GPs get higher priority for data buffer updates and retraining. Besides, BHMs with the oldest marching request timestamps are prioritized to process regions that are likely to remain stable. This strategy ensures computational resources are focused on high-demand areas while maintaining overall map correctness. V. E XPERIMENTS 
+
+We compare Kernel-SDF to four baselines: Voxblox [8], FIESTA [10], iSDF [17], and VDB-GPDF [23] on the Replica [39], Cow and Lady [8] and Newer College [40] datasets. For Replica, we simulate depth noise using an axial model with σ = 0.0025 z2 [41]. We first analyze reconstruction quality (Sec. V-A) and SDF accuracy (Sec. V-B), followed by an assessment of computational efficiency (Sec. V-C). We, then, verify the consistency between estimated SDF variance and actual error (Sec. V-D) and study the impact of sensor noise (Sec. V-E). Finally, we demonstrate real-world robot navigation using Kernel-SDF (Sec. V-F).                 
+
+> (a) Ground Truth (b) Ours (c) FIESTA [10]
+> (d) Voxblox [8] (e) iSDF [17] (f) VDB-GPDF [23]
+> Fig. 5: Qualitative comparison of mesh reconstruction on the Replica dataset [39]. Our method achieves the best visual quality, accuracy and completeness compared to the baselines. For example, the textures of the bed sheets are better preserved in our reconstruction.
+> Ours FIESTA Voxblox iSDF VDB-GPDF
+> Fig. 6: Qualitative comparison of mesh reconstruction of the cow in the Cow and Lady dataset [8]. Our method successfully recovers the detailed geometry, such as the horns, ears, and legs, which are missing in the baseline reconstructions.
+
+A. Reconstruction Accuracy 
+
+Visual comparisons in Figs. 5, 6, and 7 demonstrate that Kernel-SDF produces high-quality meshes that closely resem-ble the ground truth models. On the low-noise Replica dataset, Voxblox [8], FIESTA [10] and VDB-GPDF [23] exhibit voxel-induced block artifacts, while iSDF [17] yields over-smoothed surfaces. These baselines perform worse in real-world datasets (Cow and Lady, Newer College), where sensor noise leads to incomplete or distorted meshes. Specifically, the discrete grids used in FIESTA, Voxblox and VDB-GPDF struggle with fine details and completeness, while iSDF consistently lacks geometric details. Quantitative results in Table II confirm that our method achieves state-of-the-art or competitive performance across nearly all metrics and datasets. By effectively mitigating sensor noise while preserving fine geometric details, Kernel-SDF consistently outperforms the baselines.           
+
+> (a) Ground Truth (b) Ours (c) FIESTA [10]
+> (d) Voxblox [8] (e) iSDF [17] (f) VDB-GPDF [23] Fig. 7: Qualitative comparison of mesh reconstruction on the Newer College dataset [40].
+
+TABLE II: Mesh reconstruction metrics on the Replica dataset [39], the Cow and Lady dataset (C.L. for the scene and Cow for the cow only) [8], and the Newer College (N.C.) dataset [40]. When computing the ratio, δ = 5 cm, except for the Newer College dataset, δ = 20 
+
+cm. The best and second-best results are bold and underlined, respectively.                                                                                                                                                                                                                                                                                                                                                                                                                     
+
+> Metric Method room 0 room 1 room 2 office 0 office 1 office 2 office 3 office 4 C.L. Cow N.C. F1 Score [ < δ ]% ↑
+> Ours 95.81 97.33 97.47 98.26 96.60 95.17 93.52 94.54 83.62 92.81 75.85
+> FIESTA 76.71 76.49 78.15 77.64 82.43 75.45 79.73 78.19 19.37 18.03 54.73 Voxblox 92.00 94.77 92.64 93.72 94.23 89.50 86.58 89.94 70.30 79.38 54.14 iSDF 87.85 85.11 90.64 89.80 91.37 87.53 87.52 91.21 78.33 91.84 70.15 VDB-GPDF 60.06 57.20 58.45 60.99 56.47 58.00 54.78 56.92 78.37 91.08 61.94 Recall [ < δ ]% ↑
+> Ours 92.96 95.53 95.43 97.53 95.54 92.17 90.13 90.07 97.49 98.96 75.06 FIESTA 77.56 78.33 81.04 81.33 82.00 77.17 81.15 78.09 19.89 17.27 52.60 Voxblox 88.17 91.81 90.79 92.18 90.62 85.67 82.21 84.94 72.71 78.03 56.64 iSDF 82.88 77.54 88.64 85.51 86.30 83.30 85.46 90.12 82.70 93.47 86.24
+> VDB-GPDF 58.03 55.50 57.29 60.30 55.36 56.55 51.47 55.12 80.73 91.61 62.44 Precision [ < δ ]% ↑
+> Ours 98.85 99.21 99.61 98.99 97.67 98.36 97.18 99.47 73.21 87.37 76.65
+> FIESTA 75.87 74.73 75.47 74.28 82.85 73.81 78.36 78.28 18.87 18.86 57.03 Voxblox 96.18 97.94 94.56 95.31 98.13 93.69 91.44 95.55 68.05 80.77 51.84 iSDF 93.45 94.33 92.74 94.56 97.08 92.21 89.68 92.33 74.40 90.27 59.12 VDB-GPDF 62.24 59.01 59.66 61.69 57.63 59.52 58.53 58.85 76.14 90.56 61.45 Completion Ratio
+> [< δ ]% ↑
+> Ours 92.44 95.35 95.22 97.50 95.43 91.63 89.33 89.01 93.50 97.28 74.63 FIESTA 78.05 79.32 82.34 82.94 81.82 78.16 81.80 78.03 23.99 9.67 48.61 Voxblox 87.09 91.26 90.41 91.92 89.85 84.33 80.21 83.06 74.46 77.26 60.31 iSDF 80.69 72.68 88.12 83.98 84.59 81.51 84.74 89.88 84.43 93.69 90.57
+> VDB-GPDF 54.98 52.69 55.53 59.39 53.53 54.26 44.82 52.08 81.83 91.70 63.03 Completion [cm] ↓
+> Ours 2.84 2.35 2.33 2.07 2.26 3.02 2.99 3.50 2.58 2.57 14.23 FIESTA 3.98 3.16 2.88 2.73 4.71 4.40 3.69 3.98 18.68 25.77 71.87 Voxblox 3.69 2.16 2.31 1.71 2.07 3.52 4.37 4.38 4.44 5.77 21.30 iSDF 5.63 8.72 2.62 4.14 3.98 5.62 3.03 2.23 3.12 2.24 9.75
+> VDB-GPDF 5.52 4.82 3.87 3.52 4.12 4.80 13.78 5.07 3.68 3.05 40.57 Accuracy [cm] ↓
+> Ours 1.95 1.81 1.93 1.89 1.86 1.97 1.96 2.00 4.69 3.24 13.99
+> FIESTA 3.57 3.19 3.18 3.43 3.11 4.23 3.51 3.22 26.67 16.58 21.02 Voxblox 1.74 1.14 1.50 1.22 0.81 1.68 2.16 1.67 4.98 3.64 25.44 iSDF 2.04 1.60 1.52 1.64 1.11 1.89 2.30 1.83 4.66 2.75 31.66 VDB-GPDF 3.42 3.34 3.17 3.30 3.55 3.32 3.55 3.37 4.94 3.28 18.56 Chamfer-L1 [cm] ↓
+> Ours 2.40 2.08 2.13 1.98 2.06 2.49 2.48 2.75 3.64 2.91 14.11
+> FIESTA 3.77 3.17 3.03 3.08 3.91 4.31 3.60 3.60 22.68 21.17 46.45 Voxblox 2.72 1.65 1.90 1.47 1.44 2.60 3.26 3.02 4.71 4.70 23.37 iSDF 3.83 5.16 2.07 2.89 2.55 3.75 2.67 2.03 3.89 2.49 20.71 VDB-GPDF 4.47 4.08 3.52 3.41 3.83 4.06 8.67 4.22 4.31 3.17 29.57
+
+B. SDF Accuracy 
+
+We evaluate SDF and gradient accuracy using Mean Ab-solute Error (MAE) across three regions: All points, Near 
+
+(≤ 0.2m from surface), and Far (> 0.2m). To isolate distance accuracy from occupancy misclassification (e.g., by FIESTA), we compare the absolute values of predicted and ground-truth SDFs. Table III summarizes these results. Kernel-SDF consistently achieves the lowest MAE for both SDF values and gradients across nearly all datasets and regions. While FIESTA is competitive on the Replica dataset, its accuracy degrades significantly on Cow and Lady and Newer College due to sensor noise. Voxblox and iSDF exhibit higher errors, likely due to voxel discretizations and over-smoothing, respectively. Notably, while VDB-GPDF outperforms Voxblox in distance accuracy, its gradient MAE is the highest among all methods, indicating poor gradient estimation. Our method’s superior performance in the "Near" region opens the possibility for applications to manipulation and nav-igation, while its accurate long-range predictions and gradients may facilitate path planning and optimization-based control. 
+
+C. Computation Efficiency 
+
+We evaluate efficiency by measuring the average per-frame SDF update time and the prediction latency for 1k query positions. As shown in Table IV, Kernel-SDF consistently achieves real-time performance with an average update time of approximately 150 ms across varying scene scales. While Voxblox builds TSDF rapidly, its BFS-based SDF integration is slowed down by the high volume of voxel updates. FIESTA 
+
+(a) Predicted SDF (b) SDF Error (c) SDF Variance 
+
+Fig. 8: Demonstration of the consistency between the SDF error and the SDF variance estimated by our method on a slice of Replica Office3 [39]. (a) shows the predicted SDF values on the slice, (b) shows the absolute SDF error compared to the ground truth, and (c) shows the estimated SDF variance. We can observe that regions with higher SDF error correspond to regions with higher estimated variance, indicating that Kernel-SDF effectively captures uncertainty. 
+
+achieves the fastest integration. However, as shown in Sec. V-A and V-B, its accuracy is not satisfactory in noisy environments. iSDF remains slow due to its multi-iteration convergence requirements and the overhead of analytical gradient backprop-agation. Although VDB-GPDF shares our log-GP represen-tation, its reliance on VDB structures for spatial partitioning results in significantly higher update latencies. Overall, Kernel-SDF strikes a good balance between computational speed and mapping precision, providing a robust solution for real-time robotic applications. 
+
+D. Error-Uncertainty Consistency 
+
+A key advantage of Kernel-SDF is its ability to quantify SDF prediction uncertainty. Fig. 8 illustrates the SDF error and estimated variance on a slice of the Replica Office3 dataset [39]. We observe a strong correlation between higher SDF errors and increased estimated variance, confirming that TABLE III: SDF reconstruction metrics on the Replica dataset [39], the Cow and Lady dataset (C.L. for the scene and Cow for the cow only) [8], and the Newer College (N.C.) dataset [40]. 
+
+Metric Region Method room 0 room 1 room 2 office 0 office 1 office 2 office 3 office 4 C.L. Cow N.C. SDF MAE 
+
+[cm ] ↓
+
+All Ours 1.994 1.676 1.719 1.617 1.715 1.947 1.850 2.068 4.699 2.547 24.009 FIESTA 2.175 2.364 2.418 2.662 2.461 2.234 2.344 2.378 15.344 15.092 37.244 Voxblox 3.128 2.539 2.733 3.017 2.725 3.470 3.740 3.077 6.297 4.000 62.917 iSDF 3.745 4.230 4.259 3.890 4.226 5.094 4.245 4.147 7.327 4.258 64.304 VDB-GPDF 2.925 2.900 2.778 2.902 2.968 2.861 3.176 2.929 4.683 3.056 21.783 
+
+Near Ours 2.454 1.955 1.940 1.732 1.909 2.264 2.253 2.695 3.427 2.513 10.998 FIESTA 2.121 2.046 2.040 2.233 1.926 1.848 1.974 2.077 10.591 13.582 32.209 Voxblox 2.780 2.153 2.233 2.196 2.172 2.852 3.409 2.959 4.287 3.404 19.634 iSDF 3.649 3.632 3.295 3.206 3.646 3.821 3.397 3.301 4.258 3.595 6.540 
+
+VDB-GPDF 2.847 2.924 2.802 2.827 2.936 2.770 3.136 2.870 3.938 3.025 20.693 Far Ours 1.676 1.454 1.565 1.521 1.524 1.716 1.531 1.645 5.336 2.574 25.214 FIESTA 2.205 2.574 2.656 2.961 2.898 2.461 2.563 2.545 17.753 16.331 37.744 Voxblox 3.368 2.845 3.081 3.711 3.270 3.918 4.002 3.158 7.338 4.471 67.322 iSDF 3.811 4.705 4.932 4.466 4.797 6.016 4.918 4.718 8.864 4.802 69.652 VDB-GPDF 3.486 2.620 2.606 3.778 3.585 3.472 3.511 3.320 7.066 3.272 22.739 
+
+Grad. MAE 
+
+[rad ] ↓
+
+All Ours 0.159 0.138 0.166 0.161 0.140 0.166 0.161 0.161 0.501 0.295 0.311 
+
+FIESTA 0.220 0.207 0.184 0.216 0.250 0.198 0.224 0.180 1.141 1.093 0.498 Voxblox 0.230 0.195 0.222 0.251 0.190 0.271 0.279 0.232 0.477 0.338 0.777 iSDF 0.358 0.200 0.339 0.276 0.279 0.286 0.292 0.346 0.569 0.400 0.667 VDB-GPDF 0.998 1.051 1.022 1.050 1.165 0.998 1.032 0.980 1.066 0.982 1.176 Near Ours 0.181 0.171 0.174 0.201 0.180 0.189 0.198 0.180 0.671 0.397 0.934 
+
+FIESTA 0.304 0.276 0.230 0.313 0.323 0.253 0.300 0.232 1.329 1.224 1.398 Voxblox 0.282 0.183 0.204 0.259 0.179 0.301 0.336 0.299 0.679 0.466 1.435 iSDF 0.290 0.176 0.247 0.229 0.206 0.222 0.257 0.277 0.679 0.395 1.309 VDB-GPDF 1.070 1.101 1.088 1.099 1.193 1.075 1.093 1.057 1.116 1.030 1.413 Far Ours 0.149 0.121 0.162 0.141 0.115 0.155 0.143 0.153 0.439 0.230 0.288 
+
+FIESTA 0.182 0.171 0.162 0.166 0.203 0.171 0.189 0.158 1.050 0.985 0.412 Voxblox 0.208 0.201 0.230 0.246 0.198 0.257 0.256 0.205 0.406 0.258 0.720 iSDF 0.389 0.214 0.389 0.303 0.330 0.319 0.309 0.377 0.528 0.403 0.632 VDB-GPDF 0.613 0.622 0.627 0.643 0.762 0.603 0.684 0.590 0.907 0.644 0.968 
+
+TABLE IV: Timing metrics. Results are reported as the average per-frame processing time (FPT) and prediction time for 1k points (QT-1k) on the Replica room0 [39], the Cow and Lady dataset [8] and the Newer College dataset [40]. The best and second best results are bold and underlined, respectively. Timing was measured on a system with an Intel i9-14900K CPU and an NVIDIA RTX 3090 GPU.                                       
+
+> Method Replica Cow & Lady Newer College FPT (s) QT-1k (ms) FPT (s) QT-1k (ms) FPT (s) QT-1k (ms) Kernel-SDF 0.19 2.80 0.11 4.43 0.17 3.04 VDB-GPDF 0.68 10.66 0.10 8.29 0.26 10.16 Voxblox 21.23 103.81 4.48 99.42 94.01 85.20 iSDF 2.49 0.29 0.84 0.27 1.38 0.28 FIESTA 0.05 0.05 0.02 0.03 0.28 0.04
+
+(a) Mesh Metrics vs. Sensor Noise (b) SDF Metrics vs. Sensor Noise 
+
+Fig. 9: Ablation study on the effect of sensor noise on (a) mesh reconstruction metrics and (b) SDF metrics on the Replica room0 dataset [39]. The results demonstrate that our method maintains robust performance even as sensor noise increases, with only a gradual degradation in both mesh quality and SDF accuracy. 
+
+our softmin-based formulation effectively captures predictive uncertainty. This consistency is vital for risk-aware robotic tasks, such as navigation and manipulation, where confidence in distance estimates informs safe decision-making. 
+
+E. Ablation Study on Sensor Noise 
+
+To assess noise robustness, we evaluated Kernel-SDF on Replica Room0 [39] by varying the axial noise parameter 
+
+(a) Jackal robot (b) SDF and safe bubble cover 
+
+Fig. 10: Kernel-SDF enables safe bubble cover construction [26] and safe robot navigation. (a) A Clearpath Jackal robot equipped with a LiDAR sensor navigating in a laboratory environment. (b) Visualization of the real-time Kernel-SDF estimate as a heatmap, the safe bubble cover generated from it (union of orange circles), and the planned trajectory (black line). 
+
+k in σ = kz 2 while keeping other parameters fixed. Fig. 9 illustrates the resulting mesh (Fig. 9a) and SDF (Fig. 9b) metrics. Our method demonstrates robust performance with only gradual degradation as noise increases, confirming that the BHM front-end effectively mitigates sensor noise to maintain reliable SDF mapping in adverse environments. 
+
+F. Autonomous Robot Navigation Case Study 
+
+Real-time, uncertainty-quantified SDF mapping is essential for safe robot navigation. We demonstrate this by constructing a safe navigation corridor from a chain of overlapping bub-bles, by planning in the SDF map using the sampling-based approach proposed in [26]. The planner constructs a rapidly exploring random tree from sampled positions in free space with associated safe bubbles. The radii are specified by the SDF values minus a safety margin, which can be scaled by the estimated SDF uncertainty. As shown in Fig. 10, the planner recovers a connected chain of SDF bubbles spanning the start and goal positions, ensuring the path remains strictly within the mapped free space. This case study validates the utility of Kernel-SDF in providing the accurate distance and uncertainty information required for risk-aware motion planning. VI. C ONCLUSION 
+
+We presented Kernel-SDF, a real-time kernel regression framework for differentiable SDF learning with uncertainty quantification. By coupling BHMs for robust surface estima-tion with GPs for distance prediction, our method achieves superior reconstruction accuracy and efficiency. The hierar-chical tree structure ensures scalability for large-scale en-vironments, while our softmin-based uncertainty quantifi-cation enables risk-aware decision-making for downstream robotic tasks. Extensive evaluations on synthetic and real-world datasets demonstrate that Kernel-SDF outperforms state-of-the-art baselines in both quality and speed. Furthermore, our BHM-based front-end effectively mitigates sensor noise and adapts to dynamic environments, providing a robust and practical solution for real-time robotic applications. REFERENCES [1] A. Hornung, K. M. Wurm, M. Bennewitz, C. Stachniss, and W. Burgard, “OctoMap: An Efficient Probabilistic 3D Mapping Framework Based on Octrees,” Autonomous Robots , 2013. [2] J. Behley and C. Stachniss, “Efficient Surfel-Based SLAM using 3D Laser Range Data in Urban Environments,” Robotics: Science and Systems (RSS) , 2018. [3] F. Lu, G. Chen, Y. Liu, Y. Zhan, Z. Li, D. Tao, and C. Jiang, “Sparse-to-Dense Matching Network for Large-Scale LiDAR Point Cloud Reg-istration,” IEEE Trans. Pattern Anal. Machine Intell. , 2023. [4] Y. Zeng, J. Hou, Q. Zhang, S. Ren, and W. Wang, “Dynamic 3D Point Cloud Sequences as 2D Videos,” IEEE Trans. Pattern Anal. Machine Intell. , 2024. [5] N. Wang, Y. Zhang, Z. Li, Y. Fu, W. Liu, and Y.-G. Jiang, “Pixel2Mesh: Generating 3D Mesh Models from Single RGB Images,” in European Conference on Computer Vision (ECCV) , 2018. [6] A. Rosinol, M. Abate, Y. Chang, and L. Carlone, “Kimera: an Open-Source Library for Real-Time Metric-Semantic Localization and Map-ping,” in IEEE Int. Conf. on Robotics and Automation (ICRA) , 2020. [7] R. A. Newcombe, S. Izadi, O. Hilliges, D. Molyneaux, D. Kim, A. J. Davison, P. Kohi, J. Shotton, S. Hodges, and A. Fitzgibbon, “KinectFusion: Real-time dense surface mapping and tracking,” in IEEE International Symposium on Mixed and Augmented Reality , 2011. [8] H. Oleynikova, Z. Taylor, M. Fehr, R. Siegwart, and J. Nieto, “Voxblox: Incremental 3D Euclidean Signed Distance Fields for on-board MAV planning,” in IEEE/RSJ Int. Conf. on Intelligent Robots and Systems (IROS) , 2017. [9] J. J. Park, P. Florence, J. Straub, R. Newcombe, and S. Lovegrove, “DeepSDF: Learning Continuous Signed Distance Functions for Shape Representation,” in IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2019. [10] L. Han, F. Gao, B. Zhou, and S. Shen, “FIESTA: Fast Incremental Euclidean Distance Fields for Online Motion Planning of Aerial Robots,” in IEEE/RSJ Int. Conf. on Intelligent Robots and Systems (IROS) , 2019. [11] B. Lee, C. Zhang, Z. Huang, and D. D. Lee, “Online Continuous Mapping using Gaussian Process Implicit Surfaces,” in IEEE Int. Conf. on Robotics and Automation (ICRA) , 2019. [12] L. Wu, K. M. B. Lee, L. Liu, and T. Vidal-Calleja, “Faithful Euclidean Distance Field From Log-Gaussian Process Implicit Surfaces,” IEEE Robotics and Automation Letters (RAL) , 2021. [13] P. Wang, L. Liu, Y. Liu, C. Theobalt, T. Komura, and W. Wang, “NeuS: Learning Neural Implicit Surfaces by Volume Rendering for Multi-view Reconstruction,” in Advances in Neural Information Processing Systems (NeurIPS) , 2021. [14] T. Takikawa, J. Litalien, K. Yin, K. Kreis, C. Loop, D. Nowrouzezahrai, A. Jacobson, M. McGuire, and S. Fidler, “Neural Geometric Level of Detail: Real-time Rendering with Implicit 3D Shapes,” in IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2021. [15] I. Vizzo, T. Guadagnino, J. Behley, and C. Stachniss, “VDBFusion: Flexible and Efficient TSDF Integration of Range Sensor Data,” Sensors ,2022. [16] Y. Pan, Y. Kompis, L. Bartolomei, R. Mascaro, C. Stachniss, and M. Chli, “Voxfield: Non-Projective Signed Distance Fields for Online Planning and 3D Reconstruction,” in IEEE/RSJ Int. Conf. on Intelligent Robots and Systems (IROS) , 2022. [17] J. Ortiz, A. Clegg, J. Dong, E. Sucar, D. Novotny, M. Zollhoefer, and M. Mukadam, “iSDF: Real-Time Neural Signed Distance Fields for Robot Perception,” in Robotics: Science and Systems (RSS) , 2022. [18] Y. Wang, Q. Han, M. Habermann, K. Daniilidis, C. Theobalt, and L. Liu, “NeuS2: Fast Learning of Neural Implicit Surfaces for Multi-view Reconstruction,” in IEEE/CVF International Conference on Computer Vision (ICCV) , 2023. [19] C. Jiang, H. Zhang, P. Liu, Z. Yu, H. Cheng, B. Zhou, and S. Shen, “H2-Mapping: Real-time Dense Mapping Using Hierarchical Hybrid Representation,” IEEE Robotics and Automation Letters (RAL) , 2023. [20] C. Le Gentil, O.-L. Ouabi, L. Wu, C. Pradalier, and T. Vidal-Calleja, “Accurate Gaussian-Process-Based Distance Fields With Applications to Echolocation and Mapping,” IEEE Robotics and Automation Letters (RAL) , 2024. [21] Y. Pan, X. Zhong, L. Wiesmann, T. Posewsky, J. Behley, and C. Stach-niss, “PIN-SLAM: LiDAR SLAM Using a Point-Based Implicit Neural Representation for Achieving Global Map Consistency,” IEEE Transac-tions on Robotics (TRO) , 2024. [22] Q. Zou and M. Sester, “3D Uncertain Implicit Surface Mapping Using GMM and GP,” IEEE Robotics and Automation Letters (RAL) , 2024. [23] L. Wu, C. Le Gentil, and T. Vidal-Calleja, “VDB-GPDF: Online Gaussian Process Distance Field With VDB Structure,” IEEE Robotics and Automation Letters (RAL) , 2025. [24] Y. Tian, H. Cao, S. Kim, and N. Atanasov, “MISO: Multiresolution Submap Optimization for Efficient Globally Consistent Neural Implicit Reconstruction,” in Robotics: Science and Systems (RSS) , 2025. [25] B. Mildenhall, P. P. Srinivasan, M. Tancik, J. T. Barron, R. Ramamoorthi, and R. Ng, “NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis,” in European Conference on Computer Vision (ECCV) ,2020. [26] K. M. B. Lee, Z. Dai, C. L. Gentil, L. Wu, N. Atanasov, and T. Vidal-Calleja, “Safe Bubble Cover for Motion Planning on Distance Fields,” in preprint arXiv:2408.13377 , 2024. [27] Y. Li, X. Chi, A. Razmjoo, and S. Calinon, “Configuration Space Distance Fields for Manipulation Planning,” 2024. [28] K. Long, Y. Yi, Z. Dai, S. Herbert, J. Cortés, and N. Atanasov, “Sensor-based distributionally robust control for safe robot navigation in dynamic environments,” The International Journal of Robotics Research (IJRR) ,2025. [29] Y. Li, Y. Zhang, A. Razmjoo, and S. Calinon, “Representing Robot Ge-ometry as Distance Fields: Applications to Whole-body Manipulation,” 2024. [30] Y. Bai, Z. Miao, X. Wang, Y. Liu, H. Wang, and Y. Wang, “VDBblox: Accurate and Efficient Distance Fields for Path Planning and Mesh Reconstruction,” in IEEE/RSJ Int. Conf. on Intelligent Robots and Systems (IROS) , 2023. [31] A. Millane, H. Oleynikova, E. Wirbel, R. Steiner, V. Ramasamy, D. Tingdahl, and R. Siegwart, “nvblox: GPU-Accelerated Incremental Signed Distance Field Mapping,” in IEEE Int. Conf. on Robotics and Automation (ICRA) , 2024. [32] R. Senanayake and F. Ramos, “Bayesian Hilbert Maps for Dynamic Continuous Occupancy Mapping,” in Conference on Robot Learning (CoRL) , 2017. [33] W. E. Lorensen and H. E. Cline, “Marching Cubes: A High Resolution 3D Surface Construction Algorithm,” in ACM SIGGRAPH , 1987. [34] B. Curless and M. Levoy, “A Volumetric Method for Building Complex Models from Range Images,” in ACM SIGGRAPH , 1996. [35] K. Museth, “VDB: High-resolution Sparse Volumes with Dynamic Topology,” ACM Trans. Graph. , 2013. [36] T. S. Jaakkola and M. I. Jordan, “A Variational Approach to Bayesian Logistic Regression Models and their Extensions,” in Proceedings of the Sixth International Workshop on Artificial Intelligence and Statistics ,1997. [37] O. Williams and A. Fitzgibbon, “Gaussian Process Implicit Surfaces,” in Gaussian Processes in Practice , 2006. [38] S. R. S. Varadhan, “On the Behavior of the Fundamental Solution of the Heat Equation with Variable Coefficients,” Communications on Pure and Applied Mathematics , 1967. [39] J. Straub, T. Whelan, et al. , “The Replica Dataset: A Digital Replica of Indoor Spaces,” preprint arXiv:1906.05797 , 2019. [40] L. Zhang, M. Camurri, D. Wisth, and M. Fallon, “Multi-Camera LiDAR Inertial Extension to the Newer College Dataset,” in preprint arXiv:2112.08854 , 2021. [41] M. S. Ahn, H. Chae, D. Noh, H. Nam, and D. Hong, “Analysis and noise modeling of the intel realsense d435 for mobile robots,” in International Conference on Ubiquitous Robots (UR) , 2019. VII. A PPENDIX 
+
+A. EM Algorithm for Updating BHM 
+
+Readers can refer to [32], [36] for more details about the Bayesian Hilbert Map (BHM). Here, we provide a brief derivation of the EM algorithm for updating the BHM model parameters, μ and Σ.BHM represents a continuous occupancy field P (y | x) by using a set of M hinge points ˜X with weights w to do kernel regression in the Hilbert space: 
+
+P (y | x, w) = σ (2 y − 1) w⊤ϕ(x), (18) where ϕ(x) = [ k(x, ˜x1), · · · , k (x, ˜xM ), 1] ⊤ is a vector of kernel values, k(·, ·) is RBF kernel, and σ is the sigmoid function. Given a dataset D = {(xk, y k)}Kk=1 of K generated samples at time t, our goal is to update the weights w of the model such that we get the posterior distribution: 
+
+P (w|D ) = P (D| w)P (w)
+
+P (D) , (19) where P (w) is the prior distribution of the weights, and the likelihood is given by: 
+
+P (D| w) = 
+
+> K
+
+Y
+
+> k=1
+
+P (yk|xk, w)=
+
+> K
+
+Y
+
+> k=1
+
+σ(−ykw⊤ϕ(xk)) , yk ∈ {− 1, 1}.
+
+(20) The marginal likelihood P (D) is intractable, so we resort to approximate inference methods. Our goal to maximize the log marginal likelihood: 
+
+log P (D) = log 
+
+Z
+
+P (D| w)P (w)dw
+
+= log 
+
+Z
+
+Q(w) P (D| w)P (w)
+
+Q(w) dw
+
+≥
+
+Z
+
+Q(w) log P (D| w)P (w)
+
+Q(w) dw,
+
+↑ Jensen’s inequality (21) where Q(w) is an approximate posterior distribution of the weights. Since P (D| w) is product of sigmoids that contains the weights w inside, we use the variational bound [36] to get a looser lower bound: 
+
+σ(r) ≥ σ(ξ) exp 
+
+ r − ξ
+
+2 + λ (ξ)  r2 − ξ2
+
+,
+
+where ξ is a variational parameter and λ(ξ) = 12ξ
+
+  12 − σ(ξ).Using the idea of Sequential BHM EM update [32], we assume a Gaussian prior P (w) = N (w|μt−1, Σt−1) and a Gaussian approximate posterior Q(w) = N (w|μt, Σt) for the weights. Hence, we can write the variational lower bound of the log marginal likelihood as: 
+
+L = EQ [log P (D| w)] + EQ [log P (w)] − EQ [log Q(w)] 
+
+≥
+
+> K
+
+X
+
+> k=1
+
+EQ
+
+log σ(−ykw⊤ϕ(xk)) 
+
++ EQ [log P (w)] − EQ [log Q(w)] 
+
+≥
+
+> K
+
+X
+
+> k=1
+
+
+
+log σ(ξk) − ξk
+
+2 + EQ [rk]2 + λ(ξk)  EQ
+
+r2
+
+> k
+
+ − ξ2
+
+> k
+
+
+
++ EQ [log P (w)] − EQ [log Q(w)] =
+
+> K
+
+X
+
+> k=1
+
+
+
+log σ(ξk) − ξk
+
+2 − ξ2
+
+> k
+
+λ(ξk) + ( yk − 12 )μ⊤ 
+
+> t
+
+ϕ(xk)
+
+
+
++
+
+> K
+
+X
+
+> k=1
+
+
+
+λ(ξk)ϕ⊤(xk)  Σt + μtμ⊤
+
+> t
+
+ ϕ(xk)
+
+
+
++ 12 tr    Σ−1 
+
+> t
+
+− Σ−1
+
+> t−1
+
+ Σt
+
+ + 12 log |Σt||Σt−1|− 12
+
+ μt − μt−1
+
+⊤ Σ−1
+
+> t−1
+
+ μt − μt−1
+
+ ,
+
+where rk = ykw⊤ϕ(xk), y k ∈ { 0, 1}.
+
+To maximize the lower bound L, we take derivatives with respect to the variational parameters {ξk}Kk=1 and μt, and set them to zero. This results in the following update equations: 
+
+a) E-Step: ∂L/∂ μt = 0 leads to 
+
+μt = Σt Σ−1
+
+> t−1
+
+μt−1 +
+
+> K
+
+X
+
+> k=1
+
+
+
+yk − 12
+
+
+
+ϕ(xk)
+
+!
+
+, (22) 
+
+Σ−1 
+
+> t
+
+= Σ−1 
+
+> t−1
+
++
+
+> K
+
+X
+
+> k=1
+
+1/2 − σ(ξk)
+
+ξk
+
+ϕ(xk)ϕ⊤(xk). (23) 
+
+b) M-Step: ∂L/∂ξ k = 0 leads to 
+
+ξk =
+
+q
+
+ϕ⊤(xk)  Σt + μtμ⊤
+
+> t
+
+ ϕ(xk), ∀k = 1 , . . . , K. 
+
+(24) Note that ξk,t = ξk, where t is omitted for simplicity. We suggest initialize ξk to 0.0 or 1.0 for all k (Empirically, both work well). 
+
+Practical Optimization for the Implementation: For each generated dataset D, usually 1 to 2 EM iterations are sufficient for convergence. To make the algorithm more efficient, we set 
+
+ϕm(xk) = 0 if its value is smaller than a threshold (e.g., 10 −3)so that we can speed up the computation by the sparsity of 
+
+ϕ(xk). Besides, the update of μ and Σ needs matrix inversion of Σ−1 
+
+> t
+
+, which is handled by Cholesky decomposition for efficiency and numerical stability. 
+
+B. Approximation of BHM Prediction 1) Mean Occupied Probability: With enough iterations, we get the converged μ and Σ, and predict the occupancy probability at x∗ by (18): 
+
+g(x∗, w) = P (y = 1 | x∗, w) = σ(w⊤ϕ∗), (25) where w ∼ N (μ, Σ), ϕ∗ = ϕ(x∗). Let g∗(w) = g(x∗, w).Then, the mean of g∗(w) is 
+
+E[g∗(w)] = P (y = 1 | x∗) = 
+
+Z
+
+σ  w⊤ϕ∗
+
+ P (w)dw. (26) However, we cannot compute the above integral analytically. One way of approximation is to collect N samples of w from 
+
+N (μ, Σ), so that 
+
+E[g∗(w)] = P (y = 1 | x∗) ≈ 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+σ(w⊤ 
+
+> i
+
+ϕ∗). (27) A faster and more accurate approximation is 
+
+E[g∗(w)] ≈ σ (h) , h = μ⊤ϕ∗
+
+q
+
+1 + π 
+
+> 8
+
+ϕ⊤∗ Σϕ∗
+
+. (28) 
+
+Proof. We approximate the sigmoid function σ(x) with the cumulative distribution function of the normal distribution, 
+
+Φ( λx ), where λ = pπ/ 8. Therefore, 
+
+P (y = 1 | x∗)
+
+≈
+
+Z
+
+Φ( λw⊤ϕ∗)P (w)dw =
+
+Z
+
+Φ( λu )P (u)du 
+
+=
+
+Z
+
+Φ
+
+
+
+v + μ⊤ϕ∗/
+
+q
+
+ϕ⊤∗ Σϕ∗
+
+
+
+λ
+
+q
+
+ϕ⊤∗ Σϕ∗
+
+−1
+
+ P (v)dv 
+
+= Φ 
+
+
+
+μ⊤ϕ∗/
+
+q
+
+ϕ⊤∗ Σϕ∗
+
+s
+
+1 + 
+
+
+
+λ
+
+q
+
+ϕ⊤∗ Σϕ∗
+
+−2
+
+
+
+= Φ 
+
+ μ⊤ϕ∗
+
+q
+
+λ−2 + ϕ⊤∗ Σϕ∗
+
+ ≈ σ
+
+ μ⊤ϕ∗
+
+q
+
+1 + λ2ϕ⊤∗ Σϕ∗
+
+
+
+= σ
+
+ μ⊤ϕ∗
+
+q
+
+1 + π 
+
+> 8
+
+ϕ⊤∗ Σϕ∗
+
+ ,
+
+where u = w⊤ϕ∗ ∼ N 
+
+
+
+μ⊤ϕ∗, ϕ⊤∗ Σϕ∗
+
+
+
+, v = u−μ⊤ϕ∗√ϕ⊤∗ Σϕ∗
+
+∼N (0 , 1) . And the following integral is used 
+
+Z
+
+Φ
+
+ w − ab
+
+
+
+P (w)dw = Φ 
+
+ −a
+
+√1 + b2
+
+
+
+. (29) To prove the above equation, let X ∼ N (a, b 2) and Y ∼N (0 , 1) be independent random variables. Then, 
+
+P (X ≤ Y | Y = w) = P (X ≤ w) = Φ 
+
+ w − ab
+
+
+
+, (30) 
+
+P (X ≤ Y ) = 
+
+Z
+
+P (X ≤ Y | Y = w)P (w)dw 
+
+=
+
+Z
+
+Φ
+
+ w − ab
+
+
+
+P (w)dw. 
+
+(31) Since P (X ≤ Y ) = P (X−Y ≤ 0) and X−Y ∼ N (a, b 2+1) ,
+
+P (X ≤ Y ) = Φ 
+
+ −a√1+ b2
+
+
+
+. Therefore, (29) holds. When it converges, det( Σ) ≈ 0, we have 
+
+E[g∗(w)] ≈ σ  μ⊤ϕ∗
+
+ , (32) where μ⊤ϕ∗ is the log-odds of occupancy at x∗.
+
+2) Gradient and Surface Normal Prediction: We can also derive the gradient of (28) as 
+
+∇E[g∗(w)] = σ(h)σ(−h)∇xϕ∗∇ϕ∗ h, 
+
+∇ϕ∗ h = 1
+
+q
+
+1 + π 
+
+> 8
+
+ϕ⊤∗ Σϕ∗
+
+μ − 
+
+> π
+> 8
+
+μ⊤ϕ∗Σϕ∗
+
+1 + π 
+
+> 8
+
+ϕ⊤∗ Σϕ∗
+
+!
+
+, (33) where ∇xϕ∗ = −2γX diag( ϕ∗), X = [ x∗ − ˜x1, · · · , x∗ −
+
+˜xM , 0] for the RBF kernel and M hinge points {˜xi}Mi=1 .When det( Σ) ≈ 0, the gradient of the occupancy probabil-ity at x∗ is approximated as 
+
+v∗ ≈ σ(μ⊤ϕ∗)σ(−μ⊤ϕ∗)∇xϕ∗μ. (34) The surface normal at x∗ is the opposite direction of v∗.Since we do not care about the magnitude of v∗ when calculate the surface normal, we have 
+
+n∗ = − z(μ)
+
+∥z(μ)∥2
+
+, z(μ) = ∇xϕ∗μ, (35) and the variance is 
+
+V[n∗] = G⊤ΣG , G = ( ∇xϕ∗)⊤ I − n∗n⊤∗
+
+∥z(μ)∥2
+
+. (36) 
+
+C. SDF Gradient Variance Calculation 
+
+Based on the softmin approximation of (15), we can obtain the approximation of the UDF gradient: 
+
+∇d(x∗) ≈ ∇ x∗ h(x∗, {xi}Ni=1 ) = g(x∗, {xi}Ni=1 )= V  αss ⊤z − α diag( s)z + s ,
+
+V = v1 · · · vN
+
+ , vi = x∗ − xi
+
+zi
+
+.
+
+(37) Therefore, assuming isotropic variance Vi for each di-mension of xi, we can calculate the variance of ∇d(x∗)
+
+approximately by Taylor expansion and get (17): 
+
+V[∇ku(x∗)] ≈
+
+> N
+
+X
+
+> i=1
+
+∇xi gk(x∗, {xi}Ni=1 ) 22 σ2 
+
+> i
+
+, 1 ≤ k ≤ n, 
+
+where 
+
+∇xi g(x∗, {xi}Ni=1 ) = 
+
+αvi (li (vi − Vs ) + si(vi − g)) ⊤ + li
+
+zi
+
+ viv⊤ 
+
+> i
+
+− I ,li = si(αs⊤z − αz i + 1) .
+
+(38) 
+
+D. Priority-Based Update Scheme 
+
+In Kernel-SDF, several operations take significant time, including BHM EM update, BHM marching, GP training data collection, and GP training. However, not all operations need to be performed at every time step. Therefore, we introduce a priority-based update scheme to efficiently allocate computational resources to the most needed updates. To maintain the responsiveness of the system to the latest sensor data, BHM EM updates are performed at every time step for all BHMs that have new sensor data. Newly created BHMs also need to be marched immediately to get surface points for its corresponding GP training data buffer update. For all GP training operations, we delay them until they are required for SDF prediction. For other operations, we use priority queues to determine the order of updates based on their necessity. In order to make the system also responsive to the latest query trends (e.g., the down-stream planner may focus on a specific area), each GP has a query counter c0 that records how many times the GP is requested for SDF prediction. The counter helps to reshape the priority of GP training and data buffer updates. When a GP is trained, its query counter is reduced by half. And the query counter is capped to a maximum value (10000) to avoid over-prioritization. (a) Voxel update order (b) Free voxel parallel generation 
+
+> Fig. 11: To construct the tree efficiently, we implement two key optimizations: (a) voxels are updated in ray-sorted order to maximize the CPU cache hit rate; and (b) this ordering is generated via a stride-2 parallel reduction. In this scheme, threads first process ray batches in parallel, then odd-indexed threads ( 2i−1) merge results from their even-indexed counterparts ( 2i). Finally, these partially merged results are aggregated sequentially into thread 0.
+
+1) Marching Priority Queue: Note that a single EM update of a BHM only affects a small portion of the surface points. Especially for well-updated BHMs, the surface point changes are even smaller. Hence, we first introduce a priority queue for marching BHMs, which orders the BHMs by the latest timestamp tB when a BHM is requested to update sur-face estimation. The BHM with the oldest timestamp (smaller 
+
+tB) in the queue is processed first because it is more likely to be unchanged in the near future: 
+
+smarch = tB ↓, (39) where ↓ indicates smaller values have higher priority. 
+
+2) GP Data Buffer Update Queue: After marching a BHM, its corresponding GP training data buffer needs to be updated with the new surface points. However, it also takes time to get significant changes of Dsurf for updating the GP. And Dsurf is not required until the GP needs to be trained. Therefore, we introduce a priority queue that orders the GPs by the following score: 
+
+sbuffer update = c1(1 + η1c0) ↑, (40) where c1 is the number of times the GP data buffer is marked to be updated since the last update, η1 is a weight parameter, and ↑ indicates larger values have higher priority. 
+
+c1 is increased by 1 each time the GP is marked to update its data buffer after marching its corresponding BHM and reset to 0 after the data buffer is updated. For newly created GPs, we initialize c1 to cmax 1 exp( −γ∥cGP − ot∥2), where cGP is the center of the GP training data collection bounding box, ot
+
+is the current sensor origin, and γ > 0 is a decay parameter. This initialization gives higher priority to GPs closer to the sensor origin. 
+
+3) GP Training Queue: Similar to the GP data buffer update, GP training is not required until SDF prediction is requested. In addition, training a GP only makes sense when its training data buffer has significant changes. Therefore, we introduce another priority queue that orders the GPs by the following score: 
+
+sGP train = c2(1 + η2c0) ↑, (41) where c2 is the number of times the GP is marked to be trained since the last training, η2 is a weight parameter, and ↑ indicates larger values have higher priority. c2 is increased by c1 each time the GP’s buffer is updated and reset to 0 after the GP is trained. When the GP is trained, c0 is also halved in case the GP is over-prioritized for future updates as the query trend may change. 
+
+E. Efficient Tree Construction 
+
+To optimize occupancy mapping, we extend the Octomap [1] to include a dedicated 2D quadtree implementation. Perfor-mance is further boosted by updating voxels in a sorted, along-ray order (Fig. 11a). This approach leverages spatial locality that when a free voxel is updated, its neighboring voxels are more likely to be updated, improving the CPU cache hit rate. While the order of occupied voxels is obvious, we implement an algorithm demonstrated in Fig. 11b to efficiently generate the sorted free-voxel sequence. 
+
+F. Experiment Details 1) Parameter Settings: For Kernel-SDF, we set the oc-tree resolution to 0.08m, 0.05m and 0.7m for the Replica, Cow&Lady, and Newer College datasets, respectively. The local BHMs are placed at the depth Dtree − 1, which means the local BHM bounding box size is twice the octree voxel size. The number of hinge points per axis is set to 7 for the Replica and Cow&Lady datasets, and 9 for the Newer College dataset. The BHM kernel scale l is set to 0.016m, 0.013m and 0.11m for the three datasets, respectively. For the GP, we use RBF kernel and set λ = 12l2 to 500, 300, and 250 for the three datasets, respectively. For other parameters, please refer to our released code. For the baselines, we use the default parameters provided in their released code except for necessary modifications to adapt to the datasets. For example, iSDF [17] only supports image input, so we convert the LiDAR scans of the Newer College dataset to depth images using the camera intrinsic parameters that give the same field of view as the LiDAR. We set the voxel size of Voxblox and FIESTA to be 0.05m for the Replica and Cow&Lady datasets, and 0.2m for the Newer College dataset to get a better trade-off between accuracy and efficiency. For our method and VDB-GPDF [23], a mesh is available from the algorithm directly. For Voxblox [8], FIESTA [10], and iSDF [17], we extract the mesh using the marching cubes algorithm [33] with the voxel size as the marching cubes resolution, except for iSDF, where we use a resolution of 0.02m for the Replica and Cow&Lady datasets and 0.1m for the Newer College dataset. 
+
+2) Mesh Metrics: For Replica dataset, we sample 2 million points from the ground truth mesh and the reconstructed mesh, respectively. For Cow&Lady dataset, we sample 54k points from the ground truth point cloud and the reconstructed mesh, respectively. For Newer College dataset, we sample 2 million points from the ground truth point cloud and the reconstructed mesh, respectively. We compute precision, recall, and F1 score with a threshold of 0.05m for the Replica and Cow&Lady datasets, and 0.2m for the Newer College dataset. A point is considered to be correctly reconstructed if its distance to the other point cloud is less than the threshold. Besides, we compute the accuracy and the completion, which are defined as: Accuracy = 1
+
+|P| 
+
+X
+
+> p∈P
+
+min  
+
+> q∈Q
+
+∥p − q∥2, (42) Completion = 1
+
+|Q| 
+
+X
+
+> q∈Q
+
+min  
+
+> p∈P
+
+∥p − q∥2, (43) where P is the reconstructed point cloud and Q is the ground truth point cloud. We also choose to use Chamfer-L1 distance in place of the standard Chamfer distance for more intuitive interpretation of the error in meters, which is the average of accuracy and completion. 
+
+3) SDF Metrics: For SDF evaluation, we query each method with a regular grid of points covering the bounding box of the ground truth mesh or point cloud. The grid resolution is set to 0.05m for the Replica and Cow&Lady datasets, and 0.2m for the Newer College dataset. Prediction may fail for Voxblox and FIESTA at some query points because they rely on the eight voxel corners to interpolate the SDF value. In such cases, we exclude the failed points when calculating the metrics for Voxblox and FIESTA. 
+
+4) Time Metrics: While it is straightforward to measure the prediction time for all methods, measuring the update time is more complex due to the different update strategies employed by each method. For a fair comparison, we measure the average update time per scan for all methods. Specifically, we record the total time taken to process all scans in a dataset (but exclude time of data loading, logging and etc.) and divide it by the number of scans to obtain the average update time per scan. This approach provides a consistent basis for comparing the efficiency of each method’s update process.

@@ -6,26 +6,26 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-04-04
-- 运行时间：2026-04-04 20:07:00 UTC
+- 最新运行日期：2026-04-05
+- 运行时间：2026-04-05 19:34:51 UTC
 - 运行状态：成功
 - 本次总论文数：1
-- 精读区：1
-- 速读区：0
+- 精读区：0
+- 速读区：1
 
 ### 今日简报（AI）
-今日聚焦人形机器人控制新突破，Heracles 框架以 9.0 高分实现精准追踪与生成合成的深度融合。
-该研究成功打破了通用人形机器人控制中动作精度与生成灵活性之间的壁垒。
-推荐关注生成式合成技术在提升机器人复杂任务适应性方面的实战应用。
-- 详情：[/202604/04/README](/202604/04/README)
+今日聚焦开源库 Kernel-SDF，探索利用核回归实现实时有符号距离函数（SDF）估计的高效方案。
+该库通过核回归技术优化了 SDF 估计的实时性能，为三维重建领域提供了全新的开源工具支持。
+建议关注三维建模与实时渲染的开发者尝试该开源库，以提升场景重建的计算效率。
+- 详情：[/202604/05/README](/202604/05/README)
 
 ### 精读区论文标签
-1. [Heracles: Bridging Precise Tracking and Generative Synthesis for General Humanoid Control](/202604/04/2603.27756v2-heracles-bridging-precise-tracking-and-generative-synthesis-for-general-humanoid-control)  
-   标签：评分：9.0/10、query:robot
-   evidence：用于类人机器人运动控制的生成式合成
+- 本次无精读推荐。
 
 ### 速读区论文标签
-- 本次无速读推荐。
+1. [Kernel-SDF: An Open-Source Library for Real-Time Signed Distance Function Estimation using Kernel Regression](/202604/05/2603.29227v1-kernel-sdf-an-open-source-library-for-real-time-signed-distance-function-estimation-using-kernel-regression)  
+   标签：评分：7.0/10、query:robot
+   evidence：用于轨迹优化和碰撞检测的SDF估计
 
 
 <div class="dpr-home-promo-card">

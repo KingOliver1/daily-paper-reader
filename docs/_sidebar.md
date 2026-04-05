@@ -1,6 +1,9 @@
 * <a class="dpr-sidebar-root-link" href="#/">首页</a>
 * <a class="dpr-sidebar-root-link dpr-sidebar-noactive-link" href="javascript:void(0)" data-dpr-hash="#/tutorial/README">使用教程</a>
 * Daily Papers
+  * 2026-04-05 <!--dpr-date:20260405-->
+    * 速读区
+      * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202604/05/2603.29227v1-kernel-sdf-an-open-source-library-for-real-time-signed-distance-function-estimation-using-kernel-regression" data-sidebar-item="{&quot;title&quot;: &quot;Kernel-SDF: An Open-Source Library for Real-Time Signed Distance Function Estimation using Kernel Regression&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2603.29227v1-kernel-sdf-an-open-source-library-for-real-time-signed-distance-function-estimation-using-kernel-regression&quot;, &quot;score&quot;: &quot;7.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;robot&quot;}], &quot;evidence&quot;: &quot;用于轨迹优化和碰撞检测的SDF估计&quot;}">Kernel-SDF: An Open-Source Library for Real-Time Signed Distance Function Estimation using Kernel Regression</a>
   * 2026-04-04 <!--dpr-date:20260404-->
     * 精读区
       * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202604/04/2603.27756v2-heracles-bridging-precise-tracking-and-generative-synthesis-for-general-humanoid-control" data-sidebar-item="{&quot;title&quot;: &quot;Heracles: Bridging Precise Tracking and Generative Synthesis for General Humanoid Control&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2603.27756v2-heracles-bridging-precise-tracking-and-generative-synthesis-for-general-humanoid-control&quot;, &quot;score&quot;: &quot;9.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;robot&quot;}], &quot;evidence&quot;: &quot;用于类人机器人运动控制的生成式合成&quot;}">Heracles: Bridging Precise Tracking and Generative Synthesis for General Humanoid Control</a>
