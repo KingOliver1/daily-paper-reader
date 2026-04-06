@@ -1,0 +1,368 @@
+Title: Learning Locomotion on Complex Terrain for Quadrupedal Robots with Foot Position Maps and Stability Rewards
+
+URL Source: https://arxiv.org/pdf/2604.02744v1
+
+Published Time: Mon, 06 Apr 2026 00:27:54 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Learning Locomotion on Complex Terrain for Quadrupedal Robots with Foot Position Maps and Stability Rewards 
+
+Matthew Hwang 1, Yubin Liu 1, Ryo Hakoda 1 and Takeshi Oishi 1
+
+Abstract — Quadrupedal locomotion over complex terrain has been a long-standing research topic in robotics. While recent reinforcement learning-based locomotion methods im-prove generalizability and foot-placement precision, they rely on implicit inference of foot positions from joint angles, lacking the explicit precision and stability guarantees of optimization-based approaches. To address this, we introduce a foot position map integrated into the heightmap, and a dynamic locomotion-stability reward within an attention-based framework to achieve locomotion on complex terrain. We validate our method exten-sively on terrains seen during training as well as out-of-domain (OOD) terrains. Our results demonstrate that the proposed method enables precise and stable movement, resulting in improved locomotion success rates on both in-domain and OOD terrains. 
+
+I. INTRODUCTION Quadrupedal robots have the potential to traverse over complex and unstructured terrains that pose significant chal-lenges for wheeled and crawler-based robots. To reliably deploy quadrupedal robots, robust locomotion strategies that can handle complex terrains are needed. Over the years classical optimization-based locomotion methods have been proposed to achieve locomotion on diverse terrain [1]–[5]. More recent methods based on reinforcement learning (RL) propose to learn locomotion through trial and error [6]–[9]. For locomotion over sparse terrain, much research has been conducted on optimization-based methods [5], [10]– [12], RL-based methods [13]–[16], and hybrid methods [17]– [19]. Optimization-based methods exhibit high foot place-ment precision but lack robustness against real world noise and uncertainties. On the other hand, RL-based methods excel in robustness but lack foot placement precision. While DTC [19] partially solves this issue, it has a complex architecture and is inherently constrained by the model-based planner utilized for foot planning [5]. Recent research has utilized attention-based heightmap encoding [20] to focus on important sections of the surrounding terrain. This increases generalizability of the trained policies on complex and sparse terrain. However, with AME [20] the robot must implicitly infers where the feet are placed from the proprioception infor-mation. Furthermore, RL methods in general lack stability guarantees that optimization-based methods possess. Addi-tionally, in some cases we found the robot learns to avoid dangerous terrain such as stepping stones when using local velocity tracking commands.          
+
+> 1Authors are with the University of Tokyo, Japan
+
+email: mhwang@g.ecc.u-tokyo.ac.jp actions     
+
+> update input
+> Foot position map
+> Global velocity commands
+> Stability Rewards
+> policy
+> CoP
+> 𝑟 !"#$%&%"' =𝑚𝑖𝑛 𝑑 {%)*,,,-}
+> 𝑑 !
+> 𝑑 "𝑑 #
+
+Fig. 1: Overview of our method. With the proposed foot posi-tion map and stability reward, our policy achieves successful locomotion over complex terrain. In order to solve these issues, we propose a foot position map (footmap) in the same representation as the heightmap. Directly placing foot position information inside of the heightmap lets the attention mechanism know where the feet are positioned explicitly, which is crucial information when performing locomotion over sparse terrains. Furthermore, since the policy does not have to infer the foot positions from joint angles, our policy excels on out-of-domain (OOD) ter-rains. Furthermore, we introduce a dynamic stability reward which guides the policy to learn locomotion that respects the model-based stability criteria, leading to safer locomotion. We also introduce global velocity tracking to ensure that the robot cannot exploit the reward function by avoiding difficult terrain. These contributions lead to successful locomotion over complex terrain on in-domain and OOD terrains. The main contributions of this paper are three-fold: 1) A novel foot position map embedded into the heightmap, providing direct knowledge of the relation-ship between the terrain and the foot positions; 2) A dynamic stability reward that guides the policy to learn stable locomotion over complex terrain; 3) Global velocity tracking, which prevents the robot from exploiting the reward function to avoid difficult terrain. We conduct extensive quantitative and qualitative evaluations across a wide range of terrains to validate our findings. In addition, we evaluate our method with zero-shot sim-to-sim transfer to assess its applicability. II. RELATED WORKS 
+
+A. Locomotion over Sparse Terrain 
+
+Much research has focused on locomotion over sparse footholds. DeepGait [11] is comprised of a high level policy to output footholds and a low level policy which generates whole body motions to achieve these footholds, resulting 
+
+> arXiv:2604.02744v1 [cs.RO] 3 Apr 2026 Proprioception
+> Heightmap
+> Actor
+> Critic
+> PD Controller
+> PPO
+> Update
+> Simulator
+> CNN
+> concatenate
+> Linear
+> Multi Head Attention
+> map encoding
+> concatenate
+> map features
+> Foot position map
+
+Map Encoding Policy   
+
+> With stability
+> rewards
+> ℎ!
+> ℎ!
+> "#
+> 𝑜 !
+> $%&$
+> 𝑓 !
+> 𝑧 !
+> $%&$
+> ℎ!
+> '&(')! 𝑧 !
+> 𝑄
+> 𝐾 , 𝑉
+> 𝑜 !
+
+Fig. 2: We propose a foot position map which is concatenated with the heightmap providing information of the foot positions relative to the terrain. During training, we add a stability reward based on the CoP to guide the policy to prefer safer actions. 𝐹𝐿 
+
+> 𝑑 !
+> 𝐶𝑜𝑃
+> 𝑑 "
+> 𝑑 #
+
+𝑟 !"#$%&%"' = 𝑚𝑖𝑛 𝑑 {%)*,,,-}
+
+> 𝐹𝑅 𝑅𝑅
+> 𝑅𝐿
+> 𝐶𝑜𝑃
+> 𝑓 !
+> 𝑓 "
+> 𝑓 #
+> 𝑓 $%&
+
+Fig. 3: CoP-based stability rewards. We calculate the mini-mum distance of the Center of Pressure (CoP) to boundary of the support polygon as the stability reward. on successful locomotion in simulation. DTC [19] utilizes a state-of-the-art optimization-based foothold planner TA-MOLS [5] combined with RL for low level control by which they circumvent the problem of sparse reward signals on sparse terrain. However, the computational overhead for the optimization-based method is high. Moreover, the usage of an optimization-based foothold planner limits the robustness of the method compared to end-to-end learning-based meth-ods. Recently, end-to-end methods have been researched in the context of quadrupedal and bipedal locomotion over sparse terrain. Zhang et al. [13] proposed a two stage curriculum learning method combined with a position-based goal definition [21] as an alternative to the standard veloc-ity tracking formulation, achieving agile locomotion over sparse footholds. However, the MLP policy network over-fits to the training terrain reducing generalizability. Yu et al. [14] proposed to train a network to reconstruct the height map from depth images for locomotion over sparse foot holds incorporating the heightmap reconstruction network proposed in [22]. To avoid the problem of sparse reward signals on sparse terrain, Wang et al. [15] proposed a soft-to-hard constraint training method. Most recently, Junzhe et al. [20] proposed an attention-based heightmap encoder resulting in robust locomotion over sparse terrain with high generalizability. 
+
+B. Stability in Locomotion 
+
+In the context of legged locomotion the criteria of stability has been long researched. We first define a support polygon 
+
+P which is the convex hull of the foot positions in contact with the ground as a series of continuous line segments 
+
+(l0, . . . , ln). The static stability of a robot can be calculated by whether the projected center of mass CoM proj ∈ R2
+
+is within the robots support polygon P [23]. Keeping the projected CoM inside of the support polygon can be used as a constraint for the optimization of whole body movement during real time locomotion [24]. More recently, FT-Net [25] uses the distance of the CoM to the support polygon as a reward for locomotion with quadrupedal robots that have impaired joints. RLOC [17] utilize the Capture Point [26] for a stability reward and the CoM-CoP vector has been used for quadrupedal robots performing bipedal locomotion [27]. III. METHODOLOGY In this Section we will introduce the three components of our proposed method and the training pipeline. First, we describe the proposed foot position map and the heightmap encoding in detail. Next we introduce the stability rewards. Finally, we explain the global velocity tracking and compare it to other command types. The rest of the section is dedicated to discussing the details of the observation and the action space of the policy and the reward functions. 
+
+A. Foot Position Map Generation 
+
+In our method we propose an explicit representation of foot positions integrated it into the heightmap. With the proposed foot position map the attention mechanism [20] can attribute weights based on the foot position information without inferring the foot positions from joint encoder infor-mation. The heightmap is a 1.0 m × 1.6 m 2d gridmap of the heights surrounding the base of the robot sampled every 
+
+0.1 m with dimensions H × W = [17 , 11] . We implement the foot position map as a discrete 2d map with the same dimensions as the heightmap with one channel for each foot resulting in a tensor with dimensions H × W × 4. We represent the foot position map as a discretized gaussian distribution f t ∈ RH×W ×4 at time t as given below: 
+
+f t = [ f 1(x, t ), f 2(x, t ), f 3(x, t ), f 4(x, t )] ⊤, (1) 
+
+f k(x, t ) = w · exp 
+
+
+
+− d2
+
+> k
+
+(x)2σ2
+
+
+
+, k = 1 , ..., 4, (2) where dk is the distance from the sampled coordinates to the corresponding foot k. x ∈ {xij }H,W i=1 ,j =1 are the xy coordinates that we sample, where k is the index of each foot and i × j is the heightmap dimension. w is the foot position map weight, and σ is the standard deviation. In our experiments we set w to 10.0 and σ to 0.1. For deployment, we perform Forward Kinematics to cal-culate the foot position from the current joint angles. 
+
+B. Heightmap Encoding 
+
+We propose to apply attention to the concatenated heightmap information which is a foot position map concate-nated with the heightmap 3d coordinates and features, which we will describe in this section. The heightmap ht ∈ RH×W
+
+is first processed by a CNN to produce the heightmap features zheightmap t ∈ RH×W ×(d−7) . The CNN has two layers with a stride of 5 and padding. The first layer has dimensions of 16 and the second layer has dimensions of 
+
+d − 7. d = 64 is the input dimensions of the MHA network: 
+
+zheightmap t = CNN (ht). (3) Then we concatenate the heightmap 3d coordinates h3dt ∈
+
+RH×W ×3, the heightmap features zheightmap t and the foot position map f t to create the concatenated heightmap fea-tures hconcat t ∈ RH×W ×d:
+
+hconcat t = concat (h3dt , zheightmap t , f t). (4) The proprioception encoding zprop t ∈ Rd is created from the linear projection of the proprioception observation oprop t =[vt, ωt, gt, ct, qt, ˙qt, at−1]T. With linear velocity vt ∈ R3,angular velocity ωt ∈ R3, the gravity vector gt ∈ R3, linear and angular velocity commands ct ∈ R3, joint angles qt ∈
+
+R12 ,joint velocities ˙qt ∈ R12 , and previous actions at−1 ∈
+
+R12 :
+
+zprop t = Linear (oprop t ). (5) Finally, we apply Multi Head Attention(MHA) [28] to the concatenated heightmap features hconcat t with the query as 
+
+zprop t to produce the heightmap encoding zt:
+
+zt = MHA (K, V = hconcat t , Q = zprop t ). (6) 
+
+C. Stability Rewards 
+
+In our approach, we employ the dynamic stability criteria based on the center of pressure (CoP) [29] for the reward function. As shown in Fig. 3, we calculate the stability reward rstability from the minimum distance d of CoP to 
+
+n sides of the support polygon: 
+
+rstability = min di=1 ,...,n . (7)           
+
+> Method No Reward Hacking Velocity Accuracy Simple Training Local Velocity ✗✓✓
+> Position ✓✗✗
+> Global Velocity ✓✓✓
+
+TABLE I: Command type comparison. Global velocity track-ing maintains velocity tracking accuracy and simplicity of training while preventing reward exploitation. This stability reward guides the policy to maintain the CoP near the middle of the support polygon therefore enhancing the stability during locomotion. In the rare case that the CoP is outside of the support polygon ( e.g. when a leg is caught in the terrain and negative pressure is applied) we apply a negative penalty. 
+
+D. Global Velocity Tracking 
+
+Local velocity tracking is commonly utilized when learn-ing quadrupedal locomotion. With local velocity tracking, we randomly sample command velocities in the robot’s local coordinates. This means that if the robot turns in any direction, as long as it moves at the given velocity in its local coordinates the robot can obtain high rewards. This setup generally works well but can be exploited by the robot on certain terrains such as stepping stones. We found that in some cases the robot learned to avoid the stepping stones and move in a circle inside of the starting platform. Some research propose to use position commands [21] that prevent the robot from avoiding difficult terrain. However, training becomes more difficult and accurate velocity tracking is challenging with this method. In contrast, we propose a simple global velocity tracking method. With global velocity tracking, we first sample a random velocity in the global coordinates. Then, we apply a transformation from the global coordinates to the local coordinates of the robot. This way the robot cannot gain rewards by running away, mitigating the reward exploitation issue. With RT as the Rotation matrix from global to local coordinates we calculate the local velocity commands ct as, 
+
+ct =
+
+RT (vglobal  
+
+> cmd
+
+)
+
+ωcmd 
+
+
+
+(8) consequently, vlocal  
+
+> cmd
+
+= RT (vglobal  
+
+> cmd
+
+).
+
+E. Observation Space 
+
+The policy network πϕ(at|ot) takes ot ∈ R112 as the input and outputs actions at ∈ R12 . This policy is a neural network with parameters ϕ.The observation ot is the proprioception observation data 
+
+oprop t ∈ R48 and the heightmap encoding zt ∈ R64 :
+
+ot = [ oprop t , zt]T. (9) TABLE II: Definition of rewards ϕ(x) := exp( − || x|| 2 
+
+> 0.5
+
+).                                               
+
+> Reward Terms Definition Weight (1) Linear Velocity Tracking ϕ(vlocal cmd −vlocal b)1.5
+> Angular Velocity Tracking ϕ(ωcmd −ωyaw )0.5
+> (2) Z Linear Velocity Penalty −v2
+> z1.0
+> Angular Velocity Penalty −|| ω|| 20.05
+> Joint Torques −|| τj|| 20.0001
+> Joint Acceleration −|| ˙qj|| 22.5e−7
+> Base Height Tracking −|| ztarget −z|| 21.0
+> Action Rate −|| ˙aj|| 20.03
+> Collisions −ncollision 1.0
+> Stumble −n∥fxy ∥>5∥fz∥0.1
+> Joint Error −|| qdefault
+> j−qj|| 20.04
+> (3) Stability rstability 1.0
+
+F. Action Space 
+
+In this research we employ a quadrupedal robot with 3 actuators per leg as the experimental platform. Consequently, the action space dimension of the policy network corresponds to the robot’s actuator configuration, which consists of 12 degrees of freedom. We define the actions as the difference from the default joint angles qdefault ∈ R12 . Therefore, the final joint target angles qtarget  
+
+> t
+
+∈ R12 are calculated as, 
+
+qtarget  
+
+> t
+
+= qdefault + αat. (10) With α being a constant multiplier set to 0.25. The final actuator torques τ ∈ R12 are calculated from a PD controller with Kp = 40 and Kd = 1 .0:
+
+τ t = Kp(qtarget  
+
+> t
+
+− qt) − Kd ˙qt. (11) 
+
+G. Reward Functions 
+
+We train a locomotion policy which follows velocity commands. The reward functions can be categorized into (1) Velocity command tracking rewards, (2) Regularization rewards to suppress dangerous movements and (3) Our proposed stability reward. The details of the reward functions can be found in Table II. vlocal cmd , vlocal b are the command linear velocity and the actual linear velocity. ωcmd , ωyaw 
+
+are the command angular velocity and the actual angular velocity. ztarget , z are the target height of the robot and the actual height of the robot. f is the contact force of the feet of the robot. ncollision , n∥fxy ∥>5∥fz ∥ are the number of collisions as well as the amount of times the collision force of the foot was greater in the horizontal direction in comparison with the force of the vertical direction respectively. The total reward rt at time step t is calculated as: 
+
+rt(ot, at) = X
+
+> i
+
+riwi, (12) where i denotes different items listed in Table II, and wi is the weight for the corresponding reward item. SU + R SD + R SU + S          
+
+> SD + S SU + S + R SD + S + R
+> Pallets Beams Circles
+> Small Stones Pits Gaps
+> Out -of -Domain Evaluation Environment
+> Smooth
+> Stairs Up Stairs Down Stones
+> Rough Discrete
+> Training Environment
+
+Fig. 4: The training environment consists of smooth, rough, stairs up, stairs down, discrete and stones terrain. The OOD evaluation terrains include novel combinations of stones (S), rough (R), stairsup (SU) and stairsdown (SD) terrains as well as beams, pallets, circles, small stones, pits and gaps. TABLE III: Parameters of the stone terrain               
+
+> Difficulty Level Stone Size cm Stone Gap cm Max. Shift cm Max. Height cm
+> 092 2.5 0.0 1.0
+> · · · · · · · · · · · · · · ·
+> 940 20 10 10
+
+IV. EXPERIMENTS 
+
+A. Experiment Setting 1) Training Environment: The training environment con-sists of a curriculum setup of 6 terrains: smooth, rough, discrete, stairs up, stairs down and stones as depicted in 4. The stones terrain is implemented with the parameters specified in III with varying stone sizes, stone gaps, random shifts and random heights. 
+
+2) Training Details: we trained 4096 environmnets in parallel on a desktop PC with a single NVIDIA RTX4090. Training for our method took around 25 hours to complete. We use PPO [30] as the training algorithm with the legged gym environment [7] based on Isaac Gym [31]. (a) (b) 
+
+> (c)
+
+Fig. 5: The success rate results. (a) Our proposed method produces higher success rates across the board for all terrains. (b) We observe an improvement at higher difficulty levels. (c) We observe a higher success rate especially at lower velocities. 
+
+3) Evaluation Environment: In our experiments we create a large variety of OOD terrains which are not encountered during training for testing as shown in 4. We introduce terrains from combinations of stepping-stones (stones:S), stairs(stairsup, stairsdown:SU, SD) and rough(R) terrain. Additionally we introduce 6 more terrains including pallets, beams, circles, smallstones, pits and gaps. 
+
+4) Evaluation Details: For evaluation we sequentially generate a terrain from difficulty levels 0 to 9 and evaluate each individually. During evaluation for Fig. 5-(a) and Fig. 5-(b), we command the robot to move forward at 1.0 m/s for 20s. If the robots base does not make contact with the terrain and the robot moves more than 4m away from the origin, we calculate that trajectory as a success. We obtain the individual success rate of 1000 robots in simulation and calculate the mean as the final success rate at that difficulty level. For the success rate evaluation at different velocities of Fig. 5-(c), we evaluate locomotion at command velocities from 0.1m/s to 1.0m/s. If the robots base does not make contact with the terrain and the robot moves more than half the expected distance based on the velocity command we calculate that trajectory as a success. 
+
+5) Comparison Methods: We choose 4 baselines to eval-uate along side our proposed method. (1) Ours : This is our proposed method with the foot posi-tion map, stability rewards and global velocity tracking. (2) Attention : We utilize the same architecture from [20], which applies attention to the heightmap, filtering out unimportant heightmap information. (3) Transformer : We implement a Transformer-based En-coder similar to LocoFormer [32]. In the original paper, a depth image is used for exteroception. To have a fair comparison, we input a heightmap instead of the depth image. (4) CNN : We implement a simple CNN-based heightmap encoder with 2 convolutional layers and a final linear layer. TABLE IV: Results of comparison methods. We osbsere a constant improvement of the success rate, the survival rate tracking error and power consumption for our proposed method.                                
+
+> Method MLP CNN Transf. [32] Attn [20] Ours
+> Success rate [%] ↑58.7 69.8 56.8 64.2 77.0 Survival rate [%] ↑62.1 70.8 57.0 68.7 78.5 Tracking error [m/s ]↓0.268 0.249 0.229 0.243 0.169 Power [W] ↓69.3 60.2 78.7 60.2 58.5
+
+(5) MLP : This is a simple MLP-based policy with a flat-tened heightmap as the input. V. RESULTS IN SIMULATION 
+
+A. Quantitative results 1) Success rate per terrains: Fig. 5-(a) depicts the success rate of each method when evaluated on a diverse set of terrains. The columns that are highlighted with a gray color are the OOD terrains that we have added for the evaluation. Compared to the Attention policy our proposed method yields near 10% increase. We observe our proposed method constantly outperforms the baseline methods (MLP, Atten-tion) on all OOD terrains. The largest difference is shown in the pallets terrain where the MLP and Attention methods have a success rate lower than 20%. Our method achieved around 70% success rate which is a 3.5 fold improvement. 
+
+2) Success rate on stones: Fig. 5-(b) shows the success rate of each method when evaluated on the stepping stones terrain at all difficulty levels. We first observe that the MLP policy has the overall lowest success rate on all difficulties. the performance drops drastically around level 5 and reaches 0 at level 8. The Attention policy shows high performance up until level 6 but decreases rapidly from levels 7 and above. Our proposed method shows comparable performance to the Attention policy up until level 6. From level 7 and above we (a) (b) (c)  
+
+> (d) (e)
+> (f)
+
+Fig. 6: Qualitative locomotion results of our proposed method on different terrains. (a) stones + stairs up, (b) stairs up, (c) stones, (d) gaps, (e) pits, (f) pallets. 
+
+Fig. 7: Qualitative locomotion results of our method on stones. (FR: Front Right, FL: Front Left, RR: Rear Right, RL: Rear Left) 𝐶𝑜𝑀 !"#$   
+
+> 𝐶𝑜𝑀
+> CoM
+> 𝐶𝑜𝑃 𝑓 %
+> 𝑓 &
+> 𝑓 '
+> 𝑓 (#!
+> CoP(Ours)
+> 𝐶𝑃
+> 𝐶𝑜𝑀 !"#$
+> 𝐶𝑜𝑀
+> Capture Point
+> Static Stability Dynamic Stability
+
+Fig. 8: We implement stability rewards based on the CoM and the Capture Point for comparing with our proposed CoP-based stability reward. observe that our method out performs the baseline policies. At level 8, both the MLP and Attention policies have a success rate near 0% while our proposed method maintains a higher success rate at around 80%. This 80% difference shows that our proposed method especially thrives with high difficulty stepping stones that are smaller and further apart needing more precise foot placement. 
+
+3) Success rate on stones at different velocities: In Fig. 5-(c) we present the success rate evaluation on the stones environments at velocities from 0.2 m/s to 1.0 m/s. From Fig. 5-(c) we find that our proposed method out performs the MLP and the Attention policies especially at velocities around 0.3 to 0.5 m/s. At 0.3 m/s we observe a near 80% improvement over the baseline policies. 
+
+B. Comparison of Heightmap Encoders 
+
+We compare different network architectures for heightmap encoding. We present the overall success rate in Fig. IV. The overall success rate is calculated from the average success rates of all terrains and all difficulties from 0 to 9. From Fig. IV we observe that Our proposed method produces the highest success rates overall compared to baseline methods such as Attention policies and MLP policies. 
+
+C. Qualitative Locomotion Results 
+
+We present qualitative locomotion results in Fig. 6. We found that our method enables locomotion on terreains such as stones + stairs up terrain 6-(a) and pallets 6-(f) which were not seen during training. Locomotion on other in-domain terrains 6-(b), 6-(c) and out-of-domain terrains 6-(d), 6-(e) are presented as well. Fig. 7 depicts a locomotion trajectory with our policy traversing over the stones terrain. From the Contact state plot we observe that the policy adapts to the environment successfully, changing from a standard trot to a leap when overcoming the gap. Interestingly, we observed that the robot slows down right before a gap and accelerates as it overcomes the terrain. VI. A BLATION STUDIES 
+
+A. Comparison of Stability Rewards 
+
+Table V shows the comparison of different stability re-wards. We compare a static stability reward based on the CoM and two dynamic stability rewards based on the CP(:Capture Point) and CoP(Ours) as depicted in 8. From our results we observe that the CoM stability reward and the TABLE V: Ablation of stability rewards. We found that the CoP reward (Ours) increases the success rate in contrast to Com and CP-based methods.                 
+
+> Stability Reward None CoM CP CoP(Ours)
+> Success Rate [%] ↑74.6 73.7 66.8 77.0 Survival Rate [%] ↑75.3 74.6 68.6 78.5
+
+TABLE VI: Ablation of proposed components. The foot position map produces 10% jump and the dynamic stability rewards produce an additional 2.4% increase in success rates.              
+
+> Component Attention Footmap Ours
+> Success Rate [%] ↑64.2 74.6 77.0 Survival Rate [%] ↑68.7 75.4 78.5
+
+CP stability reward decrease the success rate while the CoP stability reward increases the success rate when evaluated on all terrains at a set command velocity of 1.0m/s. In pre-liminary experiments, the CoM-based static stability reward worked well for terrain that is relatively flat, improving the success rate at lower velocities. However, when the terrains are more complex, the performance degraded. For the CP-based stability reward, we observed a sharper decrease in the success rate. During qualitative evaluation we observed that when the robot is moving at higher speeds (1.0m/s) the CP tends to move out of reach of the support polygon. Since there is a time variable that is not considered in our present reward function, the degraded performance is to be expected. 
+
+B. Comparison of Proposed Components 
+
+In the below Table VI we present the ablation results of our proposed method. To determine which parts of our method had the most impact we test the results of only using the foot position map and both the foot position map and the stability rewards. First, we observe that utilizing the foot position map has the highest increase in success rate at around 10% jump from the baseline Attention method. When we utilize the stability rewards we see a 2.4% increase in success rate as well. From these experiments we conclude that the explicit foot position map has the highest impact on success rate with the stability rewards following. 
+
+C. The Effect of Global Velocity Tracking 
+
+When using the standard local velocity tracking, we found that in some cases the robots learns to avoid difficult terrain like stepping stones. With local velocity tracking, the robot can obtain a relatively high reward without the risk of walk-ing over dangerous terrain by simply turning in a different direction. Since this method does not take into account the absolute direction that the robot is moving towards, the robot can exploit the setup. To prevent the robot from exploiting the reward function we proposed global velocity tracking. From Fig. 9b we observe that the robot does not avoid the dangerous terrain. 
+
+(a) Local velocity tracking (b) Global velocity tracking 
+
+Fig. 9: When using global velocity tracking the issue of robots avoiding difficult terrain is resolved. (1) (2) (3) (4)    
+
+> (1) (2) (3) (4)
+
+Fig. 10: Locomotion results on gaps (top) of 20cm and stairs (bottom) with heights of 20cm. Experiments were conducted in the Gazebo simulator. VII. SIM-TO-SIM TRANSFER EXPERIMENTS We conduct sim-to-sim transfer experiments to validate the applicability of our proposed method. We utilize aUnitree A1 robot equipped with an Ouster OS1-128 Lidar sensor deployed in the Gazsebo simulator. For the heightmap generation we utilize the elevation mapping [33] ROS pack-age. For the sim-to-sim transfer we add noise and domain randomization during the finetuning stage of training. The domain randomization parameters are given in VII. As shown in Fig. 10 we report successful locomotion over gap terrains (top) and stairs terrains (bottom). VIII. CONCLUSION AND FUTURE WORK In this paper we proposed a foot position map, dynamic stability rewards and global velocity tracking to improve locomotion on complex terrain. We demonstrated the capa-bilities of our policy with extensive tests on in-domain and OOD terrains as well as successful sim-to-sim transfer. Our future work will include sim-to-real transfer experi-ments, learning safety limits of locomotion to prevent failure in real world scenarios and further improvements in the encoder architecture. APPENDIX 
+
+A. Training Parameters 
+
+The domain randomization parameters are presented in Table VII, and the PPO training parameters are in Table VIII. REFERENCES [1] A. Shkolnik, M. Levashov, I. R. Manchester, and R. Tedrake, “Bounding on rough terrain with the littledog robot,” The International Journal of Robotics Research , vol. 30, no. 2, pp. 192–215, 2011. [Online]. Available: https://doi.org/10.1177/0278364910388315 [2] R. Grandia, F. Farshidian, R. Ranftl, and M. Hutter, “Feedback MPC for torque-controlled legged robots,” in 2019 IEEE/RSJ International Conference on Intelligent Robots and Systems, IROS 2019, Macau, SAR, China, November 3-8, 2019 . IEEE, 2019, pp. 4730–4737. [Online]. Available: https://doi.org/10.1109/IROS40897.2019.8968251 TABLE VII: Domain Randomization 
+
+Parameters Range Unit 
+
+Ground Friction [0.5,1.25] -Ground Restitution [0.0,0.8] -Link Mass [0.9,1.1]×nominal value Kg Payload Mass [-1,2] Kg CoM [-0.05,0.05] 3 mMotor Strength [0.9,1.1]×motor torque Nm Joint Kp [0.9,1.1]×40 -Joint Kd [0.9,1.1]×1.0 -Initial Joint Positions [0.5,1.5]×default angles rad System Delay [0,40] ms External Force [-30,30] 3 NHeightmap Drift [-0.05,0.05] 3 m
+
+TABLE VIII: PPO Training Parameters 
+
+Hyperparameter Value Clip range 0.2 Entropy coefficient 0.005(stage1), 0.002(stage2) Discount factor 0.99 GAE discount factor 0.95 Desired KL-divergence 0.01 Learning rate 1e-4 Adam epsilon 1e-8 Replay Buffer Size 4096×24 [3] Y. Ding, A. Pandala, C. Li, Y.-H. Shin, and H.-W. Park, “Representation-free model predictive control for dynamic motions in quadrupeds,” IEEE Transactions on Robotics , vol. 37, no. 4, 2021. [Online]. Available: http://dx.doi.org/10.1109/TRO.2020.3046415 [4] R. Grandia, F. Jenelten, S. Yang, F. Farshidian, and M. Hutter, “Perceptive locomotion through nonlinear model-predictive control,” 
+
+IEEE Transactions on Robotics , pp. 1–20, 2023. [5] F. Jenelten, R. Grandia, F. Farshidian, and M. Hutter, “Tamols: Terrain-aware motion optimization for legged systems,” IEEE Transactions on Robotics , vol. 38, no. 6, p. 3395–3413, Dec. 2022. [Online]. Available: http://dx.doi.org/10.1109/TRO.2022.3186804 [6] T. Haarnoja, S. Ha, A. Zhou, J. Tan, G. Tucker, and S. Levine, “Learning to walk via deep reinforcement learning,” arXiv preprint arXiv:1812.11103 , 2018. [7] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk in minutes using massively parallel deep reinforcement learning,” in 
+
+Proc. Conference on Robot Learning (CoRL) , 2022, pp. 91–100. [8] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning quadrupedal locomotion over challenging terrain,” Science Robotics , vol. 5, no. 47, Oct. 2020. [Online]. Available: http://dx.doi.org/10.1126/scirobotics.abc5986 [9] T. Miki, J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning robust perceptive locomotion for quadrupedal robots in the wild,” Science Robotics , vol. 7, no. 62, Jan. 2022. [Online]. Available: http://dx.doi.org/10.1126/scirobotics.abk2822 [10] F. Jenelten, T. Miki, A. E. Vijayan, M. Bjelonic, and M. Hutter, “Per-ceptive locomotion in rough terrain – online foothold optimization,” 
+
+IEEE Robotics and Automation Letters , vol. 5, no. 4, pp. 5370–5376, 2020. [11] V. Tsounis, M. Alge, J. Lee, F. Farshidian, and M. Hutter, “Deepgait: Planning and control of quadrupedal gaits using deep reinforcement learning,” 2020. [Online]. Available: https://arxiv.org/abs/1909.08399 [12] S. Fahmi, V. Barasuol, D. Esteban, O. Villarreal, and C. Semini, “Vital: Vision-based terrain-aware locomotion for legged robots,” 
+
+IEEE Transactions on Robotics , 2022. [13] C. Zhang, N. Rudin, D. Hoeller, and M. Hutter, “Learning agile locomotion on risky terrains,” 2024. [Online]. Available: https://arxiv.org/abs/2311.10484 [14] R. Yu, Q. Wang, Y. Wang, Z. Wang, J. Wu, and Q. Zhu, “Walking with terrain reconstruction: Learning to traverse risky sparse footholds,” 2025. [Online]. Available: https://arxiv.org/abs/2409.15692 [15] H. Wang, Z. Wang, J. Ren, Q. Ben, T. Huang, W. Zhang, and J. Pang, “Beamdojo: Learning agile humanoid locomotion on sparse footholds,” 2025. [Online]. Available: https://arxiv.org/abs/2502.10363 [16] Y. Dong, J. Ma, L. Zhao, W. Li, and P. Lu, “Marg: Mastering risky gap terrains for legged robots with elevation mapping,” IEEE Transactions on Robotics , vol. 41, pp. 6123–6139, 2025. [17] S. Gangapurwala, M. Geisert, R. Orsolino, M. Fallon, and I. Havoutis, “Rloc: Terrain-aware legged locomotion using reinforcement learning and optimal control,” IEEE Transactions on Robotics , vol. 38, no. 5, pp. 2908–2927, 2022. [18] Z. Xie, X. Da, B. Babich, A. Garg, and M. v. de Panne, “Glide: Generalizable quadrupedal locomotion in diverse environments with a centroidal model,” in Algorithmic Foundations of Robotics XV , S. M. LaValle, J. M. O’Kane, M. Otte, D. Sadigh, and P. Tokekar, Eds. Cham: Springer International Publishing, 2023, pp. 523–539. [19] F. Jenelten, J. He, F. Farshidian, and M. Hutter, “Dtc: Deep tracking control,” Science Robotics , vol. 9, no. 86, Jan. 2024. [Online]. Available: http://dx.doi.org/10.1126/scirobotics.adh5401 [20] J. He, C. Zhang, F. Jenelten, R. Grandia, M. B¨ acher, and M. Hutter, “Attention-based map encoding for learning generalized legged locomotion,” Science Robotics ,vol. 10, no. 105, p. eadv3604, 2025. [Online]. Available: https://www.science.org/doi/abs/10.1126/scirobotics.adv3604 [21] N. Rudin, D. Hoeller, M. Bjelonic, and M. Hutter, “Advanced skills by learning locomotion and local navigation end-to-end,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2022, pp. 2497–2503. [22] H. Duan, B. Pandit, M. S. Gadde, B. Van Marum, J. Dao, C. Kim, and A. Fern, “Learning vision-based bipedal locomotion for challenging terrain,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) , 2024, pp. 56–62. [23] Q. Hao, Z. Wang, J. Wang, and G. Chen, “Stability-guaranteed and high terrain adaptability static gait for quadruped robots,” Sensors , vol. 20, no. 17, 2020. [Online]. Available: https://www.mdpi.com/1424-8220/20/17/4911 [24] P. Fankhauser, M. Bjelonic, C. Dario Bellicoso, T. Miki, and M. Hutter, “Robust rough-terrain locomotion with a quadrupedal robot,” in 2018 IEEE International Conference on Robotics and Automation (ICRA) ,2018, pp. 5761–5768. [25] Z. Luo, E. Xiao, and P. Lu, “Ft-net: Learning failure recovery and fault-tolerant locomotion for quadruped robots,” IEEE Robotics and Automation Letters , vol. 8, no. 12, pp. 8414–8421, 2023. [26] J. Pratt, J. Carff, S. Drakunov, and A. Goswami, “Capture point: A step toward humanoid push recovery,” in 2006 6th IEEE-RAS International Conference on Humanoid Robots , 2006, pp. 200–207. [27] E. Xiao, Y. Dong, J. Lam, and P. Lu, “Learning stable bipedal locomotion skills for quadrupedal robots on challenging terrains with automatic fall recovery,” npj Robotics , vol. 3, no. 1, p. 22, 2025. [Online]. Available: https://doi.org/10.1038/s44182-025-00043-2 [28] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, L. Kaiser, and I. Polosukhin, “Attention is all you need,” 2023. [Online]. Available: https://arxiv.org/abs/1706.03762 [29] M. VUKOBRATOVI ´ C and B. BOROVAC, “Zero-moment point — thirty five years of its life,” International Journal of Humanoid Robotics , vol. 01, no. 01, pp. 157–173, 2004. [Online]. Available: https://doi.org/10.1142/S0219843604000083 [30] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 , 2017. [31] V. Makoviychuk, L. Wawrzyniak, Y. Guo, M. Lu, K. Storey, M. Mack-lin, D. Hoeller, N. Rudin, A. Allshire, A. Handa, and G. State, “Isaac gym: High performance GPU based physics simulation for robot learning,” in Thirty-fifth Conference on Neural Information Processing Systems Datasets and Benchmarks Track (Round 2) , 2021. [32] R. Yang, M. Zhang, N. Hansen, H. Xu, and X. Wang, “Learning vision-guided quadrupedal locomotion end-to-end with cross-modal transformers,” in International Conference on Learning Representations , 2022. [Online]. Available: https://openreview.net/forum?id=nhnJ3oo6AB [33] T. Miki, L. Wellhausen, R. Grandia, F. Jenelten, T. Homberger, and M. Hutter, “Elevation mapping for locomotion and navigation using gpu,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2022, pp. 2273–2280.

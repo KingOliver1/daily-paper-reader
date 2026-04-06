@@ -1,0 +1,520 @@
+Title: From Impact to Insight: Dynamics-Aware Proprioceptive Terrain Sensing on Granular Media
+
+URL Source: https://arxiv.org/pdf/2604.02563v1
+
+Published Time: Mon, 06 Apr 2026 00:12:58 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# From Impact to Insight: Dynamics-Aware Proprioceptive Terrain Sensing on Granular Media 
+
+Yifeng Zhang, Yue Wu, Jake Futterman, Jacob Meseha, Eduardo Rosales, Irie Cooper, J. Diego Caporale ∗, Feifei Qian ∗
+
+Department of Electrical and Computer Engineering, University of Southern California, Los Angeles, CA 90089, USA 
+
+> ∗
+
+Corresponding authors. Emails: {caporale, feifeiqi }@usc.edu First author email: yifengz@usc.edu 
+
+Abstract —Robots that traverse natural terrain must inter-pret contact forces generated under highly dynamic conditions. However, most terrain characterization approaches rely on quasi-static assumptions that neglect velocity- and acceleration-dependent effects arising during impact and rapid stance tran-sitions. In this work, we investigate granular terrain interaction during high-speed hopping and develop a physics-based frame-work for dynamic terrain characterization using proprioceptive sensing alone. Through controlled hopping experiments with systematically varied impact speed and leg compliance, our mea-surements reveal that quasi-static based assumptions lead to large discrepancies in granular terrain property estimation during high-speed hopping, particularly upon touchdown and controller-induced stiffness transitions. Velocity-dependent drag alone can-not explain these discrepancies. Instead, acceleration-dependent added-mass effects—associated with grain entrainment beneath the foot—dominate transient force responses. We integrate this force decomposition with a momentum-observer–based estimator that compensates for rigid-body inertia and gravity, and intro-duce an acceleration-aware weighted regression to account for in-creased force variance during high-acceleration events. Together, these methods enable consistent recovery of granular stiffness parameters across locomotion conditions, closely matching linear-actuator ground truth. Our results demonstrate that accurate terrain inference during high-speed locomotion requires explicit treatment of acceleration-dependent granular effects, and provide a foundation for robots to characterize complex deformable terrain during dynamic exploration of terrestrial and planetary environments. 
+
+I. I NTRODUCTION 
+
+Deformable terrain is widespread in natural environments and significantly challenges robot stability and mobility, neces-sitating focused study of locomotion dynamics and controller design for reliable traversal of yielding substrates [1]. The mechanical response of natural substrates, such as sand and mud, can vary substantially on compaction state [2], moisture [3], and particle size [4]. Robots operating in such environ-ments frequently encounter spatially variable ground condi-tions. As a result, locomotion performance depends critically on the robot’s ability to sense and interpret terrain mechanical properties during interaction. While prior work has advanced adaptive gait control [5]–[7], energy-aware control [8]–[10], and morphological effects [11]–[13] for deformable substrates, these approaches share a common dependency: controller effectiveness hinges on accurate knowledge of terrain strength and reaction forces at the contact interface. Mismatch between assumed and actual terrain properties can degrade performance (a) 
+
+Higher speed 
+
+Improved sensing accuracy 
+
+Quasi -static Gait  Dynamic Gait 
+
+(c) 
+
+(b) 
+
+Fig. 1. Locomotion regimes on deformable terrain and their implications for proprioceptive sensing . (a) A quadruped robot navigating natural de-formable terrain with spatially-varying strength and mechanics. (b) Dynamic leg-terrain interaction from a representative stride. (c) Locomotion regimes spanning quasi-static gaits (higher sensing fidelity) to dynamic gaits (higher speed), highlighting the trade-off between terrain inference accuracy and locomotion performance. 
+
+or lead to failure, underscoring the necessity of terrain aware-ness—inferring mechanical characteristics of the substrate directly from physical interactions—for safe, reliable, and efficient legged locomotion on deformable environments [14]– [18]. Recent advances in direct-drive brushless DC (BLDC) ac-tuation provides high torque transparency and low transmis-sion impedance, creating new opportunities for in-situ terrain perception through proprioceptive feedback [19], [20]. Prior work has shown that granular terrain strength can be inferred from internal sensing signals and exploited for locomotion planning [21], [22], establishing a foundation for terrain char-acterization without external instrumentation. This capability has the potential to enable rapid terrain sensing and locomotion adaptation across spatially varying terrain conditions. However, most existing proprioceptive terrain sensing ap-proaches [23], [24] rely on quasi-static granular force models in which resistive forces are assumed to scale primarily with penetration depth [9], [25], [26]. Such models neglect 
+
+> arXiv:2604.02563v1 [cs.RO] 2 Apr 2026
+
+inertial and impact effects that arise during high-speed in-teractions [27]–[29]. In actual locomotion, especially under dynamic gaits, robot legs frequently contact the substrate at substantial velocities. These interactions introduce significant dynamic effects, where both the magnitude and temporal pro-file of the terrain reaction forces deviate from quasi-static pre-dictions [28], [29], leading to substantial degradation in pro-prioceptive sensing accuracy during dynamic locomotion [21]. Consequently, simple linear regression of the force–depth curve becomes insufficient when evaluating terrain mechan-ical properties under dynamic loading conditions. Impulsive robot–substrate interactions remain largely underexplored in the context of proprioceptive terrain inference. To resolve this gap, we investigate dynamics-aware propri-oceptive terrain sensing using a direct-drive BLDC-actuated hopper operating on granular media (Sec. II). We systemati-cally vary impact speed and controller parameters, characteriz-ing terrain reaction forces through both proprioceptive estima-tion and ground-truth load-cell measurements. Measurements reveal that under increasing impact velocity, terrain reaction forces deviate substantially from the quasi-static penetration models (Sec. III-A). To understand how hopping dynamics affect terrain property inference, we analyze the discrepancy between quasi-static regression and measured force profiles, and isolate the depth, velocity, and acceleration compo-nents (Sec. III-B). Guided by these observations, we develop a dynamics-aware proprioceptive terrain-sensing framework, that (i) incorporates a momentum observer to account for inertial effects introduced by leg dynamics (Sec. III-C),and (ii) employs a granular-physics-informed, acceleration-aware weighted regression to reduce hydrodynamic-like and added-mass contributions, restoring accuracy in terrain parameter inference during high-speed hopping (Sec. III-D). Together, these results establish that incorporating impact-aware gran-ular modeling is essential for reliable proprioceptive terrain characterization under dynamic gaits. By bridging granular physics with dynamic robot locomotion and proprioceptive sensing, this work advances robot-aided terrain characteriza-tion beyond the quasi-static domain, and enables interpretation of complex robot–granular interaction signals during dynamic locomotion. II. M ATERIALS AND METHODS 
+
+Here, we describe the robotic platform, experimental proce-dures, and data analysis methods to investigate terrain–intruder interactions during hopping. Specifically, Sec. II-A describes the hopper kinematics and control. Sec. II-B describes the experimental setup and data collection procedures. Sec. II-C describes the state estimation methodology. 
+
+A. Direct-Drive Hopper 
+
+A vertically constrained hopper (Fig. 2a) was used to study proprioceptive granular terrain sensing during dynamic locomotion. The hopper employed a parallel five-bar linkage in which the two upper links were actuated symmetrically to drive the vertical motion of the foot (Fig. 2c). A circular Touchdown  
+
+> Leg length
+> compresses
+> Liftoff
+> Leg length
+> > threshold
+> No -
+> liftoff
+> apex
+> Compression
+> -Extension
+> Flight
+> (damped)
+> Soft
+> Compression
+> Stiff
+> Extension
+
+(d) State Machine  (e) State Estimation            
+
+> Sensors
+> Kalman
+> Filter
+> Kinematics
+> 𝑥 f,ሶ𝑥 f,ሷ𝑥 f
+> Momentum
+> Observer
+> Contact
+> Force
+> IMUs,
+> TOF,
+> Encoders
+> Torque estimates,
+> Encoders
+> 𝐹 =𝑓 𝑥 f,ሶ𝑥 f,ሷ𝑥 f
+> Reaction Force Modeling
+> ሶ
+> 𝑥 𝑓
+
+(a) Robot System: 
+
+> Direct -Drive Hopper
+> TOF
+> Direct
+> drive
+> motors
+
+(b) Measurement System: 
+
+> Load -Cell Linear Actuator
+> Intrusion
+> Direction
+
+## 𝜏 1 𝜏 2
+
+𝐹  𝑥 f
+
+> 𝑥 b
+> 𝜃
+
+(c) Free -Body  
+
+> Diagram
+> Linear
+> Actuator
+> Motor
+> IMUs
+> Load cell
+> Fluidized
+> bed
+> Fig. 2. (a) Robotic hopper. (b) Load cell instrumented linear actuator for ground truth measurements. (c) Hopper free body diagram. (d) SLIP controller state machine. (e) State estimation pipeline.
+
+foot (80 mm diameter, 50 mm thickness) was attached at the intersection of the two lower linkages via a central bar, enforcing vertical intrusion into the granular terrain. This low-degree-of-freedom (DoF) configuration and simple foot tra-jectory facilitated systematic variation of impact speed while eliminating effects from body rotation. A Raibert-style controller [30] was used to control the hopper motion. Each hopping cycle was divided into flight and stance phases. During the stance phase, the virtual leg stiffness was modulated from a compliant compression mode to a stiffer extension mode at the end of compression to generate lift-off (Fig. 2d). This phase-dependent stiffness modulation compen-sated for energy dissipated during terrain interaction [9] by injecting elastic potential energy through the virtual spring. During flight, the leg reset to its compression neutral length for the next stance; additional damping was applied to suppress oscillations in the absence of terrain loading. The joints were actuated using direct-drive ( i.e., gearless) motors (CubeMars, R80 KV110), which provided high force transparency [19] and enabled estimation of ground reaction forces from actuator current measurements. Joint position and current were logged from motor encoders at a sampling frequency of 1kHz. Joint torque was then estimated from the joint current, and enabling the computation of end-effector forces using Jacobian: 
+
+F = J−⊤ τ (1) where J is the leg Jacobian and τ = KtI denotes the joint torque vector estimated from measured joint currents I using the torque-constant Kt.To evaluate the accuracy of the proprioceptive force es-timates, a single-axis compression load cell (50 kg rated capacity) was mounted on the foot and interfaced with a signal amplifier (ATO-LCTR-DY510) and a 16-bit ADC (ADS1115). In addition, two inertial measurement units (IMUs; ISM330DHCX) were mounted on the body and the foot, respectively, to measure linear acceleration. A downward-facing time-of-flight (ToF) sensor (AFBR-S50) was installed on the body to measure body height. 
+
+B. Hopping Experiments for Proprioceptive Terrain Charac-terization 
+
+Experiments were conducted on a granular bed composed of 300 μm glass beads, which behaves qualitatively similar with natural sand, while its uniform size and shape promote consistent mechanical behavior [31]. Prior to each trial, the bed was reset using a fluidized-bed preparation technique [32], producing a level surface and repeatable volume fraction. To ensure interaction with undisturbed terrain, each hopping trial was performed on a freshly prepared surface. The robot was released from a prescribed height, and only the first complete hopping stride—from pre-touchdown flight to post-liftoff—was analyzed to avoid terrain compaction from prior contacts. Five impact conditions were tested, spanning mea-sured touchdown speeds vTD ≈ 0.2–1.2 m /s (the lowest-speed condition used an ∼2 mm release). The extension stiffness was fixed at 5.00 N/cm, while compression stiffness varied among 2.50, 3.75, and 5.00 N/cm. Neutral lengths were held constant. Five trials per configuration were performed, yielding 60 total trials. All onboard sensors—including motor torque estimates, encoders, IMUs, the ToF sensor, and the load cell—recorded synchronized measurements at 1 kHz during each trial to cap-ture the transient robot–terrain interaction dynamics. Ground-truth body and foot positions were tracked using the motion-capture system (OptiTrack Prime 13W, 240 FPS). In addition, Hopper dynamics and foot-ground interactions were recorded from sideview (GoPro HERO 12, 240 FPS). To obtain ground truth terrain mechanics, we used a linear actuator (Heechoo) mounted above the fluidized bed to per-form penetration experiments (Fig. 2b). During each trial, the linear actuator drove the same hopper foot vertically into the granular bed, while a load cell measured the resulting resis-tive forces under high-speed intrusion. Fifty intrusion speeds (0.022–1.1 m/s) were tested with a fixed 5 cm maximum depth; three trials per speed yielded 150 total trials. Motion capture provided independent measurements of intrusion depth, while an IMU measured acceleration and, via sensor fusion, esti-mated velocity. 
+
+C. State Estimation 
+
+To obtain inertia-compensated proprioceptive force esti-mates, we used a discrete-time Kalman filter to estimate system states from onboard sensing and a momentum observer to account for inertial effects in robot–terrain interaction (Fig. 2e). 
+
+a) Kalman Filter: State estimation is performed using a discrete-time Kalman filter [33]. The system kinematics are modeled in discrete time as, 
+
+xk+1 = Akxk + Bkuk + wk, (2) where the state vector is defined as xk := [ xb,k , ˙xb,k , xf,k , ˙xf,k ]⊤, with xb,k and xf,k denoting the vertical positions of the body and the foot, respectively, and ˙xb and ˙xf their corresponding velocities (Fig. 2c). The input vector is uk := [ ab,k , af,k ]⊤, where ab and af the linear accelerations measured by the IMU. The state transition matrix Ak and input matrix Bk are given by 
+
+Ak =
+
+
+
+1 ∆tk 0 00 1 0 00 0 1 ∆tk
+
+0 0 0 1
+
+ , Bk =
+
+ 
+
+> 12
+
+∆t2 
+
+> k
+
+0∆tk 00 12 ∆t2
+
+> k
+
+0 ∆tk
+
+ ,
+
+(3) where ∆tk denotes the discrete-time sampling interval. And 
+
+wk represents zero-mean process noise induced by IMU measurement uncertainty. The measurement model is given by 
+
+zk = Hkxk + vk, (4) where 
+
+zk =
+
+
+
+zk, 1
+
+zk, 2
+
+zk, 3
+
+ =
+
+
+
+xb,k 
+
+xb,k − xf,k 
+
+˙xb,k − ˙xf,k 
+
++vk, Hk =
+
+
+
+1 0 0 01 0 −1 00 1 0 −1
+
+ ,
+
+(5) with zk, 1 measured by the ToF sensor; zk, 2 and zk, 3 cor-responding to the body–foot relative displacement and its rate obtained from the encoder; and vk denoting zero-mean measurement noise. 
+
+b) Momentum Observer: The estimated kinematics are used to reconstruct the foot–terrain contact force via a momen-tum observer. Using generalized coordinates q = [ xf , θ]⊤,where θ is the joint angle shared by the two motors under symmetric actuation, the dynamics are written as 
+
+M (q) ¨ q + C(q, ˙q) ˙ q + g(q) = S⊤ τ + J⊤ 
+
+> c
+
+Fc, (6) where τ is the scalar input torque and Fc is the scalar vertical foot–terrain contact force. With this coordinate choice, the selection matrix and contact Jacobian reduce to constant row vectors, S = 0 1 and Jc = 1 0, and are therefore independent of q. Here, Jc(q) denotes the contact Jacobian ,which is distinguished from the Jacobian used for quasi-static force reconstruction in (1). Using this formulation, we solve for the foot vertical accel-eration ¨xf from (6), yielding 
+
+Mf (θ) ¨ xf + Mf (θ) g = Fc − β(θ) τ − C(θ) ˙θ2, (7) This expression relates the vertical foot dynamics to the foot– terrain contact force and the applied joint torque. When the linkage inertia and Coriolis/centrifugal terms are neglected, the model reduces to the quasi-static proprioceptive formulation in (1). As acceleration measurements are noisy and not directly used in the momentum observer, we reformulate the estimator in terms of the foot momentum 
+
+pf := Mf (θ) ˙ xf . (8) Taking the time derivative and substituting the dynamics yields the contact force in the form 
+
+Fc = ˙ pf − ψ(θ, ˙θ, ˙xf , τ ), (9) where 
+
+ψ(·) := ∂M f (θ)
+
+∂θ ˙θ ˙xf − Mf (θ) g − β(θ) τ − C(θ) ˙θ2. (10) Following [34], the contact force was estimated using a first-order residual filter 
+
+˙r = k Fc − r, (11) which can be implemented equivalently via an internal mo-mentum estimate ˆpf :
+
+r = k pf − ˆpf
+
+, ˙ˆpf = ψ(·) + r. (12) Encoder measurements provided θ and ˙θ, and ˙xf was obtained from the Kalman filter. The contact force was then recovered from the residual r.III. R ESULTS 
+
+This section reports force measurements during dynamic hopping, isolates factors influencing ground reaction forces, and develops a granular-physics framework to infer terrain properties from proprioceptive data. Sec. III-A presents a representative hopping stride, illustrating kinematic states and terrain contact forces. Sec. III-B explores hydrodynamic-like effects under high-speed intrusion and their manifestation in the contact force. Sec. III-C introduces a momentum-observer estimator to compensate for rigid body inertia, recovering terrain forces and improving proprioceptive estimates. Finally, Sec. III-D integrates the robot–granular interaction model with improved force estimates to infer granular terrain properties during high-speed hopping. 
+
+A. Hopper Dynamics and Terrain Reaction Force During a Single Cycle 
+
+We examined the evolution of the hopper dynamics and ground reaction forces during a representative stride cycle on undisturbed sand (Fig. 3). The cycle was segmented into pre-touchdown flight, compression, extension, and post-liftoff flight. At touchdown (Fig. 3, t = 0 .13 s), the virtual leg length began decreasing as the compression phase initiated (Fig. 3b). Upon contact, the body continued descending while the foot height briefly plateaued before further penetration (Fig. 3c). Unlike rigid-ground hopping, where the foot velocity drops instantaneously to zero upon touchdown, the foot velocity decelerated over approximately 50 ms before reaching rest (Fig. 3d) due to granular medium yielding. The foot IMU (a) Representative stride snapshots                                  
+
+> 0.16 sec 0.28 sec 0.36 sec 0.47 sec
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> 0.25
+> 0.30
+> 0.35
+> 0.40
+> Length
+> [m]  Flight
+> Compression Extension
+> Flight
+> TD CE LO
+> (b) Virtual leg length
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> 0.2
+> 0.3
+> 0.4
+> Body Height
+> [m]
+> (c) Body and foot height
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> 1
+> 0
+> 1
+> 2
+> Velocity
+> [m/s]
+> (d) Body and foot velocity
+> Body
+> Foot
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> 0
+> 50
+> Acceleration
+> [m/s²]
+> (e) Body and foot IMU acceleration
+> Body
+> Foot
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> Time [s]
+> 0
+> 50
+> 100
+> Force
+> [N]
+> (f) Quasi-static proprioception vs. load cell toe force
+> QS Proprioceptive
+> Load cell
+> 0.1
+> 0.0
+> 0.1
+> Foot Height
+> [m]
+> Fig. 3. Representative dynamic hopping stride on granular medium. (a) Snapshots of the hopper during a representative stride: initial compression after touchdown, maximum compression, deeper penetration induced by the stiffer extension phase, and post-liftoff. (b) Virtual leg length, defined as the body–foot height difference, measured by motor encoder. TD: touchdown; CE: compression–extension transition; LO: liftoff. (c, d) Body and foot height and velocity, respectively, measured via motion capture (MoCap). (e) Body and foot acceleration measured by onboard IMUs. (f) Quasi-static proprioceptive estimate (1) compared with load-cell ground-truth measurements.
+
+exhibited a sharp upward acceleration transient at impact (Fig. 3e), corresponding to rapid momentum exchange with the substrate. The load-cell force increased immediately af-ter contact and exhibited an early peak (Fig. 3f, orange curve). This peak was lower and broader than the sharp, high-magnitude impact forces typical of rigid-ground contact, reflecting pronounced energy dissipation in the deformable terrain. During compression (Fig. 3, t = 0 .13 − 0.28 s), the virtual leg shortened until reaching its minimum (Fig. 3b). The foot penetrated deeper into the sand while the body descended toward its minimum height (Fig. 3c). Both body and foot velocities approached zero near maximum leg compression (Fig. 3d), while body acceleration increased and remained ele-vated due to the rising controller-generated leg force (Fig. 3e). The contact force increased throughout compression (Fig. 3f); unlike rigid-ground hopping, where a large ground-reaction force rapidly halts the foot and balances the applied leg force, the substrate yielded nonlinearly under load. At the compression–extension transition (Fig. 3, t = 0 .28 s), the controller increased the virtual leg stiffness, initiating leg extension (Fig. 3b). As extension began, the body height increased while the foot continued descending due to substrate deformation, creating a transient divergence (Fig. 3c). The body velocity rapidly became positive, whereas the foot veloc-ity remained negative before approaching zero before reversing (Fig. 3d). A second pronounced acceleration transient was observed at the stiffness switch (Fig. 3e). The contact force increased after the stiffness transition, reaching its maximum during extension (Fig. 3f), coinciding with maximum penetra-tion depth. This behavior differed from rigid-ground hopping, where force would decrease once upward acceleration began. The deformable substrate continued yielding under increased load, causing further penetration and energy dissipation. Upon liftoff (Fig. 3, t = 0 .47 s), the controller switched to flight, and the leg returned toward its neutral length in preparation for the next stride (Fig. 3b). The foot lifted off below the original sand surface, indicating residual substrate deformation (Fig. 3c). A third acceleration transient occurred at liftoff (Fig. 3e), reflecting rapid unloading and leg retraction. 
+
+B. Decomposing Terrain Reaction Force in Dynamic Intrusion 
+
+In this section, we integrate granular physics models to develop a terrain-force prediction framework using ground reaction forces measured by the load cell during hopping. 
+
+1) Quasi-static reference: Granular intrusion at low speed is commonly modeled under quasi-static penetration as a depth-dependent resistive force that scales approximately linearly with penetration depth beyond a shallow transient regime [35]. Most robotic terrain-sensing work adopts this quasi-static (QS) formulation to interpret terrain proper-ties [23], [24]. We therefore first compared the hopper’s depth–force measurements to a linear depth-only fit; the sys-tematic deviation indicates that depth alone cannot capture the force in the dynamic regime (Fig. 4(a)). 
+
+2) Velocity-dependent effects: We hypothesized that the mismatch arose from velocity-dependent inertial effects during high-speed intrusion. Prior studies [27], [28] showed that gran-ular resistive forces scale quadratically with intrusion speed once impact exceeds a material-dependent inertial threshold, which for our medium is p2dgg ≈ 0.08 m/s [36]. Because touchdown speeds in our hopping experiments exceeded this threshold (Fig. 4b), the interaction lay in the inertial regime. To characterize velocity dependence, we performed constant-speed intrusions from 0.022 to 1.1 m/s, with an in-0
+
+> 50
+> Force [N]
+
+(a)   
+
+> Linear fit
+> Hopper
+> 024
+> Depth [cm] 0.0
+> 0.5
+> 1.0
+> Speed [m/s]
+> 0
+> 30
+> 60
+> 90
+> Force [N]
+
+(c) 
+
+> 0
+> 50
+> Force [N]
+
+(d) 
+
+> QS + velocity
+> Hopper
+> 50
+> 0
+> a [m/s²]
+
+(e)      
+
+> 012345
+> Intrusion Depth [cm]
+> 25
+> 0
+> 25
+> Fres  [N]
+
+(f) 
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> Force [N]
+> 5
+> 0
+> 5
+> maa [N]
+> 0
+> 1
+> Speed [m/s]
+
+(b)          
+
+> Fig. 4. Terrain force decomposition under high-speed intrusion. (a) Force–depth with linear fit. (b) Intrusion speed–depth. (c) Depth–speed force map from constant-speed linear-actuator intrusions; gray: representative trials, cyan: hopper trajectory projected for prediction. (d) Measured force vs map prediction. (e) Foot acceleration. Positive represents downward direction. (f)
+> Fres and added-mass term maa.
+
+crement of 0.02 m/s (Fig. 4c, transparent curves). Using these data, we fit a compact parametric terrain model via ordinary least squares and constructed a continuous depth–speed force surface (Fig. 4c, surface color). Incorporating velocity dependence improved agreement rel-ative to the QS model, but substantial residuals remained (Fig. 4d), particularly (i) shortly after touchdown and (ii) post compression–extension transition. Both intervals coincided with rapid foot deceleration (Fig. 4e), suggesting an additional acceleration-dependent contribution. 
+
+3) Acceleration-dependent added mass: Granular impact studies report that high-speed intruders entrain a conical region of grains beneath the foot, which behaves as an effective added mass [37]. This mechanism introduces acceleration-dependent inertial forces beyond depth- and velocity-dependent resis-tance. Building on this framework, We modeled the terrain reaction force as: 
+
+Fg(z, ˙z, ¨z) = Fd(z) + ddt [ma(z) ˙ z] = Fd(z) + ∂m a
+
+∂z ˙z2 + ma ¨z, 
+
+(13) where z = max(0 , −xf ) denotes the penetration depth (posi-tive downward), ma denotes the added mass. This formulation separates inertial effects into: (1) avelocity-dependent quadratic drag term proportional to ˙z2, and (2) an acceleration-dependent added-mass term ¨z arising from accelerating the granular cone. Under constant-speed intrusion, 
+
+¨z = 0, and only the ˙z2 contribution remains. However, during hopping, rapid deceleration and acceleration occurred at touchdown and at the compression–extension transition, activating the ma ¨z term. The added mass grew during the near-surface transient regime and became approximately constant once the steady regime is reached. We estimated the added-mass profile by integrating the fitted added-mass gradient with respect to depth, and computed an acceleration-induced contribution using the estimated added mass and the measured acceleration (Fig. 4f, purple). The resulting added-mass term reproduced the dominant timing and shape of the residual force during both transient intervals (Fig. 4f, blue). Although magnitudes differed modestly, likely due to uncertainty in gradient integration and bulk-model fitting, the agreement supports acceleration-induced added mass as a primary contributor to dynamic terrain reaction forces during hopping. This decomposition established a physics-based represen-tation of terrain reaction forces under dynamic intrusion. In Sec. III-D, we leverage this representation to infer terrain properties from proprioceptive force measurements. 
+
+C. Proprioceptive Terrain Reaction Force Estimation via Mo-mentum Observer 
+
+To infer terrain properties from onboard sensing alone, pro-prioceptive force estimates must accurately capture transient interaction forces. However, the quasi-static (QS) estimator (1) exhibited substantial mismatch with load-cell ground truth, particularly during rapid events (Fig. 3f). It failed to reproduce (i) the initial force surge at touchdown and (ii) the two force peaks associated with controller mode transitions. These discrepancies aligned with three pronounced foot-IMU acceleration transients (Fig. 3(e))—impact, the com-pression–extension transition, and liftoff—indicating rapid momentum exchange neglected by the quasi-static model. Conceptually, the quasi-static estimator treats the body–foot spring interaction as the terrain force; however, when the foot accelerates, foot inertia causes a mismatch between the body–foot interaction and the true terrain contact force, biasing the inferred terrain force—especially during impact and phase transitions. This motivates accurate state (and acceleration) estimation to improve proprioceptive terrain inference. To address this limitation, we implemented a momentum-observer framework driven by onboard state estimation (Fig. 5), with its kinematic inputs provided by a Kalman filter that fuses ToF, encoder, and IMU measurements to estimate 0.0 0.1 0.2 0.3 0.4 0.5                             
+
+> 0.2
+> 0.3
+> 0.4
+> Height [m]
+> (a) Body height
+> ToF
+> MoCap
+> KF
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> 0.05
+> 0.00
+> 0.05
+> (b) Foot height
+> MoCap
+> KF
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> 1
+> 0
+> 1
+> 2
+> Velocity [m/s]
+> (c) Body velocity
+> MoCap
+> KF
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> 1
+> 0
+> 1
+> (d) Foot velocity
+> MoCap
+> KF
+> 0.0 0.1 0.2 0.3 0.4 0.5
+> Time [s]
+> 0
+> 25
+> 50
+> 75
+> Force [N]
+> (e) Momentum observer
+> proprioception
+> Load cell
+> MO
+> 0123456
+> Foot depth [cm]
+> 0
+> 25
+> 50
+> 75
+> (f) Load cell and MO
+> force vs. foot depth
+> Load cell
+> MO
+> Fig. 5. Kinematic state estimation and MO-based force inference. (a-d) Body and foot height (a,b) and velocity (c,d) estimated via the onboard-sensing-based Kalman filter, compared with MoCap measurements. (e) Toe force estimated by the momentum observer using Kalman-filter-estimated kinematics. (f) MO force vs. KF-estimated depth, compared with load-cell force vs. MoCap depth.
+
+body and foot motion. The ToF sensor measured body height over granular medium but was noisy and unsuitable for direct height or velocity use. The encoder provided high-fidelity body–foot displacement with low assumed covariance, and the IMU, despite noise, tracked body and foot kinematics to constrain the filter between updates. This fusion yielded reliable onboard kinematic estimates, validated against motion capture(Fig. 5a-d). The body height closely tracked the MoCap data, effectively denoising the ToF measurements, while the foot height also aligned well with MoCap. More importantly, the velocity, obtained through Kalman filter, matched the MoCap velocity with high accuracy. Using the estimated foot velocity, the momentum observer compensated for inertia and gravity to recover the external terrain reaction force. The observer-based estimate closely matched the load-cell force throughout the stride, including impact and phase transitions, substantially improving upon the QS estimate (Fig. 3e). Finally, combining Kalman-filtered foot height with the force estimates, we expressed force as a function of intrusion depth (Fig. 5f) and found that, despite residual errors, the primary terrain mechanics were captured relative to load-cell and MoCap ground truth, establishing momentum-observer–based proprioception as a viable foun-dation for terrain characterization during dynamic hopping. D. Dynamic Terrain Reaction Force Characterization for Robot–Terrain Interaction 
+
+In this section, we investigate whether proprioceptively estimated contact forces can be used to recover an empirical terrain reaction model F (z, ˙z, ¨z), and evaluate the performance of three treatments:  
+
+> •
+
+w/o MO, w/o GD : quasi-static (QS) proprioception only (1) with linear fitting to estimate granular penetration resistance without considering granular dynamics;  
+
+> •
+
+w/ MO, w/o GD : momentum observer (MO) corrected proprioception, with linear fitting.  
+
+> •
+
+w/ MO, w/ GD : momentum observer corrected propri-oception with acceleration-aware weighted least squares (WLS) fitting that accounts for acceleration-induced gran-ular dynamics (GD). 
+
+1) Momentum observer improves force estimation and re-sulting granular strength estimation: We first compared terrain characterization using momentum observer based force esti-mate against the quasi-static estimator (1). Across touchdown speeds (fixed kc) and across controller stiffnesses (fixed vTD ), the MO-corrected estimates (Fig. 6c,d, w/ MO, w/o GD )systematically lay closer to the linear-actuator ground truth 
+
+kGT than the QS estimator (Fig. 6c,d, w/o MO, w/o GD ). In contrast, the uncorrected QS force–depth relationship was strongly nonlinear with substantial within-group variability, undermining linear stiffness regression. This improvement indicated that compensating for rigid-body inertia and gravity reduced systematic bias in proprioceptive stiffness estimation. Nevertheless, residual deviations from kGT remained, includ-ing at high touchdown speeds with large accelerations. 
+
+2) Acceleration-aware weighting enables identification of granular terrain mechanics during dynamic hopping: We next examine how explicitly accounting for granular dynamics influences the inferred terrain parameters. As shown in Sec. III-B, residual force discrepancies correlated with large foot accelerations. To account for this, we applied an acceleration-dependent weighting in regression that down-weights samples collected during large |¨z|. Specifically, we assign each sample 
+
+i an inverse-variance weight 
+
+wi = 1
+
+σ2
+
+> i
+
+, σi = σgood + ( σbad − σgood ) si, (14) where 
+
+si = (1 + exp[ −k (|¨zi| − a0)]) −1 . (15) The sigmoid mapping si increases the assigned variance once 
+
+|¨z| exceeds a threshold a0, reducing the influence of high-acceleration samples while retaining them in the regression. Across touchdown speeds at fixed kc, the acceleration-aware estimation using granular dynamics (Fig. 6c, w/ MO, w/ GD )yielded kest values that tracked the linear-actuator reference 
+
+kGT closely. A similar improvement was observed when vary-ing kc at fixed vTD (Fig. 6d). These results showed that down-weighting high-acceleration samples improves granular terrain parameter identification under dynamic hopping conditions. 0 2 4 6
+
+> Depth [cm]
+> 0
+> 50
+> 100
+> Force [N]
+
+(a) QS vs MO (Both w/o GD)    
+
+> QS
+> MO
+> 0246
+> Depth [cm]
+
+(b) MO w/o vs w/ GD      
+
+> w/o GD
+> w/ GD
+> 0.22 0.51 0.83 1.01 1.22
+> vTD [m/s]
+> 10.0
+> 15.0
+> 16.6
+> 20.0
+> kest  [N/cm]  kGT
+
+(c)    
+
+> 2.50 3.75 5.00
+> kc[N/cm]
+> 10.0
+> 15.0
+> 16.6
+> kest  [N/cm]
+> kGT
+
+(d)            
+
+> w/o MO, w/o GD
+> w/ MO, w/o GD
+> w/ MO, w/ GD
+> Fig. 6. Terrain stiffness estimation across three treatments. (a) Represen-tative depth–force curve comparing w/o MO, w/o GD (QS; OLS fit) versus w/ MO, w/o GD (MO-corrected; OLS fit). (b) Representative MO-based fit comparing w/ MO, w/o GD (OLS) versus w/ MO, w/ GD (acceleration-aware WLS; points weighted in the regression). (c,d) Estimated stiffness for w/o MO, w/o GD (gray), w/ MO, w/o GD (light blue), and w/ MO, w/ GD (dark blue), shown versus (c) touchdown speed and (d) compression stiffness. In (c), kc= 3 .75 N /cm ; in (d), vTD ≈1.0 m /s. Points are means over n= 5
+> trials; error bars indicate ±SEM. Dashed lines in (c,d) denote kGT , the linear-actuator ground-truth granular terrain stiffness.
+
+In summary, compensating for inertia and gravity using a momentum observer is necessary to obtain consistent proprio-ceptive stiffness estimates across dynamic locomotion regimes. Furthermore, explicitly accounting for acceleration-dependent error in regression substantially improves agreement with ground truth. Together, MO-based force estimation combined with acceleration-aware fitting enables robust onboard charac-terization of granular stiffness during high-speed hopping. IV. C ONCLUSION 
+
+In this work, we presented a dynamics-aware proprioceptive framework for terrain characterization on dry granular media using onboard sensing alone. Controlled high-speed hopping experiments showed that quasi-static based terrain stiffness estimation broke down during impact and controller-induced stiffness transitions, where force discrepancies grow with foot acceleration. By incorporating granular physics models, we identified velocity- and acceleration-dependent effects as dominant contributors to transient force responses. A Kalman-filter state estimator and momentum observer then recovered contact forces accurately from onboard sensing, enabling terrain property identification without external instrumenta-tion. Furthermore, incorporating acceleration-aware weighted regression improved stiffness identification across touchdown speeds and leg compliances, yielding consistent agreement with linear-actuator ground truth. Together, these results show that explicit treatment of inertial granular effects is necessary for reliable terrain inference during dynamic locomotion. Looking forward, this framework opens several avenues for extending dynamics-aware proprioception beyond the present setting. First, the proposed approach can be generalized to di-verse robotic leg morphologies, multi-degree-of-freedom con-tacts, and substrates with cohesion or fluid saturation, where geometry- and direction-dependent force representations are required. Such extensions could support real-time terrain char-acterization and adaptive control for legged robots operating in complex terrestrial and planetary environments. In addition, leveraging dense step-wise interaction data generated during locomotion may enable learning-based or hybrid physics–data models that capture context-dependent contact phenomena while preserving physical interpretability. By treating each locomotion step as a sensing experiment, robots could collect spatially resolved terrain data during exploration and continu-ously update internal terrain representations, constructing and refining world models through interaction. ACKNOWLEDGMENT 
+
+The authors would like to thank Jordan Westphal for dynamics simulation and discussions. This work is sup-ported by the National Science Foundation (NSF) CAREER Award #2240075, the NASA Planetary Science and Tech-nology Through Analog Research (PSTAR) program, Award # 80NSSC22K1313, the NASA Lunar Surface Technology Research (LuSTR) program, Award # 80NSSC24K0127, Na-tional Science Foundation (NSF) Foundational Research in Robotics (FRR) program, Award #2529696, and the NASA Mars Exploration Program (MEP) Technology Development Funding. REFERENCES [1] C. Li and K. Lewis, “The need for and feasibility of alternative ground robots to traverse sandy and rocky extraterrestrial terrain,” Advanced Intelligent Systems , vol. 5, no. 3, p. 2100195, 2023. [2] N. Gravish, P. B. Umbanhowar, and D. I. Goldman, “Force and flow at the onset of drag in plowed granular media,” Physical Review E , vol. 89, no. 4, p. 042202, 2014. [3] V. Richefeu, F. Radjaı, and M. S. El Youssoufi, “Stress transmission in wet granular materials,” The european physical journal E , vol. 21, no. 4, pp. 359–369, 2006. [4] Z.-Y. Wang, P. Wang, Z.-Y. Yin, and R. Wang, “Micromechanical inves-tigation of the particle size effect on the shear strength of uncrushable granular materials,” Acta Geotechnica , vol. 17, no. 10, pp. 4277–4296, 2022. [5] C. M. Hubicki, J. J. Aguilar, D. I. Goldman, and A. D. Ames, “Tractable terrain-aware motion planning on granular media: An impulsive jumping study,” in 2016 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2016, pp. 3887–3892. [6] J. R. Gosyne, C. M. Hubicki, X. Xiong, A. D. Ames, and D. I. Goldman, “Bipedial locomotion up sandy slopes: Systematic experiments using zero moment point methods,” in 2018 IEEE-RAS 18th International Conference on Humanoid Robots (Humanoids) . IEEE, 2018, pp. 994– 1001. [7] S. Liu, J. Tang, S. Meng, and F. Qian, “Adaptive locomotion on mud through proprioceptive sensing of substrate properties,” arXiv preprint arXiv:2504.19607 , 2025. [8] D. J. Lynch, K. M. Lynch, and P. B. Umbanhowar, “The soft-landing problem: Minimizing energy loss by a legged robot impacting yielding terrain,” IEEE Robotics and Automation Letters , vol. 5, no. 2, pp. 3658– 3665, 2020. [9] D. J. Lynch, J. L. Pusey, S. W. Gart, P. B. Umbanhowar, and K. M. Lynch, “Efficient, responsive, and robust hopping on deformable terrain,” 
+
+IEEE Transactions on Robotics , 2024. [10] S. F. Roberts and D. E. Koditschek, “Virtual energy management for physical energy savings in a legged robot hopping on granular media,” 
+
+Frontiers in Robotics and AI , vol. 8, p. 740927, 2021. [11] U. Saranli, M. Buehler, and D. E. Koditschek, “Rhex: A simple and highly mobile hexapod robot,” The International Journal of Robotics Research , vol. 20, no. 7, pp. 616–631, 2001. [12] H. Marvi, C. Gong, N. Gravish, H. Astley, M. Travers, R. L. Hatton, J. R. Mendelson III, H. Choset, D. L. Hu, and D. I. Goldman, “Sidewinding with minimal slip: Snake and robot ascent of sandy slopes,” Science ,vol. 346, no. 6206, pp. 224–229, 2014. [13] X. Liao, W. Liu, H. Wu, and F. Qian, “A bio-inspired sand-rolling robot: effect of body shape on sand rolling performance,” arXiv preprint arXiv:2503.13919 , 2025. [14] S. Chhaniyara, C. Brunskill, B. Yeomans, M. Matthews, C. Saaj, S. Ransom, and L. Richter, “Terrain trafficability analysis and soil mechanical property identification for planetary rovers: A survey,” 
+
+Journal of Terramechanics , vol. 49, no. 2, pp. 115–128, 2012. [15] X. A. Wu, T. M. Huh, A. Sabin, S. A. Suresh, and M. R. Cutkosky, “Tactile sensing and terrain-based gait control for small legged robots,” 
+
+IEEE Transactions on Robotics , vol. 36, no. 1, pp. 15–27, 2019. [16] A. H. Chang, C. M. Hubicki, J. J. Aguilar, D. I. Goldman, A. D. Ames, and P. A. Vela, “Learning to jump in granular media: Unifying optimal control synthesis with gaussian process-based regression,” in 2017 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2017, pp. 2154–2160. [17] ——, “Learning terrain dynamics: A gaussian process modeling and optimal control adaptation framework applied to robotic jumping,” IEEE Transactions on Control Systems Technology , vol. 29, no. 4, pp. 1581– 1596, 2020. [18] S. Choi, G. Ji, J. Park, H. Kim, J. Mun, J. H. Lee, and J. Hwangbo, “Learning quadrupedal locomotion on deformable terrain,” Science Robotics , vol. 8, no. 74, p. eade2256, 2023. [19] G. Kenneally, W.-H. Chen, and D. E. Koditschek, “Actuator transparency and the energetic cost of proprioception,” in International Symposium on Experimental Robotics . Springer, 2018, pp. 485–495. [20] G. Kenneally, A. De, and D. E. Koditschek, “Design principles for a family of direct-drive legged robots,” IEEE Robotics and Automation Letters , vol. 1, no. 2, pp. 900–907, 2016. [21] E. Fulcher, J. Caporale, Y. Zhang, J. Ruck, and F. Qian, “Effect of gait design on proprioceptive sensing of terrain properties in a quadrupedal robot,” arXiv preprint arXiv:2509.22065 , 2025. [22] S. Liu, J. Caporale, Y. Zhang, X. Liao, W. Hoganson, W. Hu, S. Misra, N. Peddinti, R. Holladay, E. Fulcher et al. , “Scout-rover cooperation: on-line terrain strength mapping and traversal risk estimation for planetary-analog explorations,” arXiv preprint arXiv:2602.18688 , 2026. [23] F. Qian, D. Lee, G. Nikolich, D. Koditschek, and D. Jerolmack, “Rapid in situ characterization of soil erodibility with a field deployable robot,” 
+
+Journal of Geophysical Research: Earth Surface , vol. 124, no. 5, pp. 1261–1280, 2019. [24] J. G. Ruck, C. G. Wilson, T. Shipley, D. Koditschek, F. Qian, and D. Jerolmack, “Downslope weakening of soil revealed by a rapid robotic rheometer,” Geophysical Research Letters , vol. 51, no. 1, p. e2023GL106468, 2024. [25] R. Albert, M. Pfeifer, A.-L. Barab´ asi, and P. Schiffer, “Slow drag in a granular medium,” Physical review letters , vol. 82, no. 1, p. 205, 1999. [26] C. Li, T. Zhang, and D. I. Goldman, “A terradynamics of legged locomotion on granular media,” science , vol. 339, no. 6126, pp. 1408– 1412, 2013. [27] D. I. Goldman and P. Umbanhowar, “Scaling and dynamics of sphere and disk impact into granular media,” Physical Review E—Statistical, Nonlinear, and Soft Matter Physics , vol. 77, no. 2, p. 021308, 2008. [28] F. Qian, T. Zhang, C. Li, P. Masarati, A. M. Hoover, P. Birkmeyer, A. Pullin, R. S. Fearing, D. I. Goldman, and F. Olin, “Walking and running on yielding and fluidizing ground,” in Robotics: Science and Systems , 2013, p. 345. [29] S. Godon, M. Kruusmaa, and A. Ristolainen, “Maneuvering on non-newtonian fluidic terrain: a survey of animal and bio-inspired robot locomotion techniques on soft yielding grounds,” Frontiers in Robotics and AI , vol. 10, p. 1113881, 2023. [30] M. H. Raibert, Legged robots that balance . MIT press, 1986. [31] G. Hill, S. Yeung, and S. A. Koehler, “Scaling vertical drag forces in granular media,” EPL (Europhysics Letters) , vol. 72, no. 1, pp. 137–143, 2005. [32] Z. Jin, J. Tang, P. B. Umbanhowar, and J. Hambleton, “Preparation of sand beds using fluidization,” 2019. [33] R. E. Kalman, “A new approach to linear filtering and prediction problems,” Journal of Basic Engineering , vol. 82, no. 1, pp. 35–45, 1960. [34] S. Haddadin, A. De Luca, and A. Albu-Sch¨ affer, “Robot collisions: A survey on detection, isolation, and identification,” IEEE Transactions on Robotics , vol. 33, no. 6, pp. 1292–1312, 2017. [35] W. Kang, Y. Feng, C. Liu, and R. Blumenfeld, “Archimedes’ law explains penetration of solids into granular media,” Nature communi-cations , vol. 9, no. 1, p. 1101, 2018. [36] L. K. Roth, E. Han, and H. M. Jaeger, “Intrusion into granular media beyond the quasistatic regime,” Physical Review Letters , vol. 126, no. 21, p. 218001, 2021. [37] J. Aguilar and D. I. Goldman, “Robophysical study of jumping dynamics on granular media,” Nature Physics , vol. 12, no. 3, pp. 278–283, 2016.
