@@ -1,0 +1,795 @@
+Title: State estimations and noise identifications with intermittent corrupted observations via Bayesian variational inference
+
+URL Source: https://arxiv.org/pdf/2604.02738v1
+
+Published Time: Mon, 06 Apr 2026 00:31:30 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# State estimations and noise identifications with intermittent corrupted observations via Bayesian variational inference 
+
+Peng Sun 1, Ruoyu Wang 2, IEEE student member and Xue Luo 3,♯ , IEEE senior member 
+
+Abstract — This paper focuses on the state estimation problem in distributed sensor networks, where intermittent packet dropouts, corrupted observations, and unknown noise covari-ances coexist. To tackle this challenge, we formulate the joint estimation of system states, noise parameters, and network reliability as a Bayesian variational inference problem, and propose a novel variational Bayesian adaptive Kalman fil-ter (VB-AKF) to approximate the joint posterior probability densities of the latent parameters. Unlike existing AKF that separately handle missing data and measurement outliers, the proposed VB-AKF adopts a dual-mask generative model with two independent Bernoulli random variables, explicitly characterizing both observable communication losses and la-tent data authenticity. Additionally, the VB-AKF integrates multiple concurrent multiple observations into the adaptive filtering framework, which significantly enhances statistical identifiability. Comprehensive numerical experiments verify the effectiveness and asymptotic optimality of the proposed method, showing that both parameter identification and state estimation asymptotically converge to the theoretical optimal lower bound with the increase in the number of sensors. 
+
+I. I NTRODUCTION 
+
+In the field of filtering theory, the Kalman filter (KF) [1] is well known to provide optimal state estimation for linear dynamic systems, provided that the exact noise statistics are known a priori. Misspecified noise parameters often degrade filtering performance and may even cause filter divergence. To alleviate this issue, adaptive Kalman filtering (AKF) [2] has been developed as an important approach for the joint estimation of system states and unknown noise parameters. However, in high-dimensional scenarios, an analytical ex-pression for the joint posterior probability density of states and noise parameters is generally unavailable. Meanwhile, in statistical inference, variational inference (VI) [3] has been widely adopted to approximate unknown quantities of interest by recasting Bayesian inference into an optimization problem. Compared with traditional Markov Chain Monte Carlo methods, VI exhibits superior com-putational efficiency when handling complex hierarchical models [4]. Further improvements in scalability, such as  
+
+> *This work is financially supported by National Natural Science Founda-tion of China (Grant No. 12271019) and the National Key R&D Program of China (Grant No. 2022YFA1005103).
+> 1P. Sun is with School of Mathematical Sciences, Beihang University, Beijing, P. R. China 102206.
+
+1512530585@buaa.edu.cn  
+
+> 2R. Wang is with School of Mathematical Sciences, Beihang University, Beijing, P. R. China 102206.
+
+WangRY@buaa.edu.cn  
+
+> 3X. Luo is with School of Mathematical Sciences, Beihang University, Beijing, P. R. China 102206, and Key Laboratory of Mathematics, Infor-matics and Behavioral Semantics (LMIB), Beihang University, Beijing, P. R. China 100191.
+
+xluo@buaa.edu.cn 
+
+> ♯X. Luo is the corresponding author.
+
+stochastic variational inference [5], have greatly extended the applicability of VI to dynamic systems. Pioneering this intersection, S¨ arkk¨ a and Nummenmaa [6] presented the first Variational Bayesian AKF (VB-AKF) for unknown measurement noise covariance by approximating the joint probability density functions (pdf) with Gaussian inverse-gamma distributions. This foundational work was subsequently extended to address both unknown process noise covariance and measurement noise covariance in filter-ing [7] and smoothing [8] contexts. Building upon these core architectures, researchers have adapted VB to tackle diverse modeling challenges. For instance, Ma et al. [9] applied vari-ational Bayesian (VB) to approximate the joint pdf of states and model identities in multiple state-space models, while Xu et al. [10] and Xia et al. [11] developed VB-based adaptive fixed-lag smoothing and calibration methods, respectively. Most recently, Lan et al. [12] advanced the optimization framework itself, proposing a novel AKF method based on conjugate-computation variational optimization to efficiently solve the joint identification problem in complex systems. Besides, in networked control systems and large-scale wireless sensor networks, intermittent observations (i.e., data missing or packet dropouts) caused by communication chan-nel fading pose a significant challenge. Sinopoli et al. [13] first derived the critical divergence threshold of the KF’s estimation covariance under such observations, making this a pivotal research direction with various intermittent observa-tion models explored. For example, Li et al. [14] designed an optimal diffusion KF for distributed sensor networks, while Xu et al. [15] used event-triggering to address random delays and observation losses. This problem has since expanded from linear to nonlinear/distributed frameworks, with Kluge et al. [16] and Li et al. [17] establishing EKF and UKF stochastic stability under random dropouts, respectively. More recently, research has shifted to adaptive estimation with unknown dropout/noise statistics. A stochastic event-triggered VB filter [18] jointly estimates state and unknown noise covariances, and VB-based methods [19] infer state and measurement loss probability adaptively. However, most ex-isting approaches treat dropouts and corrupted observations separately, lacking a unified framework to simultaneously handle outliers and missing data. In this paper, we model intermittent and corrupted ob-servations via two independent Bernoulli random variables, which respectively characterize the packet loss and mea-surement accuracy of the survival observations. Within this dual-parameter modeling framework, we make the following key contributions: On the one hand, we adapt the VB-
+
+> arXiv:2604.02738v1 [stat.ML] 3 Apr 2026
+
+AKF to enable effective joint state and noises estimation, as well as the dropout and clean rates, under the scenario of simultaneous packet dropouts and corrupted observations. On the other hand, we propose a centralized sequential fusion scheme for the VB-AKF and validate its statistical properties through numerical investigations. Specifically, we first demonstrate the asymptotic optimality of the dual-mask framework, revealing that expanding the observation sample size fundamentally drives the inference error to monotoni-cally converge to the theoretical optimal lower bound. We then verify the algorithm’s dynamic resilience, confirming its capability of zero-delay trajectory tracking under ex-treme impulsive interferences, as well as stable variance identification under severe catastrophic scenarios featuring simultaneous massive packet dropouts and data corruption. Finally, comprehensive ablation studies are conducted to rigidly delineate the operational envelope of the proposed method, explicitly characterizing the statistical identifiability boundaries and theoretical inference limits. The paper is organized as follows: Section II elaborates on the concrete problem to be addressed and provides prelimi-nary background on variational inference. Section III derives the VB-AKF tailored to our specific scenario, along with the corresponding pseudo-code. Section IV presents several numerical experiments to demonstrate the effectiveness of the proposed method. Finally, Section V summarizes the key findings and draws the conclusion. II. P ROBLEM SETTING -UP AND PRELIMINARIES 
+
+A. Problem setting-up 
+
+Consider a time series of length T for a linear dy-namic system. To model large-scale distributed tracking and network-induced packet dropouts (i.e., missing data), we assume a centralized network consisting of N distributed sensor nodes, all observing a single target trajectory simulta-neously. At time k, let xk ∈ Rdx denote the system state and 
+
+yi,k ∈ Rdy (for dx, d y ≥ 1) denote the observation from the 
+
+i-th sensor. The underlying physical dynamics of the system and the observation model for the i-th sensor are given by: 
+
+xk = Fkxk−1 + wk, (1) 
+
+yi,k = γi,k Hkxk + vi,k + (1 − zi,k )ϵk, (2) for i = 1 , · · · , N . Here, Fk ∈ Rdx×dx and Hk ∈ Rdy ×dx
+
+represent the state transition matrix and observation matrix, respectively. The system noise wk ∼ N (0, Q k), observation noise vi,k ∼ N (0, R k) and extra corrupted noise ϵk ∼N (0, E k) are mutually independent. We assume that Qk ∈
+
+Rdx×dx and Rk ∈ Rdy ×dy are unknown, while Ek is known apriori. The binary indicator γi,k ∈ {0, 1} characterizes inter-mittent packet dropouts caused by communication channel fading: specifically, γi,k = 1 indicates successful reception of the observation from the i-th sensor at time k, with ρk ∈
+
+[0 , 1] denoting the network survival rate, i.e. P(γi,k = 1) = 
+
+ρk. Even when observations are successfully received, they may be corrupted by extreme electromagnetic interference or sensor malfunctions, resulting in inaccurate measurements. To characterize the cleanliness of received observations (i.e., whether they are uncorrupted), we introduce another unob-servable and independent binary indicator zi,k ∈ {0, 1}:
+
+zi,k = 1 means the observation from the i-th sensor at time k is clean (uncorrupted), whereas zi,k = 0 indicates a corrupted observation accompanied by the extra noise 
+
+ϵk. The clean rate of the received observations, defined as 
+
+P(zi,k = 1) = βk, is also an unknown parameter to be estimated. The generative model and its known/unknown parameters are displayed in Fig. 1.       
+
+> xk−1xk
+> Qkν0, V 0
+> yi,k Rku0, U 0Ek
+> zi,k γi,k
+> βkρkaβ, 0, b β, 0aρ, 0, b ρ, 0
+> Fk
+> Hk
+> Fig. 1. Generative model of the linear filtering problem (1)-(2) with packet dropout and corrupted noises. Shaded nodes: observable variables; unshaded circles: latent parameters to be estimated; rectangles: hyper-parameters in priors.
+
+To summarize, under the considered problem setup, the following quantities are assumed known apriori: the state transition matrix Fk, the observation matrix Hk, the extra corruption noise covariance Ek, and the noisy/corrupted sensor observations yi,k . The binary packet dropout indicator 
+
+γi,k is observable and also available. The unknown quantities to be jointly estimated include: the system state xk, the unknown noise covariances Qk and Rk, the packet dropout rate ρk, the clean observation indicator zi,k , and the clean rate βk.
+
+B. Preliminary: Variational Inference (VI) 
+
+Let us denote the latent parameter to be estimated as 
+
+W = ( W1, · · · , W n) and the observed data as Z. VI aims to find a tractable distribution family q(W) to approximate the complex true posterior distribution p(W|Z) [3], [4]. This goal can be achieved by maximizing the well-known Evidence Lower Bound (ELBO): 
+
+L(q) := Eq(W)[log p(Z, W)] − Eq(W)[log q(W)] .
+
+Assume that the true conditional distribution belongs to the exponential family: 
+
+p(Wi|W−i, Z ) = h(Wi) exp gTi (W−i, Z )Wi − A(gi) ,
+
+(3) where gi is the natural parameter depending on the rest of the variables W−i and the observed data Z, and A(·)
+
+is the log-partition function. Furthermore, with the mean-field assumption each component of W is assumed to be independent parameters, and we restrict the variational distribution q(Wi) to the same exponential family (3) with a free natural parameter νi, i.e. 
+
+qν (W) = 
+
+> n
+
+Y
+
+> i=1
+
+qνi (Wi),
+
+with ν = ( ν1, · · · , ν n) and 
+
+qνi (Wi) = h(Wi) exp νTi Wi − A(νi) .
+
+The local ELBO with respect to Wi is then defined to be 
+
+Li(qνi ) := Eqνi [log p(Wi|W−i, Z )] − Eqνi [log qνi (Wi)] .
+
+(4) It is the key fact [4] that by minimizing the local ELBO (4) the optimal natural parameter νi equals to the expectation of gi in the true conditional distribution: 
+
+ν∗ 
+
+> i
+
+= Eqν [gi(W−i, Z )] . (5) For a detailed derivation of (5), interested readers are referred to Appendix A in [4]. Equation (5) plays a critical role in the subsequent parameter estimation procedures. III. S TRUCTURED VI AT TIME INSTANT k
+
+Recalling the problem setup described in Section II-A, we illustrate the parameters to be estimated and their mutual relationships in Fig. 2. We refer to the parameters shared by all sensors as global parameters, and those intrinsic to each individual sensor as local parameters.     
+
+> Global parameters Local parameters
+> Qk
+> xk, P k
+> Rk
+> βk
+> ρk
+> zi,k γi,k
+> Fig. 2. Latent parameters dependency. Global parameters shared across all sensor nodes, while local parameters (subscript i, k ) are different among individual sensors.
+
+The latent parameter in our problem is Wk := 
+
+{xk, Q k, R k, ρ k, β k, z i,k , i = 1 , · · · , N }. Under the mean-field assumption [5], the variational distribution 
+
+q(Wk) = q(xk)qνk ,V k (Qk)quk ,U k (Rk)
+
+· qaρ,k ,b ρ,k (ρk)qaβ,k ,b β,k (βk)
+
+> N
+
+Y
+
+> i=1
+
+qπi,k (zi,k ). (6) To perform the Bayesian inference and to ensure the posterior distribution of the parameters remains tractable, we assign conjugate priors to all parameters. Specifically, inverse-Wishart ( IW ) priors are adopted for the noise co-variance matrices, and Beta priors are imposed on the global network survival rate ρk ∈ [0 , 1] and the data clean rate 
+
+βk ∈ [0 , 1] , i.e. 
+
+‘Qk ∼ IW (ν0, V 0), (7) 
+
+Rk ∼ IW (u0, U 0), (8) 
+
+ρk ∼ Beta (aρ, 0, b ρ, 0), (9) 
+
+βk ∼ Beta (aβ, 0, b β, 0). (10) The likelihood function for the i-th sensor forms aBayesian mixture of Gaussians (BMG) [3], which is “gated” by the packet dropout indicator γi,k . Specifically, when 
+
+γi,k = 1 (i.e., the observation is successfully received), the likelihood is given by: 
+
+p(yi,k | xk, R k, z i,k , γ i,k = 1) (11) 
+
+= N (yi,k | Hkxk, R k)zi,k 
+
+| {z }
+
+> Clean observation
+
+· N (yi,k | Hkxk, R k + Ek)1−zi,k 
+
+| {z }
+
+> Corrupted observation
+
+;
+
+whereas if γi,k = 0 (i.e., packet dropout occurs), the observation yi,k is unavailable. 
+
+A. Bayesian Mixture of Gaussians (BMG) and inference of clean rate 
+
+Let us infer the latent clean indicator zi,k for each i-th sensor by BMG proposed in [3]. From the likelihood (11) and the prior P(zi,k = 1) = βk, the conditional log-probability for the clean observation ( zi,k = 1 ) is given by: 
+
+ln p(zi,k = 1 |W−zi,k , y i,k ) = ln βk + ln N (yi,k |Hkxk, R k),
+
+up to a constant. According to (5), taking the expectation with respect to q(xk, R k, β k), we obtain the variational log-posterior: 
+
+ln q∗(zi,k = 1) =Eq(x,R k ,β k )
+
+"
+
+ln βk − 12 ln |Rk|− 12 (yi,k − Hkxk)T R−1 
+
+> k
+
+(yi,k − Hkxk)
+
+#
+
++ const . (12) Let us approximate q(xk) ≈ N (ˆ xk|k−1, P k|k−1), where 
+
+ˆxk|k−1 =Fk ˆxk−1|k−1,Pk|k−1 =FkPk−1|k−1F Tk + ( EQk)−1,
+
+are the predictive mean and covariance matrix. The ex-pectation of the quadratic term in (12) can be obtained analytically: 
+
+Eq(xk ,R k )
+
+(yi,k − Hkxk)T R−1 
+
+> k
+
+(yi,k − Hkxk)
+
+= ( yi,k − Hk ˆxk|k−1)T E[R−1 
+
+> k
+
+]( yi,k − Hk ˆxk|k−1)+ Tr  E[R−1 
+
+> k
+
+]HkPk|k−1HTk
+
+ . (13) Substituting (13) back to (12), one has 
+
+ln q∗(zi,k = 1) =Eq(βk ) ln βk − 12 Eq(Rk ) ln |Rk|− 12 (yi,k − Hk ˆxk|k−1)T E[R−1 
+
+> k
+
+]( yi,k − Hk ˆxk|k−1)
+
+− 12 Tr  E[R−1 
+
+> k
+
+]HkPk|k−1HTk
+
+ =: ∆ 1
+
+> i,k
+
+, (14) up to a constant. Similarly, one has 
+
+ln q∗(zi,k = 0) =Eq(βk ) ln(1 − βk) − 12 Eq(Rk ) ln |Rk + Ek|− 12 (yi,k − Hk ˆxk|k−1)T E(Rk + Ek)−1(yi,k − Hk ˆxk|k−1)
+
+− 12 Tr  E(Rk + Ek)−1HkPk|k−1HTk
+
+ =: ∆ 0
+
+> i,k
+
+, (15) up to a constant. Therefore, the optimal posterior distribution of zi,k is obtained via the softmax transformation: 
+
+πi,k = q∗(zi,k = 1) (14) ,(15) 
+
+= ∆1
+
+> i,k
+
+∆1 
+
+> i,k
+
++ ∆ 0
+
+> i,k
+
+. (16) 
+
+B. Inferences of global parameters ( ρk, βk, Rk and Qk)1) Rates inference ρk and βk: From Fig. 2, it is clear to see that ρk and βk are only related to two independent Boolean indicators γi,k and zi,k , respectively. According to Bayes’ rule, one has 
+
+p(ρk|W−ρk , y) ∝ p(ρk)
+
+> N
+
+Y
+
+> i=1
+
+p(γi,k |ρk),
+
+> (9)
+
+=Beta 
+
+
+
+aρ, 0 +
+
+> N
+
+X
+
+> i=1
+
+γi,k , b ρ, 0 +
+
+> N
+
+X
+
+> i=1
+
+(1 − γi,k )
+
+
+
+,
+
+and 
+
+p(βk|W−βk , y) ∝ p(βk)
+
+> N
+
+Y
+
+> i=1
+
+p(zi,k |βk)γi,k 
+
+> (10)
+
+= Beta 
+
+
+
+aβ, 0 +
+
+> N
+
+X
+
+> i=1
+
+γi,k πi,k , b β, 0 +
+
+> N
+
+X
+
+> i=1
+
+γi,k (1 − πi,k )
+
+
+
+,
+
+where y = {yi,k }, i = 1 , · · · , N , k = 1 , · · · , T .
+
+2) Observation covariance matrix Rk: From Fig. 2, the observation covariance matrix Rk depends on zi,k , γ i,k and 
+
+xk. According to Bayes’ rule, we have 
+
+ln p(Rk|W−Rk , y)= ln p(Rk) + 
+
+> N
+
+X
+
+> i=1
+
+γi,k zi,k ln N (yi,k |Hkxk, R k) (17) 
+
++
+
+> N
+
+X
+
+> i=1
+
+γi,k (1 − zi,k ) ln N (yi,k |Hkxk, R k + Ek) + const .
+
+With the prior distribution (8), adhering to (17) would render the posterior distribution of Rk intractable. To address this, we approximate (17) by omitting the term corresponding to 
+
+zi,k = 1 . Under this approximation, the posterior distribution of Rk reduces to an inverse-Wishart distribution with uk =
+
+u0 +PNi=1 γi,k πi,k and the scale matrix is gated by πi,k , zi,k 
+
+and γi,k , i.e. 
+
+Uk = U0 +
+
+> N
+
+X
+
+> i=1
+
+γi,k πi,k 
+
+h
+
+(yi,k − Hk ˆxk|k)( yi,k − Hk ˆxk|k)T
+
++ HkPk|kHTk
+
+i
+
+. (18) 
+
+3) State covariance matrix Qk: From Fig. 2, the state covariance matrix Qk depends only on xk. According to Bayes’ rule, one has 
+
+ln p(Qk|W−Qk , y)= ln p(Qk) + ln N (xk|Fkxk−1, Q k) + const .
+
+Therefore, with the prior distribution (7), the posterior distribution of Qk is still an inverse-Wishart distribution 
+
+IW (νk, V k), with νk = ν0 + 1 and 
+
+Vk = V0 + (ˆ xk|k − Fk ˆxk−1|k−1)(ˆ xk|k − Fk ˆxk−1|k−1)T
+
+(19) 
+
++ Pk|k + FkPk−1|k−1F Tk − (FkP Tk,k −1 + Pk,k −1F Tk ),
+
+where Pk,k −1 = Pk|kP −1
+
+> k|k−1
+
+FkPk−1|k−1 is the Rauch-Tung-Striebel smoother [20]. 
+
+C. Gated Kalman gain and state’s fusion 
+
+To fuse information from the distributed sensor network seamlessly, we propose a sequential gated updating for the posterior state ˆxk|k and the covariance matrix Pk|k. For the 
+
+i-th sensor at time k, the intermediate state and covariance be ˆx[i] 
+
+> k|k
+
+and P [i] 
+
+> k|k
+
+are updated according to 
+
+ˆx[i] 
+
+> k|k
+
+= ˆ x[i−1]  
+
+> k|k
+
++ Ki,k 
+
+
+
+yi,k − Hk ˆx[i−1] 
+
+> k|k
+
+
+
+, (20) 
+
+P [i] 
+
+> k|k
+
+= ( I − Ki,k Hk)P [i−1]  
+
+> k|k
+
+, (21) where ˆx[i−1]  
+
+> k|k
+
+and P [i−1]  
+
+> k|k
+
+are taking the place of the predictive state ˆxk|k−1 and covariance matrix Pk|k−1 in the classical KF. Also, the localized gated gain is constructed as: 
+
+Ki,k = γi,k P [i−1]  
+
+> k|k
+
+HTk
+
+
+
+(Ω i,k )−1 + HkP [i−1]  
+
+> k|k
+
+HTk
+
+−1
+
+, (22) with the measurement precision formulated as a linear com-bination of the clean and corrupted precision matrices: 
+
+Ωi,k = πi,k ER−1 
+
+> k
+
++ (1 − πi,k )E(Rk + Ek)−1. (23) Since the log-likelihood term is explicitly modulated by 
+
+γi,k , when a network dropout occurs at the i-th sensor at time k (i.e. γi,k = 0 ), the localized Kalman gain collapses to a zero matrix [13]. In this case, the intermediate state estimate and error covariance at the i-th sensor automatically degenerate to the previous sensor’s intermediate state and covariance matrix. D. Iteration of variational inference (VI) and pseudo code 
+
+The VI steps detailed in Sections III-A–III-C are imple-mented iteratively at each time instant to mitigate the bias induced by the parameter priors. The iteration process is indexed by the superscript j in Algorithm 1. Meanwhile, the overall procedure of the proposed VB-AKF, which integrates the BMG and Beta-Bernoulli gating mechanisms, is summa-rized in Algorithm 1. IV. N UMERICAL EXPERIMENTS 
+
+To comprehensively evaluate the statistical properties and estimation performance of the proposed VB-AKF, we design four numerical experiments. These experiments aim to verify the following characteristics: (1) Asymptotic optimality: To validate that increasing the number of observation sample paths reduces the inference error toward the theoretical lower bound. (2) Transient robustness: To evaluate the tracking ability and covariance recovery performance of the filter under sudden noise variance spikes. (3) Inference under severe degradation: To verify the consistent parameter iden-tifiability under simultaneous high-rate packet dropouts and measurement corruptions. (4) Sensitivity analysis: To reveal the statistical identifiability boundaries and theoretical per-formance limits of the model via comprehensive ablation studies. For visualization clarity, we set the state and observation dimensions to dx = dy = 1 to intuitively trace the variance compensation dynamics. In all experiments, we set F =
+
+H = 1 , T = 120 and set the number of VI iterations to 
+
+J = 20 . Packet dropouts and corrupted measurements are not considered in the first two experiments. 
+
+A. Asymptotic optimality 
+
+In this experiment, we investigate the impact of the observation sample size N = Mk (no packet dropout is considered) on our proposed VB-AKF’s convergence accu-racy for linear filtering problem (1)-(2). The true baseline variances are set to Q = 0 .1 and R = 1 . We compare the Root Mean Square Error (RMSE) of the state in the standard KF, which serves as an “Oracle” (i.e., it has full knowledge of the true values of Q and R), with that of the VB-AKF, which relies entirely on blind posterior estimation. We conduct the experiment by iterating over different values of N , specifically N ∈ { 1, 2, 5, 10 , 20 , 50 , 100 }.As shown in Fig. 3, in the data-scarce regime (e.g., N ≤
+
+5), the RMSE of the VB-AKF is slightly higher than that of the Oracle KF. However, with the accumulation of observa-tion data fusion ( N ≥ 10 ), the error curve of the VB-AKF decreases rapidly and converges closely to the theoretical optimal lower bound. This result numerically validates the core statistical property of Bayesian inference: as the amount of data evidence increases, the adaptive learning mechanism of the algorithm mitigates prior uncertainty, enabling the fil-tering system to attain the theoretical asymptotic optimality. 
+
+Algorithm 1: Our proposed VB-AKF 
+
+Input: The number of sensors: N; the number of time steps: T; all the Observations yN ×T ; the Boolean dropout indicator matrix 
+
+Γ = ( γi,k )i=1 ,··· ,N,k =1 ,··· ,T ∈ { 0, 1}N ×T ; the number of iterations J; hyper-parameters 
+
+Ek, a ρ, 0, b ρ, 0, a β, 0, b β, 0, u 0, U 0, ν 0, V 0 and the initial state x0 ∼ N (μ0, Σ0). 
+
+> 1
+
+for k=1:T do  
+
+> 2
+
+% Dropout rate inference ( ρk) 
+
+> 3
+
+E[1 − ρk] = bρ, 0+N −Mk 
+
+> aρ, 0+bρ, 0+N
+
+, where Mk = PNi=1 γi,k . 
+
+> 4
+
+% Iterations of VI at each time instant  
+
+> 5
+
+for j=1:J do  
+
+> 6
+
+% Prediction 
+
+ˆx(j) 
+
+> k|k−1
+
+=Fk ˆxk−1|k−1,P (j) 
+
+> k|k−1
+
+=FkPk−1|k−1F Tk + ( EQk(j−1) )−1.
+
+% Initialize fusion: ˆx[0]  
+
+> k|k
+
+= ˆ x(j) 
+
+> k|k−1
+
+and 
+
+P [0]  
+
+> k|k
+
+= P (j)
+
+> k|k−1
+
+. 
+
+> 7
+
+% Local parameter inference & state and covariance fusion  
+
+> 8
+
+for i=1:N do  
+
+> 9
+
+The clean rate π(j) 
+
+> i,k
+
+is inferred by (16).  
+
+> 10
+
+Calculate equivalent precision Ω(j) 
+
+> i,k
+
+and the local Kalman gain K(j) 
+
+> i,k
+
+via (22) and (23).  
+
+> 11
+
+Sequential state and covariance update: 
+
+ˆx[i] ( j) 
+
+> k|k
+
+, P [i] ( j) 
+
+> k|k
+
+via (20).  
+
+> 12
+
+State and covariance fusion: ˆx(j) 
+
+> k|k
+
+= ˆ x[N ] ( j)
+
+> k|k
+
+and P (j) 
+
+> k|k
+
+= P [N ] ( j) 
+
+> k|k
+
+. 
+
+> 13
+
+% Inference of global parameters  
+
+> 14
+
+Corrupted rate inference: 
+
+E[1 − β(j) 
+
+> k
+
+] = bβ, 0+P    
+
+> iγi,k (1 −π(j)
+> i,k )
+> aβ, 0+bβ, 0+Mk
+
+. 
+
+> 15
+
+Update expected precisions: 
+
+ER(j) −1 
+
+> k
+
+=
+
+
+
+u0 +
+
+> N
+
+X
+
+> i=1
+
+γi,k π(j)
+
+> i,k
+
+
+
+U (j) −1 
+
+> k
+
+,
+
+EQ(j) −1 
+
+> k
+
+=( ν0 + 1) V (j) −1 
+
+> k
+
+,
+
+where U (j) 
+
+> k
+
+and V (j) 
+
+> k
+
+are via (18) and (19), respectively. 
+
+Output: Estimates ˆxk|k = ˆ x(J) 
+
+> k|k
+
+, Pk|k = P (J) 
+
+> k|k
+
+;dropout rate E
+
+
+
+1 − ρ(J)
+
+> k
+
+
+
+; corrupted rate E
+
+
+
+1 − β(J)
+
+> k
+
+
+
+; noise covariance matrices EQ(J) −1 
+
+> k
+
+and ER(J) −1 
+
+> k
+
+.
+
+B. Transient robustness 
+
+In the second experiment, we introduce extreme nonsta-tionary variance shifts, with a fixed number of observations Fig. 3. The RMSE of the state convergence comparison between the oracle KF and the proposed VB-AKF with different numbers of observation nodes  
+
+> N.
+
+N = Mk = 5 at each time step (packet dropouts are not considered). The baseline variances are set to Q = 0.1
+
+and R = 1, consistent with Section IV-A. Two abrupt anomalies are introduced: a sudden process variance spike at k = 40 (the process noise variance instantly jumps to 30 ), and a simultaneous observation disturbance at k = 80 (the observation noise variance instantly surges to 60 ). As shown in Fig. 4, constrained by the static variance assumption, the standard KF responds sluggishly to dynamic maneuvers and is severely degraded by abrupt outliers. In contrast, by performing joint inference across multiple distributed observations, the proposed VB-AKF can rapidly capture the underlying nonstationary variance shifts, thus effectively suppressing invalid perturbations and achieving nearly zero-delay state tracking. Notably, a sudden increase in Rk noticeably affects the estimation of Qk, whereas an increase in Qk has only a mild influence on the estimation of 
+
+Rk, revealing an asymmetric coupling structure between the process and observation noise covariances during adaptive inference. Moreover, a sudden surge in the observation noise variance degrades the state estimation performance more severely than an surge in the process noise, for both the standard KF and the proposed VB-AKF. 
+
+C. Inference under severe degradation 
+
+To rigorously verify the centralized sequential fusion ar-chitecture and the statistical identifiability of the proposed VB-AKF, we consider a network with N = 200 distributed sensor nodes monitoring the same state process. The true noise covariances are set to Q = 0.05 and R = 1,respectively. To simulate an extreme sensing environment, the anomaly perturbation is set to Ek = 10 . A severe data degradation stage is introduced during k ∈ [50 , 100] , during which the packet dropout rate abruptly rises to 60%, while the data corruption rate for successfully received packets simultaneously increases to 60%. As illustrated in Fig. 5 (Top), the deterministic M-step ac-curately tracks the global packet dropout rate, which is barely disturbed under severe conditions. Fig. 5 (Bottom) further validates the robustness of the fusion scheme: despite nearly         
+
+> Fig. 4. State estimation and noise variance inferences under non-stationary perturbations with N= 5 sensor nodes. Top: State trajectory tracking; Middle: Inference of observation noise variance Rk; Bottom: Inference of process noise variance Qk.
+
+84% of data being invalid, the sequential gated Kalman gain effectively suppresses harmful disturbances. A key observa-tion is the asymmetric robustness among parameters. The inferred process noise E[Qk] converges stably to 0.05 and is nearly immune to corruption and dropouts, whereas the data corruption rate and observation noise E[Rk] are more sensitive to outliers. This matches the parameter dependence in Fig. 2, as Qk is less related to zi,k than Rk. Even under strong outliers with Ek = 10 , E[Rk] still fluctuates tightly around 1. The soft probabilistic responsibilities πi,k 
+
+prevent outlier residuals from contaminating the inverse-Wishart update, ensuring reliable inference of both Qk and 
+
+Rk under extreme data degradation. 
+
+D. Sensitivity analysis 
+
+To clearly analyze the statistical identifiability boundaries of our method, we perform three ablation studies based on the centralized sensor array. By separately adjusting the baseline observation noise Rk, anomaly intensity Ek, and process noise Qk, we evaluate the RMSE of the inferred corruption rate 1 − βk.Ablation A: Impact of baseline noise ( Rk). We vary Rk
+
+while fixing the anomaly intensity Ek = 10 and process Fig. 5. Performance of the proposed VB-AKF under severe data degra-dation (60% packet dropout and 60% data corruption). Top: Dropout rate inference; Second: Data clean rate identification; Third: Joint inference of process noise Qk and observation noise Rk ; Bottom: State estimation via centralized sequential fusion. 
+
+noise Qk = 0.05 . As shown in Fig. 6(a), the inference RMSE exhibits a clear V-shaped characteristic. When Rk
+
+approaches the anomaly intensity Ek, the anomalies are severely masked by the background noise, resulting in a sub-stantial loss of statistical identifiability. Conversely, an overly small Rk amplifies the sensitivity to small prediction errors, which easily trigger false-positive classifications due to the narrow confidence interval.The best inference performance is achieved in the intermediate region where the signal-to-anomaly contrast is maximized. Ablation B: Impact of anomaly intensity ( Ek). We in-vestigate the inference accuracy under varying anomaly intensities with a fixed baseline noise Rk = 1 . As shown in Fig. 6(b), when Ek ≤ Rk, the clean and corrupted Gaussian components overlap significantly, making them statistically indistinguishable. However, once Ek exceeds the baseline     
+
+> (a) Impact of baseline observation noise ( Rk)
+> (b) Impact of anomaly intensity ( Ek)
+> (c) Impact of process noise ( Qk)Fig. 6. Sensitivity analysis and statistical identifiability of corruption rate inference. (a) Identifiability degradation under strong baseline observation noise. (b) Exponential error convergence beyond the anomaly intensity threshold. (c) Identifiability degradation under intense process noise varia-tions.
+
+noise level, the statistical separation between components in-creases sharply, and the RMSE decays exponentially toward its theoretical lower bound. Ablation C: Impact of process noise ( Qk). Finally, we examine our proposed algorithm’s sensitivity to underlying process variations Qk with fixed Ek = 10 and Rk = 1 . The proposed framework maintains robust inference performance for stable targets ( Qk < 10 −1). However, intense process noise introduces substantial predictive uncertainty Pk|k−1
+
+into state transitions. Since this uncertainty is incorporated into πi,k (16) in through trace expansion (13), violent state maneuvers become statistically indistinguishable from sensor corruption. This predictive uncertainty confounding leads to severe overestimation of the corruption rate, which defines the theoretical upper bound of target agility that the dual-mask inference architecture can reliably handle. V. C ONCLUSION 
+
+In this paper, a novel variational Bayesian adaptive Kalman filter (VB-AKF) is proposed for state estimation in the presence of simultaneous intermittent packet dropouts and corrupted observations. Different from existing robust adaptive Kalman filtering methods that only address in-complete data or outliers separately, the proposed approach introduces a dual-mask generative model based on two independent Bernoulli random variables, which explicitly characterizes both data loss and measurement corruption. Meanwhile, the VB-AKF framework integrates multiple concurrent observations into the adaptive filtering structure, which significantly improves statistical identifiability and enables both state estimation and parameter identification to asymptotically approach the theoretical optimal lower bound as the number of sensors increases. Within the variational mean-field inference, an inference isolation mechanism and a sequential gated fusion scheme are developed to suppress outlier-induced variance inflation and guarantee strong ro-bustness against severe data anomalies. The effectiveness and superiority of the proposed method are verified through extensive numerical experiments under extreme dual-failure scenarios and rigorous ablation studies. Future work will focus on two aspects: 1) Modeling: refining the missing measurement model to better accom-modate complex real-world engineering scenarios; 2) The-oretical analysis: investigating the coupling relationships among the process noise covariance Qk, baseline observation noise covariance Rk, and anomaly intensity Ek, as well as their joint impacts on corruption rate inference accuracy. As observed in Section IV-D, these three covariance terms interact non-trivially in determining inference performance, which appears to be closely related to controllability and observability arguments in classical linear filtering theory. REFERENCES [1] R. E. Kalman, “A new approach to linear filtering and prediction problems,” Journal of Basic Engineering , vol. 82, no. 1, pp. 35–45, 1960. [2] R. Mehra, “On the identification of variances and adaptive kalman filtering,” IEEE Transactions on Automatic Control , vol. 15, no. 2, pp. 175–184, 1970. [3] D. M. Blei, A. Kucukelbir, and J. D. McAuliffe, “Variational infer-ence: A review for statisticians,” Journal of the American Statistical Association , vol. 112, pp. 859 – 877, 2016. [4] D. M. Blei and M. I. Jordan, “Variational inference for Dirichlet process mixtures,” Bayesian Analysis , vol. 1, no. 1, pp. 121 – 143, 2006. [5] M. D. Hoffman, D. M. Blei, C. Wang, and J. Paisley, “Stochastic variational inference,” Journal of Machine Learning Research , vol. 14, no. 4, pp. 1303–1347, 2013. [6] S. Sarkka and A. Nummenmaa, “Recursive noise adaptive kalman filtering by variational bayesian approximations,” IEEE Transactions on Automatic Control , vol. 54, no. 3, pp. 596–600, 2009. [7] Y. Huang, Y. Zhang, Z. Wu, N. Li, and J. Chambers, “A novel adaptive kalman filter with inaccurate process and measurement noise covari-ance matrices,” IEEE Transactions on Automatic Control , vol. 63, no. 2, pp. 594–601, 2018. [8] T. Ardeshiri, E. ¨ Ozkan, U. Orguner, and F. Gustafsson, “Approximate bayesian smoothing with unknown process and measurement noise co-variances,” IEEE Signal Processing Letters , vol. 22, no. 12, pp. 2450– 2454, 2015. [9] Y. Ma, S. Zhao, and B. Huang, “Multiple-model state estimation based on variational bayesian inference,” IEEE Transactions on Automatic Control , vol. 64, no. 4, pp. 1679–1685, 2019. [10] H. Xu, K. Duan, H. Yuan, W. Xie, and Y. Wang, “Adaptive fixed-lag smoothing algorithms based on the variational bayesian method,” IEEE Transactions on Automatic Control , vol. 66, no. 10, pp. 4881–4887, 2021. [11] M. Xia, T. Zhang, J. Wang, L. Zhang, Y. Zhu, and L. Guo, “The fine calibration of the ultra-short baseline system with inaccurate measure-ment noise covariance matrix,” IEEE Transactions on Instrumentation and Measurement , vol. 71, pp. 1–8, 2022. [12] H. Lan, S. Zhao, J. Hu, Z. Wang, and J. Fu, “Joint state estimation and noise identification based on variational optimization,” IEEE Transactions on Automatic Control , vol. 70, no. 7, pp. 4500–4515, 2025. [13] B. Sinopoli, L. Schenato, M. Franceschetti, K. Poolla, M. Jordan, and S. Sastry, “Kalman filtering with intermittent observations,” IEEE Transactions on Automatic Control , vol. 49, no. 9, pp. 1453–1464, 2004. [14] W. Li, Y. Jia, J. Du, and D.-Y. Meng, “Diffusion kalman filter for distributed estimation with intermittent observations,” in 2015 American Control Conference (ACC) , pp. 5353–5358, IEEE, 2015. [15] L. Xu, Y. Mo, and L. Xie, “Remote state estimation with stochastic event-triggered sensor schedule and packet drops,” IEEE Transactions on Automatic Control , vol. 65, no. 11, pp. 4981–4988, 2020. [16] S. Kluge, K. Reif, and M. Brokate, “Stochastic stability of the extended kalman filter with intermittent observations,” IEEE Transactions on Automatic Control , vol. 55, no. 2, pp. 514–518, 2010. [17] L. Li and Y. Xia, “Stochastic stability of the unscented kalman filter with intermittent observations,” Automatica , vol. 48, no. 5, pp. 978– 981, 2012. [18] X. Lv, P. Duan, Z. Duan, G. Chen, and L. Shi, “Stochastic event-triggered variational bayesian filtering,” IEEE Transactions on Auto-matic Control , vol. 68, no. 7, pp. 4321–4328, 2023. [19] Y. Cheng et al. , “A variational bayesian adaptive kalman filter for the random losses problem of sensor packet,” IEEE Access , vol. 12, pp. 12345–12356, 2024. [20] H. E. Rauch, F. Tung, and C. Striebel, “Maximum likelihood estimates of linear dynamic systems,” AIAA journal , vol. 3, no. 8, pp. 1445– 1450, 1965.

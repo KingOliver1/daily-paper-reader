@@ -1,0 +1,1706 @@
+Title: RK-MPC: Residual Koopman Model Predictive Control for Quadruped Locomotion in Offroad Environments
+
+URL Source: https://arxiv.org/pdf/2604.04221v1
+
+Published Time: Tue, 07 Apr 2026 01:26:26 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# RK-MPC: Residual Koopman Model Predictive Control for Quadruped Locomotion in Offroad Environments 
+
+Sriram S. K. S. Narayanan and Umesh Vaidya 
+
+Abstract — This paper presents Residual Koopman MPC (RK-MPC), a Koopman-based, data-driven model predictive control framework for quadruped locomotion that improves prediction fidelity while preserving real-time tractability. RK-MPC augments a nominal template model with a compact linear residual predictor learned from data in lifted coordinates, enabling systematic correction of model mismatch induced by contact variability and terrain disturbances with provable bounds on multi-step prediction error. The learned residual model is embedded within a convex quadratic-program MPC formulation, yielding a receding-horizon controller that runs onboard at 500 Hz and retains the structure and constraint-handling advantages of optimization-based control. We evaluate RK-MPC in both Gazebo simulation and Unitree Go1 hardware experiments, demonstrating reliable blind locomotion across contact disturbances, multiple gait schedules, and challeng-ing off-road terrains including grass, gravel, snow, and ice. We further compare against Koopman/EDMD baselines using alternative observable dictionaries, including monomial and 
+
+SE (3) -structured bases, and show that the residual correction improves multi-step prediction and closed-loop performance while reducing sensitivity to the choice of observables. Overall, RK-MPC provides a practical, hardware-validated pathway for data-driven predictive control of quadrupeds in unstruc-tured environments. See https://sriram-2502.github. io/rk-mpc/ for implementation videos. 
+
+I. INTRODUCTION 
+
+A. Motivation 
+
+Quadruped robots operating in off-road and unstructured environments must navigate terrain-induced disturbances, contact uncertainty, and modeling errors while satisfying tight real-time constraints [1]. Classical physics-based MPC can enforce constraints and provide reliable receding-horizon behavior, but its performance depends on prediction fidelity, which is difficult to maintain across changing footholds, compliance, and unmodeled terrain interactions [2]. Purely policy-based learning can produce agile behaviors, yet it often requires extensive data and tuning and does not natu-rally provide predictive structure for constrained navigation [3]. These challenges motivate a data-driven, model-centric approach in which predictive models are learned directly from locomotion data and embedded within MPC to preserve optimization-based constraint handling [4]. In this work, we focus on Koopman-based predictors as a structured learning mechanism, enabling the construction of linear predictive models from data that can be directly integrated within MPC                           
+
+> Financial support from NSF CMMI Award 253180 is greatly ac-knowledged. Sriram S. K. S. Narayanan and Umesh Vaidya are with the Department of Mechanical Engineering, Clemson Univer-sity, Clemson, SC 29630, USA
+
+email:sriramk@clemson.edu; uvaidya@clemson.edu 
+
+frameworks to improve robustness and real-time performance in off-road, unstructured environments. 
+
+B. Related works 
+
+Recent work on quadruped locomotion spans a spectrum from physics-based optimization methods to fully data-driven learning approaches. Classical model-based meth-ods formulate locomotion as a trajectory optimization or model predictive control (MPC) problem using reduced-order dynamics, enabling dynamic and reliable behaviors on hardware [5], [6]. These approaches leverage structured dynamics and convex formulations to enforce contact and friction constraints, but their performance depends on the fidelity of the underlying model and can degrade under unmodeled terrain interactions, compliance, and disturbances encountered in off-road environments. To address these limitations, learning-based MPC methods augment nominal physics models with learned components (e.g., residual dynamics or disturbance models), improving prediction accuracy while retaining an optimization-based mechanism for constraint handling [7], [8]. However, for high-dimensional, contact-rich systems such as quadrupeds, these methods can still face practical bottlenecks: collect-ing sufficiently informative data across gaits, impacts, and terrains is costly; learned corrections can be brittle under distribution shift; and uncertainty-aware variants (e.g., GP-based MPC) introduce additional computational overhead that is difficult to scale in real time [4], [9]. In parallel, deep reinforcement learning has demonstrated impressive agility and sim-to-real transfer for quadruped locomotion, particularly in unstructured and off-road envi-ronments [10], [11], [12]. These approaches leverage large-scale simulation, domain randomization, and policy learning to achieve robust blind locomotion over challenging ter-rain. However, such methods are typically highly sample-inefficient, requiring extensive data collection and careful reward design; moreover, learned policies do not inherently provide predictive structure for constrained control or explicit safety guarantees, and can remain sensitive to unmodeled hardware effects and contact variability [1], [13]. 
+
+Role of Koopman Operator in structured learning and control: Koopman operator theory provides a principled operator-theoretic framework for analyzing nonlinear dy-namical systems through linear evolution in an infinite-dimensional function space [14], [15], [16], [17]. The spec-tral properties of the Koopman operator reveal intrinsic geometric structures of the state space, including invariant manifolds characterized as level sets of eigenfunctions [18], 
+
+> arXiv:2604.04221v1 [cs.RO] 5 Apr 2026
+
+[19]. This connection between spectral analysis and state-space geometry has enabled a broad class of data-driven methods for approximating Koopman eigenfunctions and constructing lifted representations of nonlinear dynamics. In practice, these lifted representations enable approximating nonlinear systems with linear predictors in the space of observables, enabling the use of linear system identification techniques and control design tools. In particular, Koopman-based predictors have been incorporated into data-driven con-trol pipelines for system identification, state estimation, and model predictive control, where the lifted linear dynamics facilitate tractable optimization and constraint handling [20], [21]. Koopman-based methods have also been applied for feed-back stabilization and learning structured representations tailored for control synthesis, including approaches based on deep neural network parameterizations [22], [23]. More recent advances have further extended Koopman opera-tor theory to nonlinear control settings, where operator-theoretic formulations enable the construction of control-relevant representations of dynamical systems. In partic-ular, connections between Koopman spectral analysis and nonlinear optimal control have been established through links to the Hamilton–Jacobi equation, demonstrating that solutions to optimal control problems can be approximated using Koopman eigenfunctions within convex optimization frameworks [24], [25], [26]. These developments provide a principled pathway for extending linear systems tools to nonlinear dynamics and motivate the use of Koopman-based representations for scalable control design. These ideas have been successfully applied across a range of robotic systems [27], [28], including soft manipulators [29], [30], [31], autonomous ground vehicles [32], [33], [34], agile quadrotors [35], [36], and, more recently, legged platforms [37], [38], highlighting the growing potential of Koopman-based representations for real-time control in complex, high-dimensional robotic systems. 
+
+Challenges in Extending Koopman Operator methods to quadruped locomotion: Extending Koopman-based methods to rigid-body legged locomotion remains challenging due to the high-dimensional, contact-rich hybrid dynamics of quadrupeds, where switching contacts, impacts, and terrain variability degrade multi-step predictive accuracy. Recent work has incorporated Koopman predictors into legged sys-tems by learning lifted linear models from locomotion data and embedding them in estimation and predictive control pipelines [38], [39], [40]. Geometry-aware observable dictio-naries that encode SE (3) structure improve physical consis-tency over generic liftings, but do not guarantee preservation of rotation constraints, leading to SO (3) drift and error accumulation over the prediction horizon [35], [36]. Deep lifting approaches can improve one-step accuracy, but require large datasets, introduce significant training overhead, and remain sensitive to distribution shifts across contact condi-tions and terrains [39]. Continual lifting strategies mitigate dictionary design issues, but are typically data-intensive and primarily validated in simulation, leaving challenges for reliable deployment on hardware [40]. These limitations motivate Koopman predictors for quadruped rigid-body dynamics that (i) retain a compact and computationally light lifted representation suitable for real-time MPC, (ii) reduce sensitivity to observable design while maintaining geometric consistency under multi-step rollouts, and (iii) remain reliable under terrain disturbances and contact variability in unstructured, off-road hardware deployments. 
+
+C. Main Contributions 
+
+This paper presents Residual Koopman MPC (RK-MPC), a Koopman-based, data-driven MPC framework with alearned linear residual correction for quadruped locomotion. Our main contributions are: 1) Residual Koopman modeling: a Koopman-based data-driven framework that learns a compact linear residual correction on top of a nominal template model, along with formal guarantees on multi-step prediction error through bounded residual dynamics. 2) Convex RK-MPC formulation: a MPC formulation that embeds the learned residual predictor within a receding-horizon controller and runs onboard in real time at 500 Hz. 3) Validation in simulation and hardware: extensive Gazebo simulations and Unitree Go1 experiments demonstrating reliable tracking of planar velocity com-mands and robust blind locomotion across contact dis-turbances, multiple gait schedules, and off-road terrains (grass, gravel, snow, and ice). II. PRELIMINARIES 
+
+A. Notation 
+
+For n ∈ N, Rn denotes the n-dimensional real vector space. For m, n ∈ N, Rm×n denotes the set of real m × n
+
+matrices, and In denotes the n×n identity matrix. We denote the state by x ∈ M ⊆ Rn and the control input by u ∈ U ⊆ 
+
+Rm.The cross product of two vectors a, b ∈ R3 is written as 
+
+a × b = a∧b, where (·)∧ : R3 → so (3) denotes the hat operator . For a = [ a1 a2 a3 ]⊤, the hat map produces the skew-symmetric matrix 
+
+a∧ =
+
+
+
+0 −a3 a2
+
+a3 0 −a1
+
+−a2 a1 0
+
+ .
+
+The inverse mapping (·)∨ : so (3) → R3 denotes the vee operator . The Lie group of rotation matrices is denoted 
+
+SO (3) , with associated Lie algebra so (3) .For a matrix A ∈ Rm×n, vec( A) denotes its column-wise vectorization, ∥ · ∥ F denotes the Frobenius norm, and (·)† denotes the Moore–Penrose pseudoinverse. We use 
+
+Θ ∈ R3 to denote the base (center-of-mass) orientation parameterized by roll–pitch–yaw (RPY) Euler angles, i.e., 
+
+Θ := [ θr θp θy ]⊤, where θr , θp and θy denote the roll, pitch and yaw angle of the center of mass respectively. Fig. 1. Single rigid-body (SRB) model. The floating base evolves under stance ground reaction forces fi applied at the contact points with moment arms ri, generating the net centroidal wrench that propels the robot forward. TABLE I SRB PHYSICAL PARAMETERS FOR UNITREE GO1Parameter Value Mass m [kg] 12.75 Inertia IB [kg m 2] 10 −3 ×       
+
+> "160 0.12 −16 0.12 470 −0.03
+> −16 −0.03 520
+> #
+
+B. Single Rigid Body (SRB) Dynamics 
+
+Quadruped locomotion is modeled as a hybrid system switching between swing and stance phases. During stance, the floating base is underactuated and its motion is deter-mined solely by the ground-reaction forces applied at the feet contact. Each foot i applies a force fi ∈ R3 at a location 
+
+ri relative to the CoM (for i = 1 , . . . , n c, where nc is the number of feet in contact). The resulting net wrench can be obtained using the transformation matrix H as follows 
+
+"Fτ
+
+#
+
+=
+
+ I3 . . . I3
+
+r∧ 
+
+> 1
+
+. . . r∧
+
+> nc
+
+| {z }
+
+> H
+
+
+
+f1
+
+...
+
+fnc
+
+ , (1) where I3 is the 3 × 3 identity matrix. The evolution of the floating-base can be described using the single rigid body (SRB) dynamics model [41], [42]: 
+
+˙p = v, (2a) 
+
+˙v = ag + 1
+
+m F, (2b) 
+
+˙R = ω∧R, (2c) 
+
+˙ω = I−1
+
+τ − ω∧Iω 
+
+
+
+, (2d) 
+
+I := RI B R⊤ (2e) where p ∈ R3 and v ∈ R3 denote the CoM position and velocity in the inertial frame I, R ∈ SO (3) is the body orientation, and ω ∈ R3 is the angular velocity expressed in the body frame B, m is the body mass, ag = [0 0 − g]⊤
+
+is gravity expressed in the inertial frame, I ∈ R3×3 is the Inertia expressed in the inertial frame and IB ∈ R3×3 is the inertia matrix expressed in the body frame. 
+
+C. Optimal Control Formulation 
+
+The finite-horizon optimal control problem in (3) seeks a sequence of states and inputs {xi, u i}Ni=0 that minimizes a cumulative performance index while satisfying the system dynamics and all admissible constraints. Such formulations are standard in model predictive control and optimal control of constrained dynamical systems [43]. In this paper, we consider the optimal control problem in the following form: 
+
+min   
+
+> {xk,u k}Nk=0
+
+ℓN +1 (xN +1 ) + 
+
+> N
+
+X
+
+> k=0
+
+ℓi(xk, u k) (3a) s.t. xk+1 = F (xk, u k), (3b) 
+
+uk ∈ U k, (3c) 
+
+xk ∈ X k, (3d) 
+
+x0 = xop . (3e) The cost function is composed of a terminal cost 
+
+ℓN +1 (xN +1 ) and stage costs ℓi(xk, u k), which together encode tracking objectives and control effort penalties. The discrete-time dynamics xk+1 = F (xk, u k) enforce the evo-lution of the system across the horizon, where F (·) denotes the transition map. At each stage k, the control input must lie within the admissible set Uk, and the state must remain within the feasible set Xk. The OCP is initialized at the measured or estimated operating state x0 = xop .The constraints in (3) take on a specific structure for legged locomotion. The system dynamics F (xk, u k) in (3b) describe the discrete-time evolution of the floating-base state using rigid-body dynamics. The control inputs ui correspond to the ground reaction forces applied at the feet fi ∈
+
+R3, which generate linear and angular accelerations of the floating base. The control objective is to design these foot forces to track a desired CoM reference trajectory while satisfying friction and contact constraints. [2], [6], [41], [44]. The admissible input set Uk in (3c) corresponds to the feasible ground reaction forces at each foot. In general, these forces must lie within the Coulomb friction cone, which imposes the nonlinear constraint 
+
+q
+
+f 2 
+
+> i,x
+
++ f 2 
+
+> i,y
+
+≤ μf i,z , fi,z ≥ 0,
+
+for each stance foot i, where μ is the coefficient of friction. Finally, we do not impose additional state constraints beyond those required by the dynamics, and thus take Xi =
+
+Rn in (3d). This will be explored in future works. 
+
+D. Hierarchical Control Architecture 
+
+The quadruped control system is organized as a hierar-chical architecture that separates high-level motion planning from low-level actuation. This structure enables real-time im-plementation while preserving modularity between planning, optimization, and joint-level control [6], [41]. Note that this architecture is for blind locomotion, where no exteroceptive sensing is used. Fig. 2. RK-MPC locomotion stack. A hierarchical pipeline converts high-level velocity commands into joint-level torque/position commands. A state estimator provides the feedback state to the finite-state machine and the convex residual Koopman MPC, which generates optimal ground reaction forces. The resulting commands are tracked by the joint controller and executed on hardware. 
+
+Finite State Machine. A finite state machine (FSM) coordinates transitions between swing and stance phases for each leg based on the gait schedule and contact state. The FSM activates the appropriate controller for each leg and ensures consistent timing between planning, optimization, and execution layers. 
+
+Global Planner. A reduced-order model of the floating base is used to generate reference trajectories for the center of mass and base orientation. These references are specified in terms of desired linear and angular velocities and serve as inputs to the lower-level controllers. 
+
+Footstep Planner. Footstep planning produces touchdown targets for swing feet. In this work, we use a kinematic heuristic that accounts for gait timing and commanded mo-tion. Let ϕi ∈ [0 , 1] denote the swing phase for leg i ∈ ¯C,where ¯C denotes the set of swing legs. Let Tsw and Tst 
+
+denote the swing and stance durations. Let (vx, v y ) and ωz
+
+denote the estimated planar body velocity and yaw rate, and let (vcmd  
+
+> x
+
+, v cmd  
+
+> y
+
+, ω cmd  
+
+> z
+
+) denote the commanded twist. The step offsets are defined as 
+
+∆xi = vx
+
+(1 − ϕi)Tsw + 12 Tst 
+
+ + kx
+
+ vx − vcmd 
+
+> x
+
+ , (4) 
+
+∆yi = vy
+
+(1 − ϕi)Tsw + 12 Tst 
+
+ + ky
+
+ vy − vcmd 
+
+> y
+
+ , (5) 
+
+∆ψi = ωz
+
+(1 − ϕi)Tsw + 12 Tst 
+
+ + kψ
+
+ ωcmd  
+
+> z
+
+− ωz
+
+ . (6) The gains (kx, k y , k ψ ) are feedback gains that regulate velocity and yaw tracking by adjusting foot placement. The touchdown location for leg i is then given by 
+
+p(i) 
+
+> td
+
+= pbody +
+
+
+
+∆xi
+
+∆yi
+
+0
+
+ +
+
+
+
+ri cos( θy + αi + ∆ ψi)
+
+ri sin( θy + αi + ∆ ψi)0
+
+ , (7) where θy denotes the base yaw angle, and (ri, α i) are the nominal hip-to-foot polar coordinates in the horizontal plane [45]. The touchdown height is set to the nominal ground plane. In implementation, (∆ xi, ∆yi) are saturated to satisfy kinematic limits (Table II), improving robustness. 
+
+Swing-Leg Control. A smooth swing trajectory connects the current foot position (xs, y s, z s) to the touchdown target 
+
+(xe, y e, z e) using the swing phase ϕ ∈ [0 , 1] . We use a cycloidal horizontal profile and a sinusoidal vertical profile                             
+
+> TABLE II GAIT AND FOOTSTEP PARAMETERS .Parameter Trot Crawl
+> T[s] 0.45 1.10
+> β0.5 0.75
+> Tst [s] 0.225 0.825
+> Tsw [s] 0.225 0.275 Freq. [Hz] 2.22 0.91 Phase bias (LF,LH,RF,RH) [0,0.5,0.5,0] [0,0.25,0.5,0.75]
+> h[m] 0.10 0.10
+> (kx, k y, k ψ)(0.005,0.005,0.005) same
+> (|∆x|,|∆y|)[m] (0.10,0.10) same
+
+with swing height h:
+
+x(ϕ) = xs + ( xe − xs) 2πϕ − sin(2 πϕ )2π ,y(ϕ) = ys + ( ye − ys)ϕ, z(ϕ) = zs + h 1 − cos(2 πϕ )2 .
+
+Let p(i) 
+
+> foot
+
+and ˙p(i) 
+
+> foot
+
+denote the measured swing-foot position and velocity, and p(i)
+
+> foot ,⋆
+
+, ˙p(i) 
+
+> foot ,⋆
+
+the corresponding swing references. The desired Cartesian swing force is 
+
+F (i) 
+
+> sw
+
+= Ksw 
+
+> p
+
+
+
+p(i) 
+
+> foot ,⋆
+
+− p(i)
+
+> foot
+
+
+
++ Ksw 
+
+> d
+
+
+
+˙p(i) 
+
+> foot ,⋆
+
+− ˙p(i)
+
+> foot
+
+
+
+. (8) and the joint torques are computed via the Jacobian transpose map 
+
+τ (i) 
+
+> sw
+
+= J⊤ 
+
+> i
+
+F (i) 
+
+> sw
+
+. (9) Here, Ji denotes the leg Jacobian consistent with the Carte-sian force representation; F (i) 
+
+> sw
+
+is expressed in the same frame as Ji. Joint-level PD gains are applied to stabilize tracking and ensure bounded torques (Table III). 
+
+Stance-Leg Control. During stance, the high-level MPC computes the desired per-foot ground reaction forces fi for each stance foot. These forces are mapped to joint torques using 
+
+τ (i) 
+
+> st
+
+= J⊤ 
+
+> i
+
+fi. (10) The contact forces are expressed in the same frame as the Jacobian used in (10). Torque saturation is applied to respect actuator limits, and the finite-state machine switches between (9) and (10) according to the gait schedule and contact state. TABLE III TORQUE CONTROL PARAMETERS .Parameter name Symbol Value Swing Cartesian P gain Ksw                    
+
+> pdiag(400 ,400 ,400)
+> Swing Cartesian D gain Ksw
+> ddiag(10 ,10 ,10)
+> Joint PD gains (swing) (ksw
+> p, k sw
+> d)(3 ,2)
+> Joint PD gains (stance) (kst
+> p, k st
+> d)(0 .8,0.8)
+> Torque saturation limit [Nm] τmax 50
+
+State Estimation. A state estimator provides the floating-base SRB state used throughout the hierarchy. At each control cycle, onboard proprioceptive measurements (IMU, leg kinematics, and contact signals from force sensors on each foot) are used to estimate the base pose and body twist. Unless otherwise stated, all estimated quantities are expressed in the inertial/world frame I. This estimate is used by the global planner and Raibert footstep heuristic to construct reference trajectories and touchdown locations, and in the MPC. 
+
+E. Koopman Operator Theory 
+
+Koopman operator theory provides a linear (but generally infinite-dimensional) representation of nonlinear dynamical systems by studying the evolution of observable functions along trajectories [15], [46]. Consider the discrete-time dy-namical system 
+
+xk+1 = T (xk), xk ∈ M , (11) where M ⊆ Rn is the state space and T : M → M is a (possibly nonlinear) state-transition map. Let HM denote a linear space of real-valued observables ϕ : M → R. The Koopman operator U : HM → H M associated with (11) is defined by 
+
+(Uϕ)( xk) := ϕ(T (xk)) = ϕ(xk+1 ). (12) The Koopman operator can be extended to controlled systems by augmenting the state with the full input sequence [20], [47], [48]. Consider the controlled discrete-time system 
+
+xk+1 = T (xk, u k), xk ∈ M , uk ∈ U . (13) Let ℓ(U) := {(ui)∞ 
+
+> i=0
+
+| ui ∈ U} denote the space of input sequences and define the extended state space S := 
+
+M × ℓ(U). Let HS denote a linear space of real-valued observables Φ : S → R. The associated Koopman operator 
+
+K : HS → H S is defined by 
+
+(KΦ)( xk, (ui)∞
+
+> i=k
+
+) := Φ  xk+1 , (ui)∞
+
+> i=k+1
+
+ , (14) where xk+1 = T (xk, u k) and (ui)∞ 
+
+> i=k+1
+
+∈ ℓ(U) denotes the shifted input sequence. In the following section, we describe how to obtain a finite-dimensional approximation of K using EDMD with control. 
+
+F. EDMD with Control 
+
+We use EDMD with control (EDMDc) to obtain a finite-dimensional approximation of the controlled Koopman op-erator K from Section II-E by projecting onto a subspace spanned by a dictionary of observables [20], [48]. Let 
+
+{ψi}qi=1 be scalar observables ψi : M → R and define the lifted (vector-valued) observable 
+
+ψ(xk) := ψ1(xk) · · · ψq (xk)⊤ ∈ Rq .
+
+In particular, K is parameterized by a pair of matrices A ∈
+
+Rq×q and B ∈ Rq×m, i.e., K := A B which define a linear predictor in the lifted space. 
+
+ψ(xk+1 ) ≈ A ψ (xk) + B u k. (15) Given snapshot data {(xk, u k, x k+1 )}M −1 
+
+> k=0
+
+, we first form the lifted snapshot matrices 
+
+Z := ψ(x0) · · · ψ(xM −1) ,Z′ := ψ(x1) · · · ψ(xM ) ,U := u0 · · · uM −1
+
+ .
+
+and the regressors as Ω := 
+
+ZU
+
+
+
+. We estimate K via ridge-regularized least squares, 
+
+K = arg min 
+
+> K
+
+∥Z′ − K Ω∥2 
+
+> F
+
++ λ∥K∥2 
+
+> F
+
+, (16) with regularization weight λ > 0. This admits the closed-form solution 
+
+K = Z′ Ω⊤ Ω Ω ⊤ + λI−1, (17) where I is the identity matrix of appropriate dimension. The resulting predictor (15) yields a linear lifted model amenable to fast, optimization-based control (e.g., linear MPC) and has been successfully used in several robotics settings [28], [27]. However, the practical performance of EDMDc hinges on the choice of observables, which remains problem-dependent and nontrivial. The following section introduces our residual Koopman framework to reduce this burden while retaining a control-oriented linear structure. III. R ESIDUAL KOOPMAN MODELING FRAMEWORK 
+
+This section presents a residual Koopman modeling frame-work for augmenting a nominal dynamics model with com-pact, data-driven corrections while preserving a linear pre-dictor structure suitable for MPC. The key idea is to (i) begin with a nominal model that captures the dominant template dynamics, and (ii) learn a Koopman based linear residual model to account for systematic mismatch arising from unmodeled contact effects, terrain/friction variation, actuator dynamics, and linearization errors. Fig. 3. Residual Koopman modeling framework 
+
+A. Nominal Dynamics Model 
+
+Let xk, x nom  
+
+> k
+
+∈ Rn denote the system state and the nominal predicted state, respectively, and uk ∈ Rm the control input at time step k. We assume that a nominal predictor F nom (xk, u k) is available in discrete time, 
+
+xnom  
+
+> k+1
+
+= F nom (xk, u k). (18) This predictor captures the primary structure of the true dynamics but may be inaccurate outside a reference regime. The nominal model (18) can be obtained in multiple ways. For instance, it may be derived from first-principles physics and subsequently embedded into a Koopman-linear represen-tation through an analytic generator-based construction [29], [31]. In this work, we instantiate F nom using a discrete linear time-varying SRB model parameterized by the yaw angle and nominal stance foot locations. We consider the SRB state vector (expressed in the inertial frame) 
+
+x := [ p⊤ Θ⊤ v⊤ ω⊤ 1 ] ⊤ ∈ R13 ,
+
+where Θ ∈ R3 denotes the base orientation (using Euler an-gles), and the appended constant state enables contributions (e.g., gravity) to be represented within a linear state-space form without an explicit affine offset. The linearized SRB dynamics are given by: 
+
+xnom  
+
+> k+1
+
+= Anom xk + Bnom uk, (19) where Anom := A(θk), Bnom := B(θk, ¯rk), θk denotes the yaw angle of the base, and ¯rk := [ r⊤ 
+
+> 1,k
+
+· · · r⊤
+
+> n,k
+
+]⊤ collects the nominal contact locations (moment arms) of the n feet in contact at step k.
+
+Remark 1: Alternatively, the nominal predictor can be constructed using an analytical Koopman lifting based on an SE (3) -consistent basis, where rigid-body kinematics and dynamics are embedded into a linear representation in a higher-dimensional space [35], [49]. Such constructions pro-vide a structured and physically consistent nominal model for quadruped locomotion, and can be used in place of the SRB-based linearization without loss of generality. The linearized SRB template has been shown to perform competitively with linear predictors identified directly from locomotion data and therefore forms a strong starting point for our nominal model [50]. Despite its practicality, the SRB linearization has well-known limitations. It is most accurate for near-planar locomotion with relatively small roll/pitch excursions and moderate angular rates [41]. In particular, the rotational kinematics and dynamics are simplified to obtain a linear (yaw-scheduled) template model. First, assuming small roll/pitch angles, the nonlinear Euler-angle kinematics are approximated by the yaw-only mapping 
+
+
+
+˙ϕ
+
+˙θ
+
+˙ψ
+
+ ≈ R⊤ 
+
+> z
+
+(ψ) ω, 
+
+where Rz (ψ) denotes the rotation matrix about the z-axis. This approximation becomes inaccurate when roll/pitch ex-cursions are large (e.g., highly uneven terrain or aggressive body reorientation), since the exact mapping between ˙ϕ, ˙θ, ˙ψ
+
+and ω is nonlinear (2c). Second, writing the body-frame angular momentum as 
+
+L = Iω , we neglect the gyroscopic coupling in the mo-mentum rate, 
+
+ddt (Iω ) = I ˙ω + ω × (Iω ) ≈ I ˙ω, 
+
+thereby removing the quadratic coupling between angular velocity and angular momentum (2d). This simplification is reasonable for moderate angular rates but can lead to systematic prediction error in regimes with large angular mo-mentum (e.g., aggressive maneuvers, highly uneven terrain), motivating the residual Koopman correction introduced next. Finally, it is worth emphasizing that even when the under-lying template dynamics are modeled exactly (e.g., nonlinear centroidal or SRB equations), they remain a reduced-order approximation of the full quadruped dynamics and con-tact interaction. As a consequence, systematic discrepancies can persist due to neglected joint dynamics and terrain-dependent effects. A residual Koopman augmentation is therefore valuable even in conjunction with any nominal model: by learning correction terms directly from measured state transitions, the predictor can compensate for repeatable modeling error while preserving an MPC-compatible linear structure in the lifted space. In this way, the residual operator improves multi-step prediction fidelity relative to a baseline reduced-order model, which in turn can enhance tracking performance and robustness of the overall hierarchical loco-motion controller. 
+
+B. Residual Koopman Representation 
+
+Let xk denote the measured state from the true system (or a high-fidelity simulator). The one-step modeling error relative to the nominal predictor is defined as 
+
+ek := xk − xnom  
+
+> k
+
+. (20) Rather than replacing the nominal model, our goal is to learn a compact predictor for ek that corrects systematic mismatch while retaining the nominal structure and interpretability. In practice, we restrict the residual to centroidal twist: ek := [∆ v⊤ 
+
+> k
+
+∆ω⊤ 
+
+> k
+
+]⊤.Motivated by Koopman operator theory, we assume the residual admits an approximately linear evolution in a lifted observable space. Let 
+
+zk := ψ(ek) ∈ Rq
+
+denote a vector of residual observables (lifting functions). We model the residual through the linear system 
+
+zk+1 = Ares zk + Bres uk, ˆek = Cres zk, (21) where Ares ∈ Rq×q , Bres ∈ Rq×m, and Cres ∈ Rn×q are learned from data. Combining (19)–(21) yields the corrected predictor 
+
+ˆxk+1 = xnom  
+
+> k+1
+
++ ˆ ek+1 = Anom xk + Bnom uk + Cres zk+1 
+
+= Anom xk + Bnom uk + Cres (Ares zk + Bres uk) .
+
+(22) This decomposition separates the modeling task into a nom-inal component that encodes the SRB template structure and a data-driven residual component that captures unmodeled effects via a linear operator in lifted coordinates. Given a dataset of transitions {(xk, u k)}Nk=1 , we compute 
+
+xnom  
+
+> k
+
+from (19) and form residual targets ek using (20). The lifted residual snapshots are constructed as zk = ψ(ek).Then, we use EDMD to identify the predictors by minimizing the lifted prediction error 
+
+min  
+
+> Ares ,B res
+> N−1
+
+X
+
+> k=1
+
+∥zk+1 − Ares zk − Bres uk∥22 , (23) followed by a linear regression for the output map 
+
+min  
+
+> Cres
+> N−1
+
+X
+
+> k=1
+
+∥ez − Cres zk∥22 . (24) We solve (23)–(24) via ridge-regularized least squares as in Section II-F, using regularization weight λ > 0 for numerical robustness. In the following, we apply this residual Koopman framework to quadruped locomotion and highlight practical considerations that arise when the predictor is embedded in a hierarchical control pipeline. Next, we present Theorem 2, which provides formal guarantees on the error bounds obtained using the proposed residual Koopman model. We first make the following as-sumptions: 
+
+Assumption 1: 
+
+(A1) The dynamics F are Lipschitz in the state uniformly in u, i.e., there exists L > 0 such that 
+
+∥F (x, u ) − F (y, u )∥ ≤ L∥x − y∥, ∀x, y, ∀u. 
+
+(A2) The residual Koopman approximation error is uni-formly bounded, i.e., there exists ε > 0 such that 
+
+∥ek+1 − Cres (Ares zk + Bres uk)∥ ≤ ε ∀k. 
+
+Theorem 2 (): Let the true discrete-time system evolve as 
+
+xk+1 = F (xk, u k).
+
+Let the nominal predictor be given by (19) with the residual defined in (20) and the residual Koopman predictor defined in (21). The combined state predictor is 
+
+ˆxk+1 = Anom xk + Bnom uk + Cres (Ares zk + Bres uk) ,
+
+with the state prediction error 
+
+˜xk := xk − ˆxk.
+
+Then, using Assumption 1, there exists a constant γ > 0,depending only on Ares , B res , C res and ψ, such that 
+
+∥˜xk+1 ∥ ≤ 2L∥˜xk∥ + ε. (25) Consequently, over any horizon N ≥ 1,
+
+∥˜xk+N ∥ ≤ (2 L)N ∥˜xk∥ + 
+
+> N−1
+
+X
+
+> i=0
+
+LN −1−i (ε) . (26) 
+
+Proof: By the definition of the true and predicted dynamics, 
+
+˜xk+1 = xk+1 − ˆxk+1 
+
+= F (xk, u k) −
+
+
+
+Anom xk + Bnom uk
+
++ Cres (Ares zk + Bres uk)
+
+
+
+.
+
+Add and subtract F (ˆ xk, u k) to obtain 
+
+˜xk+1 =
+
+
+
+F (xk, u k) − F (ˆ xk, u k)
+
+
+
++
+
+
+
+F (ˆ xk, u k) − Anom xk − Bnom uk
+
+− Cres (Ares zk + Bres uk)
+
+
+
+. (27) Taking norms and applying the triangle inequality gives 
+
+∥˜xk+1 ∥ ≤ ∥ F (xk, u k) − F (ˆ xk, u k)∥
+
++ F (ˆ xk, u k) − Anom xk − Bnom uk
+
+− Cres (Ares zk + Bres uk) . (28) Using Assumption (A1), 
+
+∥F (xk, u k) − F (ˆ xk, u k)∥ ≤ L∥xk − ˆxk∥ = L∥˜xk∥. (29) For the second term, observe that 
+
+ek+1 = xk+1 − xnom  
+
+> k+1
+
+= F (xk, u k) − (Anom xk + Bnom uk) .
+
+Then, add and subtract F (ˆ xk, u k) and using Assumption (A2) we obtain, 
+
+∥˜xk+1 ∥ ≤ L∥˜xk∥ + ε + ∥F (ˆ xk, u k) − F (xk, u k)∥ . (30) Applying Assumption (A1) once more yields 
+
+∥F (ˆ xk, u k) − F (xk, u k)∥ ≤ L∥˜xk∥. (31) Thus, 
+
+∥˜xk+1 ∥ ≤ 2L∥˜xk∥ + ε (32) The multi-step estimate follows by recursively applying the one-step bound: 
+
+∥˜xk+N ∥ ≤ (2 L)N ∥˜xk∥ + 
+
+> N−1
+
+X
+
+> i=0
+
+LN −1−i (ε) . (33) This completes the proof. 
+
+Remark 3: Theorem 2 provides a formal justification for the residual Koopman approach. Unlike full-state Koopman models, the prediction error depends on the residual ek,which is typically small since the nominal model captures the dominant dynamics. As a result, the learned correction remains well-behaved, data-efficient, and stable over multi-step prediction. This explains the improved accuracy and robustness observed in practice and supports interpreting the residual Koopman model as a structured representation of model uncertainty within MPC. IV. P RACTICAL CONSIDERATIONS FOR QUADRUPED 
+
+LOCOMOTION 
+
+While the residual Koopman framework above is general, applying Koopman-based predictors to quadruped locomo-tion within hierarchical control architectures introduces sev-eral practical considerations. Locomotion dynamics depend on contact mode and planned foothold sequences, which are commonly treated as scheduled parameters (exogenous signals) rather than states. These features make dictionary design and regression more delicate, since the lifted predictor must remain consistent under (i) orientation representations used in observables, (ii) parameter scheduling induced by planned footholds, and (iii) the chosen control parametriza-tion (e.g., wrenches versus per-foot GRFs), motivating the following discussion. 
+
+A. Orientation representations in observables 
+
+Koopman-based frameworks for SRB dynamics often build observables from Euler angles due to their minimal dimensionality and ease of implementation. However, Euler-angle parameterizations are coordinate dependent: they ex-hibit singularities and can accumulate representation error over multi-step prediction, leading to rotational inconsisten-cies when the learned predictor is rolled out over an MPC horizon. A more geometrically faithful alternative is to construct observables directly on SO (3) , for example by including the rotation matrix Rk ∈ SO (3) (or SE (3) -consistent embed-dings) in the lifting, as explored in Koopman-based modeling and control on SE(3) and SO (3) [51], [49]. While such choices avoid Euler-angle artifacts, they introduce important practical issues for data-driven identification. First, the linear predictor obtained from regression does not, in general, preserve the nonlinear manifold constraints of SO (3) . In particular, a multi-step rollout may yield ˆRk that drifts away from SO (3) (loss of orthogonality and/or det( ˆRk)̸ = 1 ), even if the one-step fit is accurate. Enforcing ˆRk ∈ SO (3) 
+
+during prediction typically requires additional mechanisms such as projection (e.g., nearest orthogonal matrix via SVD), constrained regression, or normalization, which can intro-duce extra computation and may accumulate error over long horizons. Second, using R in the lifting increases the dimension of the observable vector: the rotation matrix is typically included through its vectorized form (e.g., vec( R) ∈ R9), so each observable derived from the rotation matrix contributes nine scalar entries to the lifted state. As additional nonlinear features or cross terms are added, the lifted dimension can grow rapidly, increasing data requirements for reliable regression and computational burden in real-time MPC. 
+
+B. Footstep locations as scheduled parameters 
+
+In SRB template models, the nominal contact locations enter as scheduled parameters (through moment arms) rather than as states. In particular, the linearized SRB dynamics depend on the planned yaw and nominal footstep locations 
+
+Ak(ψk) and Bk(ψk, ¯rk), where ¯rk is provided by a foot-step planner. In common hierarchical frameworks, the MPC receives these future foothold references from an upstream planner and treats them as fixed over the horizon. As a result, the predicted state evolution is conditionally defined on the planned foothold sequence: even for identical (xk, u k),changing ¯rk changes the nominal state transition through 
+
+Bk(ψk, ¯rk). This creates a structural source of mismatch for Koopman-based predictors: if the lifting ψ(·) or the learned linear dynamics are conditioned on planned footholds, then multi-step prediction accuracy hinges on the consistency between (i) the planned footholds used to generate the predictor and (ii) the realized contacts on the robot. Devia-tions in realized footholds due to slip, compliance, foothold erosion, or unmodeled terrain geometry effectively induce a parameter mismatch. Concretely, a predictor constructed using the planned foothold sequence ¯rk will generally incur residuals when the realized contact moment arms deviate from plan. Let 
+
+¯r real  
+
+> k
+
+denote the realized moment arms and define the foothold deviation εk := ¯r real  
+
+> k
+
+− ¯rk. Then, even for the same state and force input uk, the scheduled input mapping satisfies Bk(ψk, ¯r real  
+
+> k
+
+)uk̸ = Bk(ψk, ¯rk)uk whenever εk̸ = 0 .Over a prediction horizon, such scheduling mismatch can accumulate, particularly in off-road settings where foothold uncertainty is high and contact conditions vary rapidly. This issue is especially relevant for Koopman-based quadruped MPC pipelines that learn linear predictors under nominal gait and foothold patterns [38], and motivates modeling strategies that either (i) explicitly account for foothold uncertainty in the predictor, or (ii) adapt the lifted model online/continually as contact conditions evolve [40]. 
+
+C. Control parametrization 
+
+A physics-informed choice of observables for SRB cen-troidal dynamics naturally suggests representing the input as a net body wrench (total force and torque). This choice is common in Koopman-based modeling and control frame-works for rigid-body motion [35], [36], [52]. For quadrupeds, however, the net wrench (F, τ ) is not a primitive control input: it is realized through distributed ground reaction forces across multiple contacts, and the mapping from per-foot GRFs to the net wrench depends on the contact mode and foothold geometry (i.e., P fi, and P ri × fi as given in (1)). Moreover, when multiple feet are in contact, this mapping is generally non-invertible, implying that a desired wrench corresponds to a family of force distributions whose feasibility is governed by unilateral contact and friction constraints at each foot. Consequently, adopting a Koopman-based predictor based on wrench inputs can misalign the learned model with the standard legged MPC formulations that optimize per-foot GRFs subject to contact constraints. Ensuring consistency typically requires either (i) explicitly introducing the per-foot forces (fi) as decision variables with additional con-straints linking them to the net wrench, or (ii) an auxiliary feasibility/projection step that maps an optimized wrench to admissible GRFs, which can add computation and increase model-mismatch when the desired wrench is not realizable. 
+
+D. Implications for residual Koopman representations 
+
+The above considerations suggest that, for contact-rich quadruped locomotion, Koopman-based predictors are most effective when used as structured residual models that preserve the nominal SRB dynamics and their planner-conditioned scheduling variables, rather than attempting to learn a lifted model of the full nonlinear closed-loop system. In particular, we leverage a nominal SRB-based predictor that captures the dominant centroidal trends for flat-terrain walking under nominal contact assumptions, and learn a Koopman residual model that corrects systematic mismatch arising in more challenging operating conditions. Concretely, we treat the nominal dynamics as a physics-based backbone and fit a data-driven residual map from measured transitions, so that the learned residual captures unmodeled effects due to changing ground friction, terrain geometry, and contact variability while remaining compatible with the convex MPC structure. This residual viewpoint retains interpretability (corrections are applied only where the nominal model is insufficient), reduces the learning burden relative to full-state lifting, and enables the same MPC formulation to generalize beyond the nominal regime. 
+
+Remark 4: The residual Koopman model can also be interpreted as learning a linear disturbance generator in lifted coordinates. In particular, the term Cres (Ares zk + Bres uk)
+
+acts as a structured, data-driven correction to the nominal dynamics, analogous to a disturbance model that evolves linearly in the lifted space. This perspective clarifies the role of the residual as capturing systematic model mismatch (e.g., contact variability and terrain effects) while preserving a control-oriented linear structure, and naturally connects the proposed framework to disturbance-based and robust MPC formulations. In the next section, we describe how we generate diverse training data by executing the nominal walking controller across randomized friction coefficients and a collection of terrain maps, and then identify a Koopman predictor for the one-step residual. We subsequently evaluate the learned residual model on held-out trajectories to assess predictive structure and accuracy, before incorporating it into the MPC framework and presenting closed-loop locomotion results. V. R ESIDUAL KOOPMAN MODEL IDENTIFICATION 
+
+In this section, we identify and evaluate the proposed residual Koopman predictor for quadruped locomotion on a Unitree Go1 robot in simulation. We first describe the data collection procedure used to excite a broad range of contact conditions (via randomized friction and terrain variations). We assess predictive performance on held-out trajectories and use the learned predictor in the subsequent MPC formulation to demonstrate closed-loop locomotion over diverse operating conditions. 
+
+A. Data collection and preprocessing 
+
+Training data were generated in simulation using the Gazebo physics engine and a nominal locomotion controller. We collected 10 independent episodes (approximately 2
+
+minutes each) at 100 Hz ( ∆t = 10 ms). After discarding a short initialization transient and time-aligning states and inputs, the resulting dataset contains N = 121 ,753 synchro-nized samples for identification and evaluation. To promote diversity and facilitate sim-to-real transfer, each episode was executed under randomized terrain conditions. The ground friction coefficient was sampled independently per episode from a uniform distribution on [0 .5, 1.0] . Terrain geometry was also randomized by alternating between flat ground and mild heightmap-based rough terrain. The rough terrain was generated by low-pass filtering zero-mean Gaussian noise to create spatially correlated height variations, exporting the result as a grayscale PNG heightmap, and scaling it in Gazebo to produce small-amplitude surface roughness. During each episode, the nominal controller tracked ran-domized planar velocity commands. Setpoints were sampled uniformly within vcmd  
+
+> x
+
+, v cmd  
+
+> y
+
+∈ [−0.7, 0.7] m/s and ωcmd  
+
+> z
+
+∈
+
+[−0.5, 0.5] rad/s at a fixed update period and filtered with a first-order low-pass filter to ensure smooth reference profiles. Fig. 4 summarizes the resulting coverage in (vx, v y ) with ωzFig. 4. Dataset generation for Koopman residual learning. Left: body-velocity samples (vx, v y ) with marginal histograms, colored by yaw rate ωz ,illustrating excitation coverage. Middle: Gazebo simulation setup with randomized off-road terrain with per-episode friction μ. Right: representative episode time histories of base linear velocity v, angular velocity ω, vertical contact forces fz , and trot gait phase. 
+
+encoded by color and shows a representative rollout segment with measured velocities, reference commands, GRF inputs, and the trot gait schedule. At each time step, we log the base position pk and attitude Rk ∈ SO (3) together with the base linear and angular velocities (vk, ω k) using a linear Kalman-filter state estimator (we use the same state estimator in both simulation and hardware). The attitude Rk is obtained by converting the estimator-provided quaternion to a rotation matrix. All logged velocities are expressed in the world frame. As control inputs, we log the per-foot ground reaction forces (GRFs) predicted by the nominal controller, stacked as uk =[f ⊤
+
+> 1,k
+
+, . . . , f ⊤
+
+> 4,k
+
+]⊤ ∈ R12 . We also log the planner-provided moment arms ri,k . Finally, we preprocess the dataset by ap-plying a per-feature standardization (row-wise z-score scal-ing) to mitigate unit and magnitude disparities between lifted observables and GRF inputs. We report simple numerical diagnostics to characterize dataset diversity and excitation. Let Y := y0 · · · yN −1
+
+ denote a stacked signal matrix (planar twist with yk = [ vx,k , v y,k , ω z,k ]⊤), and evaluate its singular values, numerical rank, and condition number 
+
+κ(Y ) = σmax (Y )/σ min (Y ). For the planar twist, we obtain 
+
+rank( Y ) = 3 with singular values {147 .58 , 63 .32 , 59 .77 }
+
+and κ(Y ) ≈ 2.47 , indicating well-conditioned coverage in 
+
+(vx, v y , ω z ).For all EDMD-based models, we use the stacked per-foot GRFs as the control input uk = [ f ⊤
+
+> 1,k
+
+, . . . , f ⊤
+
+> 4,k
+
+]⊤, while the foothold moment arms ri,k enter the nominal predictor as exogenous, time-varying (planner-provided) parameters. All regressions are solved via ridge-regularized least squares (Section II-F) with λ = 10 −6, and we apply per-feature standardization to the EDMDc regressor Ω.                         
+
+> TABLE IV OPEN -LOOP PREDICTION RMSE ( MEAN ±STD ). State SRB EDMD (mono) EDMD-SE(3) Res-Koopman
+> Linear velocity (m/s)
+> vx0.007 ±0.003 4.05 ±1.92 0.003 ±0.001 0 .003 ±0.001
+> vy0.008 ±0.002 3.19 ±1.63 0.003 ±0.001 0 .003 ±0.001
+> vz0.016 ±0.003 1.22 ±0.55 0.009 ±0.002 0 .007 ±0.002
+> Angular velocity (rad/s)
+> ωx0.091 ±0.018 3.16 ±1.91 0.070 ±0.022 0 .064 ±0.017
+> ωy0.118 ±0.042 2.11 ±1.06 0.094 ±0.044 0 .089 ±0.028
+> ωz0.035 ±0.005 1.29 ±0.50 0.016 ±0.005 0 .023 ±0.005
+
+B. Model Identification 
+
+In the proposed residual Koopman framework, we first construct the residual targets ek using (20) from measured transitions and the nominal SRB predictor (19). The resid-ual is defined over the centroidal twist states as ek := [ ∆ v⊤ 
+
+> k
+
+∆ω⊤ 
+
+> k
+
+]⊤ ∈ R6, where ∆vk := vk+1 − vnom  
+
+> k+1
+
+and 
+
+∆ωk := ωk+1 − ωnom  
+
+> k+1
+
+. Then, we form lifted snapshots 
+
+zk = ψ(ek) using a monomial dictionary up to degree d,
+
+ψ(ek) :=  1, e ⊤ 
+
+> k
+
+, (e2
+
+> k
+
+)⊤, . . . , (edk)⊤⊤ ∈ Rq , (34) where ejk denotes the vector of all degree-j monomials formed from the components of ek. We apply EDMDc to estimate (Ares , B res ) by minimizing the lifted one-step prediction error in (23), followed by the output regression (24) to identify Cres . We select the residual observable lift 
+
+zk = ψ(ek) as a degree-2 monomial dictionary based on the polynomial-degree sweep shown in Fig. 5(f). After per-feature standardization, the EDMDc regressor Ω is full row rank with rank(Ω) = q + m and well-conditioned with 
+
+κ(Ω) = 5 .03 , supporting numerically stable estimation of the lifted predictor. Although the lifted state can be high-0.2 0.0 0.2 0.4 
+
+> x [m]
+> 0.2
+> 0.1
+> 0.0
+> 0.1
+> y [m]
+> start
+> end
+
+(a)   
+
+> true
+> SRB
+> EDMD-mono
+> EDMD-SE3
+> res-koopman
+> EDMD-mono
+> blows up
+> EDMD-mono
+> blows up
+> vxvyvz
+> 0.000
+> 0.007
+> 0.014
+> 0.021
+
+(b) RMSE [m/s]   
+
+> SRB
+> EDMD-SE3
+> res-koopman
+> xyz
+> 0.00
+> 0.07
+> 0.14
+> 0.21
+
+(c) RMSE [rad/s]     
+
+> 246810
+> Horizon (steps)
+> 0.00
+> 0.07
+> 0.14
+> error [rad]
+
+(d)   
+
+> SO(3) error [rad] (EDMD-SE3)
+> 10 210 310 4
+> Train samples
+> 0.04
+> 0.08
+> 0.12
+> RMSE
+
+(e)     
+
+> Overall RMSE (res-koopman)
+> 1357
+> Monomial degree d
+> 0
+> 1
+> 2
+> RMSE
+
+(f)    
+
+> degree sweep (res-koopman)
+> 77.1 77.4 77.7 78.0
+> 0.0
+> 0.1
+> 0.2
+
+(g) vx [m/s]            
+
+> 77.1 77.4 77.7 78.0
+> 0.3
+> 0.0
+> 0.3
+> vy[m/s]
+> 77.1 77.4 77.7 78.0
+> Time [s]
+> 0.04
+> 0.00
+> 0.04
+> vz[m/s]
+> 77.1 77.4 77.7 78.0
+> 0.2
+> 0.0
+> 0.2
+
+(h) x [rad/s]         
+
+> 77.1 77.4 77.7 78.0
+> 0.3
+> 0.0
+> 0.3
+> y[rad/s]
+> 77.1 77.4 77.7 78.0
+> Time [s]
+> 0.30
+> 0.15
+> 0.00
+> z[rad/s]
+
+Fig. 5. Prediction performance: Comparison of the proposed residual Koopman model (orange) against a nonlinear SRB (blue dashed), EDMD with monomials (green dashed) and EDMD with SE(3) basis (purple dashed against a test trajectory (black). (a) prediction of x − y trajectory over 100 time steps. (b–c) Per-channel RMSE box plots for linear velocities (vx, v y , v z ) and angular velocities (ωx, ω y , ω z ), (d) Mean SO (3) geodesic attitude error of EDMD-SE (3) over multi-step rollout horizon, (e) Overall residual Koopman RMSE versus the number of training samples used and (f) Overall RMSE error against monomial degree sweep for the residual Koopman model. 
+
+dimensional, the learned correction is always applied in the physical space by projecting back to the 6-dimensional residual via ek ≈ Cres zk.To assess data requirements and guide model selection, Fig. 5(e) reports sample-efficiency results obtained by fitting the residual EDMDc model on random subsets of the training data and evaluating the overall windowed one-step RMSE on a fixed test set (50 windows). Performance improves rapidly with additional samples and largely saturates around 1000 transitions, decreasing from 0.3759 ± 0.1385 at 100 samples to 0.0403 ±0.0046 at 1000 samples, with diminishing returns thereafter ( 0.0349 ± 0.0035 at 3000 and 0.0333 ± 0.0032 
+
+at 10,000). Fig. 5(f) further shows a polynomial-degree sweep for zk = ψ(ek) using degree-d monomials in the 6-dimensional residual ek: while lower degrees achieve similar test error, higher degrees substantially increase the lifting dimension q and degrade generalization despite stronger regularization. Table IV reports test-set RMSE for one-step prediction over 100 -step rollouts, averaged across 100 
+
+randomly sampled windows from held-out trajectories. 
+
+C. Prediction performance comparison with baseline EDMD 
+
+In Fig. 5 and Table IV, we compare the proposed residual Koopman predictor (orange) against the nominal nonlinear SRB model (blue dashed), and two EDMD baseilens: degree-4 monomial EDMD (green dashed), and SE(3)-based EDMD [35], [51] (purple dashed). All predictions are evaluated over 
+
+100 -step open-loop rollouts, sampled at random from held-out test trajectories. RMSE is reported as the average one-step prediction error computed over 100 time steps and then averaged across 100 randomly selected windows. For both EDMD baselines, we identify a linear predictor in a lifted space as in Section II-F. The monomial baseline uses 
+
+Ψmono (x) =  1, x ⊤, (x2)⊤, . . . , (xd)⊤⊤, (35) with x := [ p⊤, θ⊤, v⊤, ω⊤ ]⊤, where xd denotes the vector of all degree-d monomials. As shown by the green trajectory in Fig. 5(a) and the RMSE statistics in Table IV, this monomial EDMD model exhibits large prediction errors and can become unstable over multi-step rollouts, yielding poor one-step and long-horizon performance. We next consider an SE(3)-structured EDMD baseline that incorporates rotation-aware features. Specifically, we form 
+
+ψSE (3) (x) =  p⊤, v ⊤, vec( R)⊤, ω ⊤, h (x), where 
+
+h(x) = 
+
+h
+
+vec( Rω ∧)⊤, vec( Rω ∧2)⊤, . . . , vec( Rω ∧d)⊤i⊤
+
+,
+
+(36) with d = 4 (degree 4). This dictionary avoids the catastrophic blow-up of monomial EDMD and achieves substantially lower RMSE (Table IV and Fig. 5(b,c)). However, because the lift is constructed from the estimated attitude, small ori-entation errors perturb the lifted coordinates and compound over multi-step rollouts, leading to horizon-dependent atti-tude drift. We quantify this effect using the SO (3) geodesic distance [53] 
+
+eR := tr 
+
+
+
+I − R⊤ ˆR
+
+
+
+> 2
+
+,
+
+which increases approximately linearly with the prediction horizon in Fig. 5(d), indicating a distinct failure mode when used in a predictive control setting. In the xy plane (Fig. 5(a)), the residual Koopman predictor remains closest to the measured trajectory, while the nominal SRB model exhibits mild drift under heightmap-induced contact variability and the degree-4 monomial EDMD model diverges. The corresponding time-series (Fig. 5(g,h)) show that all models track vx and vy closely over this segment, but the residual Koopman predictor most accurately captures the vz fluctuations induced by vertical motion and contact modulation, and provides the tightest overall tracking of 
+
+(ωx, ω y , ω z ). These trends are consistent with the aggregate RMSE box plots in Fig. 5(b,c) and Table IV, and motivate learning a compact residual correction on top of a physically meaningful nominal predictor rather than relying on a single lifted EDMD model of the full state. These results motivate using the learned residual Koopman model as a lightweight correction term within a predictive controller: it preserves the interpretability and structure of the SRB template while improving short-horizon prediction fidelity under contact variability. We next incorporate this residual Koopman predictor into our MPC formulation. VI. C ONVEX RESIDUAL KOOPMAN MPC FOR 
+
+QUADRUPED LOCOMOTION 
+
+We now embed the residual Koopman predictor from Section III into a receding-horizon MPC. Based on the linearized nominal SRB template (19) we design an MPC formulation that uses the residual-corrected linear predictor while preserving a convex QP structure. 
+
+A. Residual Koopman MPC Formulation 
+
+Using the residual Koopman representation (21), the MPC propagates the lifted residual state zk = ψ(ek) alongside the nominal SRB prediction. The combined predictor is 
+
+ˆxk+1 = xnom  
+
+> k+1
+
++ ˆ ek+1 
+
+= Anom xk + Bnom uk + Cres zk+1 , (38) 
+
+zk+1 = Ares zk + Bres uk, ˆek = Cres zk. (39) Here, xk ∈ R13 is the SRB state xk = [ p⊤ 
+
+> k
+
+θ⊤ 
+
+> k
+
+v⊤ 
+
+> k
+
+ω⊤ 
+
+> k
+
+1 ] ⊤
+
+defined in (19), and uk ∈ R6 is the net centroidal wrench applied to the base, uk = [ F ⊤ 
+
+> k
+
+τ ⊤ 
+
+> k
+
+]⊤. In our implementation, the residual is defined only over the velocity states, 
+
+ek := 
+
+" vk − vnom 
+
+> k
+
+ωk − ωnom 
+
+> k
+
+#
+
+∈ R6, (40) and zk ∈ Rq denotes the lifted residual coordinates produced by the dictionary ψ(·) acting on (40). Accordingly, Cres zk in (38) is interpreted as an additive correction to the predicted velocities within the full SRB state, while the nominal model propagates (p, θ ) through (19). The nominal matrices 
+
+Anom  
+
+> k
+
+:= A(ψk) and Bnom  
+
+> k
+
+:= B(ψk, ¯rk) are as in (19), and 
+
+(Ares , B res , C res ) are identified via (23)–(24). To track a reference trajectory {x⋆k+i}Ni=0 , we solve a receding-horizon optimal control problem using the residual-corrected predictor in (38)–(39). At each time step k, we compute the nominal prediction xnom  
+
+> k
+
+from (19) and form the residual state only in the velocity channels, 
+
+ek := (vk − vnom  
+
+> k
+
+)⊤ (ωk − ωnom  
+
+> k
+
+)⊤⊤ ∈ R6,
+
+which is lifted as zk = ψ(ek) as described in (37d). The decision variable is the sequence of stance-foot contact forces 
+
+uk+i :=  f ⊤ 
+
+> 1,k +i
+
+· · · f ⊤
+
+> nc,k +i
+
+⊤ ∈ R3nc ,
+
+where nc denotes the number of stance feet at stage k+i. The resulting Residual Koopman MPC (RK-MPC) formulation is provided in (37a)- (37d). Here, Q ⪰ 0 and R ≻ 0 weight state tracking and force effort, and Qf ⪰ 0 is an optional terminal weight. The mode 
+
+σk+i denotes the stance-foot set at stage k+i (gait schedule), which determines which contact forces are active and which inequality constraints are enforced. For each stance foot j ∈
+
+σk+i with force fj,k +i = [ fj,x fj,y fj,z ]⊤, we enforce a linear friction pyramid approximation [54] 
+
+|fj,x | ≤ μf j,z , |fj,y | ≤ μf j,z ,
+
+together with vertical force bounds 
+
+fmin ≤ fj,z ≤ fmax .
+
+These constraints can be written compactly as 
+
+Aμ fj,k +i ≤ bμ, (41) where 
+
+Aμ := 
+
+
+
+−1 0 −μ
+
+1 0 −μ
+
+0 −1 −μ
+
+0 1 −μ
+
+0 0 −10 0 1
+
+
+
+, bμ := 
+
+
+
+0000
+
+−fmin 
+
+fmax 
+
+
+
+. (42) Stacking (41) over all stance feet yields the stage-wise inequality in (37c), i.e., Aineq (σk+i)uk+i ≤ bineq (σk+i). At each control step, we apply the first optimal contact-force command u⋆k in a receding-horizon fashion. Residual Koopman MPC formulation. 
+
+min  
+
+> {xk+i, u k+i}
+> N−1
+
+X
+
+> i=0
+
+
+
+(xk+i+1 − x⋆k+i+1 )⊤Q(xk+i+1 − x⋆k+i+1 ) + u⊤
+
+> k+i
+
+R u k+i
+
+
+
++ ( xk+N − x⋆k+N )⊤Qf (xk+N − x⋆k+N ) (37a) s.t. xk+i+1 = Anom xk+i + Bnom uk+i + Cres (Ares zk+i + Bres uk+i), (37b) 
+
+Aineq (σk+i) uk+i ≤ bineq (σk+i), (37c) 
+
+zk = ψ(ek), ek = (vk − vnom  
+
+> k
+
+)⊤ (ωk − ωnom  
+
+> k
+
+)⊤⊤, (37d) Because the cost in (37) is quadratic and the constraints (37b) and (37c) are linear in the decision variables, (37) is a convex quadratic program. In particular, stacking the horizon inputs into 
+
+U := [ u⊤ 
+
+> k
+
+u⊤ 
+
+> k+1
+
+· · · u⊤  
+
+> k+N−1
+
+]⊤
+
+and eliminating the state variables via the recursion yields the standard form 
+
+min  
+
+> U
+> 12
+
+U ⊤HU + G⊤U, 
+
+s.t. AN
+
+> ineq
+
+U ≤ bN
+
+> ineq
+
+for appropriate matrices (H, G, A N
+
+> ineq
+
+, b N
+
+> ineq
+
+) determined by the nominal SRB matrices (Anom , B nom ), the residual Koopman operators (Ares , B res , C res ), the horizon weights 
+
+(Q, R, Q f ), and the contact schedule σ. This QP can be solved efficiently with standard QP solvers. Note that the nominal state xnom  
+
+> k
+
+is propagated online alongside the mea-sured state. 
+
+B. Tracking performance comparison with baseline EDMD 
+
+We evaluate the proposed Residual Koopman MPC (RK-MPC) from (37) in Gazebo simulation on a velocity-tracking task that executes a circular reference for 10 laps. A smooth global planner takes the body-frame velocity commands from user input and converts them into a world-frame CoM (base) state reference, yielding the reference sequence {x⋆k+i}Ni=0 
+
+used in the tracking objective (37a). All controllers are evaluated under identical simulation conditions (same gait schedule, contact parameters, and command profile), and use the same sampling time ∆t and horizon length N . For RK-MPC, the nominal predictor inside the horizon is the linearized SRB template (19) discretized at ∆t = 0 .01 s, while the learned residual Koopman dynamics (39) provide an additive correction to the velocity channels through (38). The RK-MPC has a state dimension nx = 13 and the con-trol input is the stacked ground reaction forces of four feet, 
+
+u = [ f ⊤ 
+
+> 1
+
+f ⊤ 
+
+> 2
+
+f ⊤ 
+
+> 3
+
+f ⊤ 
+
+> 4
+
+]⊤ ∈ R12 . We use a prediction horizon of 
+
+N = 8 with the MPC update rate set to 100 Hz. Contact constraints enforce a linear friction-pyramid model. The friction coefficient μ is randomized by sampling uniformly from [0 .5, 1.0] and is held constant within the eperiment. To evaluate robustness to mild terrain variation, episodes alter-nate between flat ground and randomly generated heightmap terrain, where the heightmap is obtained by low-pass filtering                              
+
+> TABLE V CLOSED -LOOP TRACKING RMSE AND MPC SOLVE -TIME STATISTICS ON A 10-LAP CIRCULAR TASK IN SIMULATION .Metric SRB-MPC SE3-KMPC RK-MPC
+> Linear velocity RMSE (m/s)
+> vx0.0229 ±0.0201 0.0686 ±0.0949 0.0232 ±0.0201
+> vy0.0196 ±0.0167 0.0877 ±0.1237 0.0195 ±0.0165
+> vz0.0172 ±0.0126 0.1374 ±0.2109 0.0177 ±0.0129
+> Angular-rate RMSE (rad/s)
+> ωx0.0910 ±0.0695 1.0646 ±2.1215 0.0925 ±0.0713
+> ωy0.0967 ±0.0758 0.7421 ±1.3950 0.0982 ±0.0769
+> ωz0.3368 ±0.0698 0.2936 ±0.4394 0.0938 ±0.0662
+> MPC solve time (ms)
+> Solve time 1.40 ±0.72 1.57 ±1.27 0.89 ±6.58
+
+zero-mean Gaussian noise to produce spatially correlated, small-amplitude surface roughness in Gazebo. The normal-force limit is upper bounded by fz ≤ fz, max = 180 N for stance feet. The stage cost (37a) uses diagonal weights 
+
+Q = diag(1 , 1, 200 , 30 , 30 , 1, 20 , 20 , 20 , 1, 1, 1, 0) ,R = 10 −5diag(1 , 1, 0.1, 1, 1, 0.1, 1, 1, 0.1, 1, 1, 0.1) .
+
+with Qf = Q. The resulting condensed quadratic program is solved using QuadProg++ [55]. All simulation experiments are run in ROS + Gazebo on Ubuntu 20.04 using a Dell OptiPlex workstation equipped with a 12th Gen Intel Core i9-12900K ( ∼3.2 GHz) and 32 GB RAM. We compare the proposed RK-MPC framework against two MPC pipelines that differ only in the prediction model. The baseline SRB-MPC solves a nonlinear MPC using the full SRB dynamics model, which leads to a non-convex optimization problem but serves as a high-fidelity reference. In contrast, the EDMD-SE(3) based MPC formulation (SE3-KMPC) replaces the nonlinear SRB predictor with a lin-ear Koopman/EDMD predictor identified using the SE(3)-structured dictionary (with degree 4) (36). This yields a convex QP with the same horizon, tracking weights, and contact constraints as RK-MPC, but its lifted state depends explicitly on a propagated rotation matrix ˆR (through vec( ˆR)
+
+and h(x)). As seen in the open-loop prediction results in Fig. 5(d), small rotation-consistency errors can accumulate over the prediction horizon and degrade closed-loop perfor-mance. 0.6 0.0 0.6 
+
+> x [m]
+> 0.0
+> 0.6
+> 1.2
+> 1.8
+> y [m]
+
+(a) SRB-mpc   
+
+> cmd
+> SRB-MPC
+> 0.6 0.0 0.6
+> x [m]
+> 0.0
+> 0.6
+> 1.2
+> 1.8
+
+(b) RK-mpc   
+
+> cmd
+> RK-MPC
+> 0.2 0.0 0.2
+> roll [rad]
+> 3
+> 0
+> 3
+> 6
+> x [rad/s]
+> SE3-KMPC
+> failure
+
+(c) roll stability   
+
+> 0.2 0.0 0.2
+> pitch [rad]
+> 3
+> 0
+> 3
+> 6
+> y [rad/s]
+> SE3-KMPC
+> failure
+
+(d) pitch stability   
+
+> SE3-KMPC
+> RK-MPC
+> vxvyvz
+> 0.00
+> 0.08
+> 0.16
+> 0.24
+
+(e) RMSE [m/s]   
+
+> SRB-MPC
+> SE3-KMPC
+> RK-MPC
+> xyz
+> 0.0
+> 0.4
+> 0.8
+> 1.2
+
+(f) RMSE [rad/s]    
+
+> SRB SE3 RK
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> Time [ms]
+> 1.57 ms 1.40 ms
+> 0.89 ms
+
+(g) MPC Solve time   
+
+> 024
+> Time [s]
+> 0.00
+> 0.05
+> 0.10
+
+(h) SE3-KMPC: SO(3) err.      
+
+> || RTRI|| F
+> |det (R)1|
+> 020 40 60
+> Time [s]
+> 0.5
+> 0.0
+> 0.5
+
+(i) RK-MPC: vx tracking    
+
+> 020 40 60
+> Time [s]
+> 0.5
+> 0.0
+> 0.5
+
+(j) RK-MPC: vy tracking    
+
+> 020 40 60
+> Time [s]
+> 0.5
+> 0.0
+> 0.5
+
+(k) RK-MPC: z tracking    
+
+> 020 40 60
+> Time [s]
+> 0.00
+> 0.03
+> 0.06
+
+(l) Cross-track error [m] Fig. 6. MPC tracking performance (sim): Comparison of the proposed RK-MPC framework (orange) against a nonlinear SRB-MPC (blue) and SE3-KMPC (purple) on a circular tracking task over 10 laps. (a)–(b) Executed base x–y trajectory of the SRB-MPC and the RK-MPC respectively. (c)–(d) Phase portraits for attitude stability where SE3-KMPC exhibits a failure mode with excursions away from the near-origin region. (e)–(f) Per-axis tracking RMSE distributions for linear velocities and angular rates across 10 laps of the circle. (g) MPC solve-time distributions (ms) for each controller. (h) Closed-loop SO (3) drift of the SE3-KMPC internal rotation state. (i)–(k) Tracking performance of RK-MPC for (vx, v y , ω z ), showing close agreement with the commanded signals. (l) Cross-track error for RKMPC and SRB-MPC over time. 
+
+Figure 6 and Table V summarizes the closed-loop tracking behavior for a circular trajectory over 10 laps. The executed base trajectories in Fig. 6(a)–(b) show that SRB-MPC and RK-MPC both track the commanded circle with small drift, with RK-MPC exhibiting slightly tighter overlap over the full rollout. This is also reflected in the cross-track error plot in Fig. 6(l), where both controllers remain bounded with comparable error profiles, and RK-MPC exhibits slightly reduced peaks over repeated laps. Further, the velocity plots in Fig. 6(i)–(k) show that RK-MPC follows the commanded velocities well over repeated laps. Both SRB-MPC and RK-MPC complete the full 10-lap rollout (about 250 s), whereas SE3-KMPC becomes unstable and fails within the first few seconds (about 5 s). The stability limitation of SE3-KMPC is highlighted in Fig. 6(c)–(d) and (h). The roll/pitch phase portraits in Fig. 6(c)–(d) show large excursions for SE3-KMPC. The zoomed view shows that RK-MPC remains bounded near the nominal region over the same rollout. This behavior is consistent with the rotation-manifold drift in Fig. 6(h). During runtime we log the internal predicted rotation ˆR
+
+used to construct the SE(3)-aware lifted basis. We observe that ˆR progressively departs from SO (3) , as quantified by increasing ∥ ˆR⊤ ˆR − I∥F and | det( ˆR) − 1|. This drift can be reduced by explicitly projecting ˆR back onto SO (3) at each step, but doing so adds extra operations and implementation complexity. Fig. 6(e)–(f) reports RMSE distributions for linear-velocity and angular-rate tracking across rollouts. For a compact summary, we aggregate RMSE across axes by averaging the per-axis means. In linear velocity, SRB-MPC and RK-MPC are essentially identical, with an overall mean RMSE of 
+
+0.0199 m/s (SRB-MPC) and 0.0201 m/s (RK-MPC), while SE3-KMPC is substantially worse at 0.0979 m/s. In angular-rate tracking, RK-MPC achieves the lowest overall mean RMSE of 0.0948 rad/s, compared to 0.1748 rad/s for SRB-MPC and 0.7001 rad/s for SE3-KMPC. This improvement is driven primarily by the yaw-rate channel, where RK-MPC maintains a tight ωz response across laps. Finally, we report the MPC solve time, i.e., the per-iteration wall-clock time required to solve the finite-horizon optimization and produce a new control sequence. In Fig. 6(g), RK-MPC attains the lowest solve times with a mean of 0.89 ms, compared to the SE3-KMPC (1.40 ms) 0.0 1.2 2.4                                 
+
+> 2.4
+> 1.2
+> 0.0
+> y [m]
+> start
+> end
+> (a) XY traj (random)
+> 113
+> x [m]
+> 0
+> 2
+> 4
+> y [m]
+> start
+> end
+> (b) XY traj (loops)
+> 0.4
+> 0.0
+> 0.4
+> (c) vx[m/s] (random)
+> 0.5
+> 0.0
+> 0.5
+> (d) vx[m/s] (loops)
+> 0.4
+> 0.0
+> 0.4
+> vy[m/s] (random)
+> 0.5
+> 0.0
+> 0.5
+> vy[m/s] (loops)
+> 0816 24
+> Time [s]
+> 0.4
+> 0.0
+> 0.4
+> wz[m/s] (random)
+> 0816 24 32 40
+> Time [s]
+> 1
+> 0
+> 1
+> wz[m/s] (loops) Fig. 7. Experiment 1: Velocity tracking on flat ground. (a) Executed base x–ytrajectory during randomized planar commands (start/end annotated). (b) Executed base x–ytrajectory during smooth loop commands (start/end annotated). (c) Randomized segment: commanded (black dashed) and measured (solid) (vx, v y, ω z). (d) Loop segment: commanded (black dashed) and measured (solid) (vx, v y, ω z).
+
+and the nonlinear SRB-MPC (1.57 ms). Overall, these results show that RK-MPC preserves the command-tracking quality of the nonlinear SRB-MPC base-line while offering a faster convex QP implementation. In addition, RK-MPC avoids the rotation-consistency drift that destabilizes SE3-KMPC, and therefore provides a more reliable Koopman-based MPC pipeline for long-horizon lo-comotion tracking. VII. E XPERIMENTAL VALIDATION 
+
+We validate the proposed Residual Koopman MPC (RK-MPC) on a Unitree Go1 in real-world hardware experiments. The full control stack runs fully onboard on an NVIDIA Jetson Xavier NX. At each control cycle, RK-MPC solves the convex QP in (37) using the residual-corrected predictor in (38)–(39), and applies the first optimal contact-force command u⋆k in a receding-horizon fashion. User commands are specified as planar velocity setpoints (vcmd  
+
+> x
+
+, v cmd  
+
+> y
+
+, ω cmd  
+
+> z
+
+)
+
+and are converted by a smooth global planner into a world-frame SRB reference trajectory, yielding the reference se-quence {x⋆k+i}Ni=0 used in the tracking objective (37a). State estimation is performed using the same linear Kalman filter, which provides the SRB state xk (base pose and body velocities). Gait phase and contacts are generated by a wave-based gait scheduler, and swing footholds are planned using a Raibert-style velocity-tracking heuristic. Low-level swing and stance torques are computed by mapping Cartesian swing forces and MPC ground-reaction forces through the leg Jacobians as described in the hierarchical architecture of the Preliminaries (footstep planning and torque mapping in (7)–(10)). We evaluate in a blind-locomotion setting without exteroceptive sensing, relying only on proprioception and commanded references. The goal is to demonstrate accurate tracking of time-varying planar commands and robust loco-motion under model mismatch and disturbances. The state estimator and RK-MPC controller run at 500 Hz, while the MPC model uses a discretization step of 0.01 s. Swing and stance joint torques are computed at 500 Hz. On hardware, the controller supports agile planar tracking up to peak forward speeds of 0.6 m/s under nominal flat-ground conditions. 
+
+A. Experiment 1: Velocity tracking on flat ground 
+
+In this experiment, we evaluate the closed-loop track-ing performance of the proposed RK-MPC on flat indoor terrain under time-varying planar velocity commands. The commanded references are specified as (vcmd  
+
+> x
+
+, v cmd  
+
+> y
+
+, ω cmd  
+
+> z
+
+),following the notation used in Sec. V-A, and are converted by the planner into the reference sequence {x⋆k+i}Ni=0 used in (37a). We consider two representative command profiles. First, we apply randomized planar commands (sampled and filtered as in Sec. V-A) to excite frequent changes in direction and yaw rate. The resulting executed x–y path is shown in Fig. 7(a). Second, we apply a smoother, approximately sinusoidal command pattern that induces sustained curva-ture, resulting in a loop-like/circular trajectory in the plane (Fig. 7(b)). Figure 7(c)–(d) report the corresponding time histories of commanded (black dashed) and measured (solid) planar ve-locities (vx, v y , ω z ) for the randomized and loop segments, Debris 
+
+(a) 
+
+> Debris
+
+(b) 
+
+> Push
+
+(e) 
+
+> Recovery
+
+(f)   
+
+> 0.20 0.08 0.05
+> roll [rad]
+> 1.5
+> 0.0
+> 1.5
+> ang. vel [rad/s]
+
+(c)    
+
+> Debris
+> Flat
+> Roll vs x
+> 0.05 0.08 0.20
+> pitch [rad]
+> 1.5
+> 0.0
+> 1.5
+
+(d)     
+
+> Debris
+> Flat
+> Pitch vs y
+> 0612 18
+> Time [s]
+> 1
+> 0
+> 1
+
+(g)    
+
+> push 1
+> push 2
+> push 3
+> vel [m/s] vs time
+> vx
+> vy
+> 0612 18
+> Time [s]
+> 0.1
+> 0.0
+> 0.1
+
+(h)           
+
+> push 1 push 2
+> push 3
+> angle [rad] vs time
+> roll
+> pitch Fig. 8. Experiment 2: Debris traversal and push recovery. (a) Representative snapshots of blind locomotion over a debris field. (b)–(c) Attitude phase portraits comparing debris (orange) and flat ground (blue): roll versus ωxand pitch versus ωy. (d) External push trial with recovery during steady walking. (e) Measured planar velocities (vx, v y)during the push sequence (push instants annotated). (f) Measured base angles (roll, pitch) during the push sequence (push instants annotated).
+
+respectively. In both cases, the measured velocities closely track the commanded references, with bounded oscillations attributable to gait impacts and contact transitions. Overall, these results demonstrate that RK-MPC achieves reliable real-time planar command tracking on hardware in nominal flat-ground conditions. 
+
+B. Experiment 2: Robustness to debris and external push 
+
+We next evaluate the robustness of RK-MPC under con-tact disturbances and unmodeled terrain interactions in a blind-locomotion setting. First, we command the robot to traverse a debris field consisting of loose wooden pieces and small obstacles (Fig. 8(a)). Over 10 trials at vcmd  
+
+> x
+
+=0.5 m/s , v cmd  
+
+> y
+
+= 0 m/s , ω cmd  
+
+> z
+
+= 0 rad/s, the robot success-fully completes 9/10 runs without failure, demonstrating that the residual-corrected predictor maintains stable track-ing despite intermittent foot slippage and height variations introduced by the debris. Figures 8(b)–(c) further summarize attitude stability by plotting phase portraits (roll versus ωx
+
+and pitch versus ωy ), comparing flat-ground walking against the debris condition. While debris induces larger excursions than flat terrain, the trajectories remain bounded and return to the near-origin region, indicating stable closed-loop behavior. Second, we evaluate recovery from external disturbances by applying repeated lateral and longitudinal pushes during steady walking (Fig. 8(d)). We conduct two sequences of three pushes (six pushes total), and in all cases the robot maintains balance and returns to steady tracking without falling. Figures 8(e)–(f) show representative time histories of the measured planar velocities (vx, v y ) and base angles (roll, pitch) during the push trials, where each push produces a transient deviation followed by rapid recovery back toward nominal motion. 
+
+C. Experiment 3: Executing different gaits 
+
+We next evaluate whether the proposed RK-MPC frame-work generalizes across gait schedules beyond those used during model identification. Note that the residual Koopman predictor is trained using data collected under a trot gait, yet the MPC formulation in (37) depends on the gait only through the contact schedule σk (which selects the active stance feet and corresponding constraints). To test gait gen-eralization, we execute both a trot gait and a crawl gait on hardware using the gait timing parameters reported in Table II. Figure 9 summarizes representative segments for each gait. The left column shows snapshots of the robot executing the gait patterns, and the bottom row visualizes the correspond-ing contact schedule over time. The right columns show the measured per-foot ground reaction forces for each gait (stacked as fx, fy , and fz ), illustrating consistent force mod-ulation aligned with the stance phases. Despite being trained only with trot data, RK-MPC produces stable locomotion under the crawl schedule, indicating that the learned residual correction transfers across contact timing patterns and that the controller can accommodate different gaits through the scheduled constraints and foothold plan. 
+
+D. Experiment 4: Generalization to off-road terrains 
+
+Finally, we evaluate the robustness of RK-MPC under unmodeled ground conditions by executing velocity-tracking trials on four representative outdoor terrains: grass, gravel, ice, and snow (Fig. 10(a)–(d)). In all trials, the robot op-erates in a blind-locomotion setting without exteroceptive Trot (FR/RL) 
+
+(a)  
+
+> Trot (FL/RR) Crawl (FR)
+
+(b)   
+
+> Crawl (RL)
+> 40
+> 0
+> 40 fx[N]
+
+(c) Trot gait          
+
+> 40
+> 0
+> 40 fy[N]
+> 0
+> 90
+> 180 fz[N]
+> 2345
+> Time [s]
+> RR
+> RL
+> FR
+> FL
+> Gait phase
+> 25
+> 0
+> 25 fx[N]
+
+(d) Crawl gait               
+
+> 25
+> 0
+> 25 fy[N]
+> 0
+> 90
+> 180 fz[N]
+> 2345
+> Time [s]
+> RR
+> RL
+> FR
+> FL
+> Gait phase Fig. 9. Experiment 3: Gait generalization. RK-MPC trained on trot data is executed on hardware under both trot and crawl gait schedules. representative snapshots (a-b). and measured per-foot ground reaction forces fx,fy, and fzfor trot (c) and crawl (d). Bottom: corresponding gait phase/contact schedule for each leg (FR, FL, RR, RL), showing consistency between stance phases and force generation.
+
+sensing and tracks commanded planar references specified by (vcmd  
+
+> x
+
+, v cmd  
+
+> y
+
+, ω cmd  
+
+> z
+
+).On grass and gravel, we command primarily planar linear motion (no yaw-rate command) and observe stable locomo-tion with consistent tracking of (vx, v y ) over the duration of the trials (Fig. 10(i)–(j)). The corresponding attitude phase portraits (Fig. 10(e)–(f)) remain bounded and comparable to flat-ground behavior, with modest increases in roll/pitch excursions attributable to uneven contact and compliance. On ice, the robot remains dynamically stable but begins to experience noticeable slip after several seconds. This behavior is consistent with the measured vertical contact forces saturating near the stance limit across legs (Fig. 10(g)), indicating that the controller demands increased normal force to maintain traction while the available friction is insufficient. The contact schedule for this segment is shown in Fig. 10(k). On snow, we command a circular planar motion with a nonzero yaw-rate reference. Figure 10(h) shows that the robot tracks (vx, v y ) smoothly, and Fig. 10(l) shows close tracking of ωz over the trial, demonstrating that RK-MPC can sustain coordinated turning motion on deformable terrain. VIII. D ISCUSSION 
+
+The results show that directly learning a lifted linear predictor for the full SRB state using a generic mono-mial EDMD dictionary can be unreliable for contact-rich quadruped locomotion. Even when the one-step regression error is reasonable, multi-step rollouts can become unstable, leading to rapidly growing prediction error and divergence (Fig. 5(a) and Table IV). This behavior is consistent with the fact that high-degree polynomial lifts can amplify modeling and measurement errors, and the resulting linear predictor does not inherently enforce physical structure or bound-edness. When embedded in a receding-horizon controller, such open-loop drift corrupts the horizon predictions and degrades the quality of the optimized contact forces, making monomial EDMD a poor drop-in replacement for a physics-based template in MPC. Using an SE (3) -inspired EDMD dictionary substantially improves prediction accuracy relative to monomial EDMD and avoids catastrophic blow-up, yielding lower RMSE in open-loop tests (Fig. 5(b,c) and Table IV). However, this improvement comes with a distinct failure mode in closed loop: the lift depends explicitly on the estimated attitude through vec( R) and the rotation-aware features in (36). As a consequence, small attitude-estimation errors perturb the lifted coordinates and compound over the MPC hori-zon, producing drift in the internally propagated rotation variables and ultimately destabilizing SE3-KMPC in long-horizon tasks (Fig. 6(h)). This highlights a practical trade-off: adding geometric structure can reduce model bias, but can also increase sensitivity to state-estimation quality and the consistency of ˆR under repeated prediction. The proposed RK-MPC avoids these issues by retaining Grass 
+
+(a) 
+
+> Gravel
+
+(b) 
+
+> Ice
+
+(c) 
+
+> Snow
+
+(d)   
+
+> 0.05 0.00 0.05
+> roll [rad]
+> 0.6
+> 0.0
+> 0.6
+> ang. vel. [rad/s]
+
+(e)    
+
+> gravel
+> grass
+> Roll vs x
+> 0.05 0.00 0.05
+> pitch [rad]
+> 0.6
+> 0.0
+> 0.6
+
+(f)     
+
+> flat
+> Pitch vs y
+> 28 29 30 31
+> 0
+> 60
+> 120
+> 180
+
+(g) ice: fz [N] vs time    
+
+> 0510 15
+> 0.0
+> 0.2
+> 0.4
+
+(h) snow: vx, vy vs time    
+
+> 010 20 30
+> Time [s]
+> 0.4
+> 0.0
+> 0.4
+> v [m/s]
+
+(i) grass: vx, vy vs time     
+
+> vxvy
+> 12 18 24 30
+> Time [s]
+> 0.2
+> 0.0
+> 0.2
+
+(j) gravel: vx, vy vs time   
+
+> 29 30 31
+> Time [s]
+> RR
+> RL
+> FR
+> FL
+
+(k) ice: contact phase    
+
+> 0510 15
+> Time [s]
+> 0.5
+> 0.0
+> 0.5
+
+(l) snow: z vs time Fig. 10. Experiment 4: Off-road generalization. (a)–(d) Representative snapshots of blind locomotion on grass, gravel, ice, and snow. (e)–(f) Attitude phase portraits (roll versus ωx and pitch versus ωy ) across terrains. (g) Ice: measured vertical ground-reaction forces fz approaching the stance limit during slip onset. (h) Snow: commanded (dashed) and measured (solid) planar velocities (vx, v y ) during a turning trial. (i)–(j) Grass and gravel: commanded (dashed) and measured (solid) (vx, v y ) time histories. (k) Ice contact schedule for the shown segment. (l) Snow: commanded (dashed) and measured (solid) yaw rate ωz .
+
+a physics-based SRB template inside the optimizer and learning only a compact residual correction applied to the velocity channels. This preserves the scheduling and con-straint structure of standard convex SRB MPC (contact-set dependent constraints, planned moment arms, and per-foot force decision variables), while using data to improve prediction fidelity in regimes where the nominal template is imperfect. Across simulation and hardware experiments, RK-MPC consistently provides reliable tracking and stable locomotion without the lifted-state divergence of monomial EDMD or the rotation-drift sensitivity observed with SE(3)-based lifts. On hardware, RK-MPC further demonstrates practical real-time viability: the full stack runs onboard on an NVIDIA Jetson Xavier NX with the estimator and controller executing at 500 Hz while the MPC discretization uses ∆t = 0 .01 s(Sec. VII). Beyond flat-ground tracking (Sec. VII-A), RK-MPC maintains stability under disturbances and changing ground conditions. In particular, the off-road study in Exper-iment 4 (Sec. VII-D) directly evaluates performance under terrain and friction effects (grass, gravel, ice, and snow), showing that RK-MPC sustains velocity tracking and stable walking across diverse outdoor surfaces. Two extensions follow naturally from this work. First, RK-MPC can be made adaptive by updating the residual model online using new transitions collected during operation, en-abling specialization to changing payloads, friction, or actua-tor characteristics. Such updates could be performed through incremental least-squares refinement of (Ares , B res , C res ) or periodic refitting of a lightweight residual layer under safety constraints. Second, because RK-MPC remains a convex QP, it provides a natural foundation for robust MPC designs with guarantees. For example, uncertainty sets on the learned residual could be propagated through the linear predictor to derive tube-based or constraint-tightening schemes, retaining real-time solvability while improving robustness certification. IX. C ONCLUSION 
+
+This paper presented a residual Koopman modeling and control framework for quadruped locomotion that augments a standard SRB-based convex MPC with a compact data-driven correction. By learning a linear residual predictor in lifted coordinates and applying the correction only in the physical velocity channels, RK-MPC preserves the structure and real-time solvability of convex contact-force MPC while improving prediction fidelity under contact variability. In simulation and Unitree Go1 hardware experiments, RK-MPC achieves reliable planar velocity tracking, maintains stability under disturbances, and generalizes to different gait sched-ules and off-road terrains, all while running fully onboard at high control rates. Overall, these results suggest that residual Koopman models offer a practical middle ground between purely physics-based templates and fully lifted EDMD pre-dictors for contact-rich legged locomotion. REFERENCES [1] S. Ha, J. Lee, M. van de Panne, Z. Xie, W. Yu, and M. Khadiv, “Learning-based legged locomotion: State of the art and future per-spectives,” The International Journal of Robotics Research , vol. 44, no. 8, pp. 1396–1427, 2025. [2] P. M. Wensing, M. Posa, Y. Hu, A. Escande, N. Mansard, and A. Del Prete, “Optimization-based control for dynamic legged robots,” 
+
+IEEE Transactions on Robotics , vol. 40, pp. 43–63, 2023. [3] J. Kober, J. A. Bagnell, and J. Peters, “Reinforcement learning in robotics: A survey,” The International Journal of Robotics Research ,vol. 32, no. 11, pp. 1238–1274, 2013. [4] L. Hewing, K. P. Wabersich, M. Menner, and M. N. Zeilinger, “Learning-based model predictive control: Toward safe learning in control,” Annual Review of Control, Robotics, and Autonomous Sys-tems , vol. 3, no. 1, pp. 269–296, 2020. [5] A. W. Winkler, C. D. Bellicoso, M. Hutter, and J. Buchli, “Gait and trajectory optimization for legged systems through phase-based end-effector parameterization,” IEEE Robotics and Automation Letters ,vol. 3, no. 3, pp. 1560–1567, 2018. [6] J. Di Carlo, P. M. Wensing, B. Katz, G. Bledt, and S. Kim, “Dynamic locomotion in the mit cheetah 3 through convex model-predictive control,” in 2018 IEEE/RSJ international conference on intelligent robots and systems (IROS) , pp. 1–9, IEEE, 2018. [7] A. Aswani, H. Gonzalez, S. S. Sastry, and C. Tomlin, “Provably safe and robust learning-based model predictive control,” Automatica ,vol. 49, no. 5, pp. 1216–1226, 2013. [8] M. P. Deisenroth, D. Fox, and C. E. Rasmussen, “Gaussian processes for data-efficient learning in robotics and control,” IEEE transactions on pattern analysis and machine intelligence , vol. 37, no. 2, pp. 408– 423, 2013. [9] L. Hewing, J. Kabzan, and M. N. Zeilinger, “Cautious model predictive control using gaussian process regression,” IEEE Transactions on Control Systems Technology , vol. 28, no. 6, pp. 2736–2743, 2019. [10] J. Tan, T. Zhang, E. Coumans, A. Iscen, Y. Bai, D. Hafner, S. Bo-hez, and V. Vanhoucke, “Sim-to-real: Learning agile locomotion for quadruped robots,” arXiv preprint arXiv:1804.10332 , 2018. [11] J. Hwangbo, J. Lee, A. Dosovitskiy, D. Bellicoso, V. Tsounis, V. Koltun, and M. Hutter, “Learning agile and dynamic motor skills for legged robots,” Science robotics , vol. 4, no. 26, p. eaau5872, 2019. [12] T. Miki, J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning robust perceptive locomotion for quadrupedal robots in the wild,” Science Robotics , vol. 7, no. 62, p. eabk2822, 2022. [13] A. Kumar, Z. Li, J. Zeng, D. Pathak, K. Sreenath, and J. Malik, “Adapt-ing rapid motor adaptation for bipedal robots,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) ,pp. 1161–1168, IEEE, 2022. [14] B. O. Koopman, “Hamiltonian systems and transformation in hilbert space,” Proceedings of the National Academy of Sciences , vol. 17, no. 5, pp. 315–318, 1931. [15] I. Mezi´ c, “Spectral properties of dynamical systems, model reduction and decompositions,” Nonlinear Dynamics , 2005. [16] I. Mezic, “Spectrum of the koopman operator, spectral expansions in functional spaces, and state-space geometry.,” J. Nonlinear Sci. ,vol. 30, no. 5, pp. 2091–2145, 2020. [17] S. E. Otto and C. W. Rowley, “Koopman operators for estimation and control of dynamical systems,” Annual Review of Control, Robotics, and Autonomous Systems , vol. 4, no. 1, pp. 59–87, 2021. [18] M. Budiˇ si´ c, R. Mohr, and I. Mezi´ c, “Applied koopmanism,” Chaos: An Interdisciplinary Journal of Nonlinear Science , vol. 22, no. 4, 2012. [19] A. Mauroy and I. Mezi´ c, “Global stability analysis using the eigen-functions of the koopman operator,” IEEE Transactions on Automatic Control , vol. 61, no. 11, pp. 3356–3369, 2016. [20] M. Korda and I. Mezi´ c, “Linear predictors for nonlinear dynamical systems: Koopman operator meets model predictive control,” Auto-matica , vol. 93, pp. 149–160, 2018. [21] M. Korda and I. Mezi´ c, “Optimal construction of koopman eigen-functions for prediction and control,” IEEE Transactions on Automatic Control , vol. 65, no. 12, pp. 5114–5129, 2020. [22] B. Huang, X. Ma, and U. Vaidya, “Feedback stabilization using Koop-man operator,” in 2018 IEEE Conference on Decision and Control (CDC) , pp. 6434–6439, IEEE, 2018. [23] Y. Han, W. Hao, and U. Vaidya, “Deep learning of Koopman repre-sentation for control,” in 2020 59th IEEE Conference on Decision and Control (CDC) , pp. 1890–1895, IEEE, 2020. [24] U. Vaidya, “When koopman meets hamilton and jacobi,” IEEE Trans-actions on Automatic Control , 2025. [25] U. Vaidya and D. Tellez-Castro, “Data-driven stochastic optimal control with safety constraints using linear transfer operators,” IEEE Transactions on Automatic Control , vol. 69, no. 4, pp. 2100–2115, 2023. [26] B. Huang and U. Vaidya, “A convex approach to data-driven optimal control via perron–frobenius and koopman operators,” IEEE Transac-tions on Automatic Control , vol. 67, no. 9, pp. 4778–4785, 2022. [27] I. Abraham and T. D. Murphey, “Active learning of dynamics for data-driven control using koopman operators,” IEEE Transactions on Robotics , vol. 35, no. 5, pp. 1071–1083, 2019. [28] L. Shi, M. Haseli, G. Mamakoukas, D. Bruder, I. Abraham, T. Mur-phey, J. Cort´ es, and K. Karydis, “Koopman operators in robot learn-ing,” IEEE Transactions on Robotics , 2026. [29] D. Bruder, X. Fu, R. B. Gillespie, C. D. Remy, and R. Vasudevan, “Data-driven control of soft robots using Koopman operator theory,” 
+
+IEEE Transactions on Robotics , vol. 37, no. 3, pp. 948–961, 2020. [30] D. A. Haggerty, M. J. Banks, E. Kamenar, A. B. Cao, P. C. Curtis, I. Mezi´ c, and E. W. Hawkes, “Control of soft robots with inertial dynamics,” Science robotics , vol. 8, no. 81, p. eadd6864, 2023. [31] D. Bruder, D. Bombara, and R. J. Wood, “A koopman-based residual modeling approach for the control of a soft robot arm,” The Interna-tional journal of robotics research , vol. 44, no. 3, pp. 388–406, 2025. [32] Y. Xiao, X. Zhang, X. Xu, X. Liu, and J. Liu, “Deep neural networks with koopman operators for modeling and control of autonomous vehicles,” IEEE transactions on intelligent vehicles , vol. 8, no. 1, pp. 135–146, 2022. [33] Y. Fu, C. Hu, H. Xiong, Z. Bao, W. Du, E. Ghignone, M. Magno, L. Xie, and H. Su, “Residual koopman model predictive control for enhanced vehicle dynamics with small on-track data input,” in 2025 IEEE 28th International Conference on Intelligent Transportation Systems (ITSC) , pp. 1–8, IEEE, 2025. [34] A. Joglekar, U. Vaidya, and V. Krovi, “Modeling and control of off-road autonomous vehicles with situationally aware data-driven framework,” The International Journal of Robotics Research , 2026, accepted. [35] S. S. Narayanan, D. Tellez-Castro, S. Sutavani, and U. Vaidya, “Se(3) koopman-mpc: Data-driven learning and control of quadrotor uavs,” 
+
+IFAC-PapersOnLine , vol. 56, no. 3, pp. 607–612, 2023. [36] S. M. Rajkumar, C. Yang, Y. Gu, S. Cheng, N. Hovakimyan, and D. Goswami, “Real-time linear mpc for quadrotors on se (3): An analytical koopman-based realization,” IEEE Robotics and Automation Letters , 2025. [37] A. Krolicki, D. Rufino, A. Zheng, S. S. Narayanan, J. Erb, and U. Vaidya, “Modeling quadruped leg dynamics on deformable terrains using data-driven Koopman operators,” IFAC-PapersOnLine , vol. 55, no. 37, pp. 420–425, 2022. [38] C.-M. Yang and P. A. Bhounsule, “Koopman operator based linear model predictive control for quadruped trotting,” in 2025 IEEE Inter-national Conference on Robotics and Automation (ICRA) , pp. 12359– 12364, IEEE, 2025. [39] S. Khorshidi, M. Dawood, and M. Bennewitz, “Centroidal state estimation based on the koopman embedding for dynamic legged lo-comotion,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 12832–12839, IEEE, 2024. [40] F. Li, A. Abuduweili, Y. Sun, R. Chen, W. Zhao, and C. Liu, “Continual learning and lifting of koopman dynamics for linear control of legged robots,” in 7th Annual Learning for Dynamics \& Control Conference , pp. 136–148, PMLR, 2025. [41] A. W. Winkler, Optimization-based motion planning for legged robots .PhD thesis, ETH Zurich, 2018. [42] D. E. Orin, A. Goswami, and S.-H. Lee, “Centroidal dynamics of a humanoid robot,” Autonomous Robots , 2013. [43] J. B. Rawlings, D. Q. Mayne, and M. Diehl, Model predictive control: theory, computation, and design , vol. 2. Nob Hill Publishing Madison, WI, 2017. [44] M. Focchi, A. Del Prete, I. Havoutis, R. Featherstone, D. G. Caldwell, and C. Semini, “High-slope terrain locomotion for torque-controlled quadruped robots,” Autonomous Robots , vol. 41, no. 1, pp. 259–272, 2017. [45] M. H. Raibert, Legged Robots That Balance . MIT Press, 1986. [46] I. Mezi´ c, “Analysis of fluid flows via spectral properties of the koopman operator,” Annual review of fluid mechanics , vol. 45, no. 1, pp. 357–378, 2013. [47] M. O. Williams, M. S. Hemati, S. T. Dawson, I. G. Kevrekidis, and C. W. Rowley, “Extending data-driven koopman analysis to actuated systems,” IFAC-PapersOnLine , vol. 49, no. 18, pp. 704–709, 2016. [48] J. L. Proctor, S. L. Brunton, and J. N. Kutz, “Dynamic mode decomposition with control,” SIAM Journal on Applied Dynamical Systems , vol. 15, no. 1, pp. 142–161, 2016. [49] T. Chen, J. Shan, and H. Wen, “Koopman-operator-based attitude dynamics and control on so (3),” in Distributed Attitude Consensus of Multiple Flexible Spacecraft , pp. 177–210, Springer, 2022. [50] R. T. Fawcett, K. Afsari, A. D. Ames, and K. A. Hamed, “Toward a data-driven template model for quadrupedal locomotion,” IEEE Robotics and Automation Letters , vol. 7, no. 3, pp. 7636–7643, 2022. [51] V. Zinage and E. Bakolas, “Koopman operator based modeling for quadrotor control on se (3),” IEEE Control Systems Letters , vol. 6, pp. 752–757, 2021. [52] V. Zinage and E. Bakolas, “Koopman operator based modeling and control of rigid body motion represented by dual quaternions,” in 2022 American Control Conference (ACC) , pp. 3997–4002, IEEE, 2022. [53] T. D. Barfoot, State estimation for robotics . Cambridge University Press, 2024. [54] J. C. Trinkle, J.-S. Pang, S. Sudarsky, and G. Lo, “On dynamic multi-rigid-body contact problems with coulomb friction,” ZAMM-Journal of Applied Mathematics and Mechanics/Zeitschrift f¨ ur Angewandte Mathematik und Mechanik , vol. 77, no. 4, pp. 267–279, 1997. [55] L. Di Gaspero et al. , “Quadprog++: a c++ implementation of the goldfarb-idnani algorithm for quadratic programming,” 2007.
