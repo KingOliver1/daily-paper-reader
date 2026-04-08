@@ -1,0 +1,595 @@
+Title: Differentiable Invariant Sets for Hybrid Limit Cycles with Application to Legged Robots
+
+URL Source: https://arxiv.org/pdf/2604.05108v1
+
+Published Time: Wed, 08 Apr 2026 00:11:35 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Differentiable Invariant Sets for Hybrid Limit Cycles with Application to Legged Robots 
+
+Varun Madabushi, Akash Harapanahalli, Samuel Coogan, Maegan Tucker 
+
+Abstract — For hybrid systems exhibiting periodic behavior, analyzing the invariant set containing the limit cycle is a natural way to study the robustness of the closed-loop system. However, computing these sets can be computationally expensive, espe-cially when applied to contact-rich cyber-physical systems such as legged robots. In this work, we extend existing methods for overapproximating reachable sets of continuous systems using parametric embeddings to compute a forward-invariant set around the nominal trajectory of a simplified model of a bipedal robot. Our three-step approach (i) computes an over-approximating reachable set around the nominal continuous flow, (ii) catalogs intersections with the guard surface, and (iii) passes these intersections through the reset map. If the overapproximated reachable set after one step is a strict subset of the initial set, we formally verify a forward invariant set for this hybrid periodic orbit. We verify this condition on the bipedal walker model numerically using immrax , a JAX-based library for parametric reachable set computation, and use it within a bi-level optimization framework to design a tracking controller that maximizes the size of the invariant set. 
+
+I. I NTRODUCTION 
+
+Forward invariance plays a central role in analyzing the robustness of nonlinear dynamical systems [1], [2]. However, for hybrid systems (i.e., those that exhibit both continuous dynamics and discrete transitions), accurately characterizing invariant sets is particularly challenging due to the presence of discontinuities and switching behaviors. These systems arise naturally in applications such as legged locomotion [3], robotic manipulation with intermittent contact [4], and mechanical systems with impacts or frictional constraints [5]. The study of invariant sets and regions of attraction (RoAs) have been approached through a wide range of techniques, including Lyapunov-based methods [6], [2], sum-of-squares (SOS) programming [7], [8], [9], and Hamilton–Jacobi (HJ) formulations [10]. However, the practical applications have remained limited due to the computational complexity of the existing approaches and thus their limitation towards real-world high-dimensional systems. In 2011, Manchester [8] presented one of the first algorithmic approaches for computing inner estimates of the regions of attraction of limit cycles of a nonlinear hybrid system using iterative sum-of-squares (SoS) programming. Their approach formulated Lyapunov inequalities as semidefinite programs and was later demonstrated on the compass-gait walker, a low-dimensional (2-DOF, four states) nonlinear hybrid system [11]. Despite its theoretical elegance, SoS programming is known to scale                   
+
+> 1Varun Madabushi, Akash Harapanahalli, Samuel Coogan, and Mae-gan Tucker are with the School of Electrical and Computer Engi-neering, Georgia Institute of Technology, Atlanta, GA, 30332, USA.
+> {vmadabushi,aharapan,sam.coogan, mtucker }@gatech.edu
+
+poorly with system dimension, as the polynomial degree and number of decision variables grow combinatorially. Consequently, SoS-based methods are limited to relatively low-dimensional systems, typically below ten state variables, restricting their practical applicability to complex models. In 2022, Choi et. al. [12] instead cast the RoA computation problem as one of backward reachable set computation within the Hamilton–Jacobi (HJ) reachability framework. Their work generalized HJ formulations to accommodate hybrid dynamics, successfully recovering larger and more accurate RoA estimates compared to SoS-based approaches. However, the curse of dimensionality inherent in HJ par-tial differential equations remains a major bottleneck, as the computational complexity grows exponentially with the dimension of the state space. To address this challenge of scalability, our work instead quickly computes a parametric overapproximation of the reachable set using a set propagation approach. Approaches in this category [13] include generator-based set represen-tations like zonotopes [14], or Taylor models bounding the dynamics and/or flow [15], and promise scalability to high-dimensional dynamical systems [16]. In this work, we use linear inclusions to propagate ellipsoidal reachable sets. This is achieved through immrax [17], an efficient implementation of interval analysis [18] that exploits the hardware-accelerated and automatic differentiation capabili-ties of JAX [19] to enable scalable set propagation. However, this approach is currently limited to continuous-time systems. Extending this framework to hybrid systems with discrete impact events addresses new challenges: 1) accurately de-tecting and enclosing impact times within a continuous set evolution, 2) propagating sets across discrete reset maps that can be highly nonlinear, and 3) maintaining tight enclosures to avoid exponential growth through mode transitions. In this work, we build upon the immrax toolbox to address these challenges. The contributions of this work include the following: 1) We extend the theory of parametric reachability to iden-tify conditions under which the parametric reachable set of a hybrid system is forward invariant. 2) We introduce a procedure using interval analysis to efficiently verify the forward invariance of a given set. 3) We demonstrate this methodology on a simplified planar walker model and showcase how the differentiability of 
+
+immrax can be leveraged for control design in a bi-level optimization problem. 
+
+> arXiv:2604.05108v1 [eess.SY] 6 Apr 2026
+
+II. P RELIMINARIES 
+
+A. Hybrid System Model 
+
+In this work, we will consider an autonomous hybrid system with one continuous domain and one discrete impact event. It has been shown in prior work that multi-domain hybrid systems can be treated as an extension of this simpler representation [20]. Explicitly, the open-loop hybrid control system is represented as: 
+
+˙x = f (x, u ), x− ∈ X \ S , (1a) 
+
+x+ = ∆( x−, v ) x− ∈ S , (1b) where x ∈ X ⊆ Rn is the system state, u ∈ U ⊆ Rp is a control input, f : X × U → Rn defines a parameterized C1
+
+vector field describing the continuous flow until it reaches the guard surface (also known as the switching surface) S ⊆ X ,at which point the system undergoes an instantaneous jump from x− to x+ via the reset map ∆ : X × V → X under the discrete input v ∈ V ⊆ Rq .Under the control laws u = πc(x) and v = πd(x−), the closed-loop hybrid control system is represented as: 
+
+˙x = fcl (x) := f (x, π c(x)) , x− ∈ X \ S (2a) 
+
+x+ = ∆ cl (x−) := ∆( x−, π d(x−)) x− ∈ S (2b) A solution x(t) of the closed-loop hybrid system is aright-continuous function satisfying (2), where x−(t) =lim τ ↗t x(τ ) and x+(t) = lim τ ↘t x(τ ).We assume that the guard surface is given as follows: for some C1 smooth h : X → R,
+
+S = {x ∈ X : h(x) = 0 , ˙h(x) < 0}, (3) where ˙h(x) = Lfcl h(x). We also notationally set {h ∼ 0} =
+
+{x ∈ X : h(x) ∼ 0} for the relations ∼ ∈ { =, ≤, ≥, <, > }.Under mild conditions, the closed-loop hybrid system (2) has a unique right-continuous trajectory, which we assume does not have Zeno phenomenon. A periodic orbit of the closed-loop hybrid system is a solution x(t) of (2) that is periodic for some T , i.e., x(t) = 
+
+x(t+T ). This periodicity condition can also be written using flow notation as: 
+
+∆( φTI (x∗)(x∗)) = x∗, (4) where x∗ ∈ ∆( S) is a fixed point lying on the image of the guard surface, φt(x0) denotes in flow notation the solution of our closed-loop continuous dynamics (2a) at time t ∈ R≥0
+
+given the initial condition x0, and T := TI (x∗) for the time-to-impact function TI : X → R ∪ {∞} ,
+
+TI (x) = inf {t ≥ 0 | φt(x) ∈ S} , (5) where we use the convention inf ∅ = ∞. The flow notation can also be used to denote an associated periodic orbit: 
+
+O := {φt(x∗) ∈ X | 0 ≤ t ≤ TI (x∗) = T } (6) where (6) is periodic if x∗ satisfies (4). Stability of this periodic orbit is typically analyzed using the Poincar´ e return map [21]. In this work, we will instead use a generalization of this Poincar´ e return map we refer to as the step-to-step map, F : X → ∆( S), defined as: 
+
+F (x) := ∆( φTI (x)(x)) . (7) We note that F is only well-defined for points x ∈ X
+
+with finite time-to-impact TI (x) < ∞. Restricting F to the domain ∆( S) would recover the traditional definition of a Poincar´ e map with the Poincar´ e surface ∆( S). This step-to-step map transforms the hybrid system into a discrete-time system: 
+
+x+ 
+
+> k+1
+
+= F (x+ 
+
+> k
+
+), k = 0 , 1, . . . (8) with x+ ∈ ∆( S) being states that lie on the image of the guard (typically the + is used to denote that the states are 
+
+post -impact). Finally, the stability of the fixed point x∗ is analyzed by linearizing about x∗:
+
+(xk+1 − x∗) ≈ A(xk − x∗) := DF (x∗)( xk − x∗) (9) and computing the eigenvalues of A. If the eigenvalues lie strictly within the unit circle ( |λ(A)| < 1), then the hybrid limit cycle is locally asymptotically stable. 
+
+B. Function and Dynamics Abstraction via Linear Inclusions and Normotopes 
+
+In this subsection, we review the approach developed in [22], [23] which use linear inclusions to build a parametric embedding system bounding the reachable set from a norm ball of possibly varying shaping matrix. 
+
+Linear Inclusions: Suppose we are analyzing a C1
+
+function g : Rn → Rm. A linear inclusion encompassing the error behavior of g is an inclusion where for every x ∈ X ,for prespecified ˚x ∈ X ⊆ Rn,
+
+g(x) − g(˚ x) ∈ M (x − ˚x), (10) where M ⊆ Rm×n is a set of matrices. There are many ways to obtain matrix sets satisfying (10). For example, if 
+
+co { ∂g ∂x (x)} ⊆ M for every x ∈ X (where co is the closed convex hull), then (10) holds for every x ∈ X [22, Prop. 1]. We briefly discuss an algorithmic method from [22, Cor. 1] to obtain M using interval analysis on the first partial derivatives of g. Suppose we are given an interval set X1 ×· · · × Xn ⊆ Rn. Then the following implication holds, for fixed ˚x ∈ X1 × · · · × Xn,
+
+∂g i
+
+∂x j
+
+(X1, . . . , X j , ˚xj+1 , . . . , ˚xn) ⊆ [M]ij (11a) 
+
+=⇒ g(x) − g(˚ x) ∈ [M]( x − ˚x), (11b) for every x ∈ X1 ×· · · Xn, where the RHS is evaluated using interval matrix multiplication [18]. The set [M] in (11) is called the mixed Jacobian matrix [18, Sec. 2.2.4] since it mixed inputs to the Jacobian matrix between the interval X
+
+and the centering point ˚x.The expression is further simplified by replacing the interval matrix [M] with the convex hull of a finite set of corners satifying [M] ⊆ co {Mi}i. For example, if the interval matrix [M] has 4 non-singleton entries, then there are 24 = 16 corners M xi to consider. In immrax , this procedure is fully automated using automatic differentiation using the mjacM transform. 
+
+Normotope Embeddings: Between two normed vec-tor spaces (Rn, ∥ · ∥ a), (Rm, ∥ · ∥ b), let ∥A∥a→b =max v:∥v∥a=1 ∥Av ∥b denote the induced matrix norm on 
+
+Rm×n. For A ∈ Rn×n, let μ(A) = lim h↘0 1 
+
+> h
+
+∥I + hA ∥a→a
+
+denote the logarithmic norm (also called matrix measure). Given a norm ∥ · ∥ on Rn, a normotope is the set 
+
+J˚x, α, y K := {x ∈ Rn : ∥α(x − ˚x)∥ ≤ y} (12) where ˚x ∈ Rn is the center , α ∈ GL (n) is the square invertible n × n shape matrix , and y > 0 is the offset . The approach described in the previous subsection algorithmi-cally constructs a linear differential inclusion (LDI) encom-passing the error dynamics of the closed-loop continuous system (2a), 
+
+fcl (x) − fcl (˚ x) ∈ co {Mi}i(x − ˚x), (13) valid over a particular input set of consideration. Following the treatment from [23], we build a new dynamical system, called a parametric embedding system , by flowing a center 
+
+˚x according to the nominal dynamics of the closed-loop system, a shaping matrix α according to the adjoint of the linearization about ˚x, and an offset according to a logarithmic norm bound over the various corners of the linear differential inclusion, 
+
+˙˚x = fcl (˚ x), (14a) 
+
+˙α = −αDf cl (˚ x), (14b) 
+
+˙y = max 
+
+> i
+
+ μ(α(Mi(t) − Df cl (˚ x)) α−1) y. (14c) The key property of this embedding system, as shown in [23, Thm. 1] is the following reachable set guarantee: for any 
+
+x0 ∈ J˚x0, α 0, y 0K,
+
+φt(x0) ∈ J˚x(t), α (t), y (t)K, (15) where (˚ x(t), α (t), y (t)) is the trajectory of the parametric embedding system (14), provided the LDI (13) holds with the matrices {Mi(t)}i for every x ∈ J˚x(t), α (t), y (t)K for every t.III. R EACHABILITY FOR HYBRID PERIODIC ORBITS 
+
+This section will derive a theoretical guarantee that the set identified through parametric reachability is a forward invariant set for the hybrid system. We will later demonstrate the practical implementation of obtaining this set in Sec. IV. 
+
+A. Verifying Forward Invariant Tubes via Parametric Reach-ability 
+
+In Theorem 1 below, we apply the following intuitive procedure to verify forward invariant tubes: (i) start with a periodic nominal trajectory given by fixed point x∗ =
+
+F (x∗), impacting the guard at time T := TI (x∗), and a normotope centered around its initial condition; (ii) compute a reachable tube by flowing the normotope embeddding system (14) entirely past the guard to ensure every point                                      
+
+> Fig. 1: A visualization of the conditions supposed in Theorem 1. While the initial set can start with points in {h < 0}, we assume there exists a time T∈[0 , T )where the normotope is contained in {h > 0}. Before T,trajectories may intersect {h= 0 }as long as {˙h > 0}, avoiding impact with the switching surface S={h= 0 } ∩ { ˙h < 0}. By assumption, any intersection with {h= 0 }from Tto Thave {˙h < 0}, guaranteeing they belong to the guard surface S. Finally, we continue flowing the normotope embedding until the normotope is contained in {h < 0}to ensure every point resets.
+
+in the normotope tube resets; (iii) catalog all intersections between the computed normotope tube and the guard surface into a set I, and ensure every point in I resets into a subset of the initial normotope. 
+
+Theorem 1. Let x∗ be a fixed point of the step-to-step map F from (7) . Let [0 , T ] ∋ t 7 → (˚ x(t), α (t), y (t)) 
+
+be the embedding system trajectory (14) associated to the continuous flow (2a) from initial condition (x∗, α 0, 1) for some T > T I (x∗), and for each t ∈ [0 , T ], let 
+
+It := {h = 0 } ∩ J˚x(t), α (t), y (t)K.
+
+Suppose for some T ∈ [0 , T ) the following conditions hold: (a) h(J˚x(T ), α (T ), y (T )K) ⊆ (0 , ∞) (at time T , the set is above {h = 0 }); (b) h(J˚x(T ), α (T ), y (T )K) ⊆ (−∞ , 0) (at time T , the set is below {h = 0 }); (c) ˙h(It) ⊆ (0 , ∞) for every t ∈ [0 , T ] (transversality from below until time T ); (d) ˙h(It) ⊆ (−∞ , 0) for every t ∈ [T , T ] (transversality from above after time T ). If 
+
+γ := sup  
+
+> x∈I t,t ∈[T ,T ]
+
+∥α0(∆( x) − x∗)∥ ≤ 1,
+
+then 
+
+R = [ 
+
+> t∈[0 ,T ]
+
+J˚x(t), α (t), y (t)K
+
+∪ [ 
+
+> t∈[T ,T ]
+
+(J˚x(t), α (t), y (t)K \ { h < 0})
+
+is a forward invariant set for the closed-loop hybrid sys-tem (2) containing O, and the step-to-step map is well-defined on R, satisfying F (R) ⊆ Jx∗, α 0, γ K.Proof. Let R1 := S 
+
+> t∈[0 ,T ]
+
+J˚x(t), α (t), y (t)K, R2 := S 
+
+> t∈[T ,T ]
+
+J˚x(t), α (t), y (t)K \ { h < 0}, noting R = R1 ∪ R 2.Then for x0 ∈ R , one of the following must be true: (i) there exists a τ ∈ [0 , T ] such that x0 ∈ J˚x(τ ), α (τ ), y (τ )K, (ii) there exists a τ ∈ [T , T ] such that x0 ∈ J˚x(τ ), α (τ ), y (τ )K \{h < 0}. In either case, the inclusion φt(x0) ∈ J˚x(τ +
+
+t), α (τ + t), y (τ + t)K holds by [23, Thm. 1]. Fix x0 ∈ R. If x0 ∈ R1, Condition (a) implies at 
+
+T0 = T − τ , h(φT0 (x0)) > 0. If x0 ∈ R2, we have 
+
+h(φT0 (x0)) ≥ 0 for T0 = 0 by assumption. Condition (b) implies h(φT −τ (x0)) < 0. Therefore, by continuity there exists T1 ∈ [T0, T − τ ) such that h(φT1 (x0)) = 0 . Since 
+
+T1 + τ ∈ [T , T ], Condition (d) implies ˙h(φT1 (x0)) < 0, and therefore φT1 (x0) ∈ S .Next, the time-to-impact (5) satisfies TI (x0) ≥ T − τ ,since otherwise, ˙h(φTI (x0)(x0)) < 0 contradicts Condition (c) since φTI (x0)(x0) ∈ I TI (x0)+ τ . Thus, TI (x0) + τ ∈
+
+[T , T 1] ⊆ [T , T ] by definition of the inf . Condition (d) implies that ˙h(φTI (x0)(x0)) < 0; therefore, φTI (x0)(x0) ∈ S .Finally, by definition of γ, since φTI (x0)(x0) ∈ I TI (x0)+ τ ,
+
+∥α0(F (x0) − x∗)∥ = ∥α0(∆( φTI (x0)(x0)) − x∗)∥ ≤ γ. 
+
+Thus F (x0) ∈ Jx∗, α 0, γ K ⊆ Jx∗, α 0, 1K ⊆ R since γ ≤ 1.Proceeding by induction, R is forward invariant. 
+
+Remark 1 (Region of Attraction) . While we expect the set 
+
+R from Theorem 1 to be a region of attraction of O—especially for the case of ellipsoids with a linear guard—in its current form we have only verified that the set R is a forward invariant set containing the orbit. We leave this as an open question for future work. 
+
+B. Cataloging Guard Intersections: Affine Subspaces and ℓ2-Normotopes 
+
+Suppose we consider ℓ2-normotopes (which are ellipsoids centered at ˚x with shaping matrix P = αT α/y 2), and a guard surface defined by affine function h(x) = aT x + b. Letting 
+
+B ∈ Rn×(n−1) be a basis for the orthogonal complement to a, i.e. , aT B = 0 and B has full rank, we can also write 
+
+{h = 0 } = {Bz + x′ : z ∈ Rn−1}, given a distinguished point x′ ∈ { h = 0 } (e.g. , x′ = − baT a a). The following lemma demonstrates how the intersection of an n-dimensional ℓ2-normotope with an affine subspace can be represented as a (n − 1) -dimensional ℓ2-normotope in the basis B, whose (n − 1) × (n − 1) shaping matrix is simply the R matrix of the QR decomposition of αB .
+
+Lemma 1 (Slicing an ℓ2-normotope) . Let J˚x, α, y K2 ⊆ Rn
+
+be an ℓ2-normotope, B ∈ Rn×(n−1) be a basis for a (n−1) -dimensional subspace, and x′ ∈ Rn be an offset vector. The intersection is characterized as follows, 
+
+J˚x, α, y K2 ∩ { Bz + x′ : z ∈ Rn−1}
+
+=
+
+(
+
+BJ˚z, R, py2 − rK2 + x′, y2 ≥ r
+
+∅ y2 < r ,
+
+where QR = αB is the reduced QR-decomposition of αB ,
+
+˚z = R−1QT α(˚ x − x′), and r = ∥α(˚ x − x′)∥22 − ∥ QT α(˚ x −
+
+x′)∥22.Proof. We first prove the x′ = 0 case. The set corresponds to any z ∈ Rn−1 satisfying 
+
+zT (αB )T (αB )z − 2( α˚x)T αBz ≤ y2 − ˚xT αT α˚x. (16) Letting αB = QR be the reduced QR decomposition (Q ∈ Rn×(n−1) with orthonormal columns, and R ∈
+
+R(n−1) ×(n−1) ), we see that (αB )T (αB ) = RT QT QR =
+
+RT R. Completing the square, the LHS of (16) is equal to 
+
+zT RT Rz − 2( α˚x)T QRz = −˚xT αT QQ T α˚x
+
++ ( z − R−1QT α˚x)T RT R(z − R−1QT α˚x).
+
+Adding the offset to the RHS, we obtain the condition 
+
+∥R(z − R−1QT α˚x)∥22 ≤ y2 − (∥α˚x∥22 − ∥ QT α˚x∥22)
+
+| {z }
+
+> =: r
+
+.
+
+When y2 < r , there are no z satisfying the condition because the LHS is nonnegative (thus, the intersection is empty). When y2 ≥ r, a square root of both sides shows z lives in the normotope subset 
+
+JR−1QT α˚x, R, py2 − rK2 ⊆ Rn−1.
+
+When x′̸ = 0 , translate the subspace and the normotope so the subspace passes through the origin, apply the previous case to ˚x − x′, and shift back to complete the proof. 
+
+Theorem 2. Consider the setting of Theorem 1 with ∥ · ∥ 2.Let ∆B : Rn−1 → Rn denote z 7 → ∆( Bz + ˚ x(T )) , the reset map as a function of the basis for the affine subspace 
+
+{h = 0 }, centered at ˚x(T ) ∈ { h = 0 } for T := TI (x∗).For every t ∈ [T , T ], let R(t), ˚z(t), and r(t) be defined as Lemma 1 for the normotope J˚x(t), α (t), y (t)K2, and let 
+
+T = {t ∈ [T , T ] : y(t)2 ≥ r(t)} denote the times with nonempty intersection. Let {M ∆ 
+
+> j
+
+(t)}j ⊆ Rn×(n−1) define a collection of corners satisfying the linear inclusion 
+
+∆B (z) − ∆B (˚ z(t)) ∈ co {M ∆ 
+
+> j
+
+(t)}j (z − ˚z(t)) ,
+
+for every t ∈ T and z ∈ J˚z(t), R (t), py(t)2 − r(t)K2. Then 
+
+It =
+
+(
+
+BJ˚z(t), R (t), py(t)2 − r(t)K2 + ˚ x(T ) t ∈ T ∅ t / ∈ T ,
+
+and the gain γ from Theorem 1 can be bounded as follows, 
+
+γ ≤ sup 
+
+> t∈T
+
+max 
+
+> j
+
+
+
+∥α0(∆ B (˚ z(t)) − x∗)∥2
+
++ ∥α0M ∆ 
+
+> j
+
+(t)R(t)−1∥2→2
+
+py(t)2 − r(t)
+
+
+
+.
+
+Proof. By Lemma 1, It = ∅ for t /∈ T and It =
+
+BJ˚z(t), R (t), py(t)2 − r(t)K2 + ˚ x(T ) for t ∈ T , thus, 
+
+γ ≤ sup 
+
+> z∈J˚z(t),R (t),
+
+√y(t)2−r(t)K2,t ∈T 
+
+∥α0(∆( Bz + ˚ x(T )) − x∗)∥.
+
+Fix t ∈ T and z ∈ J˚z(t), R (t), py(t)2 − r(t)K2; then there exists M ∈ co {M ∆ 
+
+> j
+
+(t)}j such that ∆B (z) − ∆B (˚ z(t)) = 
+
+M (z − ˚z(t)) . Applying the triangle inequality, 
+
+∥α0(∆( Bz + ˚ x(T )) − x∗∥2 = ∥α0(∆ B (z) − x∗)∥2
+
+≤ ∥ α0(∆ B (z) − ∆B (˚ z(t))) ∥2 + ∥α0(∆ B (˚ z(t)) − x∗)∥2
+
+= ∥α0M (z − ˚z(t)) ∥2 + ∥α0(∆ B (˚ z(t)) − x∗)∥2.Fig. 2: The slicing and bounding procedure used in Lemma 1 and Theorem 2 is pictured. Left : the ℓ2-normotope at time t is sliced with the subspace                              
+
+> {h= 0 }={Bz + ˚ x(T)}to obtain a (n−1) -dimensional ℓ2-normotope expressed in the basis B(Lemma 1). Right : The gain γis bounded using (i) the distance from x∗to the reset center of the sliced normotope ∆B(˚ z(t))
+> measured in the initial α0norm, and (ii) the maximum induced matrix norm of a linear inclusion bounding ∆B(z)−∆B(˚ z(t)) to obtain a radius in the α0norm.
+
+Furthermore, since α0M (z − ˚z(t)) = α0M R (t)−1R(t)( z −
+
+˚z(t)) , using the induced matrix norm between (Rn−1, ∥ · ∥ 2)
+
+and (Rn, ∥ · ∥ 2),
+
+∥α0M (z − ˚z(t)) ∥2 ≤ ∥ α0M R (t)−1∥2→2∥R(t)( z − ˚z(t)) ∥2
+
+≤ ∥ α0M R (t)−1∥2→2
+
+py(t)2 − r(t)
+
+≤ max  
+
+> j
+
+∥α0M ∆ 
+
+> j
+
+(t)R(t)−1∥2→2
+
+py(t)2 − r(t)
+
+using convexity of the induced matrix norm to bound M ≤ sup M ∆∈co {M ∆  
+
+> j}j
+
+∥α0M ∆R(t)−1∥2→2 =max j ∥α0M ∆ 
+
+> j
+
+R(t)−1∥2→2.IV. A LGORITHMIC COMPUTATION OF FORWARD 
+
+INVARIANT SETS 
+
+In this section, we describe our implementation of set-based reachability, which builds upon immrax [17]. Our approach promises computational efficiency, scalability, and differentiability, unlocking future applications to higher-dimensional systems. We model reachable sets as ℓ2-normotopes of the form J˚x, α, y K2 = {x : ∥α(x − ˚x)∥ ≤ y},which correspond to ellipsoids. 
+
+A. Obtaining an Initial Set 
+
+Suppose we are given a closed-loop hybrid system (2) with a fixed point x∗ of the step-to-step map (7), corresponding to a periodic orbit O with period T . Before applying Theo-rem 1, a natural question is how to obtain a suitable shape matrix α0 to initialize the parametric embedding system, i.e. ,a suitable initial ellipsoid in the ℓ2 case. To find a suitable shaping matrix α0 defining the initial normotope set Jx∗, α 0, 1K for Theorem 1, we apply ideas from contraction theory. Let A be the linearization of the closed-loop step-to-step system about the fixed point, that is, A = DF (x∗). Setting b = ρ(A) + ε for a small constant 
+
+ε > 0, we solve the following semi-definite program to find a norm which decays at rate b, which is the minimum contraction rate [24, Eq. (2.36b)] 
+
+min  
+
+> P≻I
+
+trace( P) s.t. AT PA ⪯ b2P. (17) Setting α0 = P1/2 using the positive semi-definite matrix square root, the resulting norm ∥α0x∥2 matches the optimal norm √xT Px.
+
+B. Computing the Continuous Reachable Tube 
+
+Once we have an initial set Jx∗, α 0, 1K2, we obtain a reach-able tube by forward-simulating the dynamical embedding system (14). We simulate the parametric embedding system using Euler integration, generating a normotope trajectory 
+
+J˚xi, α i, y iK. We simulate the trajectory until the nominal trajectory intersects the guard surface, and then further until the normotope fully passes through the guard surface, corresponding to the time T .
+
+C. Accounting for the Guard Surface and Reset Map 
+
+To compute the reachable set through the hybrid dynamics, we check intersection of each ellipsoid in the normotope trajectory with the guard surface, yielding a set of inter-secting normotopes. To each of the intersecting normotopes, we apply the linear inclusion of the reset map and apply Theorem 2 to find the upper bound of the overall gain γ.
+
+D. Resizing the Invariant Tube 
+
+The procedure described in Sec. IV-C can be used to verify the invariance of a tube defined by its initial shaping matrix, but does not necessarily imply that such a tube is the largest possible one. Additionally, the initial choice of shaping matrix α0 derived from contraction theory is only accurate up to a scale. Therefore, we introduce a bisection-based algorithm to increase the size of the tube while preserving its forward invariance. Consider a function Φ : GL (n) → R which maps an initial shaping matrix to the associated post-impact length, as in Theorem 1. Verifying that the hybrid reachable tube associated with the initial normotope shaped by α0 is forward invariant is equivalent to ensuring that Φ( α0) < 1. This normotope can be uniformly scaled by dividing α0 by some factor s. We select the scale factor according to the optimization problem 
+
+max s s.t. Φ( α0/s ) < 1. (18) This amounts to a single-parameter search and can thus be easily solved using a bisection algorithm. 
+
+E. Software Implementation 
+
+The implementation of our set-based reachability approach builds upon immrax and is fully compatible with the JAX software ecosystem, enabling parallelism, traceability, and automatic differentiation. We numerically implement F (x) by simulating the dy-namics of (2a) starting at x until the trajectory inter-sects the guard surface, using the event-based integrator in 
+
+diffrax [25] to accurately determine the guard intersection point x−. The reset function (2b) is then applied to x−,yielding a new point ∆( x−) = F (x). Using the automatic differentiation capability of JAX, we can additionally com-pute the Jacobian of F (x), used in Sec. IV-A. (a) (b) (c) 
+
+> Fig. 3: Simplified Bipedal Walker illustrated for the (a) continuous domain, (b) pre-impact, and (c) post-impact
+
+We also implement the steps described in Sec. IV-B and IV-C using the normotope toolbox in immrax . The benefit of our approach is that every step in the reachable set computation can be automatically differentiated with respect to its inputs, which ultimately allows us to compute the gradient of γ with respect to system parameters. This property can be leveraged in control design, as demonstrated in Sec. V-A.5. An implemention of the entire framework is provided as a Python notebook 1.V. A PPLICATION TO PLANAR BIPEDAL WALKER 
+
+We apply our methodology on a simple planar bipedal walker. This model takes inspiration from the rimless-wheel and the compass-gait walker, but instead features a telescop-ing leg to better model the effect of a knee joint. Since we are proposing a novel model, we will first introduce our system and propose a closed-loop controller under which the system has a stable periodic limit cycle. 
+
+A. Planar Bipedal Model 1) Dynamics: We model the bipedal walker as an inverted pendulum, with mass m and length r, at angle θ from the vertical. An illustration of this model is provided in Figure 3. Over one step, one leg (the stance leg) is pinned to the ground, and the other leg (the swing leg) is held at a constant length r0 and constant angle θH from the stance leg. The robot is capable of applying a force u along its stance leg. Under these assumptions, the robot state [r, θ, ˙r, ˙θ] evolves according to the dynamics 
+
+¨r
+
+¨θ
+
+
+
+=
+
+(mr ˙θ2 + u − mg cos θ)/m 
+
+−(2 ˙ r ˙θ − g sin θ)/r 
+
+
+
+. (19) When the swing leg contacts the ground, an inelastic colli-sion occurs and a stance change is triggered. All momentum in the direction of the swing leg is removed, a controlled impulse of v is applied in the direction of the stance leg, and the swing leg is relabeled as the new stance leg. The controlled impulse models the effect of action applied by the old stance leg during a short dual-stance phase, and can be used to recover the energy lost from stepping as well as stabilize the step-to-step dynamics. The switching region S of this system can be described in terms of the position variables: 
+
+S = {r, θ : r cos( θ) + r0 cos( π + θH − θ) = 0 }. (20)         
+
+> 1https://github.com/dynamicmobility/Hybrid-Invariant-Sets.git −0.4−0.3−0.2−0.10.00.10.20.30.4
+> x
+> 0.10.20.30.40.50.6
+> y
+> Fig. 4: Stable periodic limit cycle for the walker obtained from trajectory optimization.
+
+The reset map ∆ maps the pre-impact states to post-impact states. The post-impact positions are fixed by the geometry of the system at impact: 
+
+r+
+
+θ+
+
+
+
+=
+
+ r0
+
+θH − θ
+
+
+
+. (21) Applying the inelastic collision, controlled impulse, and relabeling results in the post-impact velocities 
+
+r ˙θ+
+
+˙r+
+
+
+
+= R(−θ)
+
+v sin( θ) + [ r ˙θ cos( θH ) + ˙ r sin( θH )] cos( β)
+
+v cos( θ) − [r ˙θ cos( θH ) + ˙ r sin( θH )] sin( β)
+
+
+
+,
+
+(22) where β = θ − θH and R ∈ SO (2) is a 2D rotation matrix. 
+
+2) Transformed System Dynamics: To simplify the com-putation of intersections with the guard surface, we transform our coordinates such that the guard surface becomes ahyperplane. This is done through a map ϕ : R4 → R4. We define a transformed coordinate system 
+
+x =
+
+h
+
+r, tan θ, ˙r, ˙θ 
+
+> cos 2θ
+
+iT
+
+. (23) Under these coordinates, the guard surface is defined as 
+
+Sx =
+
+n
+
+x :  −1   
+
+> r0sin θH
+
+1 0 0 x + 1tan θH = 0 
+
+o
+
+. (24) The reset function can be similarly defined as x+ =∆x(x−) = ϕ(∆( ϕ−1(x−)) . We note that the singularities of the ϕ map are at ±π/ 2, which is outside the operating envelope of the system. 
+
+3) Open-Loop Trajectory Optimization: To realize walk-ing for our model, we synthesize a periodic trajectory and stabilizing tracking controller. Our trajectory optimization is formulated to choose an initial state xd
+
+> 0
+
+, feed-forward control sequence uff  
+
+> i
+
+∀i ∈ 1..N − 1, and nominal dual-stance impulse vff . From these specifications we can also compute a desired trajectory xdi . It is transcribed as the single-shooting trajectory optimization problem 
+
+min   
+
+> xd
+> 0,u ff
+> i,v ff
+> N
+
+X
+
+> i=0
+
+(uff  
+
+> i
+
+)2 (25) s.t. xdi+1 = xdi + hf (xdi , u ff  
+
+> i
+
+), ∀i ∈ 0, ..., N − 1,
+
+∆( xdN , v ff ) = xd
+
+> 0
+
+,ri ≥ r0, ∀i ∈ 0, ..., N, xdN ∈ S , xdi /∈ S , ∀i ∈ 0..N − 1,where h is the discretization interval of the trajectory, and N
+
+is the number of samples of the trajectory. The problem is solved using the IPOPT solver through the cyipopt library [26]. The resulting nominal trajectory is shown in Figure 4. 
+
+4) Step-to-Step Control: To stabilize the step-to-step dy-namics, we introduce a discrete-time controller which adjusts the dual-stance impulse v. For the open-loop trajectory computed in V-A.3, we numerically estimate the step-to-step dynamics by flowing the continuous dynamics and reset map from V-A.1 over one step, starting at perturbed initial conditions x0 and perturbed impulse input v. From the difference in initial and final points, we can approximate the step-to-step dynamics as 
+
+x[k + 1] − xdN = A(x[k] − xdN ) + B(vd + δv ), (26) where δv is an additional control input term which adjusts 
+
+v from the nominal quantity vd. To stabilize this system, we select a controller δv = Kds (x− 
+
+> k
+
+− xdN ) to place the eigenvalues of F within the unit circle. 
+
+5) Tracking Control: The planar bipedal walker can be stabilized onto a periodic gait using only the step-to-step controller outlined in Sec. V-A.4. This control strategy is brittle and yields a relatively small invariant tube. Thus, we develop a tracking controller designed to increase the size of the hybrid invariant tube by leveraging the automatic-differentiation capabilities of our framework. We choose to develop controllers of the form u(t) = uff (t) + K[x(t) −
+
+xd(t)] and select the control gain K.
+
+Algorithm 1 Reachability-based Control Design Procedure 
+
+Require: Initial shape α0, Rescale tolerance smin , Gradient Step Size η, Gradient Step Count NK∗ ← [0 , 0, 0, 0] 
+
+s∗ ← ∞ 
+
+α∗ ← α0
+
+while s∗ > s min do for i = 1 , ..., N do 
+
+K∗ ← K∗ − η ∂∂K ∗ Φ′(α∗, K ∗)
+
+s∗ ← max s s.t. Φ′(α∗/s, K ∗) < 1
+
+α∗ ← α∗/s 
+
+return α∗, K ∗
+
+First, we define the cost function Φ′ : GL (n) × Rn → R
+
+which, analogous to the function Φ defined in Sec. IV-D, maps an initial shaping matrix to the associated post-impact length, given a particular choice of control gains. We optimize the control gain K∗ and shaping matrix α∗ in a bilevel fashion. First, we iteratively update K using gradient descent to decrease the cost function while holding α∗
+
+constant. The gradient of the cost function, ∂∂K ∗ Φ′(α∗, K ∗)
+
+is obtained using automatic differentiation. After a fixed number of gradient steps, we hold K∗
+
+constant and optimize over α∗ by solving the optimization problem (18). This algorithm continues until the rescaling step is unable to increase the size of the initial normotope by more than the user-defined minimum factor smin . This  
+
+> (a) Hybrid Invariant Tube with no tracking control
+> (b) Hybrid Invariant Tube with tracking control included
+> Fig. 5: Slices of the computed Hybrid Invariant Tube with no tracking control (above) and tracking control (below). The blue dotted line represents the guard surface S. The green portions of the tube are the ones for which the tube intersects the guard surface.
+
+process is summarized in Algorithm 1. Note that one can also optimize this cost function with respect to the initial normotope shape α0, leading to potentially an even larger final invariant set. VI. R ESULTS 
+
+A. Hybrid Invariant Tube 
+
+We first analyze the resultant closed-loop system from applying our procedure to the autonomous system described in Sec. V-A.1. For the discrete control used to stabilize the step-to-step dynamics, we place the linearized system’s poles at z = [0 .0, 0.1, 0.2, 0.3] which stabilize the hybrid system. We apply our procedure in Sec. IV to generate an estimate of the hybrid invariant tube, without continuous control applied. This tube is shown in Figure 5. We empirically verify the invariance of the tube by performing a Monte Carlo simulation. We initialize 100 trajectories on the boundary of the initial verified normotope and simulate the system for 15 crossings of the guard surface. As expected, all trajectories successfully remain within the verified invariant tube. We then design a tracking controller using the procedure outlined in Sec. V-A.5. With gradient step count N = 20 ,step size η = 0.5, and rescale tolerance smin = 1.01 ,Algorithm 1 converges to a K∗ that increased the size of the invariant tube by a factor of 4.25, as illustrated in Figure 5. We again verify through Monte Carlo sampling that the resulting larger tube is indeed invariant. 
+
+B. Computational Efficiency 
+
+A key benefit of our approach is the ability to quickly produce approximated forward-invariant sets. To compute the reachable sets on our 4-dimensional system takes a total of 19.56 seconds, out of which 4.55 seconds are taken up by JIT compilation. In contrast, the SOS programming approach taken in [8] takes 17.7 minutes to compute a reachable set for the 4-dimensional compass walker. Similarly, the Hamilton-Jacobi-Bellman approach taken in [12] takes roughly 36 hours to compute a reachable set for the 4-dimensional compass walker. While these approaches are not directly comparable, the speed at which we can compute approximate solutions is promising for embedding reachability analysis into control design or trajectory optimization algorithms. VII. L IMITATIONS AND FUTURE WORK 
+
+One key assumption of this approach is the requirement that the guard surface is linear with respect to the choice of coordinates. In this work, we found a map ϕ which converted the planar bipedal walker’s states into coordinates for which this is true. This map may or may not exist for all hybrid systems that follow the structure in 1. However, we observe that other bipedal walker models such as the compass-gait walker do have a guard surface that is linear in their coordinates. Future work will investigate the conditions surrounding this coordinate map for other hybrid systems. Another limitation is the inherent conservativeness in our approach. The interval-based linear inclusions that model the evolution of the normotope and the effect of the reset map result in a conservative overapproximation of the true forward set. However, the approach developed in [23] shows promise in reducing this conservatism through the introduc-tion of a controlled embedding system and an additional tube refinement step. In future work, we plan to integrate this refinement step into our invariant set computation pipeline. Finally, our work only proves forward invariance of the identified hybrid tube. While we know empirically that this set also yields asymptotic stability to a stable periodic orbit, this has yet to be proven. Despite these limitations, we believe the computational speed and differentiability show promise for more complicated control design problems. VIII. C ONCLUSION 
+
+Our work presents a set-based reachability framework for efficiently estimating the region of attraction of a hybrid system. We present a condition under which the reachable set of a periodic hybrid system is forward-invariant, and provide a numerical algorithm for computing it. This condition is differentiable with respect to the initial set and system parameters, permitting reachability-guided control design. We demonstrate its effectiveness by designing a controller and certifying the forward-invariant set of a planar walker model. While this demonstration is limited in scale, our approach promises to extend to high-dimensional systems by leveraging interval analysis as well as the parallelization and auto-differentiation capabilities of JAX. As such, future work will extend this methodology to more complex systems in order to fully demonstrate its benefits. REFERENCES [1] R. Goebel, R. G. Sanfelice, and A. R. Teel, “Hybrid dynamical systems,” IEEE control systems magazine , pp. 28–93, 2009. [2] S. Sastry, Nonlinear systems: analysis, stability, and control , vol. 10. Springer Science & Business Media, 2013. [3] E. R. Westervelt, J. W. Grizzle, and D. E. Koditschek, “Hybrid zero dynamics of planar biped walkers,” IEEE transactions on automatic control , vol. 48, no. 1, pp. 42–56, 2003. [4] J. Z. Woodruff and K. M. Lynch, “Planning and control for dynamic, nonprehensile, and hybrid manipulation tasks,” in International Con-ference on Robotics and Automation (ICRA) , IEEE, 2017. [5] R. Fierro, F. L. Lewis, and A. Lowe, “Hybrid control for a class of underactuated mechanical systems,” IEEE Transactions on Systems, Man, and Cybernetics-Part A: Systems and Humans , 2002. [6] H. K. Khalil and J. W. Grizzle, Nonlinear systems , vol. 3. Prentice hall Upper Saddle River, NJ, 2002. [7] U. Topcu, A. Packard, and P. Seiler, “Local stability analysis using simulations and sum-of-squares programming,” Automatica , vol. 44, no. 10, pp. 2669–2675, 2008. [8] I. R. Manchester, “Transverse dynamics and regions of stability for nonlinear hybrid limit cycles,” IFAC Proceedings Volumes , vol. 44, no. 1, pp. 6285–6290, 2011. [9] G. Chesi, Domain of attraction: analysis and control via SOS pro-gramming , vol. 415. Springer Science & Business Media, 2011. [10] I. M. Mitchell, A. M. Bayen, and C. J. Tomlin, “A time-dependent hamilton-jacobi formulation of reachable sets for continuous dynamic games,” IEEE Transactions on automatic control , 2005. [11] I. R. Manchester, M. M. Tobenkin, M. Levashov, and R. Tedrake, “Regions of attraction for hybrid limit cycles of walking robots,” IFAC Proceedings Volumes , vol. 44, no. 1, pp. 5801–5806, 2011. [12] J. J. Choi, A. Agrawal, K. Sreenath, C. J. Tomlin, and S. Bansal, “Computation of regions of attraction for hybrid limit cycles using reachability: An application to walking robots,” IEEE Robotics and Automation Letters , vol. 7, no. 2, pp. 4504–4511, 2022. [13] M. Althoff, G. Frehse, and A. Girard, “Set propagation techniques for reachability analysis,” Annual Review of Control, Robotics, and Autonomous Systems , vol. 4, no. 1, pp. 369–395, 2021. [14] M. Althoff, “An Introduction to CORA 2015,” in Proc. of the 1st and 2nd Workshop on Applied Verification for Continuous and Hybrid Systems , pp. 120–151, EasyChair, Dec. 2015. [15] S. Bogomolov, M. Forets, G. Frehse, K. Potomkin, and C. Schilling, “JuliaReach: a toolbox for set-based reachability,” in Proceedings of the 22nd ACM International Conference on Hybrid Systems: Compu-tation and Control , pp. 39–44, 2019. [16] S. Jafarpour, A. Harapanahalli, and S. Coogan, “Efficient interaction-aware interval analysis of neural network feedback loops,” IEEE Transactions on Automatic Control , 2024. [17] A. Harapanahalli, S. Jafarpour, and S. Coogan, “immrax: A paral-lelizable and differentiable toolbox for interval analysis and mixed monotone reachability in jax,” IFAC-PapersOnLine , 2024. [18] L. Jaulin, M. Kieffer, O. Didrit, and E. Walter, Applied interval analysis . Springer, 1st edition. ed., 2001. [19] J. Bradbury, R. Frostig, P. Hawkins, M. J. Johnson, C. Leary, D. Maclaurin, G. Necula, A. Paszke, J. VanderPlas, S. Wanderman-Milne, and Q. Zhang, “JAX: composable transformations of Python+NumPy programs,” 2018. [20] J. P. Reher, A. Hereid, S. Kolathaya, C. M. Hubicki, and A. D. Ames, “Algorithmic foundations of realizing multi-contact locomotion on the humanoid robot durus,” in Algorithmic Foundations of Robotics XII: Proceedings of the Twelfth Workshop on the Algorithmic Foundations of Robotics , pp. 400–415, Springer, 2020. [21] B. Morris and J. W. Grizzle, “A restricted poincar´ e map for deter-mining exponentially stable periodic orbits in systems with impulse effects: Application to bipedal robots,” in Proceedings of the 44th IEEE Conference on Decision and Control , 2005. [22] A. Harapanahalli and S. Coogan, “A linear differential inclusion for contraction analysis to known trajectories,” IEEE Transactions on Automatic Control , pp. 1–8, 2025. [23] A. Harapanahalli and S. Coogan, “Efficient norm-based reachable sets via iterative dynamic programming,” arXiv preprint arXiv:2509.23367 ,2025. [24] F. Bullo, Contraction theory for dynamical systems . 2022. [25] P. Kidger, On Neural Differential Equations . PhD thesis, University of Oxford, 2021. [26] J. K. Moore, “cyipopt,” 08 2025.
