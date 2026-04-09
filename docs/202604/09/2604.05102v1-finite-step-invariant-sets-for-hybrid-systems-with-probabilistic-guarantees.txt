@@ -1,0 +1,662 @@
+Title: Finite-Step Invariant Sets for Hybrid Systems with Probabilistic Guarantees
+
+URL Source: https://arxiv.org/pdf/2604.05102v1
+
+Published Time: Wed, 08 Apr 2026 00:07:09 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Finite-Step Invariant Sets for Hybrid Systems with Probabilistic Guarantees 
+
+Varun Madabushi ∗,1, Elizabeth Dietrich ∗,2, Hanna Krasowski 2, Maegan Tucker 1
+
+Abstract — Poincar´ e return maps are a fundamental tool for analyzing periodic orbits in hybrid dynamical systems, includ-ing legged locomotion, power electronics, and other cyber-physical systems with switching behavior. The Poincar´ e return map captures the evolution of the hybrid system on a guard surface, reducing the stability analysis of a periodic orbit to that of a discrete-time system. While linearization provides local stability information, assessing robustness to disturbances requires identifying invariant sets of the state space under the return dynamics. However, computing such invariant sets is computationally difficult, especially when system dynamics are only available through forward simulation. In this work, we propose an algorithmic framework leveraging sampling-based optimization to compute a finite-step invariant ellipsoid around a nominal periodic orbit using sampled evaluations of the return map. The resulting solution is accompanied by probabilistic guarantees on finite-step invariance satisfying a user-defined accuracy threshold. We demonstrate the approach on two low-dimensional systems and a compass-gait walking model. 
+
+I. I NTRODUCTION 
+
+Hybrid dynamical systems naturally arise in many robotic and cyber-physical systems that exhibit both continuous-time evolution and discrete events. Examples include robotic manipulation with intermittent contact [1]–[3], legged loco-motion [4]–[7], chemical applications [8], [9], and cyber-physical systems, such as traffic networks [10], [11]. The combination of discrete transitions and nonlinear, continuous dynamics introduces significant challenges in the analysis of hybrid systems compared to purely continuous systems. A common tool for analyzing periodic behaviors in hybrid systems is the Poincar´ e return map, which reduces hybrid dynamics to a discrete-time system, defined on a guard surface. In this framework, periodic behaviors correspond to fixed points of the return map, whose stability can be analyzed using standard discrete-time techniques. This approach has been widely applied to the study of periodic motions in hybrid systems, including robotic locomotion and other systems with impacts [12]–[16]. While local stability analysis provides guarantees near a nominal periodic orbit, many practical applications require robustness to disturbances and model uncertainty. A natural way to characterize such robustness is through forward-invariant sets of the return map. A set is invariant under the return map, if trajectories initialized within it remain there for all future iterations. This provides guarantees on 
+
+> ∗
+
+Equal Contribution. 
+
+> 1
+
+Varun Madabushi and Maegan Tucker are with Georgia Institute of Technology {vmadabushi3, mtucker }@gatech.edu 
+
+> 2
+
+Elizabeth Dietrich and Hanna Krasowski are with University of Cali-fornia, Berkeley {eadietri, krasowski }@berkeley.edu 0 2                         
+
+> x1
+> −1
+> 0
+> 1
+> 2
+> x2
+> (a) Step 1: Sample points from i
+> i{xi}
+> −2 02
+> x1
+> −2
+> 0
+> 2
+> x2
+> (b) Step 2: Apply Poincaré map 
+> : = { (xi) ∣ (xi) ∈ i}
+> : = { (xi) ∣ (xi) ∉ i}
+> 02
+> x1
+> −1
+> 0
+> 1
+> 2
+> x2
+> (c) Step 3: Partition Preimages
+> : = { xi∣(xi) ∈ }
+> : = { xi∣(xi) ∈ }
+> 02
+> x1
+> −1
+> 0
+> 1
+> 2
+> x2
+> (d) Step 4: Fit MVEE to 
+> ii+ 1 
+
+Fig. 1: One iteration of the proposed algorithm. (a) N points are sampled from Ei. (b) The Poincar´ e map P partitions return points into those that leave the set ( V̸ ⊂ E i) and those that return ( W ⊂ E i). (c) The preimages are respectively partitioned into U and Z. (d) Ei+1 is fit to U. The algorithm repeats until the PAC bound satisfies a user-defined ϵ.
+
+the system’s ability to tolerate perturbations. In practice, however, computing invariant sets for hybrid systems is challenging. The return map is often available only through simulation, and its nonlinear structure renders highly non-convex optimization problems that are difficult to solve directly. Consequently, existing approaches [17] often rely on heuristic search procedures or restrictive parameterizations of the invariant set. In this work, we propose a framework that leverages sampling-based optimization [18], [19] and the holdout method [20], [21] to compute finite-step invariant sets of hybrid systems with probabilistic guarantees. By sampling points from a candidate invariant set and enforcing invariance of the return map on these samples, we generate a dataset for which we can solve a tractable optimization problem (see Fig. 1). The holdout method is then used to provide a risk estimate for the resulting prediction, based on an independent validation set. This approach bounds the violation probability of the learned invariant set, and ensures the bound holds with high confidence over the random sampling process. This work is motivated by robustness analysis of periodic walking gaits in bipedal locomotion. In this setting, the Poincar´ e return map captures the step-to-step evolution of the robot’s state at impact events. Computing invariant sets 
+
+> arXiv:2604.05102v1 [eess.SY] 6 Apr 2026
+
+of this map characterizes disturbance bounds under which walking remains stable. Extending our prior work, which estimated invariant sets as a uniform ball around a nomi-nal gait [17], we now compute forward-invariant ellipsoids with finite-sample probabilistic guarantees. This expressive representation more accurately captures the geometry of the return map, yielding less conservative robustness estimates. The main contributions of this work include:  
+
+> •
+
+We develop an iterative algorithm to compute invariant sets for hybrid systems using the discrete dynamics of a Poincar´ e map, framing the computation as a sampling-based optimization problem.  
+
+> •
+
+We provide probabilistic guarantees on finite-step in-variance of the resulting sets using the holdout method.  
+
+> •
+
+We demonstrate the proposed approach on two low-dimensional systems and a compass-gait walking model. II. P RELIMINARIES 
+
+To contextualize our method, we first introduce periodic hybrid systems, followed by a brief discussion of existing simulation-based approaches for studying hybrid system forward set invariance. We then describe how the holdout method can be used to derive finite-sample guarantees. 
+
+A. Hybrid Systems 
+
+Consider a system with state x ∈ X ⊆ Rn. Let h :
+
+X → R be a continuously differentiable function defining the admissible domain 
+
+D = {x ∈ X | h(x) ≥ 0}, (1) and the guard (or switching surface), 
+
+S = {x ∈ X | h(x) = 0 , ˙h(x) < 0}. (2) The set D is the region in which the continuous dynamics evolve, while S ⊂ D denotes the event surface where discrete transitions occur. The condition ˙h(x) < 0 ensures trajectories intersect the guard transversally. A reset map ∆ : S → D specifies the discrete transition from the pre-impact state x− to the post-impact state x+. Let 
+
+φt(x0) denote the flow of the continuous dynamics at time 
+
+t ≥ 0 with initial condition x0 ∈ D. Hybrid trajectories are obtained by concatenating continuous evolution with discrete reset events. To denote that, {τk}k≥1 is the sequence of impact times and x− 
+
+> k
+
+, x+ 
+
+> k
+
+are the corresponding pre- and post-impact states, which satisfy 
+
+x− 
+
+> k
+
+= φτk −τk−1 (x+
+
+> k−1
+
+) ∈ S, (3) 
+
+x+ 
+
+> k
+
+= ∆( x− 
+
+> k
+
+), (4) for k ≥ 1, with τ0 = 0 and initial condition x0 ∈ D. Between impacts, 
+
+φt(x0) = φt−τk (x+ 
+
+> k
+
+), t ∈ [τk, τ k+1 ). (5) In the context of robotic locomotion, we are especially interested in periodic trajectories of the hybrid systems. Thus, we analyze these systems using Poincar´ e sections, taking the guard surface S as a natural choice of a Poincar´ e section. Starting from a point x ∈ S, the reset map produces 
+
+x+ = ∆( x). (6) The system then evolves under the continuous dynamics until it intersects the guard again. Additionally, let us define the time-to-impact function 
+
+T (x) := inf {t > 0 | φt(∆( x)) ∈ S}, (7) and the associated Poincar´ e return map P : S → S as 
+
+P(x) := φT (x)(∆( x)) . (8) Thus, the hybrid system induces a discrete-time dynamical system on the guard 
+
+xk+1 = P(xk), xk ∈ S. (9) A periodic orbit of the hybrid system corresponds to a fixed point of the Poincar´ e map, 
+
+x∗ = P(x∗). (10) For instance, in legged locomotion, such a fixed point represents a periodic gait. More generally, the Poincar´ e map provides a reduced-order discrete-time representation of the hybrid dynamics on the section S, which will serve as the basis for the set invariance analysis developed in this work. 
+
+B. Invariant Sets for Hybrid Systems 
+
+A forward invariant set for a discrete-time hybrid system, is a set I ⊂ S with respect to (9) such that 
+
+x0 ∈ I ⇒ xk ∈ I , ∀k ∈ N. (11) Consequently, if the initial state of the system belongs to 
+
+I, the system will remain within I for all future steps, guaranteeing safety even under perturbations of the initial conditions. Since directly checking forward invariance is challenging, [17] proposed a sampling-based approach, for-mulating the identification of the largest set I := {x | x ∈Br (x∗) ⊂ S}, as the ball with size: 
+
+r∗ = max  
+
+> r∈[0 ,r max ]
+
+r (12) s.t. P(x) ∈ B r (x∗), ∀x ∈ B r (x∗).
+
+This optimization problem searched for a ball of radius r,centered around the fixed point that would render infinite-time set invariance. However, to practically solve this opti-mization problem, the solution was obtained by iteratively decreasing r until the condition was satisfied for an arbi-trarily large number of samples xi ∈ B r (x∗), thus negating formal guarantees of infinite-set invariance. Moreover, while this is feasible for sets characterized by a single parameter (i.e., r for the set Br (x∗)), it becomes impractical for more complex sets, such as ellipsoids. C. Finite-Sample Guarantee 
+
+In sampling-based frameworks, a limited number of sim-ulations makes it challenging to quantify confidence in a particular estimate. Finite-sample guarantees address this by providing rigorous confidence statements for a fixed number of samples. Given black-box system assumptions, the strongest, tractable guarantees are provided by Probably Approximately Correct (PAC) bounds [22]. In this work, we employ the holdout method—a general, sharp approach that yields PAC guarantees under minimal assumptions. The holdout method provides an a posteriori assessment of the robustness of a sample-based solution by computing an empirical estimate of its accuracy [20]. Specifically, it employs a test set of N i.i.d. fresh samples (i.e., distinct from the training set) and records v violations of the estimator. We aim to compute the probability of observing at most v
+
+violations of the invariant set out of N samples. Statistically, this corresponds to a tail bound of a binomial distribution. Therefore, we use a binomial tail inversion to bound the largest true error, such that the probability of v or more samples violating the invariant set is at least β.
+
+Definition 1 (Binomial Tail Inversion): For v violations out of N scenarios and all β ∈ (0 , 1] :Bin (v, N, β ) = max 
+
+> e
+
+n
+
+e : Bin 
+
+
+
+v, N, e 
+
+
+
+≥ β
+
+o
+
+, where Bin 
+
+
+
+v, N, e 
+
+
+
+=
+
+> v
+
+X
+
+> j=0
+
+Nj
+
+
+
+ej (1 − e)N −j . (13) This yields a Probably Approximately Correct (PAC) guar-antee for the invariant set I in the form: 
+
+PN (PP(x) /∈I > ϵ ) ≤ β. (14) III. P ROBLEM STATEMENT 
+
+In this paper, we aim to identify a finite-step invariant set under a Poincar´ e return map P, i.e., 
+
+P(x) ∈ I , ∀x ∈ I , (15) where I is an ellipsoid E defined as the set: 
+
+E := {x ∈ Rn | || Ax − b|| 2 ≤ 1}, (16) with positive definite A ∈ Rn×n and b ∈ Rn. Enforcing this invariance condition (15) is generally intractable without overly conservative estimates or assumptions on the structure of P. Therefore, we aim to find an ellipsoid that satisfies the invariance condition with high probability, quantified through a PAC guarantee in the form of (14). IV. M ETHOD 
+
+To compute the optimal forward-invariant set, we ideally solve an optimization problem that finds the largest set I,characterized as an ellipsoid E, such that the system remains within E for all future time steps. This can be formulated as the following optimization problem: 
+
+max Vol (E)
+
+s.t. P(x) ∈ E , ∀x ∈ E . (17) In practice, verifying forward invariance is challenging, and maximizing the volume of a given set is usually a noncon-vex optimization problem. Moreover, when operating under black-box system assumptions, explicit gradient information is not available to facilitate convergence. Therefore, we solve a relaxation of this optimization problem using an algorithmic approach and sampling-based optimization. This sampling-based approach is especially effective when model or gradient information is unavailable, or unreliable, as it leverages stochastic exploration and function evaluations (i.e., simulation outputs under random-ized inputs) to approximate optimal solutions in non-convex domains. We relax the forward-invariance constraint to an ellipsoidal containment problem, fitting a minimum-volume ellipsoid to the set of points that satisfy one-step invariance at a given time step. Because this formulation operates on samples prior to applying the Poincar´ e return map, min-imizing volume (rather than maximizing) introduces mild conservatism (see Fig. 1). Starting from a large initial es-timate, our iterative approach refines the candidate invariant ellipsoid by filtering input-output samples, Sec. IV-A, and improving the set estimate through repeated solution of the ellipsoidal optimization problem, Sec. IV-C. We summarize the proposed algorithm in Alg. 1 and detail the computational steps in the following sections. 
+
+Algorithm 1 Finite-Step Invariant Ellipsoid Identification 
+
+Require: Poincar´ e return map P : S → S, sample count 
+
+N , initial ellipsoid E0 = ( A0, b 0), desired accuracy and confidence ϵ, β ∈ (0 , 1) 
+
+Ensure: Ellipsoid E∗ ⊆ S satisfying P(x) ∈ E ∗ for all 
+
+x ∈ E ∗ 
+
+> 1:
+
+Initialize A ← A0, b ← b0 
+
+> 2:
+
+repeat  
+
+> 3:
+
+Step 1: Sample uniformly from current ellipsoid  
+
+> 4:
+
+Define E := {x ∈ S | ∥ Ax − b∥2 ≤ 1} 
+
+> 5:
+
+Draw {xi}Ni=1 ∼ Uniform( E) 
+
+> 6:
+
+Step 2: Apply Poincar´ e return map  
+
+> 7:
+
+x′ 
+
+> i
+
+← P (xi), ∀ i ∈ { 1, . . . , N } 
+
+> 8:
+
+Step 3: Partition by containment of return points  
+
+> 9:
+
+V ← { x′ 
+
+> i
+
+| ∥ Ax ′ 
+
+> i
+
+− b∥2 > 1} ▷ escaped  
+
+> 10:
+
+W ← { x′ 
+
+> i
+
+| ∥ Ax ′ 
+
+> i
+
+− b∥2 ≤ 1} ▷ contained  
+
+> 11:
+
+U ← { xi | x′ 
+
+> i
+
+∈ W} ▷ preimage of W 
+
+> 12:
+
+ϵ∗ ← Bin (|V| , N, β ) 
+
+> 13:
+
+if ϵ∗ > ϵ then  
+
+> 14:
+
+Step 4: Fit ellipsoid to U 
+
+> 15:
+
+Solve 
+
+A∗, b ∗ = arg min  
+
+> A,b
+
+− log det A
+
+s.t. ∥Ax − b∥2 ≤ 1 ∀ x ∈ U 
+
+A ← A∗, b ← b∗ 
+
+> 16:
+
+end if  
+
+> 17:
+
+until ϵ∗ ≤ ϵ 
+
+> 18:
+
+return E∗ := {x ∈ S | ∥ Ax − b∥2 ≤ 1}, ϵ∗−2 0 2                     
+
+> x1
+> −3
+> −2
+> −1
+> 0
+> 1
+> 2
+> 3
+> x2
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> Iteration (a) Convex Expander-Contractor −0.025 0.000 0.025
+> x1
+> −1.0
+> −0.5
+> 0.0
+> 0.5
+> 1.0
+> x2
+> 0
+> −0.025 0.000 0.025
+> x1
+> −0.075
+> −0.050
+> −0.025
+> 0.000
+> 0.025
+> 0.050
+> 0.075
+> x3
+> −1 01
+> x2
+> −0.075
+> −0.050
+> −0.025
+> 0.000
+> 0.025
+> 0.050
+> 0.075
+> x3
+> 10
+> 21
+> 31
+> 42
+> 52
+> 63
+> 73
+> 84
+> 95
+> Iteration (b) Compass-Gait Walker *012
+> x1
+> 0.0
+> 1.5
+> 3.0
+> x2
+> (c) Final Invariant Set for CEC −0.015 0.000 0.015
+> x1
+> −0.5
+> 0.0
+> 0.5
+> x2
+> −0.015 0.000 0.015
+> x1
+> −0.04
+> 0.00
+> 0.04
+> x3
+> −0.5 0.0 0.5
+> x2
+> −0.04
+> 0.00
+> 0.04
+> x3(d) Final Invariant Set for Compass-Gait Walker
+
+Fig. 2: Sampling-based, finite-step invariant set algorithm and verification. (a,b) Sequence of ellipsoid iterates E0, E1, . . . , E∗ produced by the algorithm for the Convex Expander-Contractor and Compass-Gait Walker (three coordinate projections), respectively. (c,d) Verification of the final set E∗: samples 
+
+U (preimages whose Poincar´ e returns remain in E∗) and Z (preimages that escape), together with their return images W ⊂ E ∗ and V̸ ⊂ E ∗. Since the user-specified accuracy for both algorithms was ϵ = 0 .03 , it is not required that all points return to E∗.
+
+A. Generation of Input-Output Samples 
+
+We obtain an initial set of N i.i.d. samples {xi}Ni=1 drawn from a uniform distribution over the volume of the current candidate invariant ellipsoid E, with parameterization A, b 
+
+(Step 1, Alg. 1). Each sample is propagated through the Poincar´ e map P, yielding a set of corresponding outputs 
+
+{x′ 
+
+> i
+
+= P(xi)}Ni=1 (Step 2, Alg. 1). Given E, we partition the input-output sample pairs according to their containment. For each pair, we evaluate the condition || Ax ′ 
+
+> i
+
+− b|| 2 ≤ 1 ∀i =1, ..., N (Step 3, Alg. 1). Samples satisfying this containment condition are classified as inliers: the corresponding outputs are assigned to the set W, and the associated inputs to the set U. Samples that violate the condition are classi-fied as outliers, with outputs forming the set V. Since the generation of input-output pairs and the containment check are independent for each sample, these steps can be parallelized, significantly reducing the algorithm’s runtime when evaluating P is computationally expensive. 
+
+B. Certification of Candidate Invariant Set 
+
+We assess the accuracy of the current candidate ellipsoid during generation of the input-output samples by computing a finite-sample guarantee using a binomial tail inversion. Specifically, we utilize the fresh set of N i.i.d. input-output pairs {(xi, x ′
+
+> i
+
+)}Ni=1 and calculate the number of outputs that violate set containment. This corresponds to the cardinality of set V (i.e., |V| ∈ N). Given a user-defined confidence level β, we compute ϵ = Bin (|V| , N, β ) (Line 12, Alg. 1). If 
+
+ϵ satisfies the user-defined accuracy threshold, the algorithm terminates, returning E as the final invariant set. This set is accompanied by the PAC guarantee defined in Eq. (14) for one-step invariance. If the candidate invariant set is not satisfactory, the algorithm refines the ellipsoidal estimate using the sample-based optimization procedure defined in IV-C. While Alg. 1 provides one-step probabilistic guarantees upon termination, additional analysis allows these guarantees to be derived for an arbitrary number of k steps. Generally, the probabilistic guarantee characterizes the probability of violating the invariance condition at step k, i.e., the test dataset is comprised of points propagated through k iterations of P. In Alg. 1, k = 1 ; however, Fig. 4 investigates the evolution of ϵ under increasing k. This provides insight into the robustness of the one-step guarantee Alg. 1 admits. 
+
+C. Refinement of set representation 
+
+If the previous candidate ellipsoidal set fails to satisfy the user-defined accuracy threshold, the algorithm refines the estimate by solving a sampling-based optimization problem over the new set of inliers U, as generated in Sec. IV-A. Specifically, it computes the minimum-volume ellipsoid enclosing all points in U. This is formulated as a convex optimization problem: a volume proxy for the ellipsoid is minimized, subject to the constraint that every point in 
+
+U lies inside the ellipsoid (Step 4, Alg. 1). We utilize the volume proxy from the well-known minimum-volume covering ellipsoid problem [23]. 1 2 3 4
+
+> 0.6
+> 0.8
+> 1
+> Iterations
+> 1 − ϵ
+
+Convex Expander-Contractor  
+
+> 3
+> 4
+> 5
+> 50 100
+> 0.6
+> 0.8
+> 1
+> Iterations
+
+Nonconvex Expander-Contractor   
+
+> 0
+> 5
+> 10
+> 10 40 70
+> 0.6
+> 0.8
+> 1
+> Iterations
+
+Compass-Gait Walker        
+
+> 0.0005
+> 0.0025
+> 0.005
+> Vol( E)
+> Fig. 3: Mean and standard deviation of accuracy 1−ϵand ellipsoid volume Vol (θ)over 10 algorithm runs. The dashed gray line indicates the user-defined target accuracy for each system. (Left): The Convex Expander-Contractor system (accuracy: dark orange, volume: light orange) with desired accuracy
+> 97% , converges within 5 iterations on average. (Middle): The Nonconvex Expander-Contractor system (accuracy: dark purple, volume: light purple) with desired accuracy 93% , converges within 150 iterations on average. (Right): The Compass-Gait walker system (accuracy: dark pink, volume: light pink) with desired accuracy 97% , converges within 75 iterations on average.
+
+V. N UMERICAL RESULTS 
+
+We demonstrate our proposed approach through three case studies 1: two low-dimensional examples, a convex and non-convex Expander-Contractor, and a planar bipedal model, the Compass-Gait walker. The low-dimensional examples em-phasize algorithmic performance across different set geome-tries and admit analytical expressions of the true invariant sets, enabling precise evaluation. The Compass-Gait walker reveals the method’s applicability to a practical system where estimation of the true invariant set is challenging. In this section, we first provide system dynamics and then report results for the three systems. 
+
+A. Convex Expander-Contractor (CEC) 
+
+We present a 2-dimensional, illustrative example to demonstrate the behavior of our algorithm, which we refer to as the Convex Expander-Contractor (CEC). The dynamics of the CEC are defined as follows: 
+
+xk+1 = P(x) = ( x − c)
+
+q
+
+(x − c)T M (x − c) + c (18) This system scales vectors centered at the fixed point c
+
+by their length measured in the M -weighted norm, where 
+
+M ⪰ 0 is a positive semi-definite matrix. Intuitively, points within the unit M -norm ball centered at c contract towards 
+
+c, while points outside the ball expand. Consequently, the ellipsoid x : ( x − c)T M (x − c) ≤ 1 is both an invariant set and a region of attraction for c. For all simulations, we set c = [1 , 1] T and M = ( 2 1 1 1 ).We initialize Alg. 1 with c0 = [0 , 0] T and M0 = ( 0.1 00 0.1 ),corresponding to a circle of radius √10 , centered at the origin. The accuracy threshold is set to ϵ = 0.03 with confidence level β = 10 −9. As shown in Fig. 3, the algorithm consistently recovers an invariant set with one-step accuracy ϵ < 0.03 . Figs. 2a and 2c illustrate the algorithmic results, showing the recovered invariant ellipsoid, which has a volume only 1.1% smaller than the true invariant set. Additionally, we evaluated the accuracy of the resulting invariant set for k = 1 , . . . , 20 steps (i.e., we form a test set by sampling N points from E∗ and simulating k applications of P). As shown in Fig. 4, despite deriving bounds that only  
+
+> 1Python scripts implementing these results are provided at https:// github.com/dynamicmobility/finite-step-invariance
+
+hold for a specific number of steps, the violation probability remains stable across increasing values of k. This empirically suggests the probabilistic estimate is robust. 
+
+B. Nonconvex Expander-Contractor (NEC) 
+
+We introduce a second illustrative system, termed the Nonconvex Expander-Contractor (NEC), whose invariant set consists of two expanded regions connected by a narrow bridge that cannot be exactly captured with an ellipsoidal representation. The dynamics of the NEC are given by the following piecewise function: 
+
+P(x) = 
+
+ 
+
+> 12
+
+(x + c1) if ∥x − c1∥2 < r  
+
+> 12
+
+(x + c2) if ∥x − c2∥2 < r κx otherwise for x, c 1, c 2 ∈ R2 and r > 0, k > 1. The invariant set associated with this system is a pair of circles of radius 
+
+r, centered at c1 and c2 respectively. For this experiment, 
+
+c1 = [ −0.6, 0] T , c 2 = [0 .6, 0] T , r = 0 .6, κ = 1 .3.For Alg. 1 to terminate, ϵ must be set sufficiently large (e.g., ϵ = 0 .07 ). After 135 iterations and ϵ = 0 .07 , the algorithm results in the ellipsoid shown in Fig 5, whose volume is 22% smaller than the true invariant set. Addition-ally, the multi-step verification in Fig. 4 reveals a decreased accuracy measure after k = 2 steps, suggesting that some points contained within the estimated 1-step invariant set do not belong to the true invariant set. This system highlights the limitations of the current ellipsoidal representation when                
+
+> 246810 12 14 16 18 20
+> 0.85
+> 0.9
+> 0.95
+> 1
+> ksteps
+> 1 − ϵ
+> Compass-Gait
+> CEC
+> NEC
+> Fig. 4: Evaluation of extension of one-step probabilistic guarantees to k-step invariance. ϵis evaluated over trajectories propagated for ksteps: stable probabilities suggest the one-step guarantee of Alg. 1 is robust.
+
+−0.8 0.0 0.8 
+
+x1
+
+−0.8 
+
+0.0 
+
+0.8 
+
+> x2
+
+RBF 
+
+E
+
+True I
+
+> Fig. 5: Invariant sets of Nonconvex Expander-Contractor (NEC) system. The true invariant set (light purple), consisting of two circles, is closely approximated by the RBF representation (orange). The ellipsoid (dark purple) from Alg. 1 results in an under-approximation with lower accuracy.
+
+handling nonconvex invariant sets. Accordingly, in Sec. VI-B, we discuss potential extensions of Alg. 1 to more expres-sive set representations, such as radial basis functions. 
+
+C. Compass-Gait Walker 
+
+Finally, we consider a 2 degree-of-freedom model of bipedal walking: the Compass-Gait walker, illustrated in Fig. 6 (adapted from [24]). One leg, the stance leg, remains pinned to the ground, while the other leg, the swing leg, rotates freely around the hip joint. When the swing leg strikes the ground, it undergoes an inelastic collision and becomes the new stance leg. This model has been extensively studied in bipedal locomotion [24]–[26]. We define the state vector as x = [qT , ˙qT ], where 
+
+q = [ θsw , θ st ]T represents the swing and stance leg angles (relative to vertical). The continuous dynamics are given by the manipulator equation: 
+
+H(q)¨ q + C(q, ˙q) ˙ q + G(q),
+
+and the reset map dynamics are derived from an inelastic collision between the swing leg and the ground, 
+
+Q+(q+) ˙ q+ = Q−(q−) ˙ q−.
+
+The definitions of the matrix functions H, C, G, Q +, Q − are provided in [24]. When walking downhill, the Compass-Gait walker exhibits a passive stable limit cycle for a specific set of initial conditions. In this setting, the energy lost during the step and ground impact is counteracted by the potential energy gained from going downhill. We apply our algorithm to compute the invariant region associated with this fixed point. 
+
+> Fig. 6: Coordinates and parameters of the Compass-Gait Walker.
+
+1) Computation of Poincar´ e Map: We begin by applying the approach from Sec. II-A to derive a Poincar´ e map for this system. Because the system is four-dimensional, P maps 
+
+R3 → R3. Due to the complexity of P, it must be computed numerically using python . Specifically, the function takes a point on the guard surface S, applies the reset map, and numerically integrates the continuous dynamics until the trajectory intersects the guard again, using the event-based integration feature of the differential equation solver 
+
+diffrax [27], built on the accelerator library jax [28]. This allows parallelization of P evaluations. 
+
+2) Initialization of Algorithm: Since the Compass-Gait walker exhibits periodic behavior with a stable fixed point, we can initialize the algorithm using the linearization of 
+
+P around its fixed point x∗. When an analytic expression for P is unavailable, the Jacobian J = DP(x∗) can be approximated numerically via finite differences, 
+
+J:,j ≈ P(x∗ + εej ) − P (x∗)
+
+ε , j = 1 , . . . , n, (19) where ε > 0 is a small perturbation and ej is the j-th standard basis vector of S. The eigenvalues of J (i.e., Floquet multipliers) determine the local stability of x∗: the fixed point is asymptotically stable if and only if |λi| < 1 for all i.The system’s linearization can be used to compute an initial guess of the invariant ellipsoid. We utilize an approach inspired by discrete-time contraction theory [29, Eq. 2.36]. Let b denote the spectral radius of J. We solve the following semi-definite program to generate an initial shaping matrix which decays according to the minimum contraction rate b.
+
+min  
+
+> P≻I
+
+trace( P) s.t. JT PJ ⪯ b2P (20) The matrix solution P describes the convergence rate of the dynamical system: unit-norm balls shaped by P contract at rate b under the dynamics of J. However, this construction is guaranteed to be invariant only for the linearized system, not for the true nonlinear P. Because Alg. 1 iteratively shrinks the candidate set, the initial ellipsoid must fully contain the true invariant set. To ensure this, P is scaled by a user-defined factor r, producing a conservatively large initial ellipsoid whose shape reflects the local contraction behavior. When applied to the Compass-Gait walker, Alg. 1 con-verged in 74 iterations to an ellipsoid with volume 8.1×10 −4,illustrated in Figs. 2b and 2d as two-dimensional slices. While the true invariant set is unknown, Fig. 4 suggests that the estimated ellipsoid provides a conservative approxima-tion. The accuracy of the set increases after k = 2 , indicating that some points within the estimated 1-step invariant set may temporarily leave before eventually returning. VI. D ISCUSSION 
+
+The invariant set identification problem sits at the in-tersection of formal guarantees and practical applicability. We discuss three aspects of this intersection: conditions under which a finite-step invariant set exists, extensions to more expressive set representations, and the scope of the guarantees this framework provides. 
+
+A. When Does a Finite-Step Invariant Set Exist? 
+
+The proposed algorithm presupposes the existence of a finite-step invariant set; therefore, it is worth examining when this assumption is well-founded. In general, the existence of such a set is not guaranteed; a system may not admit a compact invariant set in the step-to-step dynamics. A verifiable sufficient condition is the existence of a stable fixed point on the Poincar´ e surface. By discrete-Lyapunov theory, a stable fixed point implies the existence of a corresponding invariant set in the step-to-step dynamics [30], which can then be characterized in shape and volume using Alg. 1. This condition is broadly applicable to hybrid systems ad-mitting stable periodic orbits, including bipedal locomotion controllers synthesized to track a specific gait reference [17]. Beyond analytically verifiable conditions, the sampling-based nature of our approach permits a more pragmatic perspective: convergence of the algorithm serves as empirical evidence for the existence of a finite-step invariant set within the region of interest. This is consistent with the broader spirit of the framework, where PAC-style guarantees validate the returned set rather than relying on a priori knowledge of the system’s structure. 
+
+B. Extension to Non-Convex Set Representations 
+
+For systems where the true invariant set is convex, ellip-soidal representations are sufficient and the algorithm recov-ers a tight approximation. However, when a system admits a nonconvex invariant set, classic convex set representations (e.g., ellipsoids) may lead to overly conservative estimates with poor accuracy. For example, the NEC system we present in Sec. V-B, converges to an invariant set with approximately 
+
+ϵ = 0 .07 with β = 10 −9. This limitation motivates the use of more expressive nonconvex set representations, which can be integrated with Alg. 1 to achieve tighter approximations. For example, we can construct the invariant set from a finite set of radial basis functions (RBFs), where each RBF is defined as a Gaussian function parameterized by x, μ, σ, such that 
+
+f (x, μ, σ ) = e− 12(x−μi)2 
+
+> σ2
+> i
+
+, (21) where μ and σ denote the center and width of each RBF, respectively. This representation yields an optimization prob-lem for m RBFs, which can replace Line 15 in Alg. 1: minimize 
+
+> μ,σ m
+
+X
+
+> i=1
+
+σ2
+
+> i
+
+subject to 
+
+> m
+
+X
+
+> i=1
+
+e− 12(x(j)−μi)2 
+
+> σ2
+> i
+
+− γ ≥ 0, ∀j = 1 , . . . , N, σ ∈ [0 , ∞)m.
+
+(22) By summing m RBFS, their overlapping tails interact to form geometries more expressive than unions of ellipsoids. There-fore, for nonconvex invariant sets, such as those arising in the NEC system, this approach achieves tighter approximations. As seen in Fig. 5, the RBFs, where m = 2 , almost perfectly recover the NEC’s true invariant set, represented by two circles, admitting a better approximation than the ellipsoid from Alg. 1. This RBF set was computed in 15 iterations with an accuracy of ϵ = 0 .038 . Due to the convex shape of the invariant sets for the other two investigated systems, the RBF representation recovers ellipsoidal sets. The increased expressiveness of RBFs comes at the cost of solving a nonconvex optimization problem, which can reduce the stability of the algorithm’s convergence. For instance, while the algorithm converges in 15 steps, instead of 135, for the NEC system, it becomes significantly slower when recovering convex sets for CEC and the Compass-Gait walker. Therefore, the choice of set representation involves a trade-off between accuracy and computational efficiency, and largely depends on the underlying system. 
+
+C. Limitations 
+
+The tradeoff between expressiveness and efficiency high-lights a broader limitation: without structural assumptions on the system or the true invariant set, convergence of the identification algorithm is not guaranteed for any particular accuracy ϵ. Despite this, we empirically demonstrate con-vergence on a variety of example systems. Additionally, the termination criteria in Sec. IV-B, ensures that the algorithm returns a finite-step invariant set for some ϵ, although the resulting accuracy may be far below the desired level (e.g., 
+
+ϵ may be arbitrarily large). A second limitation is the curse of dimensionality inherent to sampling-based approaches. Our approach requires uni-form sampling over the volume of each candidate invariant set and assumes that these samples adequately characterize the system’s dynamics within the set. In high-dimensional spaces, more samples are required to fully characterize the volume of this set, posing potential scalability challenges. This problem can be partially mitigated through large-scale sampling, leveraging parallel processing on Graphics Pro-cessing Units (GPUs). Such approaches have gained traction in the robotics and machine learning communities, with infrastructure such as Brax [31], MuJoCo [32], and Isaac Gym [33] enabling large-scale physics simulation in contact-rich environments. VII. C ONCLUSION 
+
+In this work, we present an algorithm that leverages sampling-based optimization to compute invariant sets of hybrid systems via their discrete Poincar´ e dynamics. Our approach requires minimal structural assumptions on the dynamical system and provides probabilistic guarantees on violation of finite-step set invariance. We demonstrate the effectiveness of this algorithm on three dynamical systems, including one where the true invariant set is not explicitly known. For these systems, our algorithm successfully pro-duces probabilistic invariant sets, with PAC bounds derived from the holdout method. These results establish a founda-tion for future work on probabilistic verification in robust, bipedal robot control. VIII. A CKNOWLEDGMENTS 
+
+This work is supported by the National Science Founda-tion (NSF) CPS Award #2440387. Elizabeth Dietrich was also supported by an NSF Graduate Research Fellowship. REFERENCES [1] S. R. Leveroni, “Grasp gaits for planar object manipulation,” Ph.D. dissertation, Massachusetts Institute of Technology, 1997. [2] L. Han and J. C. Trinkle, “Dextrous manipulation by rolling and finger gaiting,” in Proceedings. 1998 IEEE International Conference on Robotics and Automation (Cat. No. 98CH36146) , vol. 1, 1998, pp. 730–735. [3] S. Kolathaya, W. Guffey, R. W. Sinnet, and A. D. Ames, “Direct collocation for dynamic behaviors with nonprehensile contacts: Ap-plication to flipping burgers,” IEEE Robotics and Automation Letters ,vol. 3, no. 4, pp. 3677–3684, 2018. [4] I. A. Hiskens, “Stability of hybrid system limit cycles: Application to the compass gait biped robot,” in Proceedings of the 40th IEEE Conference on Decision and Control (Cat. No. 01CH37228) , vol. 1, 2001, pp. 774–779. [5] J. Reher, E. A. Cousineau, A. Hereid, C. M. Hubicki, and A. D. Ames, “Realizing dynamic and efficient bipedal locomotion on the humanoid robot durus,” in 2016 IEEE International Conference on Robotics and Automation (ICRA) , 2016, pp. 1794–1801. [6] E. R. Westervelt, J. W. Grizzle, C. Chevallereau, J. H. Choi, and B. Morris, Feedback control of dynamic bipedal robot locomotion .CRC press, 2018. [7] J. Reher and A. D. Ames, “Dynamic walking: Toward agile and efficient bipedal robots,” Annual Review of Control, Robotics, and Autonomous Systems , vol. 4, pp. 535–572, 2021. [8] I. R. Epstein and J. A. Pojman, An introduction to nonlinear chemical dynamics: oscillations, waves, patterns, and chaos . Oxford university press, 1998. [9] M. Ali Al-Radhawi, M. Margaliot, and E. D. Sontag, “Maximizing average throughput in oscillatory biochemical synthesis systems: an optimal control approach,” Royal Society open science , vol. 8, no. 9, p. 210878, 2021. [10] Y. Chitour and B. Piccoli, “Traffic circles and timing of traffic lights for cars flow,” Discrete and Continuous Dynamical Systems Series B ,vol. 5, no. 3, p. 599, 2005. [11] S. Coogan and M. Arcak, “A compartmental model for traffic networks and its dynamical behavior,” IEEE Transactions on Automatic Control ,vol. 60, no. 10, pp. 2698–2703, 2015. [12] J. W. Grizzle and E. R. Westervelt, “Hybrid zero dynamics of planar bipedal walking,” in Analysis and Design of Nonlinear Control Systems: In Honor of Alberto Isidori . Springer, 2008, pp. 223–237. [13] A. Agrawal, O. Harib, A. Hereid, S. Finet, M. Masselin, L. Praly, A. D. Ames, K. Sreenath, and J. W. Grizzle, “First steps towards translating HZD control of bipedal robots to decentralized control of exoskeletons,” IEEE Access , vol. 5, pp. 9919–9934, 2017. [14] S. Veer, I. Poulakakis et al. , “Input-to-state stability of periodic orbits of systems with impulse effects via poincar´ e analysis,” IEEE Transactions on Automatic Control , vol. 64, no. 11, pp. 4583–4598, 2019. [15] J. R. Goodman and L. J. Colombo, “On the existence and uniqueness of Poincar´ e maps for systems with impulse effects,” IEEE Transactions on Automatic Control , vol. 65, no. 4, pp. 1815–1821, 2019. [16] Y. Gong and J. W. Grizzle, “Zero dynamics, pendulum models, and angular momentum in feedback control of bipedal locomotion,” 
+
+Journal of Dynamic Systems, Measurement, and Control , vol. 144, no. 12, p. 121006, 2022. [17] M. Tucker, K. Li, and A. D. Ames, “Synthesizing robust walking gaits via discrete-time barrier functions with application to multi-contact exoskeleton locomotion,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) , 2024, pp. 1136–1142. [18] E. L. Plambeck, B.-R. Fu, S. M. Robinson, and R. Suri, “Sample-path optimization of convex stochastic performance functions,” Mathemat-ical Programming , vol. 75, no. 2, pp. 137–176, 1996. [19] R. Y. Rubinstein and D. P. Kroese, Simulation and the Monte Carlo Method , 3rd ed. John Wiley & Sons, 2016. [20] J. Langford, “Tutorial on Practical Prediction Theory for Classifica-tion,” Journal of Machine Learning Research , vol. 6, pp. 273–306, 2005. [21] M. Hardt and B. Recht, Patterns, predictions, and actions: Foundations of machine learning . Princeton University Press, 2022. [22] L. G. Valiant, “A theory of the learnable,” Commun. ACM , vol. 27, no. 11, p. 1134–1142, 1984. [23] P. Sun and R. M. Freund, “Computation of Minimum-Volume Cov-ering Ellipsoids,” Operations Research , vol. 52, no. 5, pp. 690–706, 2004. [24] I. R. Manchester, M. M. Tobenkin, M. Levashov, and R. Tedrake, “Regions of Attraction for Hybrid Limit Cycles of Walking Robots,” 
+
+arXiv:1010.2247 , 2010. [25] A. Goswami, B. Thuilot, and B. Espiau, “A Study of the Passive Gait of a Compass-Like Biped Robot: Symmetry and Chaos,” The International Journal of Robotics Research , vol. 17, no. 12, pp. 1282– 1301, 1998. [26] J. J. Choi, A. Agrawal, K. Sreenath, C. J. Tomlin, and S. Bansal, “Computation of Regions of Attraction for Hybrid Limit Cycles Using Reachability: An Application to Walking Robots,” IEEE Robotics and Automation Letters , vol. 7, no. 2, pp. 4504–4511, 2022. [27] P. Kidger, “On Neural Differential Equations,” Ph.D. dissertation, University of Oxford, 2021. [28] J. Bradbury, R. Frostig, P. Hawkins, M. J. Johnson, C. Leary, D. Maclaurin, G. Necula, A. Paszke, J. VanderPlas, S. Wanderman-Milne, and Q. Zhang, “JAX: composable transformations of Python+NumPy programs,” 2018. [Online]. Available: http://github. com/jax-ml/jax [29] F. Bullo, Contraction theory for dynamical systems . Francesco Bullo, 2022. [30] N. Bof, R. Carli, and L. Schenato, “Lyapunov Theory for Discrete Time Systems,” arXiv:1809.05289 , 2018. [31] C. D. Freeman, E. Frey, A. Raichuk, S. Girgin, I. Mordatch, and O. Bachem, “Brax - A Differentiable Physics Engine for Large Scale Rigid Body Simulation,” 2021. [Online]. Available: http://github.com/google/brax [32] E. Todorov, T. Erez, and Y. Tassa, “MuJoCo: A physics engine for model-based control,” in 2012 IEEE/RSJ International Conference on Intelligent Robots and Systems , 2012, pp. 5026–5033. [33] V. Makoviychuk, L. Wawrzyniak, Y. Guo, M. Lu, K. Storey, M. Mack-lin, D. Hoeller, N. Rudin, A. Allshire, A. Handa, and G. State, “Isaac Gym: High Performance GPU-Based Physics Simulation For Robot Learning,” arXiv:2108.10470 , 2021.
