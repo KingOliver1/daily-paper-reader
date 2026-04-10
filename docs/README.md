@@ -6,37 +6,43 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-04-09
-- 运行时间：2026-04-09 20:33:09 UTC
+- 最新运行日期：2026-04-10
+- 运行时间：2026-04-10 19:44:53 UTC
 - 运行状态：成功
-- 本次总论文数：5
-- 精读区：3
-- 速读区：2
+- 本次总论文数：7
+- 精读区：4
+- 速读区：3
 
 ### 今日简报（AI）
-今日聚焦四足机器人越野与节能控制，深度解析 RK-MPC 与物理模仿学习前沿技术。
-重点关注残差 Koopman 模型预测控制在复杂地形的卓越表现，以及并联弹性关节对提升运动能效的关键作用。
-建议优先研读高分四足机器人论文，掌握结合物理特性与深度学习的运动控制新范式。
-- 详情：[/202604/09/README](/202604/09/README)
+今日聚焦具身智能核心突破，重点攻克了人形机器人跨形态全身协同操控与稳健追踪难题。
+满分论文 HEX 实现了跨形态操控的专家对齐，CMP 则通过流形投影显著提升了移动操控的追踪鲁棒性。
+建议深入研读全身协同控制（Whole-Body Control）在复杂任务泛化与多模态感知中的最新应用。
+- 详情：[/202604/10/README](/202604/10/README)
 
 ### 精读区论文标签
-1. [RK-MPC: Residual Koopman Model Predictive Control for Quadruped Locomotion in Offroad Environments](/202604/09/2604.04221v2-rk-mpc-residual-koopman-model-predictive-control-for-quadruped-locomotion-in-offroad-environments)  
+1. [HEX: Humanoid-Aligned Experts for Cross-Embodiment Whole-Body Manipulation](/202604/10/2604.07993v1-hex-humanoid-aligned-experts-for-cross-embodiment-whole-body-manipulation)  
    标签：评分：10.0/10、query:robot
-   evidence：越野环境下四足机器人运动的模型预测控制
-2. [A Physical Imitation Learning Pipeline for Energy-Efficient Quadruped Locomotion Assisted by Parallel Elastic Joint](/202604/09/2604.00611v1-a-physical-imitation-learning-pipeline-for-energy-efficient-quadruped-locomotion-assisted-by-parallel-elastic-joint)  
+   evidence：全尺寸双足人形机器人的全身操作控制
+2. [CMP: Robust Whole-Body Tracking for Loco-Manipulation via Competence Manifold Projection](/202604/10/2604.07457v1-cmp-robust-whole-body-tracking-for-loco-manipulation-via-competence-manifold-projection)  
    标签：评分：9.0/10、query:robot
-   evidence：用于节能四足机器人运动的强化学习
-3. [Robust Quadruped Locomotion via Evolutionary Reinforcement Learning](/202604/09/2604.07224v1-robust-quadruped-locomotion-via-evolutionary-reinforcement-learning)  
+   evidence：足式移动操作机器人的全身控制
+3. [Sumo: Dynamic and Generalizable Whole-Body Loco-Manipulation](/202604/10/2604.08508v1-sumo-dynamic-and-generalizable-whole-body-loco-manipulation)  
    标签：评分：9.0/10、query:robot
-   evidence：用于鲁棒四足机器人运动的进化强化学习
+   evidence：Spot四足机器人的全身运动操作
+4. [FSUNav: A Cerebrum-Cerebellum Architecture for Fast, Safe, and Universal Zero-Shot Goal-Oriented Navigation](/202604/10/2604.03139v1-fsunav-a-cerebrum-cerebellum-architecture-for-fast-safe-and-universal-zero-shot-goal-oriented-navigation)  
+   标签：评分：8.0/10、query:robot
+   evidence：包括人形机器人在内的异构机器人通用导航架构
 
 ### 速读区论文标签
-1. [Finite-Step Invariant Sets for Hybrid Systems with Probabilistic Guarantees](/202604/09/2604.05102v1-finite-step-invariant-sets-for-hybrid-systems-with-probabilistic-guarantees)  
-   标签：评分：7.0/10、query:robot
-   evidence：使用庞加莱映射分析足式机器人运动的周期轨道
-2. [STRNet: Visual Navigation with Spatio-Temporal Representation through Dynamic Graph Aggregation](/202604/09/2604.02829v1-strnet-visual-navigation-with-spatio-temporal-representation-through-dynamic-graph-aggregation)  
+1. [Differentiable SpaTiaL: Symbolic Learning and Reasoning with Geometric Temporal Logic for Manipulation Tasks](/202604/10/2604.02643v2-differentiable-spatial-symbolic-learning-and-reasoning-with-geometric-temporal-logic-for-manipulation-tasks)  
    标签：评分：6.0/10、query:robot
-   evidence：机器人的视觉导航与时空表征
+   evidence：带几何约束的操作任务微分优化
+2. [Multi-View Video Diffusion Policy: A 3D Spatio-Temporal-Aware Video Action Model](/202604/10/2604.03181v1-multi-view-video-diffusion-policy-a-3d-spatio-temporal-aware-video-action-model)  
+   标签：评分：6.0/10、query:robot
+   evidence：机器人环境动力学的3D时空状态建模
+3. [Rectified Schrödinger Bridge Matching for Few-Step Visual Navigation](/202604/10/2604.05673v1-rectified-schrdinger-bridge-matching-for-few-step-visual-navigation)  
+   标签：评分：6.0/10、query:robot
+   evidence：自主智能体的视觉导航
 
 
 <div class="dpr-home-promo-card">
