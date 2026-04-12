@@ -6,32 +6,40 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-04-11
-- 运行时间：2026-04-11 19:44:13 UTC
+- 最新运行日期：2026-04-12
+- 运行时间：2026-04-12 20:04:44 UTC
 - 运行状态：成功
-- 本次总论文数：3
-- 精读区：0
-- 速读区：3
+- 本次总论文数：6
+- 精读区：1
+- 速读区：5
 
 ### 今日简报（AI）
-今日聚焦机器人自主导航的前沿突破，涵盖多传感器融合SLAM与具身智能混合推理技术。
-重点关注利用间歇性GNSS信号的同步观测器设计，以及通过混合推理提升导航效率的HiRO-Nav框架。
-建议深入了解多源数据融合与推理模型如何协同提升复杂环境下机器人的定位与决策能力。
-- 详情：[/202604/11/README](/202604/11/README)
+今日聚焦视觉驱动的人形机器人智能体，深度探索从毫米波感知到动态避障的多维机器人进化。
+重点推荐评分 9.0 的人形机器人视觉落地研究，以及利用复数卷积神经网络实现高精度材质识别的新方案。
+建议优先关注人形机器人如何实现视觉与动作的深度耦合，这是通往通用人工智能的关键一步。
+- 详情：[/202604/12/README](/202604/12/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Visually-grounded Humanoid Agents](/202604/12/2604.08509v1-visually-grounded-humanoid-agents)  
+   标签：评分：9.0/10、query:robot
+   evidence：人形智能体在3D场景中的感知与行为
 
 ### 速读区论文标签
-1. [Synchronous Observer Design for Landmark-Inertial SLAM with Magnetometer and Intermittent GNSS Measurements](/202604/11/2604.05156v1-synchronous-observer-design-for-landmark-inertial-slam-with-magnetometer-and-intermittent-gnss-measurements)  
+1. [SMCNet: Supervised Surface Material Classification Using mmWave Radar IQ Signals and Complex-valued CNNs](/202604/12/2604.06847v1-smcnet-supervised-surface-material-classification-using-mmwave-radar-iq-signals-and-complex-valued-cnns)  
    标签：评分：7.0/10、query:robot
-   evidence：地标惯性SLAM与机器人状态估计
-2. [Towards Edge Intelligence via Autonomous Navigation: A Robot-Assisted Data Collection Approach](/202604/11/2604.03623v1-towards-edge-intelligence-via-autonomous-navigation-a-robot-assisted-data-collection-approach)  
+   evidence：室内机器人感知的表面材料分类
+2. [SANDO: Safe Autonomous Trajectory Planning for Dynamic Unknown Environments](/202604/12/2604.07599v1-sando-safe-autonomous-trajectory-planning-for-dynamic-unknown-environments)  
+   标签：评分：7.0/10、query:robot
+   evidence：动态未知环境下的安全轨迹规划
+3. [State and Trajectory Estimation of Tensegrity Robots via Factor Graphs and Chebyshev Polynomials](/202604/12/2604.08185v1-state-and-trajectory-estimation-of-tensegrity-robots-via-factor-graphs-and-chebyshev-polynomials)  
+   标签：评分：7.0/10、query:robot
+   evidence：机器人状态与轨迹估计
+4. [Adapting Neural Robot Dynamics on the Fly for Predictive Control](/202604/12/2604.04039v1-adapting-neural-robot-dynamics-on-the-fly-for-predictive-control)  
    标签：评分：6.0/10、query:robot
-   evidence：复杂环境下的自主导航与环境感知
-3. [HiRO-Nav: Hybrid ReasOning Enables Efficient Embodied Navigation](/202604/11/2604.08232v1-hiro-nav-hybrid-reasoning-enables-efficient-embodied-navigation)  
+   evidence：移动机器人的预测控制与动力学自适应
+5. [CoEnv: Driving Embodied Multi-Agent Collaboration via Compositional Environment](/202604/12/2604.05484v1-coenv-driving-embodied-multi-agent-collaboration-via-compositional-environment)  
    标签：评分：6.0/10、query:robot
-   evidence：具身导航与环境推理
+   evidence：多智能体具身感知与规划
 
 
 <div class="dpr-home-promo-card">
