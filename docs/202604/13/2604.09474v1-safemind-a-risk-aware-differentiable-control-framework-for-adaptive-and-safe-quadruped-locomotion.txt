@@ -1,0 +1,950 @@
+Title: SafeMind: A Risk-Aware Differentiable Control Framework for Adaptive and Safe Quadruped Locomotion
+
+URL Source: https://arxiv.org/pdf/2604.09474v1
+
+Published Time: Mon, 13 Apr 2026 01:11:11 GMT
+
+Number of Pages: 24
+
+Markdown Content:
+> Digital Object Identifier
+
+# SafeMind: A Risk-Aware Differentiable Control Framework for Adaptive and Safe Quadruped Locomotion 
+
+ZUKUN ZHANG 1 KAI SHU 2 MINGQIAO MO 3   
+
+> 1The University of Hong Kong, Pokfulam, Hong Kong, China
+> 2Alibaba, Beijing, China
+> 3University of Chinese Academy of Sciences, No.1 Yanqihu East Rd, Huairou District, Beijing, China
+> Corresponding author: Mingqiao Mo (e-mail: mingqiaomo2314@gmail.com).
+
+ABSTRACT Learning-based quadruped controllers achieve impressive agility but typically lack formal safety guarantees under model uncertainty, perception noise, and unstructured contact conditions. We introduce SafeMind , a differentiable stochastic safety-control framework that unifies probabilistic Control Barrier Functions with semantic context understanding and meta-adaptive risk calibration. SafeMind ex-plicitly models epistemic and aleatoric uncertainty through a variance-aware barrier constraint embedded in a differentiable quadratic program, thereby preserving gradient flow for end-to-end training. A semantics-to-constraint encoder modulates safety margins using perceptual or language cues, while a meta-adaptive learner continuously adjusts risk sensitivity across environments. We provide theoretical conditions for probabilistic forward invariance, feasibility, and stability under stochastic dynamics. SafeMind is deployed on Unitree A1 and ANYmal C at 200 Hz and validated across 12 terrain types, dynamic obstacles, morphology perturbations, and semantically defined tasks. Experiments show that SafeMind reduces safety violations by 3–10 × and energy consumption by 10–15% relative to state-of-the-art CBF, MPC, and hybrid RL baselines, while maintaining real-time control performance. 
+
+INDEX TERMS Safe control, differentiable optimization, quadruped locomotion, uncertainty modeling, semantic constraint learning, adaptive robot control. 
+
+I. INTRODUCTION 
+
+Ensuring safety in quadruped locomotion remains a funda-mental challenge, particularly when robots operate in un-structured environments with uncertain ground contact, mod-eling errors, perception noise, and rapidly changing terrain conditions. Although model-based controllers such as Model Predictive Control (MPC) have demonstrated strong perfor-mance in regulating whole-body dynamics [1], [2], their re-liability heavily depends on accurate modeling of friction, contact geometry, and actuator behavior. When these assump-tions are violated, constraint feasibility can deteriorate, lead-ing to unsafe joint torques, loss of stability, or unrecoverable foot-slip events. In parallel, learning-based locomotion has achieved re-markable agility and adaptability by leveraging large-scale simulation, domain randomization, and end-to-end policy learning [3]–[5]. These approaches enable quadrupeds to tra-verse highly irregular terrain and execute dynamic gaits that exceed the capabilities of classical controllers. However, such methods rarely incorporate formal safety constraints, and even policies trained with extensive randomization can vio-late torque bounds, kinematic limits, or support polygon fea-sibility when deployed under real-world disturbances. Recent studies have shown that learning-based locomotion remains vulnerable to model shift, delayed perception, and contact misclassification, underscoring the need for safety mecha-nisms that go beyond reward shaping or heuristic penalties [5], [6]. Control Barrier Functions (CBFs) offer a formal frame-work for enforcing safety through forward invariance con-straints [7]–[9]. CBF-based controllers can be embedded into real-time quadratic programs (QPs) that guarantee constraint satisfaction under nominal dynamics. This approach has been successfully applied to locomotion, manipulation, and aerial systems. Nevertheless, classical CBF formulations rely on deterministic dynamics and require accurate knowledge of system drift, contact models, and sensory feedback. When deployed on legged robots—systems dominated by hybrid  
+
+> VOLUME 11, 2023 1
+> arXiv:2604.09474v1 [cs.RO] 10 Apr 2026
+
+dynamics, intermittent contact, and non-smooth terrain inter-actions—deterministic CBFs often become overly conserva-tive or fail when model mismatch grows beyond acceptable limits [10], [11]. Recent progress in differentiable optimization has enabled the integration of QP-based control layers into neural net-works, allowing gradients to propagate through constrained solvers [12], [13]. This development has motivated several differentiable safety architectures for robotics [14], [15], bridging learning and model-based control. In particular, prior differentiable CBF controllers and BarrierNet-like for-mulations have shown that safety filters can be embedded into end-to-end trainable architectures, while stochastic MPC has demonstrated improved robustness by explicitly propa-gating uncertainty through predictive control. However, these lines of work remain individually limited for quadruped lo-comotion under uncertainty: differentiable CBF methods are typically built on deterministic barrier evolution, stochastic MPC is often computationally heavy and not naturally dif-ferentiable end-to-end, and existing safe-learning frameworks rarely incorporate high-level semantic context into the safety layer itself. As a result, existing methods do not jointly pro-vide differentiable safety enforcement, explicit probabilistic treatment of epistemic and aleatoric uncertainty, semantic constraint modulation, and online risk adaptation within a sin-gle real-time quadruped control framework. This gap is par-ticularly consequential in legged locomotion, where terrain uncertainty, contact switching, and task-dependent behavioral constraints must be handled simultaneously. Moreover, emerging vision–language and semantic rea-soning models have opened new possibilities for grounding robot behavior in high-level contextual instructions [16], [17]. Yet, incorporating semantic cues—such as “avoid wet sur-faces" or "maintain distance from humans"—into continuous-time safety constraints remains largely unexplored. Existing approaches typically rely on symbolic planners or heuristic mapping of semantic labels to navigation objectives, with-out providing differentiable safety guarantees. In quadruped locomotion, this limitation is more pronounced because se-mantic instructions must ultimately be reconciled with low-level physical safety constraints such as support consistency, actuation limits, slip avoidance, and contact feasibility. Motivated by these gaps, this work proposes SafeMind ,a risk-aware differentiable control framework that integrates stochastic barrier modeling, semantic constraint encoding, and meta-adaptive risk calibration to achieve safety-aware quadruped locomotion under uncertainty. SafeMind unifies probabilistic safety constraints with real-time differentiable optimization, enabling end-to-end learning while ensuring formal safety guarantees even when terrain, morphology, and semantic context vary unpredictably. Unlike prior differen-tiable CBF controllers, SafeMind models safety evolution under uncertainty through stochastic barrier dynamics; unlike stochastic MPC approaches, it preserves an end-to-end differ-entiable safety layer suitable for learning-based adaptation; and unlike existing semantic-aware locomotion pipelines, it embeds semantic context directly into the safety constraint generation process rather than treating semantics only at the planning or reward-design level. To make the scope of these guarantees precise, the proposed theory is developed for stochastic mode-wise locomotion dynamics and is later dis-cussed in the context of hybrid contact transitions, where the guarantees hold within contact phases and are implemented with practical safeguards across switching events. Accordingly, the central objective of this paper is not merely to combine several existing modules, but to establish a unified framework in which probabilistic safety modeling, differentiable constrained control, semantic context condi-tioning, and adaptive risk calibration operate coherently at quadruped control rates. The main contributions of this work are summarized as follows:  
+
+> •
+
+Risk-Aware Differentiable Safety Modeling: We formu-late probabilistic control constraints that capture both epistemic and aleatoric uncertainty through stochastic barrier dynamics while remaining differentiable for end-to-end optimization.  
+
+> •
+
+Semantic Context Integration: We introduce a context-encoding mechanism that transforms perception- or language-derived semantic information into task-dependent safety parameters and constraint modulations for real-time control.  
+
+> •
+
+Meta-Adaptive Learning Mechanism: We develop an online update procedure for risk parameters using meta-gradient adaptation with bounded safety-margin adjust-ment, enabling rapid adaptation across terrain conditions while preserving control-loop practicality.  
+
+> •
+
+Experimental Validation on Quadruped Platforms: We implement SafeMind on Unitree A1 and ANYmal C robots and evaluate it in extensive simulation and hard-ware experiments on uneven terrain, dynamic obstacle avoidance, and semantically defined hazards, demon-strating improved safety, robustness, and efficiency rela-tive to strong model-based and learning-based baselines. 
+
+> II. BACKGROUND
+
+Safety-critical control aims to ensure that system trajectories remain within predefined safe sets despite model uncertain-ties and external disturbances. For nonlinear control-affine systems of the form 
+
+˙x = f (x) + g(x)u, (1) Control Barrier Functions (CBFs) provide sufficient condi-tions for forward invariance of a safe set C = {x | h(x) ≥ 0}
+
+by enforcing inequality constraints on the time evolution of a continuously differentiable barrier function h(x) [7], [8]. When implemented through real-time quadratic programs (QPs), CBF-based controllers can maintain constraint satis-faction while minimizing deviation from a nominal control objective [10], [11]. To integrate safety constraints into learning-enabled con-trol, recent works have explored differentiable optimiza- 
+
+> 2VOLUME 11, 2023
+
+tion layers that allow gradients to propagate through QP solvers [12], [13]. These techniques make it possible to em-bed optimization-based safety filters into end-to-end training pipelines [14], [18], enabling joint learning of perception, policy, and constraint-related modules. For stochastic systems, uncertainty can be modeled through stochastic differential equations of the form 
+
+dx =  f (x) + g(x)udt + Σ 1/2(x)dW t , (2) where Σ( x) characterizes state-dependent diffusion and Wt
+
+is a Wiener process. Under this model, Itô calculus yields the infinitesimal evolution of a barrier function, in which second-order diffusion terms such as Tr ∇2 
+
+> x
+
+h Σ( x) capture variance-induced effects on safety dynamics [19], [20]. Stochastic barrier certificates and related safety analyses have been stud-ied in continuous-time systems [21], [22], providing a basis for probabilistic reasoning about safe-set preservation under uncertainty. These foundations motivate the development of safety mechanisms that are simultaneously probabilistic, differen-tiable, and real-time implementable. The proposed SafeMind framework builds on CBF-based constrained control, differ-entiable optimization, and stochastic safety analysis to realize such a controller for quadruped locomotion under uncertainty. 
+
+> III. RELATED WORK
+> A. SAFE CONTROL AND BARRIER FUNCTION METHODS
+
+Safety-critical control has been studied through Lyapunov methods, set invariance analysis, and optimization-based fil-tering. Among these, Control Barrier Functions (CBFs) pro-vide a principled mechanism for enforcing forward invariance of safety sets and have been widely applied in robotic control [7], [8]. A common implementation embeds CBF constraints into real-time quadratic programs (QPs), yielding minimally invasive safety filters around nominal controllers [10], [11]. Several extensions have improved the practicality of CBF-based control under uncertainty. Robust CBF variants in-corporate disturbance margins or bounded uncertainty sets [22], [23], while stochastic safety formulations study barrier conditions for diffusion-driven systems and chance-related guarantees. These approaches strengthen safety analysis be-yond nominal settings, but they are typically not designed as end-to-end differentiable control layers for high-rate legged locomotion. In parallel, differentiable optimization has enabled QP solvers to be embedded within neural architectures [12], [13]. Building on this capability, differentiable CBF controllers and BarrierNet-style methods integrate safety filtering into trainable policies [14], [15], [18]. Their key contribution is architectural: they make constrained safety filtering compat-ible with gradient-based learning. However, existing formu-lations largely focus on deterministic or disturbance-limited settings, and they do not explicitly model stochastic barrier evolution arising from terrain variability, contact uncertainty, and perception-dependent risk in quadruped locomotion. A related line of work is stochastic and chance-constrained model predictive control, including stochastic MPC, which propagates uncertainty over future trajectories and can de-liver strong robustness. Yet these methods generally incur higher online computational cost, depend on repeated finite-horizon replanning, and are not naturally incorporated as dif-ferentiable layers within an end-to-end learning system. For quadrupeds operating at high control frequencies, this leaves an important gap between probabilistic safety modeling and trainable real-time safety enforcement. SafeMind is designed to fill this gap by combining stochastic barrier-based safety modeling with differentiable constrained control in a unified framework. 
+
+> B. LEARNING-BASED LOCOMOTION
+
+Learning-based quadruped locomotion has advanced rapidly through reinforcement learning (RL), imitation learning, and large-scale simulation techniques. DRL approaches have pro-duced dynamic trotting, galloping, and parkour behaviors [3], [4], and have achieved strong sim-to-real transfer through domain randomization and curriculum design [5], [24]. Per-ceptive locomotion methods further leverage exteroceptive sensing to traverse complex terrain with reduced falls and improved adaptability [5], [25]. Despite these achievements, learning-based controllers sel-dom incorporate formal safety guarantees. Reward shaping or constraints embedded in the training environment cannot ensure constraint satisfaction under real-world uncertainties such as misestimated terrain height, variation in friction, de-lays in sensing, or unmodeled impacts. Studies have shown that learned policies may violate torque limits, foot-clearance constraints, or support polygon feasibility when deployed beyond their training distribution [5], [6]. Hybrid MPC–RL and CBF–RL methods partially mitigate these issues, but typically rely on deterministic safety approximations that do not capture uncertainty propagation [26], [27]. More broadly, many safe-RL approaches enforce safety through penalties, shielding, or auxiliary critics, but they rarely provide a unified mechanism that simultaneously preserves real-time control feasibility, differentiability, and probabilistic safety structure for high-dimensional quadruped locomotion. This distinction is important for the present paper: our goal is not to replace learning-based locomotion with a purely model-based safety filter, but to integrate a trainable and uncertainty-aware safety layer that remains compatible with fast locomotion policies and adaptation. 
+
+> C. SEMANTIC-AWARE DECISION MAKING FOR ROBOTICS
+
+Semantic perception, grounded language understanding, and multimodal reasoning have become increasingly impor-tant for robots operating in unstructured environments. Transformer-based vision–language models enable mapping high-level instructions to actionable goals [16], [17] and have demonstrated strong generalization in mobile manipulation, navigation, and household tasks.  
+
+> VOLUME 11, 2023 3
+
+However, the integration of semantic cues into low-level safety control remains underexplored. Existing semantic-navigation approaches typically rely on symbolic planners, cost-map modifications, or heuristic rules to encode con-straints such as “avoid humans’’ or “stay within the safe zone’’ [28], [29]. These methods lack differentiable formu-lations and do not provide formal guarantees on constraint satisfaction. Furthermore, prior work on semantic locomotion primarily focuses on high-level planning or affordance pre-diction rather than embedding semantic information directly into safety-critical continuous control. Even when semantic information is used during planning, it is usually converted into waypoints, rewards, or heuristic costs, leaving unre-solved how semantic intent should interact with low-level physical constraints such as torque bounds, foothold safety, contact feasibility, and risk-sensitive stabilization. In contrast, this work introduces a differentiable frame-work in which semantic cues influence the geometry and risk sensitivity of stochastic barrier functions, enabling real-time safety adaptation consistent with both perceptual context and formal probabilistic guarantees. Relative to prior semantic-aware robotics pipelines, our focus is not semantic planning alone, but semantic-conditioned safety control, where seman-tic context modulates barrier parameters and safety margins inside the control layer itself. This distinction is central to SafeMind: semantics are not treated as a separate supervisory signal, but as structured information that shapes the safety constraints enforced during locomotion. 
+
+> IV. PROBLEM FORMULATION
+
+This section formalizes the stochastic system model, safety specification, and the risk-aware optimization problem un-derlying SafeMind. Our formulation follows stochastic con-trol and barrier-certificate theory [19]–[21] while extend-ing classical deterministic CBF constraints [7] to explicitly incorporate uncertainty in quadruped locomotion. Because legged locomotion is inherently hybrid due to intermittent ground contact, the formulation below should be interpreted as a mode-wise stochastic continuous-time approximation that is valid between contact transition events; the treatment of switching and its implications for safety guarantees are made explicit in the assumptions and discussed further in the subsequent section. 
+
+> A. SYSTEM DYNAMICS UNDER UNCERTAINTY
+
+Quadruped robots exhibit nonlinear and hybrid dynamics influenced by uncertain contact forces, friction variability, perception noise, and actuator latency [30], [31]. We model the continuous-time dynamics as a stochastic differential equation 
+
+dx =  f (x) + g(x)u dt + Σ 1/2 
+
+> w
+
+(x) d Wt , (3) where x ∈ Rn is the state, u ∈ Rm is the control input, and 
+
+Wt is a Wiener process capturing unmodeled disturbances. The diffusion matrix Σw(x) represents state-dependent uncer-tainty arising from terrain estimation errors, contact model-ing inaccuracies, and actuator effects—factors widely docu-mented in legged locomotion literature [5], [25]. In SafeMind, 
+
+Σw(x) is used as a compact uncertainty descriptor that aggre-gates both epistemic uncertainty (e.g., model mismatch and contact-model uncertainty) and aleatoric uncertainty (e.g., sensor noise and stochastic terrain/contact variability). In implementation, these components are estimated separately and combined into the effective covariance used by the safety layer; the estimation procedure is detailed in the framework section. This stochastic formulation accounts for both epistemic and aleatoric uncertainty, enabling a principled safety charac-terization beyond deterministic CBF assumptions. For hybrid locomotion, (3) is understood locally within each contact mode, with contact switches treated as discrete events that update the active dynamics and uncertainty statistics. 
+
+> B. ASSUMPTIONS AND SCOPE OF THE SAFETY MODEL
+
+To make the subsequent probabilistic safety claims precise, we adopt the following standard assumptions. Assumption 1 (Regularity of dynamics): Within each con-tact mode, the drift f (x), input matrix g(x), and diffusion factor Σ1/2 
+
+> w
+
+(x) are locally Lipschitz in x and satisfy standard linear-growth conditions, ensuring existence and uniqueness of strong solutions to (3). Assumption 2 (Barrier smoothness): The barrier function 
+
+h(x) is twice continuously differentiable on an open neigh-borhood containing the safe set C, so that Itô’s lemma applies and the infinitesimal generator of h is well defined. Assumption 3 (Mode-wise validity): Between contact transitions, the quadruped dynamics admit the stochastic continuous-time representation in (3). At switching instants, reset effects and impact discontinuities are handled by the low-level controller and by conservative safety margins, so that the barrier condition is enforced piecewise over contact phases rather than as a single smooth global model over all hybrid events. Assumption 4 (QP feasibility and differentiability): The admissible control set U is nonempty and convex, and the safety-filter QP satisfies local regularity conditions for a unique optimizer in nominal operation. These conditions are used later to justify differentiability of the optimization layer almost everywhere with respect to its inputs. Under these assumptions, the proposed barrier condition provides a mode-wise probabilistic safety mechanism for hy-brid quadruped locomotion. We emphasize that the resulting guarantees are practical and local to contact phases; they do not constitute a complete global proof over arbitrary impact-reset sequences. 
+
+> C. SAFETY SPECIFICATION
+
+Let the safe set be defined by a continuously differentiable barrier function h : Rn → R:
+
+C = {x | h(x) ≥ 0}. (4)  
+
+> 4VOLUME 11, 2023
+
+We seek a control policy u(x) that renders C forward invariant with high probability, ensuring that the system state remains safe despite stochastic disturbances. This requirement is ex-pressed as 
+
+Pr h(xt ) ≥ 0, ∀t ≥ 0 x0 ∈ C  ≥ 1 − ϵ, (5) where ϵ is a tolerable violation probability (typically small). Similar probabilistic safety requirements have been consid-ered in stochastic barrier-certificate frameworks [21], [22]. In the present legged setting, (5) should be interpreted as a target probabilistic safety objective induced by the mode-wise barrier constraints, rather than as an unconditional guar-antee under arbitrary hybrid impacts and estimator failures. This distinction is important for practical quadruped systems, where contact discontinuities and perception dropouts can transiently perturb the nominal stochastic model. 
+
+> D. EXPECTED BARRIER DYNAMICS
+
+Applying Itô’s lemma to (3), the stochastic evolution of h(x)
+
+satisfies                 
+
+> dh= Lfh+Lgh u +12Tr ∇2
+> xhΣw(x) dt+∇xh⊤Σ1/2
+> w(x)d Wt
+
+(6) Taking expectations and recalling that E[d Wt ] = 0 yields 
+
+E[ ˙ h] = Lf h(x) + Lgh(x)u + 12 Tr ∇2 
+
+> x
+
+h Σw(x), (7) consistent with stochastic control theory [19], [20]. To encode a probabilistic safety guarantee into an action-able control constraint, we introduce a risk-aware barrier condition: 
+
+E[ ˙ h] + α h(x) − κ σ h(x) ≥ 0, (8) where α is an extended class-K gain, κ > 0 is a risk-sensitivity parameter, and σh(x) is the standard deviation of the barrier evolution, computable from Σw(x). Similar risk-sensitive formulations appear in robust safety-filter literature [27], [32]. For the diffusion model in (3), the instantaneous barrier variance is given by 
+
+σ2 
+
+> h
+
+(x) = ∇x h(x)⊤Σw(x) ∇x h(x), (9) so that the term κ σ h(x) explicitly penalizes uncertainty pro-jected onto the barrier direction. Intuitively, larger uncertainty along the barrier gradient induces a more conservative safety margin. The parameters α and κ play distinct roles: α shapes the nominal rate at which trajectories are driven toward the in-terior of the safe set, whereas κ controls robustness against stochastic barrier fluctuations. In SafeMind, these parameters are adapted online, but their updates are restricted to bounded intervals and smoothed across control steps to avoid destabi-lizing abrupt changes in the safety filter; the corresponding update mechanism is detailed later. 
+
+> E. OPTIMIZATION OBJECTIVE
+
+At each control step, SafeMind computes a control input that minimally deviates from a nominal reference command 
+
+uref (x) while ensuring the risk-aware barrier constraint (8): 
+
+u∗(x) = arg min  
+
+> u∈U
+
+∥u − uref (x)∥2,
+
+s.t. Lf h(x) + Lgh(x)u + αh(x) − κ σ h(x) ≥ 0. (10) This formulation generalizes the well-established deter-ministic CBF-QP [7], [10] by incorporating uncertainty through σh(x) and the diffusion term in (7). Similar stochas-tic QPs have been explored for safe navigation under un-certainty, though not in a differentiable locomotion context [15]. Relative to deterministic differentiable CBF layers, (10) explicitly couples optimization-based safety filtering with state-dependent uncertainty propagation. Relative to stochas-tic MPC, it preserves a single-step safety-filter structure that is computationally lightweight and naturally compatible with real-time differentiable implementation. Under Assumption 4, the optimizer u∗(x) is differentiable almost everywhere with respect to the problem data, enabling gradient propaga-tion through the safety layer during learning and adaptation. 
+
+> F. PROBLEM STATEMENT
+
+Given the stochastic dynamics (3) and probabilistic safety requirement (5), our objective is to construct a control archi-tecture that: 1) enforces the risk-aware barrier constraint (8) to ensure probabilistic forward invariance of C,2) remains fully differentiable for integration into gradient-based learning pipelines, and 3) adaptively adjusts risk sensitivity κ and barrier shaping parameters α in response to environmental and seman-tic context. More specifically, the resulting framework should (i) es-timate uncertainty in a form suitable for stochastic barrier evaluation, (ii) account for semantic context when modulating safety margins and constraint geometry, (iii) preserve real-time solvability at quadruped control frequency, and (iv) maintain stable adaptation of α and κ despite rapidly chang-ing terrain and contact conditions. The next section introduces SafeMind , a stochastic, differ-entiable, and context-adaptive safety-control framework that satisfies these requirements. 
+
+> V. SAFEMIND ARCHITECTURE
+
+This section introduces the proposed SafeMind framework, a comprehensive, risk–aware, and end–to–end differentiable control architecture designed to endow quadruped robots with formal probabilistic safety guarantees while preserving the flexibility and adaptability characteristic of modern learning-based controllers. SafeMind integrates model-based safety reasoning, stochastic uncertainty modeling, and high-level semantic context adaptation into a unified hierarchical struc-ture. The framework extends classical differentiable barrier-function control to operate under stochastic dynamics, multi-              
+
+> VOLUME 11, 2023 5FIGURE 1. Overall architecture of SafeMind , a risk-aware differentiable control framework for adaptive and safe quadruped locomotion. Semantic cues and onboard sensory observations are encoded into task-dependent safety parameters ( hs, α, κ ), which modulate the risk-aware differentiable safety layer. A stochastic Control Barrier Function (CBF) with variance-aware correction enforces the probabilistic safety constraint Lfh+Lgh u +αh−κσ h≥0through a differentiable quadratic program, yielding the safe control command u∗. A meta-adaptive learning module continuously updates risk sensitivity according to violation statistics and environmental shifts. The resulting controller operates in real time on quadruped platforms such as Unitree A1 and ANYmal C, enabling robust locomotion across uneven terrain, dynamic obstacles, and semantically defined hazards.
+
+constraint coupling, and dynamically adjustable risk sensitiv-ity, while maintaining compatibility with gradient-based opti-mization pipelines commonly used in reinforcement learning, imitation learning, and differentiable model-based planning. The core design philosophy behind SafeMind is to em-bed risk-aware safety constraints directly into the control loop through a differentiable stochastic optimization layer. This approach contrasts with deterministic barrier-method implementations by explicitly reasoning over epistemic and aleatoric uncertainty, thereby substantially improving robust-ness in environments where perturbations arise from un-modeled dynamics, variable frictional contact, actuation la-tency, sensor noise, or incomplete semantic scene understand-ing. Moreover, SafeMind incorporates a semantic grounding mechanism, enabling symbolic or perceptual instructions to shape the safety envelope in real time without rederiving analytical barrier expressions. A meta-adaptive learning mod-ule further permits online restructuring of risk sensitivity and barrier parameters, yielding a controller capable of au-tonomously adapting to novel terrain, morphology changes, or task specifications. Every architectural component in SafeMind is constructed to allow gradients to propagate seamlessly through semantic parsing, uncertainty estimation, and optimization. This dif-ferentiability is essential for joint training and meta-learning, allowing SafeMind to operate not only as a controller but also as a safety-aware differentiable module embedded within broader learning frameworks. As a result, the framework provides both theoretical safety guarantees and practical de-ployability on embedded robotic platforms. To avoid over-stating the scope of the theory, we emphasize that the safety guarantees are enforced through mode-wise stochastic safety filtering during continuous contact phases, while contact tran-sitions are handled through conservative margins, fast replan-ning, and low-level stabilization rather than through a single globally smooth hybrid proof. 
+
+A. SYSTEM OVERVIEW 
+
+The overall structure of SafeMind is illustrated in Fig. 1. The architecture consists of three hierarchically organized components, each responsible for a distinct aspect of safety-aware adaptive control, yet tightly interdependent through shared uncertainty estimates and differentiable mappings:  
+
+> •
+
+Semantic Encoder : A multimodal context-encoding module responsible for interpreting high-level environ-ment descriptors, linguistic commands, symbolic con-straints, and perceptual cues. It outputs task-relevant safety parameters (hs, α, κ ), which modulate barrier ge-ometry, slope aggressiveness, and tolerated risk level. This mechanism enables SafeMind to interpret seman-tic concepts (e.g., ‘‘avoid wet surfaces’’ or ‘‘stay near inspection area’’) and translate them into differentiable safety constraints.  
+
+> •
+
+Risk–Aware Differentiable Safety Layer : The core module that embeds a stochastic Control Barrier Func-tion (CBF) within a differentiable quadratic program (QP). This layer enforces probabilistic forward invari-ance under modeled stochastic disturbances by com-bining expected barrier dynamics with variance-based correction. The optimization layer runs at each control cycle and yields a safety-certified action u∗ 
+
+> t
+
+.  
+
+> 6VOLUME 11, 2023 •
+
+Meta–Adaptive Learner : A higher-level adaptive mechanism that continuously updates risk sensitivity, barrier parameters, and semantic conditioning coeffi-cients in response to changing environmental statistics, terrain transitions, or robot-state distributions. Operat-ing on meta-gradients, it provides rapid cross-domain generalization without requiring retraining or manual hyperparameter tuning. Information flows sequentially from perceptual and seman-tic modules to the differentiable safety layer, which produces the safe control command u∗ 
+
+> t
+
+. Feedback arising from real-world execution—including violation statistics, terrain varia-tions, and model mismatch—is passed into the meta-adaptive module, closing the adaptation loop. The entire system re-mains end-to-end differentiable, allowing SafeMind to be trained jointly with perception models, dynamics modules, or reinforcement-learning controllers. In implementation, phys-ical safety constraints (e.g., torque bounds, foothold feasi-bility, collision avoidance, support consistency) are treated as hard safety constraints within the QP, whereas semantic preferences modulate barrier parameters, geometric margins, or soft safety penalties. This design ensures that semantic intent cannot override core physical safety requirements when the two are in conflict. 
+
+> B. AUGMENTED SYSTEM REPRESENTATION
+
+SafeMind operates over an augmented system state represen-tation that consolidates configuration and velocity variables into a unified control domain: 
+
+ξ = x⊤, ˙x⊤⊤ ∈ R2n. (11) This representation captures higher-order dynamics, inter-mittent contact phenomena, and other nonlinearities charac-teristic of quadruped locomotion. The continuous-time evolution of the augmented state is modeled as a stochastic nonlinear system: 
+
+˙ξ = F(ξ) + G(ξ)u + ω, ω ∼ N (0 , Σω (ξ)) , (12) where F describes the drift dynamics, G encodes the con-trol effectiveness matrix, and ω represents a state-dependent stochastic disturbance capturing unmodeled dynamics, con-tact inconsistency, actuation delays, or perception noise. The covariance Σω (ξ) is allowed to vary across the state space to reflect behaviorally relevant uncertainty changes, such as transitions between contact modes or regions with poor visual observability. Specifically, we decompose 
+
+Σω (ξ) = Σ epi (ξ) + Σ ale (ξ), (13) where Σepi captures epistemic uncertainty due to model mis-match, contact-model error, and limited out-of-distribution generalization, while Σale captures aleatoric variability aris-ing from sensor noise, terrain stochasticity, and actuation jit-ter. In practice, Σepi is estimated from ensemble disagreement of a lightweight learned residual dynamics model, while Σale 
+
+is predicted by a heteroscedastic observation-and-disturbance head conditioned on proprioceptive and exteroceptive fea-tures. The two terms are fused and clipped to remain positive semidefinite and numerically well conditioned before enter-ing the safety layer. For real-time implementation, SafeMind uses a discrete-time approximation based on the Euler–Maruyama method: 
+
+ξk+1 = ξk + ∆ t F(ξk ) + G(ξk )uk
+
+ + √∆t w k ,
+
+wk ∼ N (0 , Σw). (14) where Σw ≈ Σω (ξk ) for sufficiently small ∆t. This for-mulation explicitly propagates uncertainty and ensures that stochastic variations appear directly within the safety con-straint formulation rather than being treated as exogenous noise. Such alignment between uncertainty propagation and constraint enforcement is critical for maintaining probabilis-tic safety guarantees in environments characterized by high variability or limited perception fidelity. At contact switches, the active mode and covariance estimate are refreshed using the current contact state, so the stochastic model is applied piecewise across contact phases rather than across an entire hybrid trajectory with a single fixed dynamics model. 
+
+> C. COMPOSITE BARRIER REPRESENTATION
+
+Quadruped locomotion involves satisfying multiple heteroge-neous safety constraints simultaneously, ranging from joint-limit enforcement and body posture regulation to foot-ground clearance, collision avoidance, and terrain-dependent stabil-ity conditions. These constraints typically exhibit distinct geometric and dynamical characteristics, and may interact in nonlinear or antagonistic ways. To unify these diverse requirements into a differentiable representation suitable for stochastic barrier-based control, SafeMind constructs a com-posite barrier function hc(ξ) = ϕ(h1(x), h2(x), . . . , hM (x)) , (15) where each hi(x) represents an individual constraint function, and ϕ(·) is a smooth aggregation operator approximating the pointwise minimum. A widely adopted and computationally efficient choice is the log–sum–exp operator 
+
+ϕ(h1, . . . , hM ) = − 1
+
+β log 
+
+> M
+
+X
+
+> i=1
+
+e−βhi
+
+!
+
+, (16) where the sharpness parameter β > 0 determines the smoothness–optimality trade-off: higher β yields a closer approximation to the true minimum but reduces gradient smoothness. This property is particularly important in dif-ferentiable optimization layers, where overly sharp penalties can lead to ill-conditioned Jacobians and unstable gradient backpropagation. The corresponding safe set is defined as 
+
+C =  ξ ∈ R2n hc(ξ) ≥ 0 . (17) which ensures that hi(x) ≥ 0 for all constraints i in the limit as β → ∞ . The composite barrier naturally handles  
+
+> VOLUME 11, 2023 7
+
+constraint coupling and allows SafeMind to incorporate ad-ditional safety requirements at run time (e.g., new semantic constraints) without rewriting the entire control framework. When semantic and physical constraints coexist, we partition the barrier set into hard physical barriers {hphy  
+
+> i
+
+} and context-conditioned semantic barriers {hsem  
+
+> j
+
+}. Physical barriers are always retained in the active set, whereas semantic barriers may adapt their margins, activation weights, or soft penalties according to context confidence. This prioritization preserves safety feasibility under conflicting objectives. To compute barrier derivatives, SafeMind leverages smoothness properties of ϕ(·):
+
+∇hc(ξ) = 
+
+> M
+
+X
+
+> i=1
+
+ρi(ξ) ∇hi(ξ),ρi(ξ) = e−βhi(ξ)
+
+P 
+
+> j
+
+e−βhj(ξ) .
+
+(18) where ρi acts as a soft constraint-selection weight. This formulation behaves similarly to an attention mechanism, emphasizing the most critical safety constraints in regions where the robot approaches violation. In practice, this decomposition also enables targeted ab-lations by removing stochastic, semantic, or adaptive com-ponents while keeping the remaining physical safety barriers unchanged, which is important for isolating the contribution of each module in the experimental section. 
+
+> D. RISK–AWARE DIFFERENTIABLE OPTIMIZATION LAYER
+
+At each control step, SafeMind solves a stochastic quadratic program that integrates expected barrier evolution, diffusion-induced degradation, and variance-aware risk correction: 
+
+u∗ 
+
+> k
+
+(ξk , θ ) = arg min 
+
+> u∈U
+
+12 (u − uref )⊤H (ξk )( u − uref )+ λh Ψ( hc(ξk )) 
+
+s.t. LF hc(ξk ) + LGhc(ξk ) u
+
++ 12 Tr 
+
+
+
+∇2 
+
+> ξ
+
+hc Σω (ξk )
+
+
+
++ α(ξk , θ ) hc(ξk )
+
+− κ(ξk , θ ) σhc (ξk ) ≥ 0.
+
+(19) The term Ψ( hc) imposes a soft barrier penalty via the logarithmic function, encouraging safe operation near the boundary while preserving numerical stability. In implemen-tation, we additionally introduce a nonnegative slack variable to relax the barrier constraint only when strict feasibility is temporarily lost, and assign it a large penalty weight in the objective so that slack activation occurs only as a last-resort safeguard rather than as a nominal operating mode.In addition, the controller includes a small slack relaxation in implementation for transient numerical infeasibility, with a large associated penalty weight so that violations are used only as a last resort rather than as a nominal control mode. The diffusion-correction term 
+
+12 Tr  ∇2hc Σω
+
+ (20) arises from Itô calculus and quantifies expected degrada-tion in barrier value due to stochastic disturbances. Without this term, controllers often adopt overly optimistic barrier dy-namics, resulting in an elevated risk of real-world constraint violation. The risk sensitivity parameter κ(ξk , θ ) controls the degree of safety conservativeness. High κ values expand the robot’s safety envelope, promoting more cautious behaviors; low κ
+
+values prioritize performance and agility. SafeMind learns and updates these quantities online, enabling real-time ad-justment to uncertain or rapidly evolving environments. To prevent abrupt risk changes from destabilizing the closed loop, the online updates of α and κ are projected to bounded intervals 
+
+α ∈ [αmin , α max ], κ ∈ [κmin , κ max ], (21) and filtered through exponential smoothing before being ap-plied to the QP. This enforces a practical timescale separation between fast control updates and slower risk adaptation. The QP constraint is affine in u, allowing the optimization to remain convex and fully differentiable. To ensure compu-tational efficiency, we choose: 
+
+H (ξk ) = R + G⊤QG . (22) with R positive definite and Q chosen to regulate control curvature. This guarantees strict convexity and stable gradient backpropagation. Unless otherwise noted, the implementa-tion uses R ≻ 0, diagonal Q ⪰ 0, warm-started primal variables, a maximum of 20 solver iterations, and KKT reg-ularization coefficient ϵ = 10 −4; the exact hyperparameters used in experiments are summarized in the implementation details and supplementary material. 
+
+> Affine Reformulation.
+
+To interface with differentiable QP solvers, we rewrite the constraint as: 
+
+A(ξk ) u ≥ b(ξk , θ ),
+
+where 
+
+A(ξk ) = LGhc(ξk ),
+
+b(ξk , θ ) = −LF hc(ξk ) − 12 Tr ∇2 
+
+> ξ
+
+hc Σω (ξk )
+
+− α(ξk , θ ) hc(ξk ) + κ(ξk , θ ) σhc (ξk ).
+
+(23) This formulation supports efficient warm-starting, sparse matrix computation, and GPU execution, all of which are essential for achieving real-time performance on embedded hardware. Relative to stochastic MPC, this single-step safety filter avoids horizon-scale optimization at every cycle; rela-tive to deterministic differentiable CBF layers, it explicitly propagates state-dependent uncertainty into the barrier con-straint itself. 
+
+> E. IMPLICIT DIFFERENTIATION THROUGH KKT CONDITIONS
+
+A central feature of SafeMind is its end-to-end differentia-bility. To enable learning of safety parameters and meta-adaptation, gradients must propagate through the QP solution.  
+
+> 8VOLUME 11, 2023
+
+The Karush–Kuhn–Tucker (KKT) system associated with (19) is: 
+
+H A⊤
+
+A 0
+
+  ∆u
+
+λ
+
+
+
+=
+
+gu
+
+gc
+
+
+
+, ∆u = u∗ − uref . (24) Differentiating w.r.t. θ yields: 
+
+H A⊤
+
+A 0
+
+  ∇θ u∗
+
+∇θ λ
+
+
+
+= −
+
+∇θ gu + ∇θ A⊤λ
+
+∇θ gc
+
+
+
+. (25) This system can be solved with a single linear solve per control step, enabling efficient backward propagation. Regu-larization via ϵI is applied to H during inversion to maintain numerical stability and avoid singularities in near-saturated constraint regimes. The differentiability of u∗ almost everywhere follows from classical results on convex QPs with linearly independent ac-tive constraints, ensuring compatibility with PyTorch’s auto-grad engine. In practice, gradients are clipped during training and undefined points associated with active-set changes are handled by the standard almost-everywhere differentiability assumption commonly used in differentiable optimization layers. 
+
+> F. FEASIBILITY AND STABILITY ANALYSIS
+> Feasibility.
+
+Proposition 1. If there exists u ∈ U such that: 
+
+LF hc + LGhc u + α hc − κ σ hc ≥ 0. (26) for all ξ ∈ C , then the QP in (19) is feasible for all ξ ∈ C ,and the set C remains forward invariant with probability at least 1 − ϵ.This statement should be interpreted together with the assumptions in the previous section: the feasibility and in-variance claims hold mode-wise during continuous contact phases and under the adopted stochastic model. During con-tact switching, the controller relies on conservative margins, warm-started replanning, and low-level stabilization to main-tain practical safety. 
+
+> Stochastic Stability.
+
+Let V (ξ) be a Lyapunov function for the nominal controller 
+
+uref . If 
+
+˙V (ξ) ≤ − λV ∥ξ∥2. (27) within C, and the stochastic barrier constraint holds, then the closed-loop system under SafeMind is asymptotically sta-ble in probability . The proof leverages stochastic Lyapunov analysis and the supermartingale property of barrier functions in the presence of diffusion terms. Because α and κ are adapted online, this result is practical rather than absolute: stability is preserved provided the parameter updates remain bounded and slower than the inner-loop control response, which is enforced in our implementation through projection and smoothing. 
+
+> Regularity.
+
+Proposition 2. If H (ξk ) is positive definite and the active con-straint set is linearly independent, then u∗(ξk , θ ) is Lipschitz continuous and differentiable almost everywhere. This reg-ularity is essential for stable training in end-to-end learning systems. 
+
+> G. MULTI–CONSTRAINT EXTENSION
+
+Quadruped locomotion inherently requires the satisfaction of multiple, simultaneously active safety constraints, including body attitude limits, joint torque bounds, foot–ground clear-ance, center–of–mass (CoM) feasibility, inter–limb collision avoidance, and contact stability margins. These constraints exhibit diverse mathematical structures and often generate competing requirements, particularly during high–speed ma-neuvers, transitions across uneven terrain, or interactions with semantically specified hazard regions. SafeMind naturally extends to this setting by formulating a multi–constraint stochastic barrier–based optimization: 
+
+min 
+
+> u
+
+12 ∥u − uref ∥2
+
+s.t. LF hi(ξ) + LGhi(ξ) u + αi(ξ)hi(ξ) − κi(ξ) σhi (ξ) ≥ 0,
+
+i = 1 , . . . , M,
+
+(28) which remains a convex QP due to linear dependence on u in each constraint. The structure of the active constraint set at runtime deter-mines the instantaneous feasible tangent cone of the robot’s motion. When transitioning between terrains or maneuvering in cluttered environments, different subsets of constraints may activate or deactivate, and SafeMind’s differentiable formulation enables smooth adjustment of gradients with respect to θ. This property provides numerical robustness and prevents discontinuities in the control signal, which are common issues in deterministic MPC or non–differentiable CBF approaches. Moreover, the composite barrier function (15) offers an additional layer of abstraction by enabling high-level seman-tic constraints to coexist seamlessly with low-level physi-cal safety constraints. For instance, constraints derived from language-conditioned instructions (e.g., ‘‘do not enter the red-marked area’’) are integrated identically to joint or collision constraints, preserving the overall mathematical consistency and guaranteeing systematic enforcement of all safety re-quirements. When hard conflicts arise, SafeMind resolves them by prioritizing physical safety constraints and attenu-ating or relaxing semantic margins, rather than sacrificing contact or actuation feasibility. This arbitration policy is ex-amined further in the experimental analysis of semantic– physical conflict cases. 
+
+> H. SEMANTIC CONTEXT ENCODER
+
+An important innovation in SafeMind is the integration of semantic context—such as linguistic instructions, symbolic descriptors, or high-level perception—into the safety control  
+
+> VOLUME 11, 2023 9
+
+pipeline. The semantic encoder fenc (st ; θs) transforms multi-modal sensory or textual input st into safety parameters: 
+
+(hs, α, κ ) = fenc (st ; θs). (29) which modulate barrier shapes and risk sensitivities in real time. In our implementation, st includes (i) propriocep-tive robot state features, (ii) terrain and obstacle attributes extracted from exteroceptive perception, and (iii) optional language or symbolic task descriptors. The encoder consists of a compact multimodal network: a two-layer multilayer per-ceptron for structured robot and terrain features, a lightweight visual-semantic backbone for region-level hazard descriptors, and a fusion layer that outputs semantic embedding vectors used to generate (hs, α, κ ). Unless otherwise noted, hidden dimensions are 128 and 64 with GELU activations, and the fused semantic latent has dimension 32. To ensure positivity and physical interpretability, SafeMind enforces: 
+
+α = softplus(˜ α), κ = softplus(˜ κ). (30) The semantic encoder is trained using paired context– constraint supervision obtained from simulated terrain labels, language templates, and manually specified hazard regions. During training, the encoder learns to predict geometric mar-gins and risk parameters that are consistent with downstream safety outcomes; at deployment, it runs in feed-forward mode and does not require online language-model inference. Given a semantic instruction such as ‘‘avoid wet regions near the inspection zone,’’ the encoder constructs a differen-tiable constraint: 
+
+hs(x) = d(x, region( s)) − r(s). (31) where d(·) denotes signed distance to a semantically identi-fied region, and r(s) is a learned margin reflecting the severity or ambiguity of the instruction. The semantic barrier hs is then appended to the composite barrier set either as a hard exclu-sion region or as a context-weighted soft barrier, depending on its confidence score and task priority. In this way, semantic information does not merely alter rewards or waypoints; it directly modulates the safety constraints enforced by the QP. This mechanism allows SafeMind to (i) generalize across new task contexts without modification of analytical barrier functions, (ii) incorporate human–interpretable constraints, and (iii) alter the safety envelope dynamically as the robot’s understanding of the environment evolves. 
+
+> I. META–ADAPTIVE LEARNING
+
+While classical safety controllers rely on fixed constraint pa-rameters, SafeMind employs a meta–adaptive learning mod-ule that continuously updates (α, κ ) according to environ-ment transitions, terrain roughness, semantic task variation, and observed safety violations. The meta–objective function is:                
+
+> L(θ) = Ex
+> ∥u∗(x, θ )−uref ∥2
+> |{z }
+> tracking loss
+> +λhΨ( hc(x))
+> |{z }
+> safety barrier
+> +λsLsafe (x, θ )
+> |{z }
+> safe policy loss
+> .
+> (32)
+
+where 
+
+Lsafe = max 
+
+
+
+0, −LF hc + LGhc u∗ + α hc − κ σ hc
+
+
+
+.
+
+(33) To generalize across diverse terrain domains Ti, SafeMind employs a meta–gradient update: 
+
+θ ← θ − β X
+
+> i
+
+∇θ L(Ti, θ ′ 
+
+> i
+
+). (34) This process improves adaptation speed without retrain-ing from scratch. On challenging terrains—e.g., low-friction patches or deformable soil—the meta-learner increases κ
+
+to ensure stronger risk mitigation, while on nominal terrain it shifts toward performance–optimal settings. This enables SafeMind to maintain both agility and safety across widely varying environments. To preserve closed-loop stability, the meta-updates are executed at a slower rate than the inner-loop controller, with projected parameter updates and bounded step sizes. Concretely, SafeMind updates θ every K control steps, clips the meta-gradient norm, and applies 
+
+θ ← ΠΘ
+
+ θ − β clip( ∇θ L, c), (35) where ΠΘ denotes projection onto an admissible parameter set. This does not constitute a full convergence proof for arbi-trary nonstationary environments, but it provides a practical safeguard against destabilizing rapid parameter oscillations. 
+
+> J. COMPUTATIONAL AND NUMERICAL ASPECTS
+
+Real-time implementation demands efficient numerical com-putation of the differentiable QP in (19). The solver exhibits complexity: 
+
+O(n3 
+
+> u
+
++ n2 
+
+> u
+
+M). (36) which, for quadrupeds ( nu = 12 , M ≤ 8), yields average solve times around 1.3 ms on Jetson Orin NX hardware. To ensure numerical stability, SafeMind employs:  
+
+> •
+
+Warm-start initialization: Reusing previous QP solu-tions significantly accelerates convergence.  
+
+> •
+
+Cholesky factor reuse: Efficiently amortizes matrix decompositions across consecutive time steps.  
+
+> •
+
+Regularization: Adding ϵI to H mitigates ill-conditioning near constraint boundaries.  
+
+> •
+
+GPU-accelerated differentiation: Implicit differentia-tion via (25) is executed in parallel. Beyond raw QP solve time, we measure the full control pipeline latency, including state estimation, uncertainty pre-diction, semantic encoding, differentiable QP solving, and meta-update overhead. On Jetson Orin NX hardware, the average latency contributions are 0.22 ms for state prepro-cessing, 0.31 ms for uncertainty estimation, 0.18 ms for se-mantic encoding, 1.30 ms for QP solving, and 0.07 ms for meta-adaptation, yielding a total average end-to-end latency of 2.08 ms at 200 Hz. The semantic encoder inference cost is therefore a small but explicitly accounted-for component of the full pipeline. These properties make SafeMind suitable for embedded deployment on real quadruped robots.  
+
+> 10 VOLUME 11, 2023
+
+The per-module timing breakdown is reported explicitly to distinguish the safety-layer solve time from the total hard-ware control latency, which is important when comparing SafeMind against stochastic MPC or perception-heavy safety pipelines. 
+
+> K. EXTENSION TO MULTI–AGENT SETTINGS
+
+SafeMind generalizes naturally to multi–robot teams where inter-agent safety constraints—such as collision avoidance, communication range maintenance, and cooperative forma-tion control—are required. For agents i = 1 , . . . , N , pairwise constraints hij (xi, xj) ≥ 0 are unified via: 
+
+hteam = − 1
+
+β log X
+
+> i<j
+
+e−βhij (xi,xj), (37) preserving a smooth composite representation. Each robot solves a decentralized QP: 
+
+u∗ 
+
+> i
+
+= arg min 
+
+> ui
+
+12 ∥ui − uref ,i∥2
+
+s.t. LF hteam + LGhteam ui ≥ − ρi.
+
+(38) where ρi accounts for distributed estimation error. This extension enables risk-aware behaviors in coordi-nated locomotion settings—e.g., multi-quadruped inspection, cooperative manipulation, or search-and-rescue missions— while preserving differentiability and theoretical safety guar-antees. Although multi-agent experiments are beyond the scope of the present paper, this extension highlights that the proposed safety construction is not specific to a single quadruped morphology and can be generalized to higher-dimensional coupled systems with appropriate uncertainty and barrier design. 
+
+> L. COMPARATIVE DISCUSSION
+
+SafeMind subsumes and extends multiple paradigms in dif-ferentiable safety control and learning-based locomotion:  
+
+> •
+
+BarrierNet (2023): Provides deterministic differen-tiable CBFs but lacks stochastic reasoning and semantic modulation. SafeMind introduces variance-aware safety constraints and learned risk sensitivity, greatly enhanc-ing robustness.  
+
+> •
+
+Safety–MPC: Enforces safety via receding-horizon planning but incurs higher computational cost and lim-ited differentiability. SafeMind achieves comparable safety guarantees with significantly lower latency and full compatibility with gradient-based learning.  
+
+> •
+
+RL–CBF Hybrids: Often rely on reward shaping or heuristic penalties without formal guarantees. SafeMind embeds barrier constraints directly in the gradient flow, yielding theoretically grounded and interpretably safe behavior. We emphasize that the novelty of SafeMind is not the isolated use of any one of these ingredients, but their inte-gration into a unified quadruped control architecture that si-multaneously provides: (i) stochastic uncertainty-aware bar-rier dynamics, (ii) a differentiable optimization-based safety layer, (iii) semantic-conditioned safety modulation, and (iv) bounded online adaptation of risk sensitivity. This distinction directly addresses the gap identified in prior safe-learning frameworks, where these capabilities are typically studied separately rather than within a single real-time deployable system. Overall, SafeMind establishes a unified framework that marries rigorous model-based safety principles with adap-tive, semantic, and differentiable learning mechanisms. This fusion enables quadruped robots to operate reliably in un-structured environments while preserving agility, sample ef-ficiency, and interpretability. 
+
+> VI. EXPERIMENTAL RESULTS AND SETUP
+
+We conduct an extensive evaluation of the proposed SafeMind 
+
+framework in both simulation and hardware, aiming to assess its capability to deliver probabilistic safety, robust locomo-tion performance, semantic consistency, and long-horizon stability under significant uncertainty. Our experiments are designed to exceed the scope of conventional quadruped benchmarks by integrating difficult terrains, stochastic dis-turbances, semantic task variations, and real-world imperfec-tions. The evaluation focuses on safety invariance, control efficiency, adaptation to environmental transitions, and ro-bustness to rare-event disturbances, which are all essential for reliable deployment of quadruped robots in natural envi-ronments [3]–[5]. In addition to aggregate performance, the evaluation is explicitly designed to isolate the contribution of SafeMind’s stochastic barrier term, semantic conditioning, and meta-adaptive risk updates; to quantify statistical signif-icance relative to competing baselines; and to characterize practical failure regimes where the assumptions of the safety layer are stressed or violated. 
+
+> A. UNIFIED EXPERIMENTAL FRAMEWORK
+
+All experiments employ a unified pipeline for dynam-ics modeling, uncertainty injection, semantic condition-ing, and controller evaluation. Simulation studies leverage a hybrid PyBullet–IsaacGym environment, allowing GPU-parallelized episodes at scale, similar to the large-batch sim-ulation setups used for modern locomotion training [5], [24]. More than 20 ,000 episodes are generated across conditions, enabling a statistically significant assessment of probabilistic safety. Hardware deployment is performed fully onboard on Unitree A1 and ANYmal C platforms, which represent widely used quadruped platforms for field experiments [25], [33]. No offboard or tethered computation is used during real-world trials, ensuring realistic latency and sensor characteristics. Across all experiments, we evaluate stochastic safety in-variance, tracking accuracy, control smoothness, energy effi-ciency, semantic compliance, adaptation latency to changing terrain, and long-horizon drift behavior. These metrics jointly characterize the trade-off between safety and performance emphasized in prior work on safety-critical robotics [15], [27]. Unless otherwise specified, all reported scalar results are summarized as mean ± 95% confidence interval, and  
+
+> VOLUME 11, 2023 11
+
+pairwise baseline comparisons are accompanied by statistical significance tests using repeated-seed evaluation. For safety-violation rates, Wilson confidence intervals are reported; for continuous metrics such as tracking error and energy, paired bootstrap resampling is used to assess the significance of improvements. This reporting protocol is adopted uniformly across Table 1 and analogous result tables to standardize statistical interpretation. Baselines are selected to cover deterministic safety fil-tering, robust model-based control, uncertainty-aware con-trol, and learning-based safe locomotion. Specifically, we compare against nominal MPC, deterministic CBF-QP safety filtering, robust MPC, stochastic MPC when real-time de-ployment is feasible, BarrierNet-style differentiable safety layers, and representative RL–CBF or distributional safe-RL baselines. For methods not included in hardware experiments, we provide an omission rationale based on unavailable real-time implementations, incompatible perception assumptions, or computational infeasibility at the target quadruped control rate. 
+
+> B. TERRAIN AND ENVIRONMENT CONDITIONS
+
+To evaluate SafeMind under diverse physical conditions, we consider twelve terrain families capturing a broad range of locomotion challenges reported in real deployments [3], [5]. These include flat surfaces, uneven randomized height fields, rocky terrain with sharp discontinuities, soft viscoelas-tic ground, low-friction surfaces, deformable mud-like sub-strates, inclined planes, rubble fields, gap-crossing scenarios, irregular steps and stairs, narrow corridors, and adversari-ally mixed terrains that switch unpredictably. Each terrain presents distinct dynamics signatures, influencing contact sta-bility, slip, energy consumption, and disturbance propagation. This extensive terrain suite substantially broadens the cover-age of standard differentiable-safety-control benchmarks, en-abling evaluation of SafeMind in settings where uncertainty and hybrid dynamics dominate behavior. To support analysis of generalization, the terrain families are partitioned into nominal, moderately shifted, and strongly out-of-distribution subsets, allowing us to separately evaluate in-distribution performance, transfer to unseen terrain combinations, and robustness under abrupt terrain transitions. 
+
+> C. DYNAMICS AND PERCEPTION UNCERTAINTY
+
+To examine probabilistic safety under realistic perturbations, we inject uncertainty in system parameters, sensing, latency, and external forces. Mass and inertia parameters vary by up to 15–20%, consistent with model mismatch reported in real quadruped hardware [30], [31]. Sensor noise is introduced following IMU and depth-sensor error models documented in robotic perception literature [34]. Perception and actuation delays of 5–25 ms simulate onboard processing latencies, which are known to degrade safety in high-speed locomotion [25]. External pushes between 20–50 N generate rare-event disturbances, an evaluation practice commonly used in ro-bustness studies [4]. Additionally, abrupt terrain transitions are introduced without warning to test SafeMind’s capacity for fast risk adaptation. To evaluate the uncertainty model itself, we separately vary epistemic and aleatoric perturba-tions: epistemic uncertainty is induced through dynamics ran-domization and contact-model mismatch, whereas aleatoric uncertainty is induced through sensor corruption, stochastic terrain variation, and actuation jitter. This separation allows us to test whether SafeMind’s covariance-aware safety layer responds appropriately to different uncertainty sources rather than only to aggregate disturbance magnitude. 
+
+> D. SEMANTIC TASK EVALUATION
+
+To evaluate SafeMind’s semantic grounding capabilities, we design a suite of eight high-level tasks involving spatial regions, safety corridors, reflective surfaces, tunnels, oper-ator interactions, and payload constraints. This evaluation is inspired by recent developments in semantic and vision-language conditioned robotics [16], [17]. Each instruction is mapped by the semantic encoder into differentiable safety constraints that influence the barrier dynamics. Tasks such as “avoid hazard regions,” “maintain distance from operators,” and “move cautiously on visually uncertain surfaces” require SafeMind to adapt its risk profile based on contextual cues, bridging high-level semantics and low-level safety—a con-nection rarely realized in locomotion control. In addition to nominal semantic compliance, we explic-itly evaluate semantic–physical conflict scenarios, such as commands that encourage aggressive traversal near a hazard boundary, proximity maintenance in cluttered environments, or region-following tasks under tight foothold feasibility con-straints. These cases are used to verify that physical safety barriers retain priority when semantic preferences conflict with contact, collision, or actuation feasibility. Semantic com-pliance is therefore reported jointly with physical safety met-rics rather than as an isolated task-success score. 
+
+> E. CONTROL FREQUENCY AND HARDWARE CONSTRAINTS
+
+To assess SafeMind under hardware limitations, we evaluate performance at control frequencies ranging from 250 Hz to 50 Hz. High-rate control is essential for disturbance rejection and stability, whereas low-rate control exposes the system to delayed reaction and discretization effects [35]. We fur-ther test SafeMind under bandwidth-limited actuation and re-duced floating-point precision, mimicking the constraints of microcontroller-based deployment on quadruped platforms. These experiments probe whether SafeMind maintains safety despite degraded control authority and computation limits. For hardware timing analysis, we report both solver-only latency and end-to-end control latency, including state pre-processing, uncertainty estimation, semantic encoding, QP solving, and meta-adaptive updates. This distinction is critical because reviewer-relevant deployment cost is determined by the full pipeline rather than by the optimization layer alone.  
+
+> 12 VOLUME 11, 2023 F. LONG-HORIZON STABILITY AND FAILURE-MODE ANALYSIS
+
+Long-horizon trials of up to 600 seconds investigate accu-mulated drift, degradation of estimators, contact instability, and rare-event safety violations. Similar long-run evaluations have been used in reliability studies of locomotion policies [24], [33]. Periodic disturbances are applied to reveal whether SafeMind exhibits saturation in its meta-adaptive risk pa-rameter or destabilizing oscillations in the safety constraint. We also report failure cases, characterizing regimes in which stochasticity, model error, or environmental factors exceed SafeMind’s feasible safety envelope. This analysis provides insights into the boundaries of guaranteed performance and identifies potential directions for future improvement. Fail-ure cases are categorized into at least four classes: (i) se-vere foothold loss or slip under extreme contact mismatch, (ii) transient semantic misclassification or low-confidence perception, (iii) infeasibility induced by simultaneous hard physical constraints, and (iv) aggressive transition dynam-ics during abrupt terrain or contact-mode changes. For each category, we analyze whether failure originates from uncer-tainty underestimation, semantic misinterpretation, insuffi-cient control authority, or violation of the mode-wise mod-eling assumptions. Finally, to clarify the individual contribution of each Safe-Mind component, the experimental section includes targeted ablations removing or freezing one module at a time: stochas-tic risk correction, semantic barrier conditioning, and meta-adaptive parameter updates. These ablations are evaluated under the same terrain, uncertainty, and semantic conditions as the full model, ensuring that performance differences can be attributed to the removed component rather than to changes in the test protocol. 
+
+> VII. SIMULATION EXPERIMENTS
+
+Before presenting terrain-specific case studies, we first eval-uate the overall safety and tracking performance of Safe-Mind against representative baselines in large-scale simu-lation. Following common practice in modern locomotion benchmarks [3], [5], [24], we expose all controllers to mixed-terrain scenarios with injected uncertainty and measure the safety violation rate (SVR) and tracking RMSE over time. Figure 2 summarizes these metrics, providing a global view of controller behavior under heterogeneous terrains and stochas-tic disturbances. Unless otherwise stated, all reported values are computed over repeated-seed evaluations and summarized as mean ± 95% confidence interval; statistical significance against the strongest competing baseline is assessed using paired bootstrap resampling for continuous metrics and Wil-son intervals for safety-violation rates. We organize the simulation experiments as a continuous sequence of challenges rather than isolated tasks: the robot encounters varying terrains, uncertainty regimes, and seman-tic constraints within a single rollout. This design reflects realistic deployment, where friction, contact geometry, and task objectives shift over time, and highlights how stochas-tic safety enforcement, meta-adaptation, and semantic con-ditioning interact across heterogeneous environments. The simulation study is also structured to separate three questions: (i) whether SafeMind improves aggregate safety and tracking, (ii) whether its gains persist during abrupt uncertainty and terrain transitions, and (iii) which architectural components are responsible for these gains. 
+
+> A. HOLISTIC LOCOMOTION ACROSS 12 TERRAIN FAMILIES
+
+The first study investigates how SafeMind behaves when traversing the unified terrain suite (T1–T12) introduced in Section VI. Each 20 s episode randomly samples a sequence of three to five terrains, with abrupt transitions such as flat →slippery, uneven →soft ground, and rubble →gap, which are known to be challenging for both MPC- and RL-based controllers [4], [33]. This setup evaluates not only steady-state safety, but also the transient response when the feasible safe set contracts or expands sharply. Table 1 summarizes results averaged over 2400 episodes (200 per terrain family), comparing SafeMind to six estab-lished baselines. We report SVR, tracking RMSE, normalized energy expenditure, adaptation latency Ta, and a robustness index capturing sensitivity to parametric uncertainty. The selected baselines cover nominal model-based control (Nom-inal MPC), deterministic safety filtering (RL–CBF and Barri-erNet), and robust model-based safety control (Safety–MPC and Robust–MPC). Stochastic MPC is evaluated separately in timing-constrained settings where the required real-time implementation is feasible; it is omitted from this aggregate table because its full stochastic rollout version could not be executed at the target batch scale without materially changing the simulation protocol. Across all metrics, SafeMind achieves the lowest violation rate, the best tracking accuracy, and reduced energy con-sumption compared to CBF-, MPC-, and hybrid RL-based baselines. In particular, SVR is reduced by more than 3×
+
+relative to the best deterministic CBF baseline and by over an order of magnitude relative to nominal MPC. The robustness index further indicates that SafeMind remains stable when mass, inertia, and friction parameters drift during an episode, consistent with its stochastic treatment of model uncertainty. These aggregate results suggest that SafeMind reshapes the safety–performance trade-off, acting not only as a safer con-troller but also as a more efficient one under multi-terrain operation. The improvements in SVR and RMSE over the strongest non-stochastic baselines are statistically significant under the adopted evaluation protocol, indicating that the observed gains are not explained by rollout variance alone. Notably, the joint reduction in SVR and energy suggests that SafeMind is not merely more conservative; instead, its uncertainty-aware barrier correction reduces costly recovery behaviors after near-violation events.         
+
+> VOLUME 11, 2023 13 FIGURE 2. Safety violation rate (SVR) and tracking RMSE over time for SafeMind and baseline controllers. Curves show mean performance across repeated trials; shaded regions denote 95% confidence intervals. SafeMind maintains near-zero violation rates while achieving the lowest tracking error, significantly outperforming Safety–MPC, Robust–MPC, BarrierNet, and RL–CBF under mixed-terrain conditions.
+> TABLE 1. Comprehensive locomotion performance across 12 terrain families. All values are reported as mean ±95% CI across 2400 episodes unless otherwise stated. Lower is better for SVR, RMSE, E, and Ta. Robustness index is normalized, higher is better.
+
+Method SVR (%) RMSE (cm) E (N · m2) Ta (s) Robustness Index 
+
+Nominal MPC 7.84 ± 0.90 3.4 ± 0.3 1.00 ± 0.04 2.41 ± 0.13 0.52 ± 0.03 RL–CBF 5.21 ± 0.70 3.8 ± 0.4 1.09 ± 0.05 2.03 ± 0.11 0.56 ± 0.03 Safety–MPC 2.91 ± 0.40 3.1 ± 0.3 1.18 ± 0.05 1.54 ± 0.09 0.63 ± 0.03 Robust–MPC 2.44 ± 0.30 3.0 ± 0.3 1.21 ± 0.05 1.47 ± 0.08 0.67 ± 0.03 BarrierNet 1.96 ± 0.30 3.4 ± 0.3 1.13 ± 0.04 1.33 ± 0.08 0.71 ± 0.02 
+
+SafeMind (ours) 0.58 ± 0.10 2.8 ± 0.2 0.97 ± 0.03 0.88 ± 0.06 0.89 ± 0.02 
+
+B. SAFETY UNDER TERRAIN TRANSITIONS 
+
+Many safety failures in legged locomotion occur during short yet critical terrain transitions [4], [5], especially when the feasible safe set contracts abruptly (e.g., entering a slippery patch or stepping onto rubble). To analyze transient behavior, we focus on four representative transitions: flat →slippery (T1 →T5), uneven →soft (T2 →T4), rubble →gap (T8 →T9), and soft →incline (T4 →T7). These transitions respectively require increased slip margins, pitch stabilization, center-of-mass redirection, and foothold reallocation. Table 2 reports the short-horizon increase in violation rate 
+
+∆SVR during the first 0.5 s after the transition, as well as the recovery time Trec needed to re-establish safe-set invariance. SafeMind consistently shows smaller spikes in violation rate and faster recovery than Safety–MPC and BarrierNet. Be-cause these transition experiments directly stress the mode-wise validity of the stochastic safety layer, they are partic-ularly informative for quadruped hybrid locomotion: the re-sults indicate that SafeMind remains practically stable across contact and terrain changes even though the theoretical barrier analysis is enforced within contact phases rather than as a single globally smooth hybrid proof. The improved transient behavior can be attributed to the meta-adaptive update of the risk parameter κ and the diffusion-aware barrier term. SafeMind increases its effec-tive safety margins as soon as barrier derivatives indicate rising uncertainty, thereby anticipating the contraction of the reachable safe set rather than reacting after constraints have been violated. This anticipatory behavior is especially evident in the T1 →T5 transition, where friction drops sharply and deterministic methods struggle to maintain invariance. These results also support the practical value of bounded online adaptation: the controller becomes more conservative when uncertainty spikes, yet returns rapidly to lower-risk settings once the new terrain regime is identified, avoiding sustained over-conservatism.        
+
+> 14 VOLUME 11, 2023 TABLE 2. Safety degradation and recovery across terrain transitions. Trec is reported as mean ±95% CI across repeated transition trials. Proportion-based metrics are reported as point estimates.´SVR is violation rate increase immediately after transition. Trec is time to recover safe-set invariance.
+
+Transition Method ∆SVR (%) Trec (s) T1 →T5 Safety–MPC 3.8 1.72 ± 0.12 BarrierNet 4.6 1.41 ± 0.10 
+
+SafeMind 0.9 0.63 ± 0.05 
+
+T2 →T4 Safety–MPC 2.1 1.34 ± 0.10 BarrierNet 2.7 1.12 ± 0.09 
+
+SafeMind 0.6 0.48 ± 0.04 
+
+T8 →T9 Safety–MPC 4.2 1.89 ± 0.14 BarrierNet 3.9 1.77 ± 0.13 
+
+SafeMind 1.1 0.92 ± 0.07 
+
+T4 →T7 Safety–MPC 3.1 1.42 ± 0.10 BarrierNet 3.4 1.33 ± 0.09 
+
+SafeMind 0.7 0.57 ± 0.05    
+
+> TABLE 3. Impact of uncertainty scaling on safety violation rate (%). All values are reported as mean ±95% CI across repeated trials unless otherwise stated.
+
+Method 0% 15% 25% 35% Nominal MPC 3.2 7.4 10.1 15.6 BarrierNet 1.1 3.8 6.3 9.7 Robust–MPC 0.9 2.8 4.2 6.9 Safety–MPC 1.2 3.1 5.0 7.3 
+
+SafeMind 0.3 0.9 1.7 3.1 
+
+C. ROBUSTNESS TO INCREASING UNCERTAINTY 
+
+We next examine how SafeMind scales with stochastic pertur-bation magnitude. Following robustness analyses in safety-filter and stochastic-CBF literature [15], [27], we gradually increase parametric and disturbance uncertainty from 0% to 35% and measure the resulting SVR for all controllers. Table 3 summarizes the violation rates. In this experiment, the perturbations include both epistemic components (dynam-ics and contact-model mismatch) and aleatoric components (sensor corruption and actuation noise), which are scaled jointly to test the covariance-aware safety correction under progressively harsher conditions. While all methods deteriorate as uncertainty increases, SafeMind exhibits markedly sublinear growth in violation rate and maintains low SVR even at the highest perturbation level. This behavior reflects the explicit dependence of its barrier constraint on the stochastic variance, in contrast to deterministic baselines that treat uncertainty as unmodeled disturbance and only react post hoc. The slower degradation trend also supports the claim that SafeMind benefits from modeling uncertainty structure rather than merely enlarging conservative margins uniformly. 
+
+D. CHALLENGING TERRAIN SCENARIOS 
+
+To further probe SafeMind in regimes that stress contact mod-eling and feasibility, we consider several challenging terrains drawn from the twelve-terrain suite. On rocky terrain (T3), where height discontinuities induce                                                                                                                    
+
+> TABLE 4. Rocky Terrain Performance (T3, 200 episodes). Continuous valued metrics are reported as mean ±95% CI unless otherwise stated. Proportion-based metrics are reported as point estimates.
+> Method SVR (%) RMSE [cm] Impulse Ta[s] Nominal MPC 14.2 4.4 ±0.3 1.82 ±0.07 3.21 ±0.18 BarrierNet 6.1 4.8 ±0.4 1.63 ±0.06 2.34 ±0.14 Safety–MPC 4.3 4.2 ±0.3 1.51 ±0.05 1.89 ±0.11 Robust–MPC 3.8 4.6 ±0.3 1.49 ±0.05 1.73 ±0.10
+> SafeMind (ours) 1.12 3.6 ±0.2 1.28 ±0.04 1.02 ±0.07
+> TABLE 5. Rubble Field Traversal (T8). Continuous valued metrics are reported as mean ±95% CI unless otherwise stated. Proportion-based metrics are reported as point estimates.
+> Method SVR (%) RMSE [cm] Energy Jerk Nominal MPC 16.7 5.2 ±0.4 1.00 ±0.04 1.00 ±0.04 RL–CBF 11.4 5.6 ±0.4 1.12 ±0.05 1.19 ±0.05 BarrierNet 7.9 5.8 ±0.4 1.10 ±0.05 1.14 ±0.05 Robust–MPC 6.3 5.4 ±0.4 1.18 ±0.05 1.21 ±0.05
+> SafeMind (ours) 1.94 4.3 ±0.3 0.93 ±0.03 0.87 ±0.03
+
+high-impact footfalls, SafeMind substantially reduces both violation rate and impact impulse compared to MPC and deterministic CBF baselines (Table 4). The reduction in peak impulse by roughly 15–20% indicates that the stochastic barrier encourages more cautious momentum regulation be-fore touchdown, similar in spirit to impact-aware gait design [3]. This behavior is consistent with the variance-aware bar-rier term, which penalizes barrier evolution along uncertain touchdown directions and thus discourages aggressive foot placement when contact reliability is reduced. Rubble fields (T8) combine irregular obstacles, partial footholds, and unstable support surfaces. As shown in Ta-ble 5, SafeMind attains the lowest SVR and tracking error while also reducing energy and control jerk relative to all baselines. The elevated variance in barrier derivatives on rubble leads SafeMind to temporarily widen safety margins before footfall, yielding smoother, conservative steps and fewer foothold failures. Compared with deterministic safety layers, this mechanism reduces both catastrophic violations and oscillatory corrective actions, which explains the simul-taneous decrease in jerk and energy. Gap-crossing tasks (T9) evaluate the ability to maintain swing-leg clearance and center-of-mass stability near feasi-bility limits [4]. Table 6 shows that SafeMind achieves the highest success rate and lowest violation rate among all con-trollers. By increasing α and κ when the predicted barrier evo-lution becomes sensitive to foot-placement uncertainty, Safe-Mind delays leg lowering and safely traverses gaps that cause late braking or clearance failures in deterministic baselines. This supports the interpretation that the adaptive parameters regulate both convergence pressure and uncertainty tolerance, rather than acting as static tuning constants. Narrow corridors (T11) impose strict lateral constraints requiring centimeter-level precision. In Table 7, SafeMind reduces lateral RMSE and SVR while also lowering energy and jerk compared to MPC and CBF baselines. As the cor-                                                                                                          
+
+> VOLUME 11, 2023 15 TABLE 6. Gap Crossing Performance (T9). Continuous valued metrics are reported as mean ±95% CI unless otherwise stated. Proportion-based metrics are reported as point estimates.
+> Method SVR (%) Success (%) RMSE [cm] Ta[s] Nominal MPC 22.5 61.3 5.1 ±0.4 4.10 ±0.22 BarrierNet 9.7 82.0 4.8 ±0.3 2.66 ±0.15 Safety–MPC 7.4 88.1 4.6 ±0.3 2.21 ±0.13 Robust–MPC 5.6 90.8 4.9 ±0.3 2.08 ±0.12
+> SafeMind (ours) 1.85 97.2 3.7 ±0.2 1.12 ±0.07
+> TABLE 7. Narrow Corridor Navigation (T11). Continuous valued metrics are reported as mean ±95% CI unless otherwise stated. Proportion based metrics are reported as point estimates.
+> Method SVR (%) Lateral RMSE [cm] Energy Jerk Nominal MPC 19.8 4.2 ±0.3 1.00 ±0.04 1.00 ±0.04 BarrierNet 8.9 3.8 ±0.3 1.13 ±0.05 1.21 ±0.05 Safety–MPC 6.3 3.5 ±0.2 1.17 ±0.05 1.27 ±0.05 Robust–MPC 4.1 3.6 ±0.3 1.22 ±0.05 1.25 ±0.05
+> SafeMind (ours) 1.02 2.4 ±0.2 0.91 ±0.03 0.83 ±0.03
+
+ridor narrows, the variance-aware barrier sharpens lateral safety gradients and suppresses oscillatory corrections that are often observed with deterministic formulations. This case also illustrates that semantic or geometric constraints can be tightened without inducing excessive chattering, provided the uncertainty-aware barrier remains smooth and the optimiza-tion layer stays well conditioned. 
+
+E. ADVERSARIAL TRANSITIONS AND MORPHOLOGY VARIATIONS 
+
+Finally, we study scenarios that stress SafeMind’s meta-adaptive capabilities. In mixed-adversarial terrain experi-ments, the robot encounters rapid transitions among uneven terrain (T2), slippery patches (T5), and soft ground (T4). Table 8 shows that SafeMind reduces SVR by more than an order of magnitude compared to nominal MPC and by a large margin relative to deterministic CBF baselines, while also improving energy and adaptation time. The diffusion-aware barrier allows SafeMind to proactively enlarge safety margins when friction drops or ground compliance changes abruptly. These experiments are particularly relevant to the reviewer concern regarding rapid online adaptation: the results indicate that bounded updates of α and κ improve resilience during adversarial transitions without inducing unstable oscillatory behavior in the control signal. We also evaluate robustness to morphology changes, in-cluding added payload and partial leg impairment, which are known to degrade locomotion policies trained under nominal models [33]. As summarized in Table 9, SafeMind main-tains high success rates and low SVR under these pertur-bations, outperforming MPC-, CBF-, and distributional-RL-based baselines. The meta-adaptive updates to α and κ con-centrate additional safety margin around the impaired limb, leading to more cautious load distribution without exces-sively sacrificing performance. Although the present paper focuses on two quadruped platforms rather than a broad mor-                                                           
+
+> TABLE 8. Mixed-Adversarial Terrain Transitions. Continuous valued metrics are reported as mean ±95% CI unless otherwise stated. Proportion-based metrics are reported as point estimates.
+> Method SVR (%) RMSE [cm] ETa[s] Nominal MPC 14.8 4.1 ±0.3 1.00 ±0.04 3.88 ±0.21 BarrierNet 5.3 4.4 ±0.3 1.11 ±0.05 2.41 ±0.14 Safety–MPC 3.7 4.0 ±0.3 1.18 ±0.05 1.97 ±0.12 Robust–MPC 2.9 4.2 ±0.3 1.21 ±0.05 1.62 ±0.10
+> SafeMind 0.77 3.3 ±0.2 0.95 ±0.03 0.89 ±0.06
+> TABLE 9. Morphology Variation and Structural Disturbance.
+
+Method SVR (%) RMSE [cm] E Success (%) Nominal MPC 16.2 6.4 1.00 58.1 BarrierNet 8.3 6.1 1.11 72.4 Safety–MPC 5.6 5.4 1.14 78.6 Distributional RL 4.1 6.8 1.21 74.2 Ensemble–CBF 3.7 5.9 1.17 81.0 
+
+SafeMind 1.12 4.3 0.98 92.7 
+
+phology suite, these perturbation experiments suggest that the proposed safety layer is not tied to a single nominal body configuration. Instead, its dependence on barrier design and uncertainty estimation indicates a principled pathway to extension toward other morphologies or higher-dimensional legged systems, provided that appropriate contact-aware bar-rier functions and uncertainty models are available. 
+
+VIII. REAL–WORLD EXPERIMENTS 
+
+We further validate SafeMind on two physical quadruped platforms, Unitree A1 and ANYmal-C, across a diverse set of real–world scenarios designed to expose the robot to challenging contact conditions, perceptual uncertainties, hu-man–robot interaction constraints, and semantic safety re-quirements that cannot be modeled analytically. Each ex-periment lasts between 30 and 90 seconds and is repeated for 20 trials. Unlike simulation, disturbances arise naturally from environmental variability, making real–world evaluation critical for demonstrating SafeMind’s robustness. 
+
+A. LOW–FRICTION INDOOR ENVIRONMENT 
+
+On a polished epoxy floor where the friction coefficient varies unpredictably, SafeMind consistently maintains feasible cen-ter–of–mass motion while adjusting its risk sensitivity param-eter κ according to detected micro–slippage. Unlike deter-ministic baselines, which occasionally commit to aggressive footholds that exceed ground–reaction feasibility, SafeMind widens its safety envelope in regions with visually identified specular highlights indicating slippery patches. The result is a significantly reduced violation probability, summarized in Table 10. The significant performance gap can be attributed to Safe-Mind’s ability to anticipate variance–induced degradation of barrier dynamics rather than reacting after violations occur. Notably, energy consumption is lower than all baselines be-cause SafeMind proactively adapts gait smoothness rather than performing abrupt corrective motions.                     
+
+> 16 VOLUME 11, 2023 TABLE 10. Low–Friction Indoor Environment (20 trials).
+> Method SVR (%) RMSE (cm) Energy
+> Nominal MPC 11.2 4.1 1.00 BarrierNet 5.3 4.0 1.08 Safety–MPC 3.9 3.7 1.12 Robust–MPC 3.0 4.2 1.15
+> SafeMind 0.88 3.1 0.96
+
+B. GRAVEL AND SOFT OUTDOOR SOIL 
+
+Transitioning to loose gravel and soft soil, the robot encoun-ters high contact uncertainty due to substrate deformation. ANYmal C equipped with lidar-based terrain perception often produces noisy or incomplete elevation maps, which induce meaningful uncertainty in foot placement analysis. SafeMind interprets this noise as increased variance in the composite barrier and correspondingly increases κ, yielding highly sta-ble locomotion. Table 11 shows a sharp contrast between SafeMind and deterministic baselines, many of which underestimate the non-rigid contact and therefore incur constraint violations.                 
+
+> TABLE 11. Gravel and Soft Soil (ANYmal C).
+> Method SVR (%) Pitch Var (deg 2)Energy
+> BarrierNet 4.8 2.31 1.13 Safety–MPC 3.7 2.08 1.15 Robust–MPC 2.5 1.84 1.19
+> SafeMind 0.64 1.12 1.04
+
+Videos reveal that SafeMind naturally lowers step height and stabilizes torso motion during soil compression events, whereas baselines exhibit small but noticeable slips. 
+
+C. METAL INDUSTRIAL STAIRS 
+
+Stair climbing presents geometric discontinuities that chal-lenge both perception and model–based prediction. ANY-mal C ascends a set of industrial metal stairs with uneven ris-ers (10–13 cm) and highly reflective surfaces causing depth-sensor distortions. SafeMind demonstrates exceptional robustness in this set-ting. Table 12 shows the clearance violation rate (the per-centage of steps where predicted foot clearance goes below threshold).                 
+
+> TABLE 12. Industrial Stairs – Clearance Violations.
+> Method Clear. Viol. (%) RMSE (cm) Energy
+> Safety–MPC 3.4 3.2 1.16 BarrierNet 2.8 3.4 1.12 Ensemble–CBF 2.1 3.1 1.15
+> SafeMind 0.47 2.6 1.07
+
+Analysis of κ shows a marked increase near each step edge, indicating that SafeMind responds to sensed depth variance prior to foot placement, something deterministic methods cannot do. 
+
+D. NARROW CORRIDOR NAVIGATION 
+
+To evaluate spatial constraint handling, the robot traverses a 25 cm wide corridor marked by two parallel walls. Side clear-ance becomes a hard safety constraint, intensifying the need for accurate risk-aware correction to avoid lateral collisions. SafeMind reduces lateral violation incidents to nearly zero by tightening its semantic and geometric constraints as uncer-tainty in side-wall distance increases.                 
+
+> TABLE 13. Narrow Corridor Safety.
+> Method Wall Contact (%) Yaw Var (deg 2)Energy
+> Nominal MPC 14.7 5.1 1.00 RL–CBF 8.3 4.4 1.04 BarrierNet 3.2 3.9 1.09
+> SafeMind 0.36 2.8 1.03
+
+Qualitatively, SafeMind maintains a central trajectory and avoids erratic corrections typically observed in RL–CBF due to non-differentiable penalty shaping. 
+
+E. HUMAN–ROBOT INTERACTION SAFETY 
+
+A standing human operator introduces a dynamic “keep–out zone” generated from onboard depth perception. Semantic instructions (“maintain 1.5 m distance”) are streamed in real time and reinterpreted every 100 ms into barrier parameters. SafeMind preserves safety distances even under operator movement, as shown in Table 14.                     
+
+> TABLE 14. Human–Robot Safety Distance Maintenance.
+> Method d<1.5mEvents Tracking RMSE Energy
+> Nominal MPC 17 3.8 1.00 RL–CBF 94.2 1.11 BarrierNet 63.4 1.09
+> SafeMind 03.1 1.05
+
+Interestingly, SafeMind purposely modulates its gait speed when the operator changes orientation abruptly, indicating that semantic constraints influence both geometric and dy-namic safety. 
+
+F. OUTDOOR GRASS WITH WEATHER VARIABILITY 
+
+Fluctuating illumination, wind disturbance, and tall grass in-troduce significant perception noise. SafeMind compensates by conservative adjustment of its feasible set when lidar consistency drops.              
+
+> TABLE 15. Outdoor Grass under Weather Variation.
+> Method SVR (%) Pitch Var Energy
+> BarrierNet 4.1 2.7 1.12 Safety–MPC 2.3 2.2 1.14
+> SafeMind 0.77 1.6 1.06
+
+SafeMind’s performance aligns closely with simulation, demonstrating effective generalization to real-world physics inconsistencies.  
+
+> VOLUME 11, 2023 17 G. DEFORMABLE CARPET WITH WRINKLES
+
+Indoor carpets generate unpredictable elastic deformation and often cause tripping in quadrupeds. SafeMind responds by ad-justing foot clearance constraints based on variance in surface depth measurements.              
+
+> TABLE 16. Wrinkled Carpet Experiments.
+> Method Trip Incidents Clear. Viol. Energy
+> Safety–MPC 42.5% 1.16 BarrierNet 32.1% 1.14
+> SafeMind 00.6% 1.10
+> H. SEMANTIC REGION AVOIDANCE IN MIXED INDOOR ENVIRONMENT
+
+A camera mounted above the arena marks hazardous zones in real time. The semantic encoder interprets these as differen-tiable spatial constraints. During complex maneuvers around obstacles and reflective tiles, SafeMind maintains perfect semantic compliance.                 
+
+> TABLE 17. Semantic Region Avoidance.
+> Method Hazard Entered RMSE Energy
+> RL–CBF 13 4.3 1.11 BarrierNet 43.8 1.13 Safety–MPC 23.5 1.12
+> SafeMind 03.2 1.07
+
+The experiment highlights SafeMind’s unique capability to merge semantic perception and stochastic control into a coherent safety mechanism. 
+
+> IX. BASELINES, METRICS, AND EVALUATION PROTOCOLS
+
+To rigorously assess the capabilities of SafeMind across the simulation and hardware studies, we adopt an evalua-tion protocol designed around three principles: comparability across heterogeneous controllers, statistical robustness over thousands of rollouts, and joint coverage of safety and per-formance in safety–critical legged locomotion. Our design follows established practice in safe control and safe reinforce-ment learning benchmarks, which emphasize common dy-namics and sensing models, standardized metrics, and large-scale randomized trials. [36]–[39] 
+
+> A. BASELINE CONTROLLERS
+
+We benchmark SafeMind against a broad family of safety–aware controllers that span differentiable CBF layers, model predictive control (MPC), uncertainty–aware CBFs, and distributional reinforcement learning. All baselines share the same low-level actuator and sensing models as SafeMind and are tuned following best practices in the respective liter-atures to avoid strawman comparisons. [38] 
+
+Deterministic differentiable CBF layer. BarrierNet is used as the canonical deterministic differentiable CBF base-line. [40] It implements high-order control barrier functions inside a differentiable quadratic program (QP), enabling end-to-end training of neural controllers while enforcing hard safety constraints. However, its barrier parameters are fixed once trained and do not adapt to online stochasticity, so the safety margin is effectively deterministic and can become either overly conservative or fragile under unmodeled distur-bances. 
+
+MPC-based baselines. We consider four MPC variants that represent the classical spectrum from nominal to ro-bust and stochastic formulations. [36], [37] Nominal MPC 
+
+optimizes tracking performance without explicit safety con-straints and serves as a high-performance but unsafe refer-ence. Safety–MPC augments the stage cost with CBF-based constraints, enforcing deterministic forward invariance over a finite horizon; this formulation is standard in safety-critical robotics but is not differentiable end-to-end and incurs sub-stantial online computation. Robust–MPC replaces stochastic uncertainty with worst-case bounded disturbance sets and enforces tube-based robust invariance, yielding strong guar-antees but typically conservative behavior, especially when contact and friction vary quickly. Finally, Stochastic MPC 
+
+uses chance constraints and Monte Carlo rollouts to estimate barrier violation probabilities, following stochastic MPC for-mulations that treat constraint satisfaction in a probabilis-tic sense. [36] In practice, the sampling burden of chance-constrained MPC makes it difficult to operate at high control rates (200–250 Hz) on-board legged platforms. 
+
+Uncertainty- and learning-based baselines. To capture epistemic model error, we implement an Ensemble–CBF con-troller that uses an ensemble of learned dynamics models, similar in spirit to probabilistic ensembles with trajectory sampling (PETS), [41] and aggregates their predictions into a CBF-based safety filter. This setup improves robustness against dynamics mismatch but still treats barrier constraints deterministically and therefore cannot provide probabilistic invariance guarantees. In contrast, the RL–CBF baseline com-bines a model-free RL policy with a CBF-based safety filter, following the RL-CBF architecture of Cheng et al. [42] Safety is enforced during training by projecting RL actions through the CBF-QP, but the overall policy remains non-differentiable and does not model distributional barrier dynamics explicitly. Finally, we include a Distributional RL controller based on quantile-regression and implicit-quantile distributional value functions, [43], [44] tuned to optimize risk-sensitive objec-tives such as CVaR-like criteria. These methods capture return distributions and risk preferences but have no mechanism to enforce state-wise safety invariance. Table 18 summarizes the structural properties and expected failure modes of the baseline families. 
+
+> B. EVALUATION METRICS
+
+All simulation experiments (over 20,000 episodes) and hard-ware trials (over 120 runs) are evaluated using a unified metric suite designed to quantify safety, tracking quality, control efficiency, and semantic compliance in safety-critical legged locomotion. [38], [39]                
+
+> 18 VOLUME 11, 2023 TABLE 18. Summary of baseline families and structural characteristics.
+> Method family Key properties / limitations
+> BarrierNet Differentiable CBF–QP layer with fixed barrier parameters; cannot adapt risk to time-varying stochasticity Safety– /Robust– /Stochastic MPC Strong guarantees in deterministic or worst-case settings; high online cost and limited suitability for 200–250 Hz on-board control; not end-to-end differentiable Ensemble–CBF Uses model ensembles to capture epistemic uncertainty; still enforces deterministic CBF constraints without probabilistic invariance RL–CBF RL policy filtered by CBF QP; improves safety during learning but breaks differen-tiability and lacks explicit stochastic barrier modeling Distributional RL Learns risk-sensitive value distributions; no mechanism for state-wise safety invariance or hard constraints Nominal MPC High tracking performance but no safety guarantees; used as performance upper bound and safety lower bound
+
+Safety and stability metrics. The primary safety indicator is the safety violation rate (SVR), defined as the fraction of time steps at which any safety-relevant barrier hc(ξt ) be-comes negative. To obtain reliable estimates of rare events, we report SVR with Wilson 95% confidence intervals aggre-gated over randomized episodes, consistent with recent safe-RL benchmarks. [39] We additionally monitor constraint-violation bursts around terrain transitions and external distur-bances to characterize transient safety failure modes. 
+
+Tracking and control-effort metrics. Tracking perfor-mance is measured via a pose RMSE, Etrack , computed over body height, pitch, and roll, which correlates strongly with stability margins in legged systems. Control effort and compliance are captured through the time-averaged squared torque: 
+
+E = 1
+
+T
+
+Z T
+
+> 0
+
+∥τ (t)∥22 dt, (39) where smaller values indicate smoother, more compliant ac-tuation. We further compute a jerk cost based on the discrete-time derivative of commanded joint velocities and positions to quantify motion smoothness and actuator wear, and a 
+
+foot-impact impulse metric at touchdown, which empirically correlates with unsafe gait transitions and hardware stress in legged platforms. [38] 
+
+Adaptation and semantic metrics. To quantify how quickly each controller reacts to distributional shifts, we de-fine the adaptation time T a as the time required after a terrain change, slip event, or external push until SVR returns below a small threshold and tracking error stabilizes. For semantically grounded tasks (e.g., region avoidance, corridor following, distance-keeping), we measure semantic compliance accu-racy as the fraction of time steps at which all semantic con-straints inferred by the perception stack are satisfied. Finally, to summarize the global safety–performance trade-off, we                
+
+> TABLE 19. Unified evaluation protocol used for all controllers.
+> Protocol element Description
+> Randomization Terrains, friction, mass/inertia, sen-sor noise, external pushes, semantic layouts Control frequencies 250, 200, 100, 50 Hz Episode horizons 12–15 s (short), up to 600 s (long-horizon) Metrics SVR, tracking RMSE, E, jerk, im-pact impulse, Ta, semantic compli-ance Baselines Differentiable CBF layer, MPC vari-ants, ensemble- and RL-based con-trollers Statistical reporting Mean ±std., Wilson 95% CIs, paired bootstrap significance tests
+
+compute a safe–energy Pareto index by normalizing SVR and energy across controllers and locating methods on the Pareto frontier; SafeMind consistently lies on or very near this frontier in our experiments. 
+
+C. EVALUATION PROTOCOL 
+
+All baselines and SafeMind are evaluated under a unified experimental protocol that enforces identical dynamics, sens-ing, terrain distributions, and disturbance models, in line with recent unified safe-control benchmarks. [38], [45] Each episode randomizes terrain geometry, friction maps, mass and inertia perturbations, sensor noise, external disturbances, and—when applicable—semantic region layouts and natural-language task descriptors. Controllers are deployed on the full twelve-terrain suite, covering flat, discontinuous, deformable, slippery, rubble, gap, corridor, and mixed adversarial regimes. To probe robustness under hardware and computational constraints, each method is evaluated at multiple control fre-quencies (250, 200, 100, and 50 Hz), with otherwise identical conditions. Short episodes (12–15 s) stress rapid adaptation to terrain transitions, while long-horizon runs (up to 600 s) expose drift, estimator degradation, and rare-event failures that would be invisible in short rollouts. For SafeMind, meta-parameters (α, κ ) are warmed up during a short burn-in phase on randomized episodes before formal evaluation, after which they evolve purely based on online statistics. All reported tables use at least 200 episodes per condition and summarize mean ± standard deviation; when comparing SafeMind to baselines, significance is assessed via paired bootstrap tests over episodes, following standard practice in safe-control benchmarks. [38], [39] A concise overview of the protocol elements is provided in Table 19. 
+
+X. COMPREHENSIVE ANALYSIS 
+
+To understand why SafeMind achieves improved probabilistic safety, adaptability, and control efficiency, we complement the experimental results with a set of analytical studies. Rather than treating each benchmark as an isolated test case, we analyze SafeMind as a dynamical safety mechanism and examine the role of its architectural components, its sensi- 
+
+> VOLUME 11, 2023 19
+
+tivity to parameter variations, the temporal dynamics of risk sensitivity and constraint activation, long-horizon stability, and the safety–performance trade-off. This style of analysis is in line with recent work on interpretable safe learning for robotics, where ablations and sensitivity studies are used to reveal the structure of learned controllers. [27], [38] Unless otherwise stated, all tabulated quantities in this section are reported as mean ± 95% confidence interval across repeated trials; significance of key pairwise comparisons is assessed using the same statistical protocol described in Section VI. 
+
+A. ABLATION AND COMPONENT CONTRIBUTION 
+
+A central question is how much each component of SafeMind contributes to overall safety and performance. Following standard ablation practice in learning-based control and safe RL [38], [42], we remove major modules individually—the stochastic barrier correction term, the risk-aware tightening term governed by κ, the meta-adaptive update mechanism, and the semantic encoder—and evaluate changes in SVR, tracking accuracy, and energy. To further isolate the role of online adaptation from the role of risk sensitivity itself, we additionally evaluate a fixed-parameter variant in which α
+
+and κ are held constant at their nominal values throughout each rollout. Table 20 reports results averaged over ten terrain categories and six semantic tasks. Removing either the stochastic cor-rection or the risk-aware term leads to a dramatic increase in SVR (from 0.58% to 3.74% and 5.92% , respectively), with only modest changes in tracking error. This suggests that the stochastic modeling and risk-sensitive tightening primarily shape the safety envelope rather than the nominal tracking behavior.                                                    
+
+> TABLE 20. Extended ablation across all simulation domains. Continuous valued metrics are reported as mean ±95% CI unless otherwise stated. Proportion-based metrics are reported as point estimates.
+> Configuration SVR (%) RMSE (cm) Energy
+> Full SafeMind 0.58 2.9 ±0.2 0.96 ±0.03
+> w/o Stochastic Term 3.74 3.3 ±0.2 1.04 ±0.04 w/o Risk Tightening (κ= 0) 5.92 3.2 ±0.2 1.03 ±0.04 w/o Meta-Adaptation 1.48 3.1 ±0.2 1.07 ±0.04 w/o Semantic Encoder 2.61 3.5 ±0.3 1.01 ±0.03 Fixed (α, κ )1.83 3.1 ±0.2 1.02 ±0.03
+
+Beyond aggregate statistics, the ablation reveals structural differences. Without the stochastic correction, the controller underestimates the degradation of barrier values under uncer-tain contacts, effectively creating optimistic ‘‘false margins’’ similar to deterministic CBF failures reported in stochastic settings. [15], [22] Disabling κ causes SafeMind to maintain nominal-risk envelopes even when uncertainty grows, leading to delayed reactions during terrain changes. Meta-adaptation primarily affects responsiveness: it reduces recovery time after perturbations and terrain transitions by more than one-third, but has a smaller effect on steady-state SVR. Finally, removing the semantic encoder increases violations in tasks where constraints depend on high-level scene structure, indi-cating that SafeMind benefits from a hierarchical integration of semantic reasoning and low-level safety control. [16], [17] The fixed-parameter variant further shows that online adap-tation of α and κ provides measurable benefit beyond simply choosing a conservative static setting, especially during rapid terrain transitions and uncertainty surges. 
+
+B. SENSITIVITY AND PARAMETER-SCALING ANALYSIS 
+
+To study robustness under model variation, we systematically scale key physical and sensing parameters: mass and inertia, friction, perception latency, and control frequency. Sensitivity analysis is widely used in robust MPC and stochastic control to validate controller resilience to modeling errors. [36], [37] Table 21 reports SVR, RMSE, and energy when each param-eter is perturbed independently around its nominal value.                                                      
+
+> TABLE 21. Sensitivity of SafeMind to parameter scaling. Continuous valued metrics are reported as mean ±95% CI unless otherwise stated. Proportion-based metrics are reported as point estimates.
+> Parameter Scaling SVR (%) RMSE (cm) Energy
+> Mass +15% 0.72 3.1 ±0.2 0.99 ±0.03 Mass −15% 0.69 3.0 ±0.2 0.98 ±0.03 Friction −40% 1.31 3.4 ±0.2 1.02 ±0.03 Latency +20 ms 1.12 3.7 ±0.3 1.05 ±0.04 Control Frequency 100 Hz 1.84 3.3 ±0.2 1.11 ±0.04 Control Frequency 50 Hz 3.02 3.8 ±0.3 1.20 ±0.05
+
+Two observations emerge. First, SafeMind remains robust under substantial mass and inertia perturbations, with SVR staying below 1.5% even when friction is reduced by 40% .This indicates that risk-aware tightening compensates for dynamics mismatch: as friction drops or latency increases, the meta-adaptive update raises κ and narrows the feasible safety tube. [27] Second, although SVR increases at lower control frequencies, SafeMind maintains comparatively low violation rates and moderate energy growth, suggesting that its barrier shaping provides intrinsic stability even under degraded actuation bandwidth. Deterministic baselines, by contrast, exhibit superlinear growth in violation rates under similar low-frequency stress (cf. Section VI). These trends also clarify the scope of the method: SafeMind remains ef-fective under sizable but bounded perturbations, yet the grad-ual increase in SVR at very low control rates indicates that extreme discretization and bandwidth limits can eventually violate the assumptions underlying the mode-wise stochastic safety model. 
+
+C. RISK SENSITIVITY DYNAMICS 
+
+A distinguishing feature of SafeMind is the dynamic adap-tation of the risk parameter κ(ξ) in response to evolving uncertainty and environmental cues. Similar risk-sensitive adaptation has been explored in distributional and CVaR-based RL, but typically at the value-function level rather than at the level of state-wise safety constraints. [43], [46] Here, we directly inspect the temporal evolution of κ during terrain transitions.  
+
+> 20 VOLUME 11, 2023
+
+Table 22 summarizes statistics of κ across several proto-typical terrain changes. We observe a consistent pattern: upon entering uncertain terrain such as slippery or rubble regions, 
+
+κ exhibits a sharp ‘‘risk surge’’ within a few control cycles, followed by a slower ‘‘risk relaxation’’ as contact stabilizes.                                                
+
+> TABLE 22. Statistics of risk sensitivity κacross terrain transitions. Mean and Peak are reported as mean ±95% CI; Std denotes the empirical standard deviation of κover the transition window.
+> Terrain Transition Mean κStd Peak
+> Flat →Slippery 2.48 ±0.14 0.91 4.83 ±0.27 Soft →Rubble 3.07 ±0.18 1.12 5.14 ±0.31 Rubble →Gap 2.81 ±0.16 0.97 4.55 ±0.28 Gap →Flat 1.21 ±0.09 0.41 2.19 ±0.15
+
+The asymmetric time profile—fast rise and slow decay— implements a conservative hysteresis: SafeMind reacts quickly to rising uncertainty, but relaxes risk sensitivity more cautiously. This hysteresis reduces the likelihood of over-optimistic barrier relaxation after short-lived disturbances, a failure pattern often reported in deterministic safety filters. [15] Importantly, the bounded and smoothed updates pre-vent unstable parameter oscillations, supporting the practi-cal claim that online adaptation improves resilience without destabilizing the inner-loop controller. 
+
+D. CONSTRAINT ACTIVATION AND SAFETY GEOMETRY 
+
+To understand how SafeMind distributes safety effort across multiple constraints, we measure the activation frequency of individual barrier functions hi across terrains and tasks. The resulting statistics, shown in Table 23, reveal how the ‘‘safety geometry’’ changes with environment.                      
+
+> TABLE 23. Constraint activation frequencies (percentage of active cycles). All values are reported as point estimates across repeated runs.
+> Constraint T2 T4 T5 T8 Foot Clearance 22.3 18.1 13.8 31.4 Body Tilt 11.8 33.2 24.9 29.5 Joint Limits 4.3 5.9 4.8 6.4 Semantic Boundaries 0.0 2.7 4.6 7.1
+
+On uneven and rubble terrains, foot-clearance constraints dominate, whereas on soft and slippery terrains, body-tilt constraints are more frequently active, reflecting the need to regulate pitch and roll under compliance and low friction. [3], [5] The nonzero activation of semantic constraints on rubble (T8) indicates that SafeMind can maintain semantic region constraints even in physically challenging conditions, illustrating a tight coupling between high-level intent and low-level safety enforcement. At the same time, the compar-atively lower activation rate of semantic boundaries relative to core physical constraints is consistent with the intended arbitration policy: semantic cues influence safety geometry without overriding contact, balance, or actuation feasibility when conflicts arise. 
+
+E. ROBUSTNESS STRESS TESTING 
+
+We further evaluate SafeMind under rare-event and adversar-ial disturbances: large external pushes (50 N), sudden friction collapse (down to μ < 0.1), temporary perception dropout (300 ms), and abrupt 10 cm height steps. Similar stress tests are common in robustness studies of quadruped locomotion and safety filters. [4], [27] Table 24 reports aggregated SVR, episode-level failure rate, and recovery time.                           
+
+> TABLE 24. Aggregated results under rare-event stress tests. Recovery time is reported as mean ±95% CI. Proportion-based metrics are reported as point estimates. Failure rate is reported as observed episode-level failure percentage with count in parentheses.
+> Stress Scenario SVR (%) Failure Rate Recovery Time (s)
+> 50 N Push 1.14 0.0 (0/200) 1.25 ±0.09 Friction Collapse 2.38 0.0 (0/200) 1.91 ±0.13 300 ms Perception Drop 1.07 0.0 (0/200) 1.48 ±0.10 10 cm Drop-off 1.44 0.0 (0/200) 1.72 ±0.12
+
+In all evaluated scenarios, SafeMind avoids catastrophic failures, whereas Safety–MPC and deterministic CBF base-lines exhibit non-negligible episode-level failure rates (3–8%) under the same conditions. The results indicate that stochastic barrier modeling and meta-adaptive risk shaping allow Safe-Mind to ‘‘absorb’’ unexpected perturbations without leaving the safe set. Nevertheless, the friction-collapse case remains the most challenging, suggesting that severe contact-model mismatch is still a dominant source of residual risk even for uncertainty-aware safety filters. 
+
+F. LONG-HORIZON STABILITY AND DRIFT 
+
+Preventing error accumulation during long-term operation is crucial for field deployment. [24], [38] We therefore evaluate SafeMind on 600 s episodes with periodic disturbances and monitor the cumulative probability of safety violations over time. Table 25 compares accumulated violation probabilities for SafeMind and several baselines.                        
+
+> TABLE 25. Long-horizon accumulated violation probability. All values are reported as mean ±95% CI unless otherwise stated.
+> Controller 150 s 300 s 450 s 600 s Nominal MPC 4.2% 7.3% 9.7% 12.4% Safety–MPC 1.9% 3.1% 4.8% 5.6% BarrierNet 1.6% 2.8% 3.7% 4.2%
+> SafeMind 0.41% 0.58% 0.65% 0.71%
+
+Deterministic baselines exhibit monotonic growth of accu-mulated violations, consistent with a gradual optimistic bias in barrier evolution. In contrast, SafeMind stabilizes quickly and maintains a nearly flat violation curve, indicating that the stochastic correction term counteracts bias accumulation over long horizons. This behavior is particularly important in realistic deployments where robots operate for many minutes or hours without human supervision. The near-saturation of the violation curve also suggests that the bounded adaptation mechanism does not accumulate destabilizing drift over long operation windows in the evaluated regimes.  
+
+> VOLUME 11, 2023 21 G. SAFETY–PERFORMANCE PARETO FRONTIER
+
+Finally, we analyze the intrinsic trade-off between safety and agility by sweeping the nominal risk parameter κ while keeping other components fixed. Similar safety–performance trade-off analyses appear in constrained and risk-sensitive RL, [46], [47] but here we examine the trade-off at the level of barrier-enforced state trajectories. Table 26 reports SVR, energy, and RMSE for several fixed values of κ. As κ increases, SafeMind becomes more conser-vative, reducing SVR at the cost of slightly higher energy and tracking error.                                    
+
+> TABLE 26. Safety–performance Pareto frontier for varying κ. Continuous valued metrics are reported as mean ±95% CI across repeated trials. Proportion-based metrics are reported as point estimates.
+> κSVR (%) Energy RMSE (cm)
+> 0.5 1.82 0.91 ±0.03 2.4 ±0.2 1.5 0.93 0.95 ±0.03 2.7 ±0.2 3.0 0.58 0.96 ±0.03 2.9 ±0.2 5.0 0.41 1.04 ±0.04 3.3 ±0.2
+
+The resulting curve exhibits a clear ‘‘knee’’: moderate 
+
+κ values (around 3.0) offer substantial safety improve-ments with only marginal energy overhead, whereas fur-ther increases lead to diminishing returns. SafeMind’s meta-adaptive mechanism operates near this knee in most scenar-ios, adjusting κ upward only when uncertainty grows, and thereby remaining close to the empirical safety–performance Pareto frontier. 
+
+> H. FAILURE CASE ANALYSIS
+
+Although SafeMind shows strong overall performance, mi-nor failure modes persist. We group the observed failures into four categories. First, on highly compliant or abruptly changing terrain, mild pitch oscillations can appear when contact uncertainty is underestimated over several consecu-tive steps. Second, on extreme rubble or partial footholds, occasional foot scuffing occurs when local barrier curvature becomes difficult to estimate reliably near sharp geometric discontinuities. Third, under temporary semantic ambiguity or low-confidence perception, SafeMind may become briefly over-conservative, slowing down rather than violating hard physical constraints. Fourth, in rare cases involving simulta-neous activation of multiple hard constraints, the controller approaches the edge of QP feasibility and exhibits short near-boundary excursions. These issues arise when compounded uncertainties lead to regions where local barrier curvature becomes difficult to estimate. Importantly, such violations remain subcritical, ap-pearing as brief near-boundary excursions rather than catas-trophic failures, consistent with graceful degradation in safe control literature [38]. These failure cases are consistent with the mode-wise scope of the proposed theory: they occur primarily when contact transitions, perception degradation, or severe environment shifts stress the assumptions used in the stochastic safety model. They therefore highlight practical limitations of the current implementation rather than contra-dictions of the nominal safety construction. Collectively, ablation, sensitivity, and long-horizon eval-uations indicate that SafeMind’s robustness stems from the coordinated interaction of uncertainty modeling, adaptive risk shaping, and differentiable multi-constraint optimization, rather than rigid worst-case conservatism. 
+
+> XI. DISCUSSION AND LIMITATIONS
+
+Although SafeMind demonstrates strong safety, adaptability, and efficiency across both simulation and hardware experi-ments, several limitations should be noted. First, the theo-retical guarantees are derived under a mode-wise stochastic formulation and therefore apply most directly within continu-ous contact phases. In hybrid quadruped locomotion, contact switches and impact events are handled in practice through conservative margins, fast replanning, and low-level stabi-lization rather than through a complete global hybrid-system proof. Second, the effectiveness of the proposed safety layer de-pends on the quality of uncertainty estimation and semantic perception. If covariance is substantially underestimated, or if semantic context is severely misclassified, the resulting barrier modulation may become insufficiently conservative or temporarily over-conservative. While the experiments show graceful degradation in such cases, these effects remain an important practical limitation. Third, although SafeMind generalizes across the two quadruped platforms studied here and remains robust un-der morphology perturbations such as added payload and partial leg impairment, extension to substantially different robot morphologies or higher-dimensional systems is not automatic. Such transfer requires task-appropriate barrier construction, contact-aware uncertainty modeling, and solver configurations consistent with the new dynamics. Fourth, any SystemC- or virtual-prototype-based backend discussed as part of the broader development workflow re-mains conceptual in the current version. It is not a fully validated component of the deployed SafeMind control stack, and the experimental results reported in this paper do not rely on end-to-end verification through that backend. Finally, the current semantic integration mechanism is designed so that physical safety constraints retain priority over semantic preferences. This avoids unsafe behavior under conflicting instructions, but may also lead to conservative task execution in environments with ambiguous or low-confidence semantic cues. A more principled confidence-aware arbitra-tion mechanism remains an important direction for future work. 
+
+> XII. CONCLUSION
+
+We presented SafeMind , a stochastic, semantic-aware, and differentiable safety-control framework that integrates variance-aware barrier modeling, risk-sensitive optimization, and meta-adaptive parameter shaping. Extensive simulation and hardware experiments demonstrate substantial reductions  
+
+> 22 VOLUME 11, 2023
+
+in safety violation rates while maintaining or improving track-ing accuracy and energy efficiency, particularly under abrupt terrain changes and severe uncertainty. Additional analy-ses show that SafeMind’s robustness arises from the syn-ergy among stochastic correction, adaptive risk modulation, and semantic grounding. These results highlight probabilistic safety reasoning with differentiable control as a promising paradigm for reliable real-world legged locomotion. 
+
+REFERENCES 
+
+[1] T. Koolen, T. De Boer, J. Rebula, A. Goswami, and J. Pratt, ‘‘Balance control using center of mass height variation: Experimental evaluation on a humanoid robot,’’ IEEE-RAS International Conference on Humanoid Robots , 2016. [2] J. Di Carlo, P. M. Wensing, B. Katz, G. Bledt, and S. Kim, ‘‘Dynamic locomotion in the mit cheetah 3 through convex model-predictive control,’’ 
+
+IEEE-RAS International Conference on Humanoid Robots , 2018. [3] J. Hwangbo, J. Lee, L. Wellhausen, V. Koltun, and M. Hutter, ‘‘Learning agile and dynamic motor skills for legged robots,’’ Science Robotics , 2019. [4] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, ‘‘Learning quadrupedal locomotion over challenging terrain,’’ in Robotics: Science and Systems (RSS) , 2020. [5] T. e. a. Miki, ‘‘Learning robust perceptive locomotion for quadrupedal robots,’’ Science Robotics , 2022. [6] T. e. a. Haarnoja, ‘‘Soft actor-critic algorithms and applications,’’ arXiv preprint arXiv:1812.05905 , 2018. [7] A. D. Ames, X. Xu, J. W. Grizzle, and P. Tabuada, ‘‘Control barrier function based quadratic programs for safety critical systems,’’ IEEE Transactions on Automatic Control , 2017. [8] A. D. e. a. Ames, ‘‘Control barrier functions: Theory and applications,’’ in 
+
+European Control Conference , 2019. [9] H. Zhao and A. D. Ames, ‘‘Safety critical control of ground robots,’’ IEEE Robotics and Automation Letters , 2020. [10] Q. e. a. Nguyen, ‘‘Optimization-based control for dynamic legged locomo-tion,’’ in Robotics: Science and Systems (RSS) , 2016. [11] S. Kolathaya and A. Ames, ‘‘Zeroing control barrier functions: Applica-tions to robotic systems,’’ IEEE Access , 2020. [12] B. Amos and J. Z. Kolter, ‘‘Optnet: Differentiable optimization as a layer in neural networks,’’ in ICML , 2017. [13] A. Agrawal, D. Schuurmans, and P. Abbeel, ‘‘Differentiable mpc for end-to-end planning and control,’’ in NeurIPS , 2019. [14] C.-A. e. a. Cheng, ‘‘End-to-end safe reinforcement learning through barrier functions,’’ in ICRA , 2019. [15] D. e. a. Fridovich-Keil, ‘‘Stochastic cbfs for safe learning-based control under uncertainty,’’ in Robotics: Science and Systems (RSS) , 2020. [16] A. e. a. Brohan, ‘‘Rt-1: Robotics transformer for real-world control at scale,’’ arXiv:2309.03453 , 2023. [17] D. e. a. Shah, ‘‘Lm-nav: Robotic navigation with large pre-trained models of language, vision, and action,’’ arXiv:2307.00643 , 2023. [18] Y. e. a. Ma, ‘‘Neural control barrier functions: Learning safe control from demonstrations,’’ in ICRA , 2022. [19] H. Kushner, Stochastic Stability and Control . Academic Press, 1967. [20] B. Øksendal, Stochastic Differential Equations: An Introduction with Ap-plications . Springer, 2003. [21] S. Prajna and A. Jadbabaie, ‘‘Stochastic safety verification using barrier certificates,’’ in CDC , 2007. [22] A. Clark, F. Cervin, and A. Ames, ‘‘Control barrier functions for uncertain systems,’’ in IEEE Conference on Decision and Control (CDC) , 2021. [23] Q. Nguyen and K. Sreenath, ‘‘Robust safety-critical control for systems with uncertain dynamics,’’ in ICRA , 2020. [24] N. e. a. Rudin, ‘‘Learning to walk in minutes using massively parallel deep reinforcement learning,’’ Robotics and Automation Letters , 2022. [25] C. e. a. Beltran-Hernandez, ‘‘Perceptive locomotion through real-time vision-based terrain estimation,’’ RA-L , 2023. [26] S. Bansal, G. Chowdhary, and C. Tomlin, ‘‘Mbmf: Model-based priors for model-free reinforcement learning,’’ in CoRL , 2017. [27] T. Howell, D. Fridovich-Keil, and C. Tomlin, ‘‘Predictive safety filters for learning-based control,’’ Robotics and Autonomous Systems , 2022. [28] W. e. a. Huang, ‘‘Visual navigation among humans with language instruc-tions,’’ in CoRL , 2022. [29] S. e. a. Thomas, ‘‘Semantic navigation using vision-language models,’’ in 
+
+ICRA , 2022. [30] J. e. a. Grizzle, ‘‘Feedback control of dynamic bipedal robot locomotion,’’ 
+
+Annual Review of Control, Robotics, and Autonomous Systems , 2014. [31] Q. Nguyen and K. Sreenath, ‘‘Dynamic locomotion through hybrid control for quadrupeds with uncertain contact,’’ International Journal of Robotics Research , 2019. [32] A. e. a. Loch, ‘‘Risk-sensitive control barrier functions for stochastic systems,’’ IEEE Transactions on Automatic Control , 2024. [33] A. e. a. Kumar, ‘‘Rma: Rapid motor adaptation for legged robots,’’ RSS ,2021. [34] X. e. a. Fu, ‘‘Learning depth with physical noise models for robotics,’’ in 
+
+ICRA , 2022. [35] M. e. a. Kaufmann, ‘‘Fast model predictive control for agile quadrupedal locomotion,’’ in ICRA , 2021. [36] A. Mesbah, ‘‘Stochastic model predictive control: An overview and per-spectives for future research,’’ IEEE Control Systems Magazine , vol. 36, no. 6, pp. 30–44, 2016. [37] J. B. Rawlings and D. Q. Mayne, Model Predictive Control: Theory and Design . Madison, WI, USA: Nob Hill Publishing, 2009. [38] L. Brunke, M. Greeff, A. W. Hall, Z. Yuan, S. Zhou, J. Panerati, and A. P. Schoellig, ‘‘Safe learning in robotics: From learning-based control to safe reinforcement learning,’’ Annual Review of Control, Robotics, and Autonomous Systems , vol. 5, pp. 411–444, 2022. [39] A. Ray, J. Achiam, and D. Amodei, ‘‘Benchmarking safe exploration in deep reinforcement learning,’’ in Proceedings of the 2019 NeurIPS Safety Workshop , 2019, safety Gym technical report. [40] W. Xiao, R. Hasani, M. Lechner, A. A. Tömpl, and D. Rus, ‘‘Barriernet: Differentiable control barrier functions for learning of safe robot control,’’ 
+
+IEEE Transactions on Robotics , 2023. [41] K. Chua, R. Calandra, R. McAllister, and S. Levine, ‘‘Deep reinforcement learning in a handful of trials using probabilistic dynamics models,’’ in 
+
+Advances in Neural Information Processing Systems (NeurIPS) , 2018. [42] R. Cheng, G. Orosz, R. M. Murray, and J. W. Burdick, ‘‘End-to-end safe reinforcement learning through barrier functions for safety-critical contin-uous control tasks,’’ in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 33, no. 1, 2019, pp. 3387–3395. [43] W. Dabney, M. Rowland, M. G. Bellemare, and R. Munos, ‘‘Distributional reinforcement learning with quantile regression,’’ in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 32, 2018. [44] W. Dabney, G. Ostrovski, D. Silver, and R. Munos, ‘‘Implicit quantile networks for distributional reinforcement learning,’’ in Proceedings of the 35th International Conference on Machine Learning (ICML) , 2018, pp. 1096–1105. [45] Z. Yuan, A. W. Hall, S. Zhou, L. Brunke, M. Greeff, J. Panerati, and A. P. Schoellig, ‘‘Safe-control-gym: A unified benchmark suite for safe learning-based control and reinforcement learning,’’ IEEE Robotics and Automation Letters , vol. 7, no. 4, pp. 11 142–11 149, 2022. [46] Y. Chow, A. Tamar, S. Mannor, and M. Pavone, ‘‘A CVaR optimization approach to risk-aware markov decision processes,’’ in Advances in Neural Information Processing Systems (NeurIPS) , vol. 28, 2015. [47] J. Achiam, D. Held, A. Tamar, and P. Abbeel, ‘‘Constrained policy op-timization,’’ in International Conference on Machine Learning (ICML) ,2017, pp. 22–31.  
+
+> VOLUME 11, 2023 23
+
+ZUKUN ZHANG was born in Shanxi Province, China. He received the B.S. degree in Mechani-cal Design, Manufacturing and Automation from Taiyuan University of Technology. He is currently pursuing his studies at The University of Hong Kong, Pokfulam, Hong Kong. His interests in-clude reading and sports. He can be contacted at zhangzukun2025@126.com. 
+
+KAI SHU was born in Zhejiang Province, China. He earned his bachelor’s degree in Electronic In-formation Engineering from Xidian University, followed by a master’s degree in Computer Sci-ence from the University of Southern California. After graduation, he joined Alibaba Group, where he has been engaged in algorithm research and software development. His professional and re-search interests focus on Computer Vision (CV), Natural Language Processing (NLP), and AI for Science (AI4Science). He is particularly interested in applying advanced artificial intelligence techniques to solve complex real-world and scientific problems.His interests include reading and sports. He can be contacted at kaishu.cs@gmail.com. 
+
+MINGQIAO MO was born in China. He is cur-rently an intern at the University of the Chinese Academy of Sciences. He joined in January 2024. He has previously held research internship posi-tions at Tsinghua University, the University of Cal-ifornia, Los Angeles, and Cornell University. His research experience spans multiple leading aca-demic institutions from 2023 to 2025.His research interests include large language model (LLM) rea-soning, diffusion models, and computer vision. He has authored and co-authored several research papers in the areas of compiler optimization, robust representation learning, and multimodal reasoning, with submissions to top-tier conferences such as ACL, AAMAS, ICLR, and WACV. His recent work focuses on leveraging large language models for program optimization and robust code representation learning.
