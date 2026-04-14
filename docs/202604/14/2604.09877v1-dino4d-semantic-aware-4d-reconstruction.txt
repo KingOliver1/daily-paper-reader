@@ -1,0 +1,208 @@
+Title: DINO_4D: Semantic-Aware 4D Reconstruction
+
+URL Source: https://arxiv.org/pdf/2604.09877v1
+
+Published Time: Tue, 14 Apr 2026 00:14:34 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+# DINO 4D: Semantic-Aware 4D Reconstruction 
+
+## Yiru Yang* University of Zurich 
+
+> yiru.yang@uzh.ch
+
+## Zhuojie Wu* University of Zurich 
+
+> zhuojie.wu@uzh.ch
+
+## Quentin Marguet EPFL 
+
+> qmarguet@ethz.ch
+
+## Max Schulthess ETH Zurich 
+
+> mschulthess@ethz.ch
+
+## Nishant Kumar Singh University of Zurich 
+
+> singhni@ethz.ch
+
+## Abstract 
+
+In the intersection of computer vision and robotic percep-tion, 4D reconstruction of dynamic scenes serve as the critical bridge connecting low-level geometric sensing with high-level semantic understanding. We present DINO 4D, introducing frozen DINOv3 features as structural priors, injecting semantic awareness into the reconstruction pro-cess to effectively suppress semantic drift during dynamic tracking. Experiments on the Point Odyssey and TUM-Dynamics benchmarks demonstrate that our method main-tains the linear time complexity O(T ) of its predecessors while significantly improving Tracking Accuracy (APD) and Reconstruction Completeness. DINO 4D establishes a new paradigm for constructing 4D World Models that possess both geometric precision and semantic understanding. 
+
+## 1. Introduction 
+
+1.1. From Static Geometry to Dynamic Perception 
+
+Human perception of the physical world is inherently four-dimensional: we not only localize objects in 3D space but also track their continuous evolution over time. This spatiotemporal continuity is the cornerstone of Embodied AI, autonomous driving, and immersive Augmented Reality (AR). Historically, computer vision has treated “3D Recon-struction” and “Motion Tracking” as disparate tasks. Tradi-tional Structure from Motion (SfM) and Multi-View Stereo (MVS) pipelines excel in static environments but often suf-fer from severe artifacts or tracking failures when applied to dynamic scenes, primarily due to the difficulty in decou-pling camera motion from object deformation [1, 2]. The advent of data-driven approaches, particularly Feed-Forward Networks (FFN), has revolutionized this land-scape. Pioneering works like St4RTrack [1] proposed a unified framework utilizing “Time-Dependent Pointmaps” to simultaneously solve reconstruction and tracking in a shared world coordinate system. Concurrently, large-scale Transformer architectures like MapAnything [2] and 
+
+VGGT [3] have demonstrated the capability to regress met-ric 3D geometry directly from multi-view images. These methods implicitly learn multi-view geometric constraints, significantly enhancing efficiency and robustness. However, existing feed-forward 4D reconstruction meth-ods face two primary challenges in complex, real-world sce-narios: • Absence of Semantic Awareness: Mainstream frame-works (e.g., St4RTrack [1], DUSt3R [4]) rely heavily on pixel-level photometric consistency or geometric repro-jection errors. These objectives optimize for geometry but ignore high-level semantic context. In textureless ar-eas (e.g., plain walls, clothing) or under rapid deforma-tion, geometric cues become ambiguous, leading to point tracking drift and topological breaks. Without semantic constraints, geometric reconstruction remains “blind” to the structural integrity of objects. • Over-smoothing and Detail Loss: While end-to-end re-gression models recover global structures efficiently, they tend to output the mean of the possible distributions to minimize L2 loss, resulting in over-smoothed geome-try. Fine-grained details—such as facial features or fabric folds—are often lost. Increasing network depth or res-olution to mitigate this incurs prohibitive computational costs. 
+
+1.2. DINO 4D: Core Concepts 
+
+To tackle these issues, we introduce DINO 4D , a frame-work designed to redefine 4D perception by imposing se-mantic understanding as an intrinsic constraint on 4D Reconstruction pipeline. Our approach integrates two key innovations: 1. Semantic Injection via DINOv3: We leverage DI-NOv3 [5], a state-of-the-art self-supervised vision trans-
+
+> arXiv:2604.09877v1 [cs.CV] 10 Apr 2026
+
+former. Unlike its predecessors, DINOv3 employs 
+
+Gram Anchoring to preserve the spatial consistency of dense features during training. By injecting these robust, semantic-rich features into our geometric backbone, we provide “semantic anchors” for dynamic tracking. Even when occlusion occurs or texture is absent, feature con-sistency guides the network to maintain correct corre-spondences. 2. Diffusion-Based Refinement: We introduce a Diffu-sionRefine module based on conditional diffusion mod-els. Instead of generating geometry from scratch, this module acts as a residual predictor, refining the coarse output of the feed-forward network. By iteratively de-noising the geometry conditioned on the input image, we recover high-frequency details that regression mod-els typically smooth out. 
+
+## 2. Related Work 
+
+2.1. Feed-Forward 4D Reconstruction 
+
+Prior to deep learning, dynamic reconstruction relied on optimization-based methods like DynamicFusion, which were computationally expensive and sensitive to initializa-tion. St4RTrack [1] marked a paradigm shift by predict-ing pairs of pointmaps to represent the scene geometry of one timestamp aligned to the camera frame of another. This unified representation allows for O(T ) inference. However, St4RTrack’s pairwise inference lacks global temporal con-text and struggles with semantic drift in long sequences. Other recent works like MapAnything [2] focus on uni-versal metric reconstruction but are primarily designed for static scenes or rigid motion, often producing ghosting ar-tifacts when encountering moving objects. VGGT [3] uti-lizes global attention for reconstruction but faces quadratic complexity scaling with sequence length. 
+
+2.2. Vision Foundation Models (VFMs) 
+
+Integrating semantic priors into geometry is a growing trend. Recent works like Ov3R [6] and Motion4D [7] have begun to explore concurrent learning of motion and open-vocabulary semantics. Similarly, DINOv3 [5] represents the latest advancement in Self-Supervised Learning (SSL). While DINOv2 was prone to feature degeneration in local patches over long training, DINOv3’s Gram Anchoring 
+
+regularizes the feature space, ensuring that dense features remain discriminative and spatially consistent. This prop-erty makes DINOv3 uniquely suited for establishing dense correspondences in 4D tracking tasks, serving as a robust descriptor that is invariant to illumination and viewpoint changes. 
+
+2.3. Diffusion in 3D Geometry 
+
+Diffusion models have expanded beyond 2D image gen-eration into 3D. Methods like Diffuse and Disperse and 
+
+Pixel-Perfect Depth demonstrate diffusion’s ability to gen-erate high-fidelity depth maps. In the point cloud domain, works like DiffRefine [8] and 3DR-DIFF [9] utilize dif-fusion for completion and densification. DINO 4D adopts a conditional diffusion strategy similar to these approaches but specifically targets the refinement of 4D pointmap tra-jectories, balancing the stability of regression with the detail of generation. 
+
+## 3. Methodology 
+
+DINO 4D is an end-to-end framework that takes an RGB video sequence V = {I1, I 2, . . . , I T } as input and predicts dense time-variant pointmaps Xt and camera poses Pt.
+
+3.1. Architecture Overview 
+
+The framework consists of three main stages: 1. Semantic-Geometric Feature Extraction: Dual-stream encoding using a lightweight geometric encoder and a frozen DINOv3 backbone. 2. Dual-Branch Prediction: A St4RTrack-based back-bone that predicts coarse tracking and reconstruction pointmaps. 3. Diffusion Refinement: A conditional diffusion module that upsamples and refines the coarse geometry. 
+
+3.1.1. Semantic Injection Adapter 
+
+We extract semantic features Fsem  
+
+> t
+
+from the frozen DINOv3 ViT-L/14 model. To fuse these with geometric features 
+
+Fgeo  
+
+> t
+
+, we employ a Semantic Injection Adapter utilizing cross-attention: 
+
+Ffused  
+
+> t
+
+= CrossAttn( Q = Fgeo  
+
+> t
+
+, K = Fsem  
+
+> t
+
+, V = Fsem  
+
+> t
+
+)+ Fgeo 
+
+> t
+
+(1) This mechanism allows the geometric stream to query high-level semantic context. For instance, knowing a surface be-longs to a “human body” (semantic) constrains the range of valid deformations (geometric). 
+
+3.2. Feed-Forward Prediction with Semantic Loss 
+
+Following St4RTrack, we utilize two branches: • Tracking Branch: Predicts iXij , the position of pixels from frame i at time j.• Reconstruction Branch: Predicts iXjj , the geometry of frame j at time j.
+
+Semantic Consistency Loss ( Lsem ): To combat seman-tic drift, we introduce a loss term that enforces consistency between the DINOv3 features of a query point and its pre-Figure 1. Overview of the proposed DINO 4D framework. Given an RGB video sequence, a frozen St4RTrack backbone predicts dual pointmaps for tracking and reconstruction. A frozen DINOv3 semantic encoder extracts patch-level semantic tokens that are injected into the geometric stream via a semantic adapter. The resulting semantic-aware representation enables consistent 4D trajectory estimation and semantic 4D reconstruction. Frozen modules are shown in blue, while trainable components are highlighted in orange. 
+
+dicted location in the target frame. 
+
+Lsem = X
+
+> p∈Ω
+
+1 − Fsem  
+
+> i
+
+(p) · Fsem  
+
+> j
+
+(Π( iXij (p))) 
+
+∥Fsem  
+
+> i
+
+(p)∥2∥Fsem  
+
+> j
+
+(Π( iXij (p))) ∥2
+
+!
+
+(2) where Π is the projection operator. This loss penalizes tracking trajectories that land on semantically dissimilar re-gions (e.g., a track drifting from a hand to a table). 
+
+3.3. Geometric Refinement via Conditional Diffu-sion 
+
+The feed-forward output Xcoarse often lacks high-frequency surface details. We formulate refinement as a conditional denoising task. The diffusion model learns to predict the residual ∆X = Xgt − Xcoarse .• Forward Process: We add Gaussian noise to the ground truth residual. • Reverse Process: The network ϵθ (zt, t, c ) predicts the noise at step t, conditioned on c = {Xcoarse , Ffused  
+
+> j
+
+}.By employing a short reverse process (e.g., K = 5 steps) during inference, we can significantly sharpen geometric details without the heavy computational cost of full gen-eration. 
+
+3.4. Joint Optimization 
+
+The total training objective combines geometric, photomet-ric, and semantic constraints: 
+
+Ltotal = λreproj Lreproj +λgeo Lgeo +λsem Lsem +λdiff Ldiff 
+
+(3) Here, Lreproj enables self-supervised adaptation on real-world videos via differentiable PnP, while Ldiff supervises the refinement module. 
+
+## 4. Experiments 
+
+4.1. Experimental Setup 
+
+• Datasets: We evaluate on Point Odyssey (PO) [10] for long-term tracking and TUM-Dynamics for real-world dynamic reconstruction. • Baselines: St4RTrack (ICCV 2025) [1], CoTracker [11] (2D tracking), MonST3R [12] (dynamic adaptation of DUSt3R [4]), and MapAnything [2]. • Metrics: Average Percent of Points within Delta (APD) for tracking accuracy; Chamfer Distance (CD) for recon-struction quality. • Implementation Details: Training follows the protocol of St4RTrack. The model is trained using the AdamW op-timizer with a learning rate of 5 × 10 −5 and batch size of 1 per GPU. For each training sample, we randomly sam-ple 24 frames with a stride of 1–6. Training is conducted on 2 NVIDIA H200 GPUs for 50 epochs. During infer-ence, the pair-wise feed-forward design maintains linear complexity O(T ) with respect to the video length. 
+
+4.2. Quantitative Results 
+
+Table 1. 3D Tracking Accuracy (APD ↑) on Point Odyssey. DINO 4D significantly outperforms baselines, particularly at tighter thresholds. 
+
+Method APD@0.1m APD@0.3m APD@0.5m 
+
+MonST3R 22.4% 48.9% 61.2% St4RTrack [1] 35.1% 67.4% 78.5% 
+
+DINO 4D 41.8% 78.1% 86.3% 
+
+DINO 4D outperforms St4RTrack by over 10% in APD@0.3m. This gain is attributed to the semantic anchors provided by DINOv3, which prevent tracking loss in tex-tureless regions where St4RTrack’s photometric loss fails. 
+
+Table 2. Reconstruction Error (Chamfer Distance ↓) on TUM-Dynamics. 
+
+Method CD (cm) 
+
+MapAnything [2] 7.53 St4RTrack [1] 6.81 DINO 4D (w/o Diffusion) 6.20 
+
+DINO 4D (Full) 5.11 
+
+The DiffusionRefine module reduces reconstruction er-ror by approximately 1.1 cm compared to the base model, validating the efficacy of generative refinement for surface recovery. 
+
+4.3. Qualitative Analysis 
+
+Visual comparisons show that while St4RTrack successfully recovers global motion, it often produces overly smooth “blob-like” shapes for human hands and faces. DINO 4D, aided by diffusion refinement, recovers distinct fingers and facial contours. Furthermore, color-coded tracking visual-izations indicate that DINO 4D maintains consistent iden-tities across long occlusion events, whereas baselines often switch identities or drift to the background. 
+
+## 5. Conclusion 
+
+This paper presents DINO 4D , a framework that unifies se-mantic understanding and geometric reconstruction for dy-namic scenes. By injecting DINOv3’s semantic priors, we robustify 4D tracking against diverse visual challenges. By integrating a conditional diffusion refinement module, we overcome the detail limitations of regression-based base-lines. DINO 4D serves as a robust foundation for next-generation 4D perception, offering a viable path toward physically grounded and semantically aware world models. Future work will focus on optimizing the inference speed of the diffusion module and exploring end-to-end training of semantic-geometric descriptors. 
+
+## References 
+
+[1] H. Feng, J. Zhang, Q. Wang, Y. Ye, P. Yu, M. J. Black, T. Darrell, and A. Kanazawa, “St4rtrack: Simultaneous 4d reconstruction and tracking in the world,” arXiv preprint arXiv:2412.02891 , 2024. 1, 2, 3, 4 [2] N. Keetha, N. M¨ uller, J. Sch¨ onberger, L. Porzi, Y. Zhang, T. Fischer, A. Knapitsch, D. Zauss, E. Weber, N. Antunes, 
+
+et al. , “Mapanything: Universal feed-forward metric 3d re-construction,” arXiv preprint arXiv:2509.13414 , 2025. 1, 2, 3, 4 [3] J. Wang, M. Chen, N. Karaev, A. Vedaldi, C. Rupprecht, and D. Novotny, “Vggt: Visual geometry grounded transformer,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 5294–5306, 2025. 1, 2 [4] S. Wang, R. Girdhar, A. Joulin, and I. Misra, “Dust3r: Geometric 3d vision made easy,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2024. 1, 3 [5] O. Sim´ eoni, H. V. Vo, M. Seitzer, F. Baldassarre, M. Oquab, C. Jose, V. Khalidov, M. Szafraniec, S. Yi, M. Ramamon-jisoa, et al. , “Dinov3,” arXiv preprint arXiv:2508.10104 ,2025. 1, 2 [6] Z. Gong, X. Li, F. Tosi, J. Han, S. Mattoccia, J. Cai, and M. Poggi, “Ov3r: Open-vocabulary semantic 3d reconstruc-tion from rgb videos,” 2025. 2 [7] H. Zhou and G. H. Lee, “Motion4d: Learning 3d-consistent motion and semantics for 4d scene understanding,” 2025. 2 [8] S. Shin, Y. He, X. Hou, S. Hodgson, A. Markham, and N. Trigoni, “Diffrefine: Diffusion-based proposal specific point cloud densification for cross-domain object detection,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , pp. 4888–4897, 2025. 2 [9] K. T. Y. Mahima, A. G. Perera, S. G. Anavatti, and M. Gar-ratt, “3dr-diff: Blind diffusion inpainting for 3d point cloud reconstruction and segmentation,” in IEEE/RSJ Interna-tional Conference on Intelligent Robots and Systems (IROS) ,pp. 7414–7421, IEEE, 2024. 2 [10] Y. Zheng, A. W. Harley, B. Shen, G. Wetzstein, and L. J. Guibas, “Pointodyssey: A large-scale synthetic dataset for long-term point tracking,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) ,pp. 19855–19865, 2023. 3 [11] N. Karaev, J. Johnson, N. Neverova, and A. Vedaldi, “Co-tracker: It is better to track together,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , 2023. 3 [12] J. Zhang, H. Feng, S. Wang, et al. , “Monst3r: A simple framework for real-time monocular 3d reconstruction,” arXiv preprint arXiv:2410.03825 , 2024. 3

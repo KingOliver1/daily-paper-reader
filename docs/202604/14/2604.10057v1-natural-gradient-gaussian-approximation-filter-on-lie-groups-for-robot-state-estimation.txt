@@ -1,0 +1,1406 @@
+Title: Natural Gradient Gaussian Approximation Filter on Lie Groups for Robot State Estimation
+
+URL Source: https://arxiv.org/pdf/2604.10057v1
+
+Published Time: Tue, 14 Apr 2026 00:33:47 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+> 1
+
+# Natural Gradient Gaussian Approximation Filter on Lie Groups for Robot State Estimation 
+
+Tianyi Zhang, Wenhan Cao, Chang Liu, Yao Lyu, and Shengbo Eben Li 
+
+Abstract —Accurate state estimation for robotic systems evolv-ing on Lie group manifolds, such as legged robots, is a prerequi-site for achieving agile control. However, this task is challenged by nonlinear observation models defined on curved manifolds, where existing filters rely on local linearization in the tangent space to handle such nonlinearity, leading to accumulated estimation errors. To address this limitation, we reformulate manifold filtering as a parameter optimization problem over a Gaussian-distributed increment variable, thereby avoiding linearization. Under this formulation, the increment can be mapped to the Lie group through the exponential operator, where it acts multiplicatively on the prior estimate to yield the posterior state. We further propose a natural gradient optimization scheme for solving this problem, whose iteration process leverages the Fisher information matrix of the increment variable to account for the curvature of the tangent space. This results in an iterative algorithm named the Natural Gradient Gaussian Approximation on Lie Groups (NANO-L) filter. Leveraging the perturbation model in Lie derivative, we prove that for the invariant ob-servation model widely adopted in robotic localization tasks, the covariance update in NANO-L admits an exact closed-form solution, eliminating the need for iterative updates thus improving computational efficiency. Hardware experiments on a Unitree GO2 legged robot operating across different terrains demonstrate that NANO-L achieves approximately 40% lower estimation error than commonly used filters at a comparable computational cost. 
+
+Index Terms —State Estimation, Lie Group, Legged Robot 
+
+I. I NTRODUCTION 
+
+Autonomous robots have become increasingly important in a wide range of applications, such as search and rescue, warehouse logistics, and manufacturing assembly. To develop motion planners and feedback controllers for these tasks, accurate estimation of the robot’s states like pose and velocity is essential [1]–[3]. The predominant architecture for robot state estimation relies on fusing data from onboard sensors, such as inertial measurement units (IMUs) and wheel or joint encoders, using a filter [4], [5]. This filtering-based approach is particularly favored for its balance of accuracy, low cost, and computational efficiency, making it suitable for real-time operation on resource-constrained platforms. 
+
+This study is supported by Tsinghua-Efort Joint Research Center for EAI Computation and Perception. Tianyi Zhang, Wenhan Cao and Yao Lyu are with the School of Vehicle and Mobility, Tsinghua University, Beijing, China (e-mail: {zhangtia24, cwh19, 
+
+}@mails.tsinghua.edu.cn, lyo.tobias@foxmail.com). Tianyi Zhang and Wen-han Cao contributed equally to this work. Chang Liu is with the College of Engineering, Peking University, Beijing, China (e-mail: changliucoe@pku.edu.cn). Shengbo Eben Li is with the School of Vehicle and Mobility and Col-lege of Artificial Intelligence, Tsinghua University, Beijing, China (e-mail: lish04@gmail.com). Corresponding Author: Shengbo Eben Li world(W) 
+
+IMU 
+
+robot(B) 
+
+Contact 
+
+sensor 
+
+Joint 
+
+encoder 
+
+Foot(F) 
+
+Motion Capture System 
+
+Fig. 1. A legged robot equipped with an IMU, joint encoders, and contact sensors is walking in an indoor environment equipped with a motion capture system. The estimated trajectory of the proposed NANO-L is closer to the ground truth than that of InEKF. 
+
+Classical filters such as the extended Kalman filter (EKF) [4] and the unscented Kalman filter (UKF) [6] have been widely used in nonlinear robotic systems for many years. However, these methods share a fundamental limitation: they assume that the state evolves in a Euclidean vector space [3], [7], [8]. In reality, the state of autonomous robots evolves on smooth manifolds known as Lie groups. For example, for the Unitree GO2 robot shown in Fig. 1, its orientation lies on the special orthogonal group SO(3) , and its pose lies on the special Euclidean group SE(3) [1], [3], [9]. Applying Euclidean filters to such non-Euclidean states ignores the underlying geometry, which can lead to singularities, con-straint violations, and instability [1], [7], [10]. This critical shortcoming has motivated extensive research into filtering algorithms that operate on manifolds. Early approaches to manifold filtering typically focus on variations of EKF. One of the earliest attempts is the multi-plicative EKF (MEKF) [11], which estimates attitude on the unit quaternion group via multiplicative error representations, naturally handling rotational constraints. Nevertheless, MEKF is not suitable for broader state representations due to its restriction to quaternion-based attitude states. A significant step toward a more general framework was the introduction of concentrated Gaussian distributions on Lie groups [12]. This concept represents uncertainty as a Gaussian-distributed perturbation vector in the group’s tangent space, while main-taining the mean on the manifold itself. Building on this for-mulation, the EKF can be applied to estimate this perturbation vector [13], [14], which is applicable to general Lie groups. 
+
+> arXiv:2604.10057v1 [cs.RO] 11 Apr 2026 2
+
+Nonetheless, the EKF’s reliance on linearization around poten-tially inaccurate state estimates can amplify errors and lead to divergence [1], [7]. To address this, a notable development is the Invariant EKF (InEKF) [7], which shows that for systems with group-affine dynamics and invariant observations, the linearization is independent of the current estimate, leading to improved convergence and stability in numerous robotic state estimation tasks [1], [5], [9], [10]. Unfortunately, the InEKF’s strict requirements on system structure limit its applicability, and its accuracy is still constrained by the first-order Taylor linearization in EKF. In parallel to the development of manifold-based EKF, recent works have also extended UKF to manifolds, capital-izing on its superior ability to handle strong nonlinearities compared to EKF [15], [16]. Brossard et al. proposed the UKF on Manifolds (UKF-M) [8], [17], which refines sigma points defined in the tangent space by applying the unscented transformation (UT) adapted for Lie groups. Its effective-ness has been demonstrated in applications such as inertial navigation and visual localization, where it achieves higher accuracy than EKF variants. However, since sigma points are defined in the tangent space while UT is performed on the Lie group, performing one UT requires four transformations between the tangent space and the group, which introduces additional computational overhead. While recent efforts have attempted to improve efficiency by performing the UT entirely in the tangent space [18], [19], this strategy depends on first-order Taylor approximations of system dynamics, thereby introducing larger linearization errors. Moreover, the UT itself can be regarded as a stochastic linear regression method, which inherently introduces certain linearization errors [16]. Thus, whether based on EKF or UKF, existing manifold filters are still fundamentally tied to local approximation schemes, either taylor expansion or UT, which can be inaccurate and computationally demanding. To address the limitations of local linearization in existing manifold filters, we propose the Natural Gradient Gaussian Approximation on Lie Groups (NANO-L) filter. Our approach formulates state estimation on Lie groups as a direct Bayesian inference problem in the tangent space and solves it through natural gradient optimization to achieve both accuracy and efficiency. Through hardware experiments on a state estima-tion task for the Unitree GO2 legged robot operating across different terrains, we demonstrate that the proposed NANO-L filter achieves over a 40% improvement in estimation accuracy on average relative to the best existing filtering algorithms, while incurring a comparable computational cost. Our main contributions are summarized as follows: 1) We reframe manifold filtering as an optimization prob-lem over the parameters of a Gaussian-distributed incre-ment variable in the tangent space and show that the optimal increment minimizes the sum of an expected likelihood term and regularization terms that penalize discrepancies in the mean, covariance, and volume be-tween the prior and posterior distributions. Under this formulation, the optimal increment is mapped from the tangent space to the Lie group via the exponential map, where it updates the prior estimate to produce the posterior state. 2) We propose a natural gradient optimization scheme for solving this problem, where each iteration leverages the Riemannian metric of the statistical manifold to account for the geometry of the tangent space. The resulting NANO-L filter avoids the approximation errors caused by local linearization in conventional EKF-based and UKF-based manifold filtering methods, thereby achiev-ing higher estimation accuracy. 3) We further prove that, for commonly used invariant observation models in robotics such as leg, wheel, and visual-inertial odometry, the covariance update of NANO-L admits an exact closed-form solution derived through the perturbation model in Lie derivative. This eliminates the need for iterative refinement, further im-proving the computational efficiency of NANO-L. The remainder of this paper is organized as follows. Section II introduces the preliminaries of Lie group theory that form the mathematical foundation of our formulation. Section III presents the system modeling for robot state estimation on Lie groups. Section IV details the design procedure of the proposed NANO-L filter. Section V provides numerical simu-lation results that validate the effectiveness of the proposed algorithm, and Section VI reports real-world experiments on a Unitree GO2 legged robot to demonstrate its practical performance. Finally, Section VII concludes the paper. II. P RELIMINARIES 
+
+This section introduces the mathematical background re-quired for developing NANO-L algorithm. We first review the fundamentals of Lie groups, including the exponential and logarithm maps, followed by the Baker–Campbell–Hausdorff (BCH) formula. We then discuss how uncertainties can be represented on Lie groups, and conclude with two important examples frequently encountered in robotics. 
+
+A. Lie Groups Theory 
+
+A matrix Lie group, denoted G, is a non-commutative group consisting of n × n matrices under matrix multiplication. It is also a smooth manifold, allowing for differential operations to be carried out on it. Each matrix Lie group corresponds to a Lie algebra g that serves as the tangent space at the group identity and captures the Lie group’s infinitesimal structure. The conversion between Lie groups and its Lie algebras can be achieved through matrix exponential exp and matrix logarithm 
+
+log operations, as 
+
+exp : g → G , log : G → g,
+
+which together define a local diffeomorphism between G and 
+
+g. Although the Lie algebra is represented by matrices of the same dimension as the group elements, it is often more convenient to work with its Euclidean space representation 
+
+Rdim g. This is achieved through the wedge and vee operators: 
+
+(·)∧ : Rdim g → g, (·)∨ : g → Rdim g.3
+
+For clarity, we adopt the following notation for the mapping between the Euclidean space and the group: 
+
+Exp : Rdim g → G , Log : G → Rdim g. (1) With this notation, the Euclidean space Rdim g will be used in place of the Lie algebra g to denote the tangent space of the Lie group throughout the remainder of the paper for simplicity. The Baker-Campbell-Hausdorff (BCH) formula plays a cen-tral role when manipulating products of Lie group elements. Consider two vectors x1, x2 ∈ Rdim g associated with different group elements [3]. When one of the vectors is small, the BCH formula provides a useful approximation for combining them: 
+
+Exp ( x1) Exp ( x2) ≈
+
+(
+
+Exp( Jl (x2)−1 x1 + x2) x1 small 
+
+Exp( x1 + Jr (x1)−1 x2) x2 small ,
+
+Exp ( x1 + x2) ≈
+
+(
+
+Exp( Jl (x2) x1)Exp( x2) x1 small 
+
+Exp( x1)Exp( Jr (x1) x2) x2 small ,
+
+(2) where Jl ∈ Rdim g×dim g and Jr ∈ Rdim g×dim g denote the left and right Jacobians of the Lie group, respectively. 
+
+B. Uncertainties on Lie Groups 
+
+State estimation requires characterizing the uncertainty of the state, which is typically assumed to be Gaussian vari-able [3], [12], [18]. In Euclidean spaces, an n-dimensional Gaussian random variable x ∼ N ( ¯ x, Σ) can be written as 
+
+x = ¯ x + ϵ, where ϵ satisfies ϵ ∼ N (0 , Σ) since Euclidean spaces are closed under addition. In contrast, Lie groups are closed under multiplication. Following the analogy with Euclidean spaces, a Gaussian random variable on a Lie group 
+
+X ∈ G can be expressed as 
+
+X = ¯XExp( ξ), ξ ∼ N (0 , Σ), (3) where ¯X ∈ G is the noise-free mean, and ξ ∈ Rdim G is a Gaussian perturbation in the tangent space. This formulation is also referred to as the concentrated Gaussian distribution on Lie group [12]. Using the mapping in (1), the group elements can be expressed as X = Exp( x) and ¯X = Exp( ¯x).Applying the BCH formula (2), we obtain 
+
+x ≈ ¯x + Jr (¯x)ξ, (4) which implies x ∼ N (¯x, Jr ΣJ⊤ 
+
+> r
+
+). Therefore, (4) character-izes the impact of a random Gaussian perturbation on the tangent space of a Lie group. These mappings, along with their uncertainty propagation, are illustrated in Fig. 2. 
+
+C. Typical Lie Groups 
+
+The 3D orientation of a rigid body forms the special orthogonal group SO(3) , defined as 
+
+SO(3) := R ∈ R3×3 | RR ⊤ = I3×3, det R = 1 ,
+
+which can be regarded as the set of all 3D rotation matrices. The Lie algebra so (3) corresponding to SO(3) is 
+
+so (3) := ϕ∧ ∈ R3×3 | ϕ ∈ R3 ,Lie Group  𝒢          
+
+> 𝑰 𝑑
+> Lie Algebra 𝔤
+> Vector Space
+> ∙∧
+> ∙∨
+> 𝟎 𝑑
+> Fig. 2. Relationship among a matrix Lie group G, its Lie algebra g, and the associated vector space Rdim G. The color-graded ellipse depicts the uncertainty distribution.
+
+where the wedge operator for SO(3) maps a vector to a skew-symmetric matrix as 
+
+ϕ∧ =
+
+
+
+0 −ϕ3 ϕ2
+
+ϕ3 0 −ϕ1
+
+−ϕ2 ϕ1 0
+
+ .
+
+Beyond orientation, state estimation in robotics often re-quires representing additional quantities such as position, velocity, and possibly landmarks in the environment [9]. When combined with attitude, these variables form another matrix Lie group, denoted as the special Euclidean group SE m(3) :
+
+SE m(3) := X =
+
+
+
+R p1 . . . pm
+
+01×3 1 . . . 0
+
+... ... . . . ...
+
+01×3 0 . . . 1
+
+ ∈ R(3+ m)×(3+ m) |
+
+R ∈ SO(3) , p1, . . . pm ∈ R3 ,
+
+where m ∈ N+ specifies the number of additional translational components. Its Lie algebra se m(3) is given by 
+
+se m(3) := 
+
+n
+
+ξ∧ ∈ R(3+ m)×(3+ m) | ξ ∈ R(3+ m)o
+
+.
+
+The wedge operator for SE m(3) takes the form as 
+
+ξ∧ =
+
+ ϕ∧ ρ1 . . . ρm
+
+0m×3 0m×1 . . . 0m×1
+
+
+
+,
+
+ϕ∧ = log( R) ∈ so (3) , ρi = Jl(ϕ)−1pi, i = 1 , . . . , m. 
+
+In addition, the adjoint matrix of SE m(3) is also a commonly used tool in state estimation, which is expressed as 
+
+Ad X =
+
+
+
+R 03×3 · · · 03×3
+
+p∧ 
+
+> 1
+
+R R · · · 03×3
+
+... ... . . . ...
+
+p∧
+
+> m
+
+R 03×3 · · · R
+
+ ∈ R(3+3 m)×(3+3 m).
+
+III. S YSTEM MODELING ON LIE GROUPS 
+
+This section presents a modeling framework for robotic sys-tems whose states evolve on Lie group manifolds. To ground our theoretical development in a practical and challenging application, we will use a legged robot state estimation task for 4
+
+illustration. This specific case was chosen for its challenging nature posed by discontinuous foot-ground contacts and po-tential measurement outliers from faulty contact detection [1], [4], [20], [21]. Specifically, this section begins by defining the key state variables on the Lie group, followed by the derivation of the state propagation model and observation models, which together form the foundation for the proposed filter design. 
+
+A. State Definition 
+
+For a legged robot, the core states of interest are its body orientation Rt ∈ SO(3) , velocity vt ∈ R3 and position 
+
+pt ∈ R3 in the world frame. In addition, to utilize forward kinematics in constructing the state estimator, the positions of the contact points between robot’s foot and ground {si,t }Li=1 
+
+are often incorporated into the state variables, where L is the number of legs. Since the propagation and observation models for each contact point are identical and independent, we represent a generic contact point by a single variable st ∈ R3
+
+without loss of generality. Collecting these components yields the full robot state, which admits a compact representation on a special Euclidean group: 
+
+Xt =
+
+ Rt vt pt st
+
+03×3 03×1 03×1 03×1
+
+
+
+∈ SE 3(3) .
+
+This formulation unifies the robot’s orientation, velocity, posi-tion, and contact information within a single group structure. 
+
+B. State Propagation Model 
+
+The state propagation model describes how the robot’s state evolves over time, driven by control inputs from an onboard IMU. The control inputs, denoted as ut ∈ R6, consist of the noisy body-frame linear acceleration ˜at ∈ R3 and angular velocity ˜ωt ∈ R3. They are corrupted by zero-mean white Gaussian noise nat ∼ N (0, Σa) and nωt ∼ N (0, Σω ), as: 
+
+˜at = at + nat , ˜ωt = ωt + nωt ,
+
+From standard IMU kinematics [1], [3], the continuous-time evolution of the pose and velocity is 
+
+ddt Rt = Rt( ˜ ωt − nω )∧,
+
+ddt pt = vt,
+
+ddt vt = Rt(˜ at − na) + g,
+
+(5) where g ∈ R3 is the gravitational acceleration. When a foot is in contact, its world-frame position is modeled as a small random walk to account for slippage: ddt st = Rtnst , where 
+
+ns ∼ N (0 , Σs) is also white Gaussian noise [1], [4], [20]. The continuous propagation model can then be compactly expressed on the Lie group as 
+
+ddt Xt = fut (Xt) + Xtn∧
+
+> t
+
+=
+
+Rt ˜ω∧ 
+
+> t
+
+Rt ˜at + g vt 03×1
+
+03×3 03×1 03×1 03×1
+
+
+
++ Xtn∧ 
+
+> t
+
+,
+
+(6) where fut : SE 3(3) → SE 3(3) is the deterministic dynam-ics function, and nt = (nωt )⊤, (nat )⊤, 03×1, (nst )⊤⊤ ∼N (0 , Qt) represents the process noise with covariance Qt =diag( Σω , Σa, 03×3, Σs). The operator diag( ·) constructs a block-diagonal matrix from its matrix-valued arguments. Fi-nally, it is worth noting that the propagation model in (6) applies universally to all rigid-body robotic systems equipped with an IMU. 
+
+C. Observation Model 
+
+The observation model defines how the system state is observed through sensors, by identifying quantities that can be both computed from the state and from sensor measurements. For legged robots, joint encoders measure the leg joint angles, denoted by ˜θt ∈ R3 for one leg, which are corrupted by Gaussian noise nθ ∼ N (0, Σθ ). Substituting the noisy joint angles into the forward kinematics function f k : R3 → R3,yields the foot contact point position relative to the robot body: 
+
+rBF ,t = f k ( ˜θt − nθ ) ≈ f k ( ˜θt) − Jfk ( ˜θt)nθ ,
+
+where Jfk ( ˜θt) ∈ R3×3 is the kinematics Jacobian matrix. The explicit forms of f k (·) and Jfk (·) are given in Appendix A. Meanwhile, the same relative position can also be expressed directly from the state variables, as 
+
+rBF ,t = R⊤ 
+
+> t
+
+(st − pt).
+
+By equating these two equivalent representations, the obser-vation model is derived as 
+
+f k ( ˜θt) = R⊤ 
+
+> t
+
+(st − pt) + Jfk ( ˜θt)nθ . (7) This equation also corresponds to the leg odometry, which provides a relative position constraint for the robot by utilizing the contact point position and leg forward kinematics [4], [21]. Given that the state evolves on a Lie group, the observation model can be expressed in a group-consistent form as 
+
+
+
+f k ( ˜θt)01
+
+−1
+
+| {z }
+
+> yt
+
+= X−1
+
+> t
+
+
+
+03×1
+
+01
+
+−1
+
+| {z }
+
+> b
+
+| {z }
+
+> h(Xt)
+
++
+
+
+
+Jfk ( ˜θt)nθ
+
+000
+
+| {z }
+
+> ηt
+
+.
+
+(8) Here, h : SE 3(3) → R6 denotes the measurement function, 
+
+yt ∈ R6 is the noisy measurement, and ηt ∼ N (0 , Γt)
+
+represents the measurement noise, whose covariance is given by Γt = diag( Jfk ( ˜θt)Σθ J⊤ 
+
+> fk
+
+( ˜θt), 03×3).The observation model in (8) is highly general, extending beyond leg odometry to any sensor modality that provides relative position constraints, such as visual, LiDAR, or wheel odometry. For example, in LiDAR odometry, a stable environ-mental feature identified via scan-matching serves the same role as the stationary foot contact point, fitting directly into the model’s mathematical structure [22]. Finally, observation models with such a mathematical structure are generally referred to as invariant observation models [1], [7]. 5
+
+IV. N ATURAL GRADIENT GAUSSIAN APPROXIMATION ON 
+
+LIE GROUP FILTER 
+
+In the previous section, we established a state space model for robot state estimation on the Lie group manifold G =SE 3(3) . Building on this foundation, this section introduces our proposed filtering algorithm, which unfolds in three stages. First, in Sec. IV-A, we reframe the manifold filtering task as a Gaussian parameter optimization problem. Following this, we detail the two key steps of our solution framework in Sec. IV-B and Sec. IV-C. 
+
+A. Optimization Objective Formulation 
+
+The objective of state estimation is to recover the system state Xt from noisy measurements yt. Typically, filtering algorithms achieve this by a two-step procedure: (i) the 
+
+prediction step computes a prior estimate ˆXt|t−1, using the state propagation model (6) together with the control input 
+
+ut−1, and (ii) the update step refines this estimate into the final posterior estimate ˆXt|t by incorporating the observation model (8) and the noisy observation yt.On Lie group manifolds, the prior estimate ˆXt|t−1 can be readily obtained by applying a forward Euler integration step to the noise-free system dynamics, ddt Xt = fut (Xt), from the posterior estimate ˆXt−1|t−1 in the last time step [1], [7], [20]. In contrast, solving for the posterior is more challenging because the Lie group operation is not closed under addition, preventing the direct use of additive update rules from classical Euclidean filters. Nevertheless, the same intuition holds: the update step essentially involves estimating a state increment relative to the prior, based on the measurements [7], [11]. In the case of Lie group, since the increment is typically small, it can be fully characterized within the tangent space. Therefore, we define ˆξt|t ∈ Rd as the posterior estimate of increment, where d = dim G denotes the dimension of the Lie group’s tangent space. By exploiting the closure property of Lie groups under multiplication and the mapping in (1), the posterior update takes the compact form: 
+
+ˆXt|t = ˆXt|t−1Exp( ˆξt|t). (9) This formulation transforms the problem of estimating the full state posterior ˆXt|t into the more tractable problem of estimating the increment posterior ˆξt|t [7], [8], [23]. According to Bayesian theory, obtaining the posterior esti-mate of the increment requires computing its posterior distri-bution [23], [24], which can be expressed as 
+
+p(ξt|y1: t, u0: t−1) = p(ξt|y1: t−1, u0: t−1)p ˆXt|t−1 (yt|ξt)
+
+R p(ξt|y1: t−1, u0: t−1)p ˆXt|t−1 (yt|ξt)d ξt
+
+.
+
+(10) Here, p(ξt|y1: t−1, u0: t−1) denotes the prior distribution of the increment, and p ˆXt|t−1 (yt|ξt) represents the measurement likelihood. Based on the update rule in (9) and the observation model in (8), the likelihood takes a Gaussian form: 
+
+p ˆXt|t−1 (yt|ξt) = N (yt; Exp( −ξt) ˆX−1
+
+> t|t−1
+
+b, Γt). (11) Since the likelihood is nonlinear with respect to ξt, the inte-gral in the denominator of (10) becomes intractable, making direct posterior computation infeasible [24]. Existing methods typically sidestep this issue by locally approximating the measurement likelihood via Taylor series expansions [7], [13], [14], [23] or UT [8], [17]–[19]. However, these approximations inevitably introduce errors due to the linearization or sampling assumptions involved [16]. Instead of relying on local approximations of the mea-surement likelihood, we propose to optimize the posterior distribution directly using the optimization perspective of Bayesian inference [16], [24]. Under this framework, the posterior distribution is characterized as the solution to an optimization problem: 
+
+p(ξt|y1: t, u0: t−1) = arg min 
+
+> q(ξt)
+
+Eq(ξt)
+
+h
+
+− log p ˆXt|t−1 (yt|ξt)
+
+i
+
++ DKL [q(ξt)∥p(ξt|y1: t−1, u0: t−1)] ,
+
+(12) where q(ξt) is the variational distribution, DKL [·∥· ] is Kullback-Leibler(KL) divergence between two distributions. This formulation essentially balances the prior information with the current measurement information [24]. However, directly solving (12) requires finding an optimal variational distribution over the entire probability space, which is gen-erally intractable. A tractable alternative is to restrict the variational distribution to a parameterizable family of distri-butions. Drawing from the properties discussed in Sec. II-B and building on established work [7], [13], [18], the Gaussian distribution family is the most natural choice. Accordingly, we define the variational distribution as q(ξt) = N (ξt; ˆξt, Pt)
+
+and approximate both the prior and posterior distributions by Gaussians: 
+
+p(ξt|y1: t−1, u0: t−1) ≈ N (ξt; ˆξt|t−1, Pt|t−1),p(ξt|y1: t, u0: t−1) ≈ N (ξt; ˆξt|t, Pt|t)
+
+Here, ˆξt|t−1 ∈ Rd and ˆξt|t ∈ Rd are the prior and posterior estimates of increment, Pt|t−1 ∈ Rd×d and Pt|t ∈ Rd×d are the prior and posterior covariance matrices, respectively. By substituting these Gaussian distributions into (12), the infinite-dimensional variational inference problem reduces to a tractable, finite-dimensional optimization problem over the Gaussian parameters: 
+
+ˆξt|t, Pt|t = arg min 
+
+> ˆξt,Pt
+
+J( ˆξt, Pt),J( ˆξt, Pt) = EN (ξt; ˆξt,Pt)
+
+h
+
+− log p ˆXt|t−1 (yt|ξt)
+
+i
+
++ 12
+
+ ˆξt|t−1 − ˆξt
+
+⊤
+
+P −1
+
+> t|t−1
+
+ ˆξt|t−1 − ˆξt
+
+
+
++ 12 Tr 
+
+
+
+P −1
+
+> t|t−1
+
+Pt
+
+
+
+− 12 log |Pt|
+
+Pt|t−1
+
+− 12 d, 
+
+(13) Consequently, the estimation procedure consists of two steps: (a) computing the Gaussian parameters of the increment prior 
+
+ˆξt|t−1 and Pt|t−1; (b) substituting them into (13) to solve for the Gaussian parameters of the increment posterior ˆξt|t and 
+
+Pt|t. To avoid confusion with the prediction and update steps of the full state, we refer to these two stages as increment prior computation and increment posterior optimization , re-spectively. Together, they constitute the update step of the full-6Prediction Step 
+
+> ෡𝑿 𝑡 −1|𝑡 −1
+> d
+> d𝑡 𝑿 𝑡 =𝒇 𝒖 𝑡 (𝑿 𝑡 )
+> ෡𝑿 𝑡 |𝑡 −1
+
+Update  Step               
+
+> Increment Prior Computation
+> ෠𝝃 𝑡 −1|𝑡 −1,𝑷 𝑡 −1|𝑡 −1
+> (15 )෠𝝃 𝑡 |𝑡 −1,𝑷 𝑡 |𝑡 −1
+> Increment Posterior Optimization
+> ෠𝝃 𝑡 |𝑡 −1,𝑷 𝑡 |𝑡 −1
+> (23 )෠𝝃 𝑡 |𝑡 ,𝑷 𝑡 |𝑡
+> ෡𝑿 𝑡 |𝑡 =෡𝑿 𝑡 |𝑡 −1Exp (෠𝝃 𝑡 |𝑡 )
+> ෠𝝃 𝑡 |𝑡 ←𝟎 ,𝑷 𝑡 |𝑡 ←𝑱 𝑟 𝑷 𝑡 |𝑡 𝑱 𝑟
+> ⊤
+> ෠𝝃 𝑡 |𝑡 ,𝑷 𝑡 |𝑡 ෠𝝃 𝑡 |𝑡 −1,𝑷 𝑡 |𝑡 −1
+> ෡𝑿 𝑡 |𝑡
+> ෡𝑿 𝑡 |𝑡 −1
+
+Fig. 3. The overall estimation procedure of our NANO-L filter at time step 
+
+t.
+
+state filter via (9). The following sections detail the solution procedure for these two stages. 
+
+B. Increment Prior Computation 
+
+Analogous to the computation of the full-state prior, de-riving the increment prior involves propagating the posterior from the previous time step through the increment dynamics model. Although the underlying IMU-driven system dynamics (6) is highly nonlinear and defined on the Lie group, it can be simplified into a much simpler dynamics model for the increment by exploiting the group-affine property [1], [7], [20]. A system is said to be group-affine [1], [7] if, for all 
+
+X1, X2 ∈ G , the dynamics function fut (·) satisfies 
+
+fut (X1X2) = fut (X1)X2 + X1fut (X2) − X1fut (Id)X2,
+
+where Id ∈ G is the group identity. The IMU-driven system (6) can be verified to satisfy this property [1], [20]. For such systems, it can be shown that the propagation model of the increment is approximately linear [1], [7], [20]: 
+
+ddt ξt = F ξ t + Ad ˆXt|t−1 nt, (14) where Ad ˆXt|t−1 is the adjoint matrix of ˆXt|t−1 and F ∈ Rd×d
+
+is a time-invariant matrix, given by 
+
+F =
+
+
+
+0 0 0 0
+
+(g)∧ 0 0 00 I 0 00 0 0 0
+
+ .
+
+Discretizing (14) yields 
+
+ξt+1 = Aξ t + Btnt,
+
+where A = I + F ∆t and Bt = ( I + F ∆t)Ad ˆXt|t−1 . Thus, the prior Gaussian mean and covariance can be propagated directly using standard Kalman filter formula as 
+
+ˆξt|t−1 = A ˆξt−1|t−1,
+
+Pt|t−1 = AP t−1|t−1A⊤ + BtQtB⊤ 
+
+> t
+
+. (15) 
+
+C. Increment Posterior Optimization 
+
+With the prior distribution established, this stage reduces to solving the optimization problem in (13). Inspired by previous works on Gaussian variational inference [3], [16], [25], we use natural gradient descent (NGD) to optimize the cost function 
+
+J( ˆξt, Pt) in (13). The NGD leverages information geometry to compute the steepest descent direction in the Gaussian parameters space, leading to more efficient updates compared to standard gradient descent [26], [27]. For simplicity, we first denote the negative log-likelihood term in (13) as ℓ(ξt, yt). Substituting (11) into this expression yields 
+
+ℓ(ξt, yt) = − log p ˆXt|t−1 (yt|ξt)= 12 (yt − Exp( −ξt) ˆX−1
+
+> t|t−1
+
+b)⊤Γ−1 
+
+> t
+
+·
+
+(yt − Exp( −ξt) ˆX−1
+
+> t|t−1
+
+b) + const .
+
+(16) Furthermore, we stack the variational Gaussian parameters into a single column vector ψ and compute the gradient with respect to it: 
+
+ψ =
+
+ ˆξt
+
+vec( P −1 
+
+> t
+
+)
+
+
+
+, ∇ψ J =
+
+ 
+
+> ∂∂ˆξt
+
+J( ˆξt, Pt)vec 
+
+ ∂∂(Pt)−1 J( ˆξt, Pt)
+
+ .
+
+Here, the partial derivatives of J( ˆξt, Pt) with respect to ˆξt
+
+and Pt are given by 
+
+∂J ( ˆξt, Pt)
+
+∂ ˆξt
+
+=EN (ξt; ˆξt,Pt)
+
+ ∂ℓ (ξt, yt)
+
+∂ξt
+
+
+
++ P −1
+
+> t|t−1
+
+( ˆξt − ˆξt|t−1),∂J ( ˆξt, Pt)
+
+∂P −1
+
+> t
+
+= 12 Pt − 12 Pt
+
+ EN (ξt; ˆξt,Pt)
+
+ ∂2ℓ(ξt, yt)
+
+∂ξ2
+
+> t
+
+
+
++ P −1
+
+> t|t−1
+
+Pt,
+
+(17) The NGD update scheme can then be defined as 
+
+ψ(i+1) = ψ(i) − F −1 
+
+> ψ
+
+∇ψ J, (18) where F−1 
+
+> ψ
+
+denotes the inverse of the Fisher information matrix, specified as 
+
+F−1 
+
+> ψ
+
+=
+
+Pt 00 2(( Pt)−1 ⊗ (Pt)−1)
+
+
+
+, (19) with ⊗ denoting the Kronecker product [3], [16]. By substi-tuting the Fisher information matrix and the partial derivatives into the update rule (18), we obtain the iterative update equations: 
+
+(P −1 
+
+> t
+
+)(i+1) =P −1 
+
+> t|t−1
+
++ EN (ξt; ˆξ(i)   
+
+> t,P(i)
+> t)
+
+ ∂2ℓ(ξt, yt)
+
+∂ξ⊤ 
+
+> t
+
+∂ξt
+
+ˆξ(i+1)  
+
+> t
+
+= ˆξ(i) 
+
+> t
+
+− P (i+1)  
+
+> t
+
+EN (ξt; ˆξ(i)   
+
+> t,P(i)
+> t)
+
+ ∂ℓ (ξt, yt)
+
+∂ξt
+
+− P (i+1)  
+
+> t
+
+P −1
+
+> t|t−1
+
+( ˆξ(i) 
+
+> t
+
+− ˆξt|t−1).
+
+(20) This iterative scheme drives the Gaussian parameters to stably converge [16], [28]. However, the expectations of the two 7
+
+derivatives of ℓ (Hessian and Jacobian, respectively) generally have no closed-form solution and must be approximated using sampling-based techniques such as unscented transformation and cubature integration [15], [29]. In particular, comput-ing the Hessian term incurs a computational complexity of 
+
+O(d3), which grows rapidly with the state dimension. For practical systems with high-dimensional states, such as legged robots here, this computational burden becomes prohibitively expensive, making real-time deployment of the iterative update scheme infeasible. To alleviate this computational burden, we observe that for the negative log-likelihood defined by the invariant observation model like (16), its derivatives with respect to ξ can be derived analytically by leveraging the perturbation model on Lie derivatives, yielding 
+
+∂ℓ (ξt, yt)
+
+∂ξt
+
+= ( ˆX−1
+
+> t|t−1
+
+b)⊙Γ−1 
+
+> t
+
+(yt − Exp( −ξt) ˆX−1
+
+> t|t−1
+
+b),∂2ℓ(ξt, yt)
+
+∂ξ⊤ 
+
+> t
+
+∂ξt
+
+= ( ˆX−1
+
+> t|t−1
+
+b)⊙Γ−1 
+
+> t
+
+( ˆX−1
+
+> t|t−1
+
+b)⊙⊤
+
+,
+
+(21) where the explicit form of (X−1b)⊙ is given by 
+
+(X−1b)⊙ =
+
+  R(p − s)∧ 03×3 I3×3 −I3×3
+
+03×3 03×3 03×3 03×3.
+
+⊤
+
+(22) The detailed derivation of these derivatives is provided in Appendix B. Here, the Hessian of ℓ is an analytic expression that is independent of ξt. Therefore, the Hessian’s expectation is simply the Hessian itself, which eliminates the need for costly sampling-based computation. Substituting these analytic derivatives into (20) yields the final NGD update: 
+
+(P −1 
+
+> t
+
+)(i+1) = P −1 
+
+> t|t−1
+
++ ( ˆX−1
+
+> t|t−1
+
+b)⊙Γ−1 
+
+> t
+
+( ˆX−1
+
+> t|t−1
+
+b)⊙⊤
+
+,
+
+ˆξ(i+1)  
+
+> t
+
+= ˆξ(i) 
+
+> t
+
+− PtP −1
+
+> t|t−1
+
+( ˆξ(i) 
+
+> t
+
+− ˆξt|t−1) − Pt( ˆX−1
+
+> t|t−1
+
+b)⊙
+
+· Γ−1 
+
+> t
+
+(yt − EN (ξt; ˆξ(i) 
+
+> t,Pt)
+
+{Exp( −ξt) ˆX−1
+
+> t|t−1
+
+b}).
+
+(23) Unlike the general iterative form in (20), the covariance update in (23) admits a closed-form solution and requires no iteration, while only the mean ˆξt is refined iteratively. This significantly reduces computational complexity and enables real-time applicability. For this iterative scheme, the initial mean and covariance are set to the prior parameters, i.e., ˆξ(0)  
+
+> t
+
+= ˆξt|t−1, P (0)  
+
+> t
+
+= Pt|t−1.The iteration proceeds until the KL divergence between two successive Gaussian distributions falls below a predefined threshold γ as 
+
+DKL (N ( ˆξ(i) 
+
+> t
+
+, P (i) 
+
+> t
+
+)∥N ( ˆξ(i+1)  
+
+> t
+
+, P (i+1)  
+
+> t
+
+)) < γ. (24) Once this condition is satisfied, the algorithm is regarded as converged, and the posterior mean and covariance are obtained as ˆξt|t = ˆξ(i+1)  
+
+> t
+
+, Pt|t = P (i+1)  
+
+> t
+
+.Finally, the posterior Gaussian parameters of increment are lifted back onto the Lie group manifold using (9) to update the full-state: 
+
+ˆXt|t−1Exp( ˆξt|t + P 1/2 
+
+> t|t
+
+ϵ)= ˆXt|t−1Exp( ˆξt|t)
+
+| {z }
+
+> ˆXt|t
+
+Exp( Jr ( ˆξt|t)P 1/2 
+
+> t|t
+
+ϵ
+
+| {z }
+
+> ξt|t
+
+), . (25) Here, ˆXt|t denotes the full-state posterior estimate, ϵ ∈N (0, I) is a standard Gaussian random variable. The posterior uncertainty is represented in the tangent space with covariance 
+
+Pt|t ← Jr ( ˆξt|t)Pt|tJr ( ˆξt|t)⊤, which captures the confidence associated with the estimate. Finally, the increment is reset to the origin ˆξt|t = 0, to prepare for the next prediction cycle. The complete procedure constitutes the NANO-L filter, summarized in Fig 3 and Algorithm 1. 
+
+Algorithm 1 NANO-L filter 
+
+Input: Initial state ˆX0|0, initial covariance P0|0, hyperparam-eter γ
+
+Output: State estimates { ˆXt|t}Tt=1  
+
+> 1:
+
+for each time step t do  
+
+> 2:
+
+Perform Prediction step:  
+
+> 3:
+
+Compute prior full-state estimate ˆXt|t−1 by integrating  
+
+> ddt
+
+Xt = fut (Xt) 
+
+> 4:
+
+Perform Update step:  
+
+> 5:
+
+Compute prior increment estimate ˆξt|t−1 and its covari-ance Pt|t−1 using (15)  
+
+> 6:
+
+Initialize the iterative Gaussian parameters: ˆξ(0)  
+
+> t
+
+←
+
+ˆξt|t−1, P (0)  
+
+> t
+
+← Pt|t−1 
+
+> 7:
+
+Perform natural gradient iterations of (23) until the stopping criterion (24) is satisfied, yielding the posterior increment estimate ˆξt|t and its covariance Pt|t. 
+
+> 8:
+
+Obtain the posterior full-state estimate ˆXt|t and its covariance using (25).  
+
+> 9:
+
+end for 
+
+V. N UMERICAL SIMULATIONS 
+
+To validate the performance of the proposed NANO-L filter in a controlled and repeatable setting, we first con-duct a numerical simulation. The scenario involves a three-dimensional rigid-body robot equipped with an IMU, whose state is corrected by vision-based observations of static, known landmarks in the environment. This simulation can be regarded as making two simplifications to the modeling presented in Section III. First, the state propagation model uses only the IMU kinematics (5), excluding the foot contact states. Second, the observation model no longer depends on a mov-ing foot contact point st, but instead directly measures the relative position of three static landmarks ( m1 = [0 , 2, 2] ⊤,
+
+m2 = [−2, −2, −2] ⊤, m3 = [2 , −2, −2] ⊤). The detailed model equations are shown in the Appendix C. A ground-truth trajectory was generated, and synthetic IMU and camera measurements were created by sampling the corresponding models and adding pre-defined Gaussian noise. To mitigate the influence of randomness, we performed 100 Monte Carlo (MC) trials, with each trial simulating 30 seconds of motion at 100 Hz. We benchmark our NANO-L filter against a comprehensive set of baselines. These include classic Euclidean filters: EKF, UKF and NANO filter [16], as well as two commonly used filters designed for Lie group manifolds: InEKF [7], [10] and UKF-M [8]. The chosen evaluation metrics are the root mean square error (RMSE) 8EKF UKF NANO InEKF UKF-M NANO-L       
+
+> 0.6
+> 0.8
+> 1.0
+> 1.2Root Mean Square Error (m) EKF UKF NANO InEKF UKF-M NANO-L
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> 3.5
+> 4.0Root Mean Square Error (deg)
+> Fig. 4. Box plots of position and orientation RMSE, aggregated over 100 Monte Carlo simulation trials. Our NANO-L filter achieves the lowest median error and smallest variance.
+
+for both orientation and position, following the formulation in [8]. The simulation results, presented in Fig. 4 and Fig. 5, confirm the superior performance of the proposed NANO-L filter. The aggregated RMSE box plots in Fig. 4 show that manifold-aware methods significantly outperform their Euclidean counterparts. This confirms the benefit of respecting the underlying Lie group geometry of the state. Among the manifold filters, NANO-L achieves the lowest median error and the most compact distribution for both orientation and po-sition. Its average position estimation error is 18% lower than NANO’s and 16% lower than UKF-M’s. The error-over-time plots in Fig. 5 corroborate this, showing NANO-L maintains a consistently lower error trajectory than other methods. This improved accuracy stems from NANO-L’s ability to mitigate the linearization errors inherent in other approaches, validating our filter as a highly accurate and robust solution for state estimation on Lie groups. VI. L EGGED ROBOT REAL -W ORLD EXPERIMENTS 
+
+To validate the NANO-L filter beyond the simulated envi-ronment, we conducted experiments on a real Unitree GO2 legged robot. This directly tests the filter’s performance on the model detailed in Sec. III. 
+
+A. Experimental Setup 
+
+A key advantage of legged robots is their ability to adapt to complex terrains [20], [30]. To evaluate the robustness of the proposed NANO-L filter across different terrains, we designed 0 5 10 15 20 25 30          
+
+> t(s)
+> 0.5
+> 1.0
+> 1.5
+> 2.0Position Error (m) 0510 15 20 25 30
+> t(s)
+> 2
+> 4
+> 6
+> 8Attitude Error (deg)
+> EKF UKF InEKF UKF-M NANO NANO-L
+> Fig. 5. RMSE for position and orientation at each time step, averaged over 100 Monte Carlo trials.
+
+two distinct experimental environments, as illustrated in Fig. 6. These included: a flat ground for baseline performance, and an 
+
+unstable surface to challenge the filter with uncertain contact information. In each environment, the legged robot was controlled to move in a trot gait while sensor data was collected. The onboard sensing suite included one IMU, 12 joint encoders, and four foot contact sensors, all recorded at 200 Hz. In addition, the robot’s ground-truth pose was provided by a high-precision NOKOV motion capture system operating at 100 Hz, as shown in Fig. 1. To minimize the influence of randomness, five 60-second datasets were collected for each environment. For a fair and reproducible comparison, all algorithms were executed on the collected datasets using a laptop equipped with an Intel Core i9-14900HX processor and initialized from the ground-truth state. The noise parameters and algorithm hyperparameters were set consistently for all trials, as detailed in Table VI-A. Finally, in this real-world legged robot experiment, we primarily compare the proposed NANO-L filter against EKF [4], [21] and InEKF [1], [20], as these filters are widely applied and studied in legged robots. In contrast, UKF-based methods are rarely adopted in practice for such platforms due to their higher computational cost and lower numerical stability. The estimation performance is evaluated using two commonly employed metrics: the absolute trajectory error (ATE) and the relative error (RE) for position, velocity, and orientation, with the specific metric formulations taken from [31]. ATE measures the global consistency of the estimated trajectory with respect to the ground truth, while RE reflects 9 
+
+> Fig. 6. Different environments of real-world experiments.
+
+the local accuracy by quantifying drift over a fixed time interval (set to 3 s in our experiments). Together, these two metrics provide complementary insights into both long-term accuracy and short-term consistency of the estimators.              
+
+> TABLE I NOISE PARAMETERS AND NANO-L’ S HYPERPARAMETER .
+> Name Symbol Value Accelerometer σa0.2568 m /s2
+> Gyroscope σω0.00139 rad /s
+> Joint encoder σe0.3 rad
+> Slip σs0.001 m /s
+> Stopping threshold γ10 −4
+
+B. Comparison Results 
+
+Table II summarizes the ATE and RE metrics for all filters across the two environments, including the mean (outside the parentheses) and variance (inside the parentheses) of each metric computed from five experimental datasets. Several key observations can be made. First, as expected, the estimation errors for all methods increase on the more challenging unstable terrain, highlighting the difficulty of these scenarios. Second, both manifold-aware filters show a clear advantage over the standard EKF, particularly in reducing position error. Most importantly, our proposed NANO-L filter not only con-sistently outperforms the state-of-the-art InEKF across nearly all metrics and environments, but also demonstrates superior robustness by showing the least performance degradation on the more challenging terrain. For instance, on the unstable terrain, NANO-L reduces the position ATE by approximately 41% compared to InEKF. In terms of computational cost, while InEKF is exceptionally fast, NANO-L’s processing time of approximately 3.35 ms remains well within the 5 ms budget required for 200 Hz real-time operation. Fig. 7 provides a visual comparison of the estimated tra-jectories from a representative trial on the unstable terrain (EKF is omitted for clarity). The plots visually confirm the quantitative findings, showing that the trajectory estimated by NANO-L adheres more closely to the ground truth than that of InEKF across all components. A noteworthy detail in the trajectory plots is the vertical position pz , where all filters exhibit some drift. This is due to the known poor observability of absolute vertical height from leg odometry [20], [32], though NANO-L still demonstrates a clear tracking advantage. Fig. 8 presents a comparison of 2D localization from trials conducted on the same flat terrain, where the robot moved at approximately the same speed ( ≈0.2 m/s) over different distances and durations. The results demonstrate that the 2D localization for legged robot accumulates significant drift as travel time and distance increase. In contrast, by avoiding linearization of the observation model, our NANO-L filter effectively mitigates error accumulation, resulting in a notably smaller trajectory drift. Finally, an ablation study on the number of NANO-L iterations shown in Fig. 9 confirms that a single update step provides an excellent trade-off between accuracy and efficiency. This single iteration achieves near-optimal perfor-mance while remaining well within the 5 ms computational budget, justifying its use in our comparisons. VII. C ONCLUSION 
+
+This paper proposes the NANO-L filter, a novel framework for state estimation on Lie group manifolds that eliminates the limitations of local linearization by reformulating manifold fil-tering as the parameter optimization of a Gaussian-distributed increment in the tangent space. The NANO-L filter solves this optimization using natural gradient descent, which leverages the Fisher information matrix to respect the underlying geom-etry of the tangent space, resulting in more stable convergence. Furthermore, by exploiting the perturbation model in Lie derivative, we proved that for common invariant observation models, the covariance update admits an exact closed-form solution, eliminating iterative updates and greatly improving efficiency. Real-world experiments on a Unitree GO2 legged robot demonstrated that NANO-L achieves up to 40% lower estimation error compared to commonly used manifold filters, while maintaining comparable computational cost. APPENDIX 
+
+A. Forward Kinematics 
+
+We denote the joint angles as ϕ = [ϕ1; ϕ2; ϕ3], with 
+
+sin( ϕi) = si, cos( ϕi) = ci and sin( ϕi + ϕj ) = sij . The variables lh, lt, and lc represent the hip length, thigh length, and calf length, respectively. The coordinate of the hip joint 10 
+
+TABLE II COMPARISON OF ATE, RE, AND COMPUTATION TIME ACROSS REAL -W ORLD ENVIRONMENTS 
+
+Environment Method ATE pos ATE vel ATE ori RE pos RE vel RE ori Time 
+
+[m] [m /s] [rad] [m] [m /s] [rad] [ms] 
+
+Flat EKF 0.373 (0 .055) 0.122 (0 .032) 0.020 (0 .005) 0.076 (0 .010) 0.107 (0 .008) 0.017 (0 .005) 3.905 InEKF 0.281 (0 .099) 0.108 (0 .007) 0.022 (0 .004) 0.072 (0 .010) 0.106 (0 .015) 0.017 (0 .004) 0.712 
+
+NANO-L 0.212 (0 .078) 0.107 (0 .009) 0.017 (0 .005) 0.065 (0 .004) 0.093 (0 .014) 0.016 (0 .003) 3.351 Unstable EKF 0.633 (0 .200) 0.149 (0 .057) 0.021 (0 .002) 0.229 (0 .163) 0.094 (0 .014) 0.016 (0 .003) 3.905 InEKF 0.401 (0 .108) 0.140 (0 .028) 0.023 (0 .001) 0.162 (0 .082) 0.106 (0 .010) 0.017 (0 .003) 0.712 
+
+NANO-L 0.236 (0 .058) 0.125 (0 .011) 0.012 (0 .001) 0.104 (0 .031) 0.108 (0 .006) 0.014 (0 .004) 3.351 0 10 20 30 40 50 60                                                 
+
+> −2
+> −1
+> 0
+> 1
+> px(m)
+> 010 20 30 40 50 60
+> −1
+> 0
+> 1
+> 2
+> py(m)
+> 010 20 30 40 50 60
+> Time(s)
+> −0.50
+> −0.25
+> 0.00
+> 0.25
+> pz(m)
+> Ground Truth
+> InEKF
+> NANO-L 010 20 30 40 50 60
+> −1.0
+> −0.5
+> 0.0
+> 0.5
+> vx(m/s)
+> 010 20 30 40 50 60
+> −0.5
+> 0.0
+> 0.5
+> 1.0
+> vy(m/s)
+> 010 20 30 40 50 60
+> Time(s)
+> −0.2
+> 0.0
+> 0.2
+> vz(m/s) 010 20 30 40 50 60
+> −0.2
+> −0.1
+> 0.0
+> 0.1
+> roll (rad)
+> 010 20 30 40 50 60
+> 0.0
+> 0.1
+> pitch (rad)
+> 010 20 30 40 50 60
+> Time(s)
+> 0
+> 2
+> 4
+> 6
+> yaw (rad)
+
+Fig. 7. Estimated position, velocity, and orientation for InEKF and NANO-L on the unstable terrain. −1.5 −1.0 −0.5 0.0 0.5 1.0 1.5 2.0              
+
+> px(m)
+> −2.5
+> −2.0
+> −1.5
+> −1.0
+> −0.5
+> 0.0
+> 0.5
+> py(m)
+> Ground Truth
+> InEKF
+> NANO-L −2.5 −2.0 −1.5 −1.0 −0.5 0.0 0.5
+> px(m)
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> py(m) −1.5 −1.0 −0.5 0.0 0.5 1.0 1.5 2.0
+> px(m)
+> −2.5
+> −2.0
+> −1.5
+> −1.0
+> −0.5
+> 0.0
+> 0.5
+> py(m)
+
+Fig. 8. Estimated trajectories from InEKF and NANO-L on the flat terrain with different distances and durations. From left to right: (9.25 m, 40 s), (10.25 m, 50 s), and (14.6 m, 60 s). 
+
+in the body frame is denoted as [ox, o y , 0] . The forward kinematics function can then be written as 
+
+f k (ϕ) = 
+
+
+
+ox
+
+oy
+
+0
+
+ +
+
+
+
+−lts2 − lcs23 
+
+lhc1 + ltc2s1 + lcs1c23 
+
+lhs1 − ltc1c2 − lcc1c23 
+
+ .
+
+Differentiate f k (ϕ) with respect to ϕ to obtain the kinematics Jacobian matrix: 
+
+Jfk (ϕ)=
+
+
+
+0 −lcc23 − ltc2 −lcc23 
+
+ltc1c2 − lhs1 + lcc1c23 −s1(lcs23 + lts2) −lcs23 s1
+
+ltc2s1 + lhc1 + lcs1c23 c1(lcs23 + lts2) lcs23 c1
+
+ .11 1 2 5 10 
+
+> Iterations
+> 0.209
+> 0.210
+> 0.211
+> 0.212
+> ATE-pos (m)
+> 5
+> 10
+> Time (ms)
+
+Fig. 9. Estimation accuracy and computation time of NANO-L on flat terrain with different iteration numbers. The red dashed line indicates the 200 Hz real-time limit. 
+
+B. Derivation of the Analytic Derivatives 
+
+For simplicity, we first study the derivative of 
+
+Exp( δξ)X−1b with respect to a small perturbation 
+
+δξ = [ δϕ; δv; δp; δs] near zero, yielding 
+
+∂Exp( δξ)X−1b
+
+∂δ ξ
+
+= lim 
+
+> δξ→0
+
+Exp( δξ)X−1b − X−1b
+
+δξ
+
+= lim 
+
+> δξ→0
+
+(I + δξ∧)X−1b − X−1b
+
+δξ
+
+= lim 
+
+> δξ→0
+
+δξ∧X−1b
+
+δξ
+
+= lim 
+
+> δξ→0
+
+ δϕ∧ δv δp δs
+
+03×3 03×1 03×1 03×1
+
+
+
+R⊤(s − p)01
+
+−1
+
+
+
+[δϕ; δv; δp; δs]= lim 
+
+> δξ→0
+
+ R(p − s)∧δϕ + δp − δs
+
+000
+
+
+
+[δϕ; δv; δp; δs]=
+
+  R(p − s)∧ 03×3 I3×3 −I3×3
+
+03×3 03×3 03×3 03×3.
+
+⊤
+
+:= ( X−1b)⊙.
+
+The first equality in this formula applies the perturbation model on Lie derivatives [3]. In our NANO-L filter, the increment ξt is such a small quantity close to zero; therefore, we have 
+
+∂Exp( −ξt) ˆX−1
+
+> t|t−1
+
+b
+
+∂ξt
+
+= −( ˆX−1
+
+> t|t−1
+
+b)⊙.
+
+Finally, we can derive the first-order and second-order deriva-tives of the negative log-likelihood ℓ(ξt, yt) with respect to ξt
+
+as 
+
+∂ℓ (ξt, yt)
+
+∂ξt
+
+= ∂(yt − Exp( −ξt) ˆX−1
+
+> t|t−1
+
+b)
+
+∂ξt
+
+∂ℓ (ξt, yt)
+
+∂(yt − Exp( −ξt) ˆX−1
+
+> t|t−1
+
+b)= ( ˆX−1
+
+> t|t−1
+
+b)⊙Γ−1 
+
+> t
+
+(yt − Exp( −ξt) ˆX−1
+
+> t|t−1
+
+b),∂2ℓ(ξt, yt)
+
+∂ξ⊤ 
+
+> t
+
+∂ξt
+
+= ∂( ˆX−1
+
+> t|t−1
+
+b)⊙Γ−1 
+
+> t
+
+yt
+
+∂ξ⊤
+
+> t
+
+− ( ˆX−1
+
+> t|t−1
+
+b)⊙Γ−1
+
+> t
+
+∂Exp( −ξt) ˆX−1
+
+> t|t−1
+
+b
+
+∂ξ⊤
+
+> t
+
+= ( ˆX−1
+
+> t|t−1
+
+b)⊙Γ−1 
+
+> t
+
+( ˆX−1
+
+> t|t−1
+
+b)⊙⊤
+
+.
+
+C. System Model in the Numerical Simulation 
+
+The state of the vision-aided inertial navigation system in the numerical simulation is defined as 
+
+Xt =
+
+ Rt vt pt
+
+03×3 03×1 03×1
+
+
+
+∈ SE 2(3) .
+
+The state propagation model is given by 
+
+ddt Xt = fut (Xt) + Xtn∧
+
+> t
+
+=
+
+Rt ˜ω∧ 
+
+> t
+
+Rt ˜at + g vt
+
+03×3 03×1 03×1
+
+
+
++ Xtn∧ 
+
+> t
+
+,
+
+and the observation model can be expressed as 
+
+
+
+c
+
+01
+
+|{z} 
+
+> yt
+
+= X−1
+
+> t
+
+
+
+m
+
+01
+
+| {z } 
+
+> b
+
++
+
+
+
+ηc
+
+00
+
+| {z } 
+
+> ηt
+
+,
+
+where c ∈ R3 represents the position of the landmark m ∈ R3
+
+as observed by the camera, and ηc ∈ R3 denotes zero-mean Gaussian noise. REFERENCES [1] R. Hartley, M. Ghaffari, R. M. Eustice, and J. W. Grizzle, “Contact-aided invariant extended Kalman filtering for robot state estimation,” The International Journal of Robotics Research , vol. 39, no. 4, pp. 402–430, 2020. [2] M. Zhang, X. Zuo, Y. Chen, Y. Liu, and M. Li, “Pose estimation for ground robots: On manifold representation, integration, reparameteriza-tion, and optimization,” IEEE Transactions on Robotics , vol. 37, no. 4, pp. 1081–1099, 2021. [3] T. D. Barfoot, State estimation for robotics . Cambridge University Press, 2024. [4] M. Bloesch, M. Hutter, M. A. Hoepflinger, S. Leutenegger, C. Gehring, C. D. Remy, and R. Siegwart, “State estimation for legged robots: Consistent fusion of leg kinematics and IMU,” Robotics: Science and Systems VIII , p. 17, 2013. [5] X. Yu, S. Teng, T. Chakhachiro, W. Tong, T. Li, T.-Y. Lin, S. Koehler, M. Ahumada, J. M. Walls, and M. Ghaffari, “Fully proprioceptive slip-velocity-aware state estimation for mobile robots via invariant kalman filtering and disturbance observer,” in 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2023, pp. 8096–8103. [6] M. Bloesch, C. Gehring, P. Fankhauser, M. Hutter, M. A. Hoepflinger, and R. Siegwart, “State estimation for legged robots on unstable and slippery terrain,” in 2013 IEEE/RSJ International Conference on Intel-ligent Robots and Systems . IEEE, 2013, pp. 6058–6064. 12 
+
+[7] A. Barrau and S. Bonnabel, “The invariant extended Kalman filter as a stable observer,” IEEE Transactions on Automatic Control , vol. 62, no. 4, pp. 1797–1812, 2016. [8] M. Brossard, A. Barrau, and S. Bonnabel, “A code for unscented Kalman filtering on manifolds (UKF-M),” in 2020 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2020, pp. 5701–5708. [9] T. Zhang, K. Wu, J. Song, S. Huang, and G. Dissanayake, “Convergence and consistency analysis for a 3-D invariant-EKF slam,” IEEE Robotics and Automation Letters , vol. 2, no. 2, pp. 733–740, 2017. [10] Z. Zhu, S. M. R. Sorkhabadi, Y. Gu, and W. Zhang, “Design and evaluation of an invariant extended Kalman filter for trunk motion estimation with sensor misalignment,” IEEE/ASME Transactions on Mechatronics , vol. 27, no. 4, pp. 2158–2167, 2022. [11] F. L. Markley, “Attitude error representations for Kalman filtering,” 
+
+Journal of guidance, control, and dynamics , vol. 26, no. 2, pp. 311– 317, 2003. [12] T. D. Barfoot and P. T. Furgale, “Associating uncertainty with three-dimensional poses for use in estimation problems,” IEEE Transactions on Robotics , vol. 30, no. 3, pp. 679–693, 2014. [13] G. Bourmaud, R. M´ egret, A. Giremus, and Y. Berthoumieu, “Discrete extended Kalman filter on lie groups,” in 21st European Signal Process-ing Conference (EUSIPCO 2013) . IEEE, 2013, pp. 1–5. [14] G. Bourmaud, R. M´ egret, M. Arnaudon, and A. Giremus, “Continuous-discrete extended Kalman filter on matrix lie groups using concentrated gaussian distributions,” Journal of Mathematical Imaging and Vision ,vol. 51, pp. 209–228, 2015. [15] S. J. Julier and J. K. Uhlmann, “Unscented filtering and nonlinear estimation,” Proceedings of the IEEE , vol. 92, no. 3, pp. 401–422, 2004. [16] W. Cao, T. Zhang, Z. Sun, C. Liu, S. S.-T. Yau, and S. E. Li, “Nonlinear Bayesian filtering with natural gradient gaussian approximation,” arXiv preprint arXiv:2410.15832 , 2024. [17] M. Brossard, S. Bonnabel, and J.-P. Condomines, “Unscented Kalman filtering on lie groups,” in 2017 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2017, pp. 2485–2491. [18] A. M. Sjøberg and O. Egeland, “Lie algebraic unscented Kalman filter for pose estimation,” IEEE Transactions on Automatic Control , vol. 67, no. 8, pp. 4300–4307, 2021. [19] Y. Jin, W.-A. Zhang, J. Tang, H. Sun, and L. Shi, “A nonlinear filter for pose estimation based on fast unscented transform on lie groups,” IEEE Robotics and Automation Letters , 2024. [20] Y. Gao, C. Yuan, and Y. Gu, “Invariant filtering for legged humanoid locomotion on a dynamic rigid surface,” IEEE/ASME Transactions on Mechatronics , vol. 27, no. 4, pp. 1900–1909, 2022. [21] S. Yang, Z. Zhang, B. Bokser, and Z. Manchester, “Multi-IMU propri-oceptive odometry for legged robots,” in 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2023, pp. 774–779. [22] W. Xu and F. Zhang, “Fast-lio: A fast, robust lidar-inertial odometry package by tightly-coupled iterated Kalman filter,” IEEE Robotics and Automation Letters , vol. 6, no. 2, pp. 3317–3324, 2021. [23] S. Goffin, A. Barrau, S. Bonnabel, O. Bruls, and P. Sacr´ e, “Iterated in-variant extended Kalman filter (iiekf),” arXiv preprint arXiv:2404.10665 ,2024. [24] J. Knoblauch, J. Jewson, and T. Damoulas, “An optimization-centric view on Bayes’ rule: Reviewing and generalizing variational inference,” 
+
+Journal of Machine Learning Research , vol. 23, no. 132, pp. 1–109, 2022. [25] K. Wu and J. R. Gardner, “Understanding stochastic natural gradient variational inference,” in Forty-first International Conference on Ma-chine Learning , 2024. [26] S.-I. Amari, “Natural gradient works efficiently in learning,” Neural computation , vol. 10, no. 2, pp. 251–276, 1998. [27] J. Martens, “New insights and perspectives on the natural gradient method,” Journal of Machine Learning Research , vol. 21, no. 146, pp. 1–76, 2020. [28] T. D. Barfoot, J. R. Forbes, and D. J. Yoon, “Exactly sparse gaussian variational inference with application to derivative-free batch nonlin-ear state estimation,” The International Journal of Robotics Research ,vol. 39, no. 13, pp. 1473–1502, 2020. [29] I. Arasaratnam and S. Haykin, “Cubature Kalman filters,” IEEE Trans-actions on automatic control , vol. 54, no. 6, pp. 1254–1269, 2009. [30] J. Sun, L. Zhou, B. Geng, Y. Zhang, and Y. Li, “Leg state estimation for quadruped robot by using probabilistic model with proprioceptive feedback,” IEEE/ASME Transactions on Mechatronics , 2024. [31] Z. Zhang and D. Scaramuzza, “A tutorial on quantitative trajectory eval-uation for visual (-inertial) odometry,” in 2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2018, pp. 7244–7251. [32] Z. Yoon, J.-H. Kim, and H.-W. Park, “Invariant smoother for legged robot state estimation with dynamic contact event information,” IEEE Transactions on Robotics , vol. 40, pp. 193–212, 2023.

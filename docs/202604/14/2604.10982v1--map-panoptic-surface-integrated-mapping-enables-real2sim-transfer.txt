@@ -1,0 +1,390 @@
+Title: {\Psi}-Map: Panoptic Surface Integrated Mapping Enables Real2Sim Transfer
+
+URL Source: https://arxiv.org/pdf/2604.10982v1
+
+Published Time: Tue, 14 Apr 2026 02:06:34 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Ψ-Map: Panoptic Surface Integrated Mapping Enables Real2Sim Transfer 
+
+## Xuan Yu a, Yuxuan Xie a, Changjian Jiang a, Shichao Zhai a, Rong Xiong a, Yu Zhang a and Yue Wang a,∗
+
+> a
+
+Department of Control Science and Engineering, Zhejiang University, , Hangzhou, Zhejiang, , P. R. China 
+
+A R T I C L E I N F O 
+
+Keywords :Real-to-Sim segmentation mapping rendering 
+
+A B S T R A C T 
+
+Open-vocabulary panoptic reconstruction is essential for advanced robotics perception and simulation. However, existing methods based on 3D Gaussian Splatting (3DGS) often struggle to simultaneously achieve geometric accuracy, coherent panoptic understanding, and real-time inference frequency in large-scale scenes. In this paper, we propose a comprehensive framework that integrates geometric reinforcement, end-to-end panoptic learning, and efficient rendering. First, to ensure physical realism in large-scale environments, we leverage LiDAR data to construct plane-constrained multimodal Gaussian Mixture Models (GMMs) and employ 2D Gaussian surfels as the map representation, enabling high-precision surface alignment and continuous geometric supervision. Building upon this, to overcome the error accumulation and cumbersome cross-frame association inherent in traditional multi-stage panoptic segmentation pipelines, we design a query-guided end-to-end learning architecture. By utilizing a local cross-attention mechanism within the view frustum, the system lifts 2D mask features directly into 3D space, achieving globally consistent panoptic understanding. Finally, addressing the computational bottlenecks caused by high-dimensional semantic features, we introduce Precise Tile Intersection and a Top-K Hard Selection strategy to optimize the rendering pipeline. Experimental results demonstrate that our system achieves superior geometric and panoptic reconstruction quality in large-scale scenes while maintaining an inference rate exceeding 50 FPS, meeting the real-time requirements of robotic control loops. 
+
+1. Introduction 
+
+In the contemporary landscape of robotics, learning from simulation has emerged as the mainstream paradigm for developing robust and high-performance policies [1, 2, 3]. However, the deployment of these policies in physical envi-ronments is often hindered by the Sim2Real Gap, a funda-mental discrepancy between synthetic training data and real-world dynamics. To facilitate successful Sim2Real transfer, it is imperative to construct a high-fidelity Real2Sim map-ping, enabling a digital twin pipeline capable of migrating physical environment characteristics into simulation to sup-port environment-specific policy adaptation. Effective Real2Sim transfer demands the resolution of three core challenges. First, Geometric Integrity is paramount. The system must produce high-quality surface meshes rather than sparse point clouds to support collision detection and contact dynamics within physics engines. Second, Panoptic Understanding is required to enable object-level reasoning. The reconstruction must move beyond holistic maps to identify discrete, manipulatable entities for complex inter-actions. Finally, High-efficiency Rendering is essential. The system must provide photorealistic textures aligned with the geometry while meeting the high-frequency frame-rate requirements of robotic simulation loops. Current Real2Sim research primarily focuses on tabletop manipulation within small-scale indoor environments [4, 5, 6]. These methods rely heavily on monocular techniques, 
+
+> ∗
+
+Corresponding author  
+
+> ywang24@zju.edu.cn
+
+(Y. Wang) 
+
+> ORCID
+
+(s): 
+
+such as monocular depth estimation, single-view semantics, and generative priors, which are difficult to scale or validate in expansive, complex scenes [7, 8]. Conversely, existing large-scale reconstruction frameworks often prioritize pure visual fidelity over metric accuracy, utilizing vision-only pipelines that lack the geometric precision required for phys-ical simulation and often ignore semantic integration [9, 10, 11]. While individual modules for depth, semantics, or rendering exist, the strategic integration of these components into a unified system solution that avoids cumulative error and supports downstream policy verification remains a crit-ical gap for deployment of the learning. To address these limitations, we propose Ψ-Map, a com-prehensive panoptic reconstruction system engineered to enable seamless Real2Sim transfer Fig. 3. The core of Ψ-Map is an end-to-end semantic reconstruction and render-ing framework that fuses RGB and depth data to satisfy both metric geometric and panoptic semantic requirements. Building upon this, we implement an accelerated Gaussian and surface rendering architecture that ensures real-time performance for robot simulation. Finally, we integrate a downstream object generation model capable of recover-ing complete 3D object geometries from partially observed segments, directly serving robotic manipulation tasks. By utilizing three low-coupling yet highly efficient modules, Ψ-Map fulfills the entire spectrum of Real2Sim requirements. Our experiments demonstrate the excellence of each module, culminating in a robot navigation task in unseen environ-ments that validates the system’s ability to facilitate policy 
+
+First Author et al.: Preprint submitted to Elsevier Page 1 of 12  
+
+> arXiv:2604.10982v1 [cs.RO] 13 Apr 2026 Short Title of the Article
+> Figure 1: Ψ-Map provides a high-performance bridge from multi-modal sensor inputs to robotic applications. By fusing LiDAR-RGB-D data with Vision-Language Foundation Models, our framework achieves real-time, 3D-consistent panoptic reconstruction. This representation serves as a powerful engine for high-fidelity scene editing and virtual asset generation, ultimately empowering complex downstream skills such as generative 3D object completion and robust robotic navigation in wild environments.
+
+deployment. We anticipate that Ψ-Map will significantly ad-vance the deployment capabilities of robotic learning in real-world applications. Our core contributions are as follows: 
+
+• We present a low-coupling system solution that bridges the real sensors data to actionable digital twins. This design minimizes cumulative errors across modules, providing a robust foundation for scene-specific pol-icy transfer. 
+
+• We fuse depth-based GMM initialization with query-guided panoptic lifting, which ensures both physical surface and semantics. This allows for precise col-lision dynamics and semantic interaction within the simulation. 
+
+• We introduce an accelerated semantic rendering frame-work achieving over 50 FPS and a generative model for 3D object completion, providing the fast visual feedback and geometric wholeness necessary for phys-ical interaction. 
+
+• We verify the pipeline through robot navigation ex-periments in previously unseen environments. Re-sults show that fine-tuning policies within the Ψ-Map generated simulation effectively enhances the performance. 
+
+2. Related Work 2.1. 3D Gaussian Splatting and Geometric Modeling 
+
+3D Gaussian Splatting (3DGS) [12] has revolutionized ra-diance field representation by utilizing an explicit point-based structure and a tile-based rasterization pipeline to achieve exceptional rendering quality. While vanilla 3DGS performs remarkably in small-scale environments, it of-ten suffers from geometric collapse, holes, or excessive "floaters" in large-scale or unbounded scenes due to a lack of strong structural regularization during the initialization process, which typically relies on sparse Structure-from-Motion (SfM) point clouds. To mitigate these robustness issues, various geometric reinforcement strategies have been proposed. Mip-Splatting [13] introduced anti-aliasing filters to enhance multi-scale   
+
+> First Author et al.: Preprint submitted to Elsevier Page 2 of 12 Short Title of the Article
+
+stability, while SuGaR [14] and 2DGS [15] optimized sur-face reconstruction by constraining 3D ellipsoids into 2D Gaussian surfels with defined normals. These advancements significantly improve the representation of thin-walled struc-tures and planar regions, providing a more reliable physical foundation for downstream robotic interaction tasks. Furthermore, for large-scale reconstruction, research has explored incorporating depth map supervision [16] or multi-view geometric consistency constraints. However, vision-based depth estimation remains uncertain in texture-less regions or areas with dramatic lighting changes. Unlike existing methods purely dependent on visual feedback, we propose leveraging point cloud priors to construct plane-constrained multimodal Gaussian Mixture Models (GMMs) [17, 18]. This approach provides a reliable scale reference during initialization and ensures, through a GMM-guided optimization process, that surfels adhere to the underlying geometric structure, maintaining high physical realism in challenging environments. 
+
+2.2. 3D Panoptic Scene Understanding 
+
+Developing semantically-aware 3D representations is a fun-damental requirement for robots to perceive their environ-ment and execute complex interaction tasks. Early efforts fo-cused on embedding open-vocabulary features, such as CLIP [19], into radiance fields like LERF [20] and LangSplat [21] to enable zero-shot language-driven object localization. These works demonstrated the potential of aligning vision-language features with 3D space but remained limited in distinguishing between multiple instances with identical se-mantic attributes. With the rising demand for panoptic segmentation, methods like Gaussian Grouping [22] attemptes to lift instance labels into 3D space via multi-stage pipelines. How-ever, these paradigms rely heavily on pseudo-labels from 2D models [23] and require cumbersome, hand-designed association algorithms. Since 2D predictions often exhibit flickering and category instability across views, these man-ual association logics are prone to error accumulation and perform poorly under dynamic occlusions. Inspired by end-to-end panoptic architectures [24], we design a query-guided learning mechanism. By applying local cross-attention within the view frustum, the system models instance attributes directly within the 3D Gaussian feature space, effectively bypassing the need for explicit cross-frame association. This design not only streamlines the pipeline but also allows the system to rectify noise in 2D labels during global optimization. Additionally, we introduce label blending and warping techniques to further enhance multi-view segmentation consistency. 
+
+2.3. Efficient Neural Rendering and Robotic Simulation 
+
+While 3DGS exhibits a natural advantage in RGB rendering, it faces significant performance bottlenecks when integrat-ing high-dimensional semantic or instance features. Existing semantic field solutions often struggle to maintain inference frequencies above 10 FPS when processing feature maps with hundreds of dimensions. This latency primarily stems from frequent memory bandwidth swaps and high compu-tational complexity during feature accumulation, failing to meet the stringent real-time requirements of robotic control loops. To address this challenge, some studies have explored feature quantization, pruning, or low-rank decomposition [25]. Although these solutions reduce memory overhead, they often sacrifice segmentation accuracy and do not fun-damentally optimize the computational flow of the rasteri-zation pipeline. Balancing rendering resolution with high-dimensional features in large-scale scenes remains a key technical hurdle for practical 3D Gaussian applications in simulation and interaction. 
+
+3. Geometric Representation and Reconstruction 3.1. Preliminaries and 2D Surfel Representation 
+
+In large-scale scene reconstruction, traditional 3DGS often suffers from geometric collapse due to the lack of structural constraints on its anisotropic 3D ellipsoids. To ensure phys-ical realism, we follow the logic of LI-GS and adopt 2D Gaussian Surfelszui as the foundational map representation [26, 15]. By explicitly constraining the normal direction, it produces better-fitting planar structures and suppresses floaters. Each surfel 𝐺 𝑖 is defined within its local tangent plane. For any point (𝑢, 𝑣 ) in the local 2D tangent space, the spatial distribution 𝑑 𝜎 follows 𝑑 𝜎 (𝑢, 𝑣 ) = exp 
+
+(
+
+− 𝑢 2+𝑣 2
+
+> 2
+
+)
+
+.The opacity contribution 𝛼 𝑖 of a surfel at a specific pixel is determined by the product of its intrinsic opacity 𝑜 𝑖 
+
+and this spatial distribution 𝛼 𝑖 (𝑢, 𝑣 ) = 𝑜 𝑖 ⋅ 𝑑 𝜎 (𝑢, 𝑣 ). This formulation mathematically restricts the Gaussian energy to a 2D manifold by omitting the component perpendicular to the plane, providing a precise basis for subsequent geometric supervision via point cloud priors. The appearance 𝐶 (𝑝 ) at pixel 𝑝 is obtained through 𝛼 -blending of overlapping surfels: 
+
+𝐶 (𝑝 ) = ∑
+
+> 𝑖 ∈
+
+𝑐 𝑖 𝛼 𝑖 𝑖 −1 ∏
+
+> 𝑗 =1
+
+(1 − 𝛼 𝑗 ) (1) where  denotes the ordered set of surfels that intersect the ray passing through pixel 𝑝 , and 𝑐 𝑖 is the high-dimensional feature or color associated with the 𝑖 -th surfel. 
+
+3.2. Geometry Reinforcement via SOGMM Modeling 
+
+In large-scale panoptic reconstruction, optimization relying solely on visual gradients often struggles with geometric uncertainties caused by drastic variations in view distance or textureless regions. To address this, we introduce the Self-Organizing Gaussian Mixture Model (SOGMM) to integrate absolute scale information from 3D point clouds. SOGMM       
+
+> First Author et al.: Preprint submitted to Elsevier Page 3 of 12 Short Title of the Article
+> Figure 2: Overview of the Ψ-Map Framework. The Input consists of multi-view RGB-D frames. During Geometric Reinforcement, the point cloud is modeled as a plane-constrained SOGMM to provide continuous structural supervision for the 2D Gaussian Surfels. In the Panoptic Learning stage, 2D mask features are lifted into 3D via a query-guided end-to-end architecture, where instance tokens are refined through local cross-attention within the view frustum to ensure global identity consistency. For Inference, our highly optimized rendering pipeline employs Precise Tile Intersection and Top-𝐾 Hard Selection. By leveraging the geometric sparsity and surface-aligned nature of 2DGS, Ψ-Map significantly reduces the computational overhead of high-dimensional feature accumulation, enabling real-time, high-fidelity multi-modal rendering.
+
+serves not only as a structural foundation for surfel initial-ization but also as a continuous geometric reference field throughout the optimization cycle, ensuring high physical realism. 
+
+Probabilistic SOGMM Representation. We fit the scene point clouds into a set of anisotropic Gaussian com-ponents using a recursive splitting strategy. Unlike discrete point clouds, SOGMM transforms spatial distributions into a continuous probability density function defined as: 
+
+𝑃 (𝑧 ′|Θ) = 
+
+> 𝐾
+
+∑
+
+> 𝑘 =1
+
+̂𝜋 𝑘  (𝑧 ′|̂𝜇 𝑘 ,̂ Σ𝑘 ) (2) where 𝑧 ′ = [𝑢, 𝑣, 0, 𝑔 ]⊤ denotes a 4D augmented vector defined in the local tangent space. Here, (𝑢, 𝑣 ) represents the 2D local coordinates transformed from a world-space 3D point 𝑝 𝑖 ∈ ℝ3, and 𝑔 is the grayscale intensity derived from image projections. We adopt this 4D SOGMM formulation to simultaneously capture the geometric structure and sur-face texture, providing a richer prior for surfel initialization. 
+
+Θ = { ̂𝜋 𝑘 ,̂𝜇 𝑘 ,̂ Σ𝑘 }𝐾 𝑘 =1 denotes the set of mixing weights, means, and covariances. 𝐾 is the total number of compo-nents adaptively determined by the self-organizing process. Each Gaussian node 𝑘 represents a local planar prior. 
+
+Normal Constraint. To precisely capture surface char-acteristics, we perform eigenvalue decomposition on the co-variance matrix ̂ Σ𝑘 , yielding eigenvalues 𝜆 0 ≥ 𝜆 1 ≥ 𝜆 2 and their corresponding eigenvectors 𝐯 0, 𝐯 1, 𝐯 2. Any world-space point 𝑝 𝑖 within the neighborhood of 𝑘 can be projected onto the local tangent plane. The relationship is formulated as 𝑝 𝑖 =̂ 𝜇 𝑘 + 𝑢 𝑖 𝐯 0 + 𝑣 𝑖 𝐯 1 + 𝑤 𝑖 𝐯 2 where 𝑢 𝑖 , 𝑣 𝑖 , 𝑤 𝑖 represent the coordinates in the local coordinate system. Specifically, 
+
+𝐯 0 and 𝐯 1 span the principal directions of the local plane (as-sociated with 𝑢 𝑖 , 𝑣 𝑖 ), while the eigenvector 𝐯 2 corresponding to the smallest eigenvalue is defined as the local reference normal ̂ 𝐧 𝑘 . In a perfectly planar structure, the vertical offset 
+
+𝑤 𝑖 tends toward zero. This representation provides explicit directional constraints for the 2DGS representation.        
+
+> Figure 3: The instance branch utilizes across-attention mechanism between 3D Gaussian-modulated query tokens and SOGMM-reinforced 2DGS scene fields.
+
+SOGMM initializes the central positions and rotations of 2D Gaussians by sampling the distribution parameters. Fur-thermore, it establishes a criterion for geometric consistency in 3D space. To represent the deviation of a surfel 𝐺 𝑖 from its geometric prior, we define the distance function from the surfel center 𝜇 𝑖 to the local tangent plane of the SOGMM: 
+
+𝑑 (𝜇 𝑖 , 𝑘 ) = |(𝜇 𝑖 −̂𝜇 𝑘 ) ⋅̂ 𝐧 𝑘 | (3) This function measures the drift of the surfel along the normal direction. This anchoring mechanism effectively rec-tifies surface drifts caused by visual matching errors, main-taining rigorous topological consistency in complex, large-scale environments. 
+
+4. End-to-End Panoptic Reconstruction 4.1. Query-guided Instance Segmentation 
+
+To bypass the error accumulation and heavy computational overhead inherent in traditional multi-stage pipelines, which   
+
+> First Author et al.: Preprint submitted to Elsevier Page 4 of 12 Short Title of the Article
+
+rely on complex cross-frame data association, we propose an end-to-end architecture guided by explicit instance queries. By embedding semantic and instance-level information di-rectly into the map representation, each 2D Gaussian surfel 
+
+𝐺 𝑖 becomes a multi-modal primitive. Beyond traditional geometric attributes and appearance parameters, each sur-fel carries two additional learnable embeddings: a high-dimensional semantic feature vector 𝑓 𝑠𝑒𝑚 𝑖 and an instance feature vector 𝑓 𝑖𝑛𝑠 𝑖 , forming a continuous neural feature field grounded on the scene geometry. To extract discrete object instances from this field, we formulate the instance queries as explicitly localized rep-resentations. Following the paradigm of PanopticRecon++ [27], each instance query 𝑘 is defined as a dual-component entity: a high-dimensional query feature 𝑓 𝑞 and a spatial 3D Gaussian distribution 𝑘 (𝐱 ) =  (𝐱 |𝜇 𝑘 , Σ𝑘 ), where 𝜇 𝑘 and 
+
+Σ𝑘 represent the learnable center and spatial covariance of the 𝑘 -th instance. To segment the scene Gaussians, we utilize a distance-aware cross-attention mechanism. Considering that the scene surfels are significantly smaller in scale than the Gaussian-modulated instance queries, we simplify each surfel 𝑔 into its center point 𝑝 𝑔 during the interaction. The affinity between a query 𝑞 and a surfel 𝑔 is determined by fusing their feature similarity with their geometric correlation. First, the feature-based similarity is defined as: 
+
+𝑆 (𝑓 𝑞 , 𝑓 𝑔 ) = 𝜎 (𝑓 ⊤𝑞 𝑓 𝑔 ) (4) where 𝜎 (⋅) denotes the sigmoid function. Simultaneously, as the instance queries follow a Gaussian distribution, the spatial relationship between a 3D point and the query can be described by the probability density. We define the geomet-ric affinity between query 𝑞 and scene surfel 𝑔 as the ratio of their probability densities: 
+
+𝐷 (𝑝 𝑞 , 𝑝 𝑔 ) = 𝜑 (𝑝 𝑔 )
+
+𝜑 (𝑝 𝑞 ) (5) where 𝜑 (⋅) is the probability density function of the query’s spatial Gaussian distribution, while 𝑝 𝑞 and 𝑝 𝑔 are the center coordinates of the instance query and the scene Gaussian, respectively. The resulting attention map 𝐴 (𝑞, 𝑔 ) integrates these di-mensions to ensure the assignment is both visually consistent and geometrically grounded: 
+
+𝐴 (𝑞, 𝑔 ) = 𝑆 (𝑓 𝑞 , 𝑓 𝑔 )𝐷 (𝑝 𝑞 , 𝑝 𝑔 ) (6) The discrete instance label for each surfel 𝑔 is then derived via a softmax operation over all 𝑁 queries: 
+
+𝑙 𝑖𝑛𝑠 (𝑔 ) = Softmax ([𝐴 (𝑞 1, 𝑔 ), … , 𝐴 (𝑞 𝑁 , 𝑔 )] ) (7) where 𝑁 is the total number of queries. Finally, to achieve consistent 2D panoptic segmentation, the pixel-level in-stance identity 𝐼 is rendered by 𝛼 -blending the labels of overlapping surfels along the camera ray: 
+
+𝐼 = ∑
+
+> 𝑖 ∈
+
+𝑙 𝑖𝑛𝑠 (𝑖 )𝛼 ′
+
+> 𝑖 𝑖 −1
+
+∏
+
+> 𝑗 =1
+
+(1 − 𝛼 ′ 
+
+> 𝑗
+
+) (8) This query-based grouping facilitates global panoptic con-sistency across the entire map without the need for explicit temporal tracking or heuristic data association. 
+
+Frustum-constrained Cross-Attention. In large-scale environments, the dense population of 2D Gaussians makes global cross-attention computationally prohibitive. As the scene scale and the number of primitives grow, the attention matrix size leads to a memory explosion. To address this, we propose a local cross-attention mechanism constrained within the camera’s view frustum , which restricts interac-tions to only relevant primitives during each training step. Following the geometric criteria in 3DGS, we identify the active set of Gaussians within  as those whose 99% 
+
+confidence intervals intersect the current view frustum. For these selected primitives, we fuse the surfel central coordi-nates 𝜇 𝑗 , embedded via a positional encoding function 𝜓 (⋅),with the instance features 𝑓 𝑗 to construct the keys 𝐾 𝑗 and values 𝑉 𝑗 :
+
+𝐾 𝑗 = 𝑓 𝑗 + 𝜓 (𝜇 𝑗 ), 𝑉 𝑗 = 𝑓 𝑗 (9) The attention score 𝑒 𝑖,𝑗 between a query 𝑄 𝑖 and a local surfel feature is then computed through a similarity projection: 
+
+𝑒 𝑖,𝑗 = (𝑄 𝑖 𝑊 𝑄 )( 𝐾 𝑗 𝑊 𝐾 )⊤
+
+√𝑑 , ∀𝑗 ∈  (10) where 𝑊 𝑄 , 𝑊 𝐾 ∈ ℝ𝐶 ×𝑑 are learnable projection matrices and 𝑑 is the feature dimension. The final query representa-tion is updated by aggregating local surfel information: 
+
+𝑄 ′ 
+
+> 𝑖
+
+= Softmax ({ 𝑒 𝑖,𝑗 }𝑗 ∈ ) ⋅ (𝑉 𝑗 𝑊 𝑉 ) (11) To ensure high-performance execution, we implement this mechanism using a custom CUDA kernel. Upon filtering the valid Gaussians, we dispatch parallel threads for each primitive to compute the cross-attention scores and update the instance features. This localized strategy drastically re-duces the peak training memory and shortens convergence time, particularly in expansive scenes. Following the at-tention computation, we leverage tile-based rasterization as defined in Eq. 8 to render the 2D instance maps. This anchoring of attention within the view frustum makes our model highly scalable for complex, high-resolution large-scale reconstructions. 
+
+Dynamic Query Adjustment Strategy. As the number of objects increases with spatial expansion in large-scale scenes, a fixed number of queries fails to balance computa-tional efficiency with coverage completeness. We introduce a dynamic query adjustment scheme that adaptively prunes redundant instance tokens based on their utilization and geometric overlap. Specifically, we categorize redundant tokens into two types: useless and duplicate. Since our initial instance masks are derived from po-tentially noisy open-vocabulary segmentation rather than ground-truth annotations, some queries may be initialized by erroneous masks. We define useless tokens as those that are never assigned or assigned only infrequently during   
+
+> First Author et al.: Preprint submitted to Elsevier Page 5 of 12 Short Title of the Article
+
+the training process. By identifying and removing these low-utilization queries, we effectively reduce computational overhead while mitigating the propagation of segmentation noise. In the early stages of optimization, multiple tokens may represent different portions of the same physical object due to the limited Field of View (FoV) of 2D images. As the representation converges, one query typically evolves to encompass the entire instance, rendering others redundant. To identify these duplicates, we introduce a 3D Intersection over Mask (IoM) metric. For a pair of tokens 𝑄 𝑖 and 𝑄 𝑗 with their respective 3D masks 𝑀 𝑖 and 𝑀 𝑗 , the IoM is defined as: IoM 𝑖𝑗 = 𝑀 𝑖 ∩ 𝑀 𝑗 
+
+𝑀 𝑖 
+
+(12) Our observations indicate that duplicate tokens often exhibit an enclosing behavior, where a larger 3D mask significantly overlaps with multiple smaller ones. By applying a threshold to the IoM, we retain only the query with the largest mask coverage, ensuring a concise and non-redundant instance representation. 
+
+4.2. End-to-End Joint Optimization 
+
+To achieve synergistic improvements in both scene geometry and panoptic understanding, we propose a multi-task joint optimization framework. By unifying geometric prior con-straints and panoptic perceptual supervision, our system re-fines the spatial parameters of surfels and high-dimensional feature fields simultaneously through end-to-end backprop-agation. 
+
+Geometric and Photometric Supervision. To ensure visual realism, we supervise the rendered images using a composite photometric loss: 𝑟𝑔𝑏 = (1 − 𝜆 𝑠 )1 + 𝜆 𝑠 𝑠𝑠𝑖𝑚 .More importantly, we leverage the local planar priors pro-vided by the SOGMM to enforce geometric consistency through 𝑔𝑒𝑜 :
+
+𝑔𝑒𝑜 = ∑
+
+> 𝑖
+
+𝑑 (𝜇 𝑖 , 𝑘 ) + 𝜆 𝑛 (1 − |𝐧 𝑖 ⋅̂ 𝐧 𝑘 |) (13) where 𝑑 (𝜇 𝑖 , 𝑘 ) is the point-to-plane distance. This term anchors the surfel center 𝜇 𝑖 to the physical surface while aligning the surfel normal 𝐧 𝑖 with the reference normal ̂ 𝐧 𝑘 .Additionally, to maintain the structural integrity and com-pactness of the 2D primitives, we introduce an anisotropy regularization 𝑖𝑠𝑜 = ∑ ‖𝑠 𝑖, 1 − 𝑠 𝑖, 2‖2, which penalizes excessive stretching by minimizing the difference between the principal scaling axes (𝑠 1, 𝑠 2) of each surfel. 
+
+Panoptic Feature Supervision. The training of the se-mantic and instance fields is achieved by comparing ren-dered outputs with 2D pseudo-labels. Since 2D instance masks lack inter-view correspondence, we utilize the Hun-garian Algorithm for linear assignment on a per-frame basis to associate instance queries with pseudo-GT labels. Fol-lowing optimal matching, the instance branch is supervised via a combination of Dice and Binary Cross-Entropy (BCE) losses, while the semantic field utilizes standard Cross-Entropy (CE) loss: 
+
+𝑖𝑛𝑠 = ∑
+
+> 𝑘
+
+𝑑𝑖𝑐𝑒 (𝑀 𝑘 , 𝑀 𝑔𝑡 𝑘 ) + 𝑏𝑐𝑒 (𝑀 𝑘 , 𝑀 𝑔𝑡 𝑘 ) (14) 
+
+𝑠𝑒𝑚 = 𝑐𝑒 (𝑀 𝑠𝑒𝑚 , 𝑀 𝑔𝑡 𝑠𝑒𝑚 ) (15) 
+
+Total Optimization Objective. The final joint objective function 𝑡𝑜𝑡𝑎𝑙 is a weighted sum of the components, facili-tating a complementary gradient flow between geometry and perception: 
+
+𝑡𝑜𝑡𝑎𝑙 = 𝜆 1𝑟𝑔𝑏 +𝜆 2𝑔𝑒𝑜 +𝜆 3𝑖𝑛𝑠 +𝜆 4𝑠𝑒𝑚 +𝜆 5𝑖𝑠𝑜 (16) This multi-task training regime allows the system to re-construct geometrically precise surfaces while maintaining robust, query-consistent panoptic understanding in large-scale environments. 
+
+5. Efficient Rendering for High-Dimensional Features 
+
+In large-scale panoptic reconstruction, semantic and in-stance features often possess extremely high dimensions, imposing significant computational pressure and memory bandwidth bottlenecks on the traditional rasterization pipeline. To meet the real-time requirements of robotic control loops while ensuring high-fidelity understanding, we optimize the rendering logic for high-dimensional feature fields. 
+
+Precise Tile Intersection. Traditional rasterization of-ten employs isotropic bounding spheres to determine inter-sections between Gaussians and pixel tiles, which introduces significant computational redundancy for flattened 2D sur-fels. To optimize this, we derive a compact Axis-Aligned Bounding Box (AABB) directly from the 2D projected co-variance matrix Σ′. Specifically, for a given confidence threshold 𝜒 2 (e.g., 3𝜎 ), the influence range (Δ 𝑥, Δ𝑦 ) of a surfel is defined by the diagonal elements of the projected covariance: 
+
+Δ𝑥 =
+
+√
+
+𝜒 2Σ′11 , Δ𝑦 =
+
+√
+
+𝜒 2Σ′22 (17) This strategy precisely filters out surfels that do not overlap with the current tile in the projection plane. By substituting loose spheres with tight AABBs, we reduce invalid Gaussian assignments by approximately 40%, significantly alleviating memory bandwidth pressure in expansive large-scale envi-ronments. 
+
+Top-K Hard Selection Strategy. Unlike RGB ren-dering, which requires dense blending to capture high-frequency lighting, dense semantic prediction tasks are less sensitive to high-frequency noise and are grounded in parsimonious geometric surfaces. Given that the feature dimensionality 𝐶 is substantially higher than RGB, accumu-lating all 𝑁 overlapping Gaussians becomes a primary com-putational bottleneck. Capitalizing on the inherent geometric sparsity of 2DGS, we propose a Top-𝐾 Hard Selection    
+
+> First Author et al.: Preprint submitted to Elsevier Page 6 of 12 Short Title of the Article
+> Figure 4: Comparison of the quality of semantic segmentation and panoptic segmentation of different methods on ScanNet V2 and ScanNet++.
+
+mechanism. For each pixel, we restrict feature accumulation to a fixed set  containing the 𝐾 Gaussians with the highest opacity weights 𝜔 𝑗 = 𝛼 𝑗 
+
+∏𝑗 −1 
+
+> 𝑘 =1
+
+(1 − 𝛼 𝑘 ):
+
+𝐹 𝑝𝑖𝑥𝑒𝑙 = ∑
+
+> 𝑗 ∈
+
+𝑓 𝑗 ⋅ 𝜔 𝑗 , where || = 𝐾 (18) By replacing the 𝑂 (𝑁 ) accumulation with a constant 𝑂 (𝐾 )
+
+selection, we fundamentally streamline the high-dimensional vector multiply-accumulate operations. 
+
+6. Experiments 6.1. Experimental Setup 
+
+To validate the effectiveness of our proposed framework, we conduct extensive experiments focusing on geometric recon-struction accuracy, panoptic segmentation quality, and real-time rendering performance. We compare our system against several state-of-the-art methods in both outdoor and indoor environments to demonstrate its robustness and scalability. To verify the efficacy of Ψ-Map across diverse envi-ronments, we conduct evaluations on three authoritative real-world benchmarks: We utilize the KITTI-360 [28] dataset, which comprises extensive mobile LiDAR scans and synchronized fisheye images from urban street scenes. This dataset is instrumental for assessing our SOGMM-guided geometric initialization and the robustness of our query-based panoptic mapping in expansive outdoor settings. For fine-grained reconstruction and dense prediction, we employ ScanNet V2 [29] and its higher-fidelity successor, ScanNet++ [30]. ScanNet V2 offers a vast array of RGB-D sequences with comprehensive semantic labels, while ScanNet++ provides sub-millimeter geometry and high-resolution textures. These datasets serve as the primary testbed for evaluating our Top-𝐾 rendering efficiency and surface alignment accuracy. We employ a comprehensive set of metrics to evalu-ate different aspects of the system. For geometric recon-struction, we measure the Accuracy, Completeness, and F-score to assess how well the 2D surfels represent the physical surfaces. For panoptic understanding, we adopt standard metrics including Mean Intersection-over-Union (mIoU) for semantic segmentation, and Panoptic Quality (PQ), Segmentation Quality (SQ), and Recognition Quality (RQ) for instance-level evaluation. Additionally, we analyze the system efficiency using Frames Per Second (FPS) and GPU memory consumption to highlight our real-time per-formance. All experiments and performance benchmarks are conducted on a workstation equipped with an NVIDIA RTX A6000 GPU. 
+
+6.2. Geometric Reconstruction Evaluation 
+
+To assess the geometric fidelity of Ψ-Map, we compare it against four LiDAR-only pipelines and nine state-of-the-art Gaussian-based methods. For a fair comparison, all Gaus-sian baselines are initialized with colorized LiDAR point clouds and augmented with sky masks for outdoor scenes. As shown in Tab. 1, Ψ-Map outperforms all baselines in Accuracy, Completeness, and F-score. Qualitative results indicate that while LiDAR-only methods are limited by point sparsity, Ψ-Map utilizes visual information to reconstruct denser surfaces. Furthermore, our SOGMM-guided nor-malization mitigates the geometric degradation caused by excessive photometric loss in traditional Gaussian methods, effectively reducing artifacts and floaters. Compared to standard 2DGS, which tends to oversmooth large-scale details, our framework preserves fine-grained structures through SOGMM’s local planar priors. Ψ-Map maintains competitive rendering quality with a minor com-putational trade-off in optimization time due to the nearest   
+
+> First Author et al.: Preprint submitted to Elsevier Page 7 of 12
+
+Short Title of the Article 
+
+Table 1 
+
+Geometric quality comparison on self-collected datasets.                                                                         
+
+> Method Acc. ↓Comp. ↓C-L1 ↓Recall ↑Prec. ↑F1 ↑
+> 2DGS [15] 13.98 18.60 16.28 71.65 80.85 75.82 Gaussian Surfels [31] 14.25 35.95 25.10 70.47 48.33 57.29 PGSR [16] 13.52 19.63 16.58 72.66 73.67 73.08 RaDe-GS [32] 13.28 17.13 15.22 73.42 78.59 75.88 LIV-GaussMap [33] 14.17 15.48 14.80 72.54 80.33 76.18 GOF [34] 14.27 15.37 14.83 70.55 80.20 75.04 SuGaR [14] 12.88 15.62 14.23 75.02 81.86 78.23 Trim2DGS [35] 14.65 33.75 25.30 68.64 61.12 64.09 Trim3DGS [35] 14.47 16.28 15.37 71.09 77.52 74.08 Ours 4.37 4.63 4.51 97.49 98.65 98.07
+
+Figure 5: Qualitative rendering results on the Replica dataset, demonstrating Ψ-Map’s ability to produce high-fidelity geom-etry, semantic, and panoptic maps. 
+
+neighbor search, which is justified by the significant gains in surface accuracy and structural consistency. 
+
+6.3. Panoptic Segmentation Performance 
+
+To evaluate the scene understanding capabilities of Ψ-Map, we conduct a quantitative comparison against both NeRF-based lifting methods and Gaussian-based architectures. The results on ScanNet-V2 and ScanNet++ benchmarks are summarized in Tab. 5. As indicated by the metrics, Ψ-Map significantly outper-forms all baselines across both datasets. In ScanNet-V2 and ScanNet++, our method achieves a state-of-the-art Panoptic Quality. The performance gain can be attributed to several key architectural advantages: 
+
+End-to-End Joint Optimization. Traditional multi-stage pipelines, such as PanopticRecon and Gaussian Group-ing, often suffer from cascaded errors where inaccuracies in initial 2D segmentation masks propagate through the 3D reconstruction process. In contrast, Ψ-Map employs a unified joint optimization framework. By simultaneously re-fining geometry and high-dimensional panoptic features, our model allows perception and spatial structure to supervise each other, leading to a more globally consistent and noise-robust representation. 
+
+Query-Based Temporal Consistency. A major chal-lenge for baselines like Panoptic Lifting and OpenGaus-sian is maintaining persistent instance identities across di-verse viewpoints, frequently leading to identity switches or fragmentation. Ψ-Map resolves this by utilizing learnable 3D instance queries. This query-guided mechanism anchors each physical object to a unique identity that integrates both appearance and spatial priors. Consequently, our method ensures that multi-view observations of the same object are fused into a coherent 3D instance, as reflected by our nearly perfect RQ in ScanNet-V2. 
+
+Distance-Aware Spatial Reasoning. Feature-lifting ap-proaches like Contrastive Lift often struggle to separate adjacent objects with similar visual textures. While Open-Gaussian attempts to use spatial clustering, its priors are often too coarse for precise boundaries. Our framework leverages deformable instance queries and distance-aware similarity measures, enabling the system to perform high-resolution spatial reasoning. This allows Ψ-Map to effec-tively distinguish between spatially neighboring objects even under challenging photometric conditions. 
+
+6.4. Rendering Efficiency and Real-time Inference 
+
+In robotic simulation, the real-time synthesis of panoptic segmentation masks from a camera’s perspective is vital for high-response, low-latency autonomous operations. Our experiments quantify how these optimizations collectively alleviate computational bottlenecks to ensure fluid interac-tive rates. Table 3 summarizes the performance across different configurations, tracking inference time (ms), frame rate (FPS), and efficiency metrics such as total rendered surfel count (RN-Total) and average surfels per tile (RN/Tile). 
+
+Precise Tile Intersection. The effectiveness of our en-hanced intersection mechanism is demonstrated in the sec-ond row of Tab. 3. We significantly filter out redundant tile-to-surfel assignments. Compared to the baseline setting, this mechanism reduces the total allocation count from 6.1M to 3.9M. This reduction proves that precise geometric in-tersection effectively mitigates the rasterization bottleneck inherent in standard 2DGS, enhancing overall throughput. 
+
+Top-𝐾 Hard Selection. We further validate the strat-egy for tackling the feature accumulation bottleneck, which typically scales with the high channel count 𝐶 of panoptic fields. As shown in the w/ Top-K configuration, we leverage the surface-aligned nature of 2DGS to truncate the blending process, selecting only the 𝐾 most relevant Gaussians per pixel. Comparing this setting to the baseline, the total ren-dered surfel count drops drastically to 1.2M, with inference latency falling to 27 ms, demonstrating that the Top-𝐾 strat-egy provides substantial acceleration for high-dimensional feature rendering without a meaningful loss in PQ. The last row of Tab. 3 integrates both optimizations, effectively addressing bottlenecks in both the tile assign-ment and alpha-blending stages. This combined approach achieves a low latency of 22 ms (45 FPS), meeting the rigorous real-time requirements for high-fidelity robotic nav-igation and simulation. 
+
+First Author et al.: Preprint submitted to Elsevier Page 8 of 12 Short Title of the Article 
+
+Table 2 
+
+Quantitative comparison of panoptic segmentation performance on ScanNet-V2 and ScanNet++ datasets.                                                                                                                                
+
+> Method ScanNet-V2 ScanNet++ PQ ↑SQ ↑RQ ↑mIoU ↑mAcc ↑mCov ↑mW-Cov ↑PQ ↑SQ ↑RQ ↑mIoU ↑mAcc ↑mCov ↑mW-Cov ↑
+> NeRF-based Lifting Methods
+> Panoptic Lifting [36] 57.86 61.96 85.31 67.91 78.59 45.88 59.93 71.14 77.48 88.14 81.34 89.67 56.17 68.51 Contrastive Lift [37] 37.35 41.91 57.60 64.77 75.80 13.21 23.26 47.58 57.23 65.81 81.09 89.30 27.39 36.51 PVLFF [38] 30.11 51.71 44.43 55.41 63.96 45.75 48.41 52.24 66.86 65.56 62.53 70.31 67.95 75.47 PanopticRecon [39] 63.70 64.81 81.17 68.62 80.87 66.58 77.84 68.29 77.01 85.05 77.75 87.08 51.34 62.79
+> Gaussian-based Methods
+> Gaussian Grouping [22] 43.75 50.63 72.68 58.05 68.68 52.70 58.10 33.10 40.60 67.27 59.53 68.13 29.83 36.83 OpenGaussian [40] 48.73 51.48 88.10 54.05 68.43 44.43 49.60 51.03 56.93 85.73 61.80 73.97 50.00 51.02
+> Ψ-Map (Ours) 74.12 74.12 100.0 74.93 83.07 72.89 79.14 77.09 82.36 93.60 81.77 89.01 74.23 77.91
+
+Table 3 
+
+Study on Precise Tile Intersection and Top-𝐾 Hard Selection.                               
+
+> Config Time (ms) ↓FPS ↑RN-Total ↓RN / Tile ↓PQ ↑
+> Baseline 46 22 6.1M 1230 74.75 w/ Precise Tile 40 25 3.9M 800 74.73 w/ Top-𝐾 27 37 1.2M 610 74.17 Full Method 22 45 1.2M 580 74.12
+
+Table 4 
+
+Ablation study on different geometric representations on ScanNet-V2.                                    
+
+> Base Model PQ ↑SQ ↑RQ ↑mIoU ↑mAcc ↑mCov ↑mW-Cov ↑
+> 3DGS [41] 73.83 74.08 99.33 75.08 83.68 72.20 76.43 2DGS [15] 73.30 73.45 99.93 73.75 82.58 71.28 75.98 Ours 74.75 74.75 100.0 74.95 83.70 73.18 79.63
+
+6.5. Ablation Study 
+
+In this section, we perform a series of ablation studies to evaluate the individual contributions of our key components. We analyze the impact of different geometric representa-tions, token-based object modeling, spatial priors, and the dynamic adjustment mechanism to substantiate the design choices of the Ψ-Map framework. 
+
+Impact of Geometric Representation. We investigate the influence of various geometric representations on final panoptic understanding performance. As shown in Tab. 4, while our query-guided architecture is compatible with dif-ferent Gaussian models, the configuration utilizing our pro-posed geometric representation achieves the best results across all metrics, notably outperforming 2DGS by 1.45% in PQ. This performance gain is primarily attributed to the high-fidelity surface reconstruction and the effective suppression of floaters through our SOGMM-guided con-straints. By providing a cleaner and more physically ac-curate geometric backbone, our representation ensures that instance queries are anchored to precise structural surfaces rather than erroneous artifacts, thereby enabling more con-sistent instance association and semantic lifting. Conse-quently, we adopt this representation as the default geometric base for Ψ-Map. 
+
+Figure 6: Quantitative comparisons on Scan2CAD dataset. 
+
+6.6. Case Study 
+
+To demonstrate the practical utility of Ψ-Map, we evaluate its performance on a 3D Object Completion and Generation task using the Scan2CAD dataset, and on an Object Goal Navigation task in our self-collected and reconstructed in-door scenes. 
+
+3D Object Completion and Generation. Our frame-work extends beyond segmentation reconstruction to sup-port the generative completion of individual 3D objects within a scene following instance segmentation. A key chal-lenge in this task is maintaining the fidelity of the ob-served geometry while inferring the complete shape of oc-cluded or partially observed instances. As shown in Tab. 5, our method significantly outperforms baseline approaches across all metrics. By leveraging the high-quality partial geometry from Ψ-Map as a structural prior, our generative pipeline ensures not only the geometric completeness of reconstructed objects but also their pose consistency relative to the original scene. Crucially, our approach explicitly considers the spatial rela-tionship between the generated object and its surrounding environment, effectively avoiding geometric collisions or intersections with adjacent structures. 
+
+First Author et al.: Preprint submitted to Elsevier Page 9 of 12 Short Title of the Article                                     
+
+> Table 5
+> Quantitative comparisons on Scan2CAD dataset Method CD-S ↓F-Score-S ↑CD-O ↓F-Score-O ↑IoU-B ↑Col-O ↓Col-S ↓
+> AdaPoinTr 0.018 0.841 0.062 0.532 0.597 0.329 0.023 InstPIFu 0.128 0.493 0.089 0.470 0.207 0.510 0.159 Gen3DSR 0.070 0.655 0.103 0.430 0.398 0.291 0.093 Ours 0.016 0.903 0.036 0.710 0.666 0.203 0.015
+> Figure 7: Comparison of navigation performance before and after fine-tuning with 3D-consistent labels.
+
+Qualitative comparisons in Fig. 6 illustrate that, com-pared to existing methods, our solution produces complete 3D entities that are more consistent with the global scene context. Specifically, it excels at recovering the original orientations and relative poses of objects, ensuring that the completed models fit naturally into the environment without violating physical constraints. This capability makes Ψ-Map a powerful tool for high-fidelity simulation and digital twin synthesis. 
+
+Object Goal Navigation. We utilize a two-stage VLFM-based [42] pipeline, where the baseline perception module [43, 23] initially suffers from frequent missed or false detec-tions due to limited single-frame visibility, resulting in low success rates as shown in Tab. 6. To address this, we leverage Ψ-Map’s 3D-consistent reconstruction as a high-fidelity ground truth generator. By projecting 3D-consistent labels back into 2D viewpoints, we create robust synthetic supervision that inherently benefits from multi-view fusion. Fine-tuning the perception module with this view-invariant knowledge significantly improves detection accuracy. As shown in Tab. 6, this data-driven enhancement boosts the navigation success rate to 100% in the Laboratory Room, proving that Ψ-Map can serve as a powerful engine to bolster robotic perception in complex deployments. As visualized in Fig. 7, after fine-tuning, the navigation algorithm benefits from significantly more accu-rate real-time visual perception. The agent is able to identify target objects more promptly and navigate to their immediate vicinity with higher precision, proving that Ψ-Map can serve       
+
+> Table 6
+> Impact of fine-tuning with 3D-consistent labels on navigation success rate (SR).
+> Scene SR-Before SR-After
+> Laboratory Room 20% 100%
+> Private House 25% 50%
+
+as a powerful engine to bolster robotic perception in complex deployments. 
+
+7. Conclusion 
+
+In this paper, we presented Ψ-Map, a geometry-incorporated panoptic splatting framework designed for real-time, large-scale scene understanding. By leveraging LiDAR-guided SOGMM modeling and 2D Gaussian surfels, our method achieves high-fidelity surface reconstruction with rigorous physical consistency. We introduced a query-guided end-to-end learning architecture that effectively overcomes error accumulation in traditional multi-stage pipelines, enabling cross-view consistent panoptic field learning. Furthermore, by incorporating Precise Tile Intersection and Top-𝐾 Hard Selection, Ψ-Map successfully mitigates the computational bottlenecks of high-dimensional feature accumulation, en-suring real-time performance. Experimental results on both indoor and outdoor bench-marks demonstrate that Ψ-Map significantly outperforms   
+
+> First Author et al.: Preprint submitted to Elsevier Page 10 of 12
+
+Short Title of the Article 
+
+state-of-the-art methods in geometric accuracy and panoptic quality while maintaining a frame rate exceeding 45 FPS. Our case study further validates that Ψ-Map-generated 3D-consistent labels can serve as a powerful data engine to bolster the perception robustness of downstream robotic navigation tasks. Overall, Ψ-Map provides an efficient and robust foundation for future research in active robotic per-ception and high-fidelity simulation. 
+
+References 
+
+[1] S. Tao, F. Xiang, A. Shukla, Y. Qin, X. Hinrichsen, X. Yuan, C. Bao, X. Lin, Y. Liu, T.-k. Chan et al. , “Maniskill3: Gpu parallelized robotics simulation and rendering for generalizable embodied ai,” 
+
+arXiv preprint arXiv:2410.00425 , 2024. [2] M. Mittal, P. Roth, J. Tigue, A. Richard, O. Zhang, P. Du, A. Serrano-Munoz, X. Yao, R. Zurbrügg, N. Rudin et al. , “Isaac lab: A gpu-accelerated simulation framework for multi-modal robot learning,” 
+
+arXiv preprint arXiv:2511.04831 , 2025. [3] J. Zhang, K. Wang, S. Wang, M. Li, H. Liu, S. Wei, Z. Wang, Z. Zhang, and H. Wang, “Uni-navid: A video-based vision-language-action model for unifying embodied navigation tasks,” arXiv preprint arXiv:2412.06224 , 2024. [4] X. Li, K. Hsu, J. Gu, K. Pertsch, O. Mees, H. R. Walke, C. Fu, I. Lunawat, I. Sieh, S. Kirmani et al. , “Evaluating real-world robot ma-nipulation policies in simulation,” arXiv preprint arXiv:2405.05941 ,2024. [5] Y. Wu, L. Pan, W. Wu, G. Wang, Y. Miao, F. Xu, and H. Wang, “Rl-gsbridge: 3d gaussian splatting based real2sim2real method for robotic manipulation learning,” in 2025 IEEE International Confer-ence on Robotics and Automation (ICRA) . IEEE, 2025, pp. 192–198. [6] M. N. Qureshi, S. Garg, F. Yandun, D. Held, G. Kantor, and A. Silwal, “Splatsim: Zero-shot sim2real transfer of rgb manipulation policies using gaussian splatting,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025, pp. 6502–6509. [7] P. Li, H. Geng, J. Crate, Y. Han, J. Zhang, F. Wang, C. T. Cheng, R. Dong, Y.-J. Wang, H. Lou et al. , “Rose: Reconstructing objects, scenes, and trajectories from casual videos for robotic manipulation,” in NeurIPS 2025 Workshop on Bridging Language, Agent, and World Models for Reasoning and Planning .[8] X. Han, M. Liu, Y. Chen, J. Yu, X. Lyu, Y. Tian, B. Wang, W. Zhang, and J. Pang, “Re 3sim: Generating high-fidelity simulation data via 3d-photorealistic real-to-sim for robotic manipulation,” arXiv preprint arXiv:2502.08645 , 2025. [9] H. Xia, Z.-H. Lin, W.-C. Ma, and S. Wang, “Video2game: Real-time interactive realistic and browser-compatible environment from a single video,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 4578–4588. [10] Q. Wu, K. Wang, K. Li, J. Zheng, and J. Cai, “Objectsdf++: Improved object-compositional neural implicit surfaces,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2023, pp. 21 764–21 774. [11] J. Wang, M. Chen, N. Karaev, A. Vedaldi, C. Rupprecht, and D. Novotny, “Vggt: Visual geometry grounded transformer,” in Pro-ceedings of the Computer Vision and Pattern Recognition Conference ,2025, pp. 5294–5306. [12] S. Zhou, H. Chang, S. Jiang, Z. Fan, D. Xu, P. Chari, S. You, Z. Wang, and A. Kadambi, “Feature 3dgs: Supercharging 3d gaussian splatting to enable distilled feature fields,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 21 676–21 685. [13] Z. Yu, A. Chen, B. Huang, T. Sattler, and A. Geiger, “Mip-splatting: Alias-free 3d gaussian splatting,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2024, pp. 19 447–19 456. [14] A. Guédon and V. Lepetit, “Sugar: Surface-aligned gaussian splatting for efficient 3d mesh reconstruction and high-quality mesh rendering,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 5354–5363. [15] B. Huang, Z. Yu, A. Chen, A. Geiger, and S. Gao, “2d gaussian splat-ting for geometrically accurate radiance fields,” in ACM SIGGRAPH 2024 conference papers , 2024, pp. 1–11. [16] D. Chen, H. Li, W. Ye, Y. Wang, W. Xie, S. Zhai, N. Wang, H. Liu, H. Bao, and G. Zhang, “Pgsr: Planar-based gaussian splatting for efficient and high-fidelity surface reconstruction,” IEEE Transactions on Visualization and Computer Graphics , 2024. [17] K. Goel, N. Michael, and W. Tabib, “Probabilistic point cloud model-ing via self-organizing gaussian mixture models,” IEEE Robotics and Automation Letters , vol. 8, no. 5, pp. 2526–2533, 2023. [18] K. Goel and W. Tabib, “Incremental multimodal surface mapping via self-organizing gaussian mixture models,” IEEE Robotics and Automation Letters , vol. 8, no. 12, pp. 8358–8365, 2023. [19] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agarwal, G. Sastry, A. Askell, P. Mishkin, J. Clark et al. , “Learning transferable visual models from natural language supervision,” in International conference on machine learning . PMLR, 2021, pp. 8748–8763. [20] J. Kerr, C. M. Kim, K. Goldberg, A. Kanazawa, and M. Tancik, “Lerf: Language embedded radiance fields,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2023, pp. 19 729–19 739. [21] M. Qin, W. Li, J. Zhou, H. Wang, and H. Pfister, “Langsplat: 3d language gaussian splatting,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 20 051–20 060. [22] M. Ye, M. Danelljan, F. Yu, and L. Ke, “Gaussian grouping: Segment and edit anything in 3d scenes,” in European Conference on Computer Vision . Springer, 2024, pp. 162–179. [23] A. Kirillov, E. Mintun, N. Ravi, H. Mao, C. Rolland, L. Gustafson, T. Xiao, S. Whitehead, A. C. Berg, W.-Y. Lo et al. , “Segment any-thing,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2023, pp. 4015–4026. [24] B. Cheng, I. Misra, A. G. Schwing, A. Kirillov, and R. Girdhar, “Masked-attention mask transformer for universal image segmenta-tion,” in CVPR , 2022. [25] J. C. Lee, D. Rho, X. Sun, J. H. Ko, and E. Park, “Compact 3d gaussian representation for radiance field,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024, pp. 21 719–21 728. [26] C. Jiang, R. Gao, K. Shao, Y. Wang, R. Xiong, and Y. Zhang, “Li-gs: Gaussian splatting with lidar incorporated for accurate large-scale reconstruction,” IEEE Robotics and Automation Letters , 2024. [27] X. Yu, Y. Xie, Y. Liu, H. Lu, R. Xiong, Y. Liao, and Y. Wang, “Leverage cross-attention for end-to-end open-vocabulary panoptic reconstruction,” arXiv preprint arXiv:2501.01119 , 2025. [28] Y. Liao, J. Xie, and A. Geiger, “Kitti-360: A novel dataset and benchmarks for urban scene understanding in 2d and 3d,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 45, no. 3, pp. 3292–3310, 2022. [29] A. Dai, A. X. Chang, M. Savva, M. Halber, T. Funkhouser, and M. Nießner, “Scannet: Richly-annotated 3d reconstructions of indoor scenes,” in Proceedings of the IEEE conference on computer vision and pattern recognition , 2017, pp. 5828–5839. [30] C. Yeshwanth, Y.-C. Liu, M. Nießner, and A. Dai, “Scannet++: A high-fidelity dataset of 3d indoor scenes,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2023, pp. 12–22. [31] P. Dai, J. Xu, W. Xie, X. Liu, H. Wang, and W. Xu, “High-quality surface reconstruction using gaussian surfels,” in ACM SIGGRAPH 2024 conference papers , 2024, pp. 1–11. [32] B. Zhang, C. Fang, R. Shrestha, Y. Liang, X. Long, and P. Tan, “Rade-gs: Rasterizing depth in gaussian splatting,” arXiv preprint arXiv:2406.01467 , 2024. 
+
+First Author et al.: Preprint submitted to Elsevier Page 11 of 12 Short Title of the Article 
+
+[33] S. Hong, J. He, X. Zheng, and C. Zheng, “Liv-gaussmap: Lidar-inertial-visual fusion for real-time 3d radiance field map rendering,” 
+
+IEEE Robotics and Automation Letters , vol. 9, no. 11, pp. 9765–9772, 2024. [34] Z. Yu, T. Sattler, and A. Geiger, “Gaussian opacity fields: Efficient adaptive surface reconstruction in unbounded scenes,” ACM Transac-tions on Graphics (ToG) , vol. 43, no. 6, pp. 1–13, 2024. [35] L. Fan, Y. Yang, M. Li, H. Li, and Z. Zhang, “Trim 3d gaus-sian splatting for accurate geometry representation,” arXiv preprint arXiv:2406.07499 , 2024. [36] Y. Siddiqui, L. Porzi, S. R. Bulò, N. Müller, M. Nießner, A. Dai, and P. Kontschieder, “Panoptic lifting for 3d scene understanding with neural fields,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , June 2023. [37] Y. Bhalgat, I. Laina, J. F. Henriques, A. Zisserman, and A. Vedaldi, “Contrastive lift: 3d object instance segmentation by slow-fast con-trastive fusion,” in NeurIPS , 2023. [38] H. Chen, K. Blomqvist, F. Milano, and R. Siegwart, “Panoptic vision-language feature fields,” IEEE Robotics and Automation Letters (RA-L) , vol. 9, no. 3, pp. 2144–2151, 2024. [39] X. Yu, Y. Liu, C. Han, S. Mao, S. Zhou, R. Xiong, Y. Liao, and Y. Wang, “Panopticrecon: Leverage open-vocabulary instance segmentation for zero-shot panoptic reconstruction,” arXiv preprint arXiv:2407.01349 , 2024. [40] Y. Wu, J. Meng, H. Li, C. Wu, Y. Shi, X. Cheng, C. Zhao, H. Feng, E. Ding, J. Wang et al. , “Opengaussian: Towards point-level 3d gaussian-based open vocabulary understanding,” arXiv preprint arXiv:2406.02058 , 2024. [41] B. Kerbl, G. Kopanas, T. Leimkühler, and G. Drettakis, “3d gaussian splatting for real-time radiance field rendering.” ACM Trans. Graph. ,vol. 42, no. 4, pp. 139–1, 2023. [42] N. Yokoyama, S. Ha, D. Batra, J. Wang, and B. Bucher, “Vlfm: Vision-language frontier maps for zero-shot semantic navigation,” 2023. [Online]. Available: https://arxiv.org/abs/2312.03275 [43] M. Lei, S. Li, Y. Wu, H. Hu, Y. Zhou, X. Zheng, G. Ding, S. Du, Z. Wu, and Y. Gao, “Yolov13: Real-time object detection with hypergraph-enhanced adaptive visual perception,” 2025. [Online]. Available: https://arxiv.org/abs/2506.17733 
+
+First Author et al.: Preprint submitted to Elsevier Page 12 of 12

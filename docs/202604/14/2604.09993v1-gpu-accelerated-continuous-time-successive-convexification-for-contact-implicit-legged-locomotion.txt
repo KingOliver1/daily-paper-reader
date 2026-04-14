@@ -1,0 +1,1095 @@
+Title: GPU-Accelerated Continuous-Time Successive Convexification for Contact-Implicit Legged Locomotion
+
+URL Source: https://arxiv.org/pdf/2604.09993v1
+
+Published Time: Tue, 14 Apr 2026 00:29:17 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# GPU-Accelerated Continuous-Time Successive Convexification for Contact-Implicit Legged Locomotion 
+
+Samuel C. Buckner 1 and Purnanand Elango 2∗
+
+Abstract — Contact-implicit trajectory optimization (CITO) enables the automatic discovery of contact sequences, but most methods rely on fine time discretization to capture all contact events accurately, which increases problem size and runtime while tying solution quality to grid resolution. We extend the recently proposed sequential convex programming (SCP) approach for trajectory optimization, continuous-time successive convexification (CT-SCVX), to CITO by introducing integral cross-complementarity constraints, which eliminate the risk of missing contact events between discretization nodes while preserving the flexibility of contact mode changes. The result-ing framework, contact-implicit successive convexification (CI-SCVX), models full multibody dynamics in maximal coordinates, including stick-slip friction and partially elastic impacts. To handle complementarity constraints, we embed a backtracking homotopy scheme within SCP for reliable convergence. We implement this framework in a stand-alone Python software, leveraging JAX for GPU acceleration and a custom canonical-form parser for the convex subproblems of SCP to avoid the overhead of general-purpose modeling tools such as CVXPY. We demonstrate CI-SCVX on diverse legged-locomotion tasks. In particular, we validate the approach in MuJoCo with the Gymnasium HalfCheetah model against the MuJoCo MPC baseline, showing that a tracking simulation with the optimized torque profiles from CI-SCVX produces physically consistent trajectories with lesser energy consumption. We also show that the resulting software achieves faster solve times than existing state-of-the-art SCP implementations by over an order of magnitude, thereby demonstrating a practically important contribution to scalable real-time trajectory optimization. 
+
+I. I NTRODUCTION 
+
+Trajectory optimization is a central tool for generating agile behaviors in legged robots [20]. Contact-implicit trajec-tory optimization (CITO) methods are particularly attractive because they eliminate the need to predefine contact sched-ules. However, most existing CITO formulations rely on fine time discretization to capture contact events. This increases the number of decision variables and constraints, coupling solution quality tightly to the discretization resolution and creating an unfavorable accuracy-runtime tradeoff [15]. To address this limitation, we build on the sequential convex programming (SCP) approach, which iteratively ap-proximates and solves nonconvex problems. While the usage of SCP has been addressed for CITO [12, 13], we instead consider the recently proposed continuous-time successive convexification (CT-SCVX) framework [3], which notably enforces constraints in continuous time and thus permits  
+
+> 1Department of Aeronautics and Astronautics, University of Washington, Seattle, WA 98195. S. C. Buckner interned at MERL during the development of this work.
+> 2Mitsubishi Electric Research Laboratories, Cambridge, MA 02139.
+> ∗Corresponding author. Email: elango@merl.com
+
+high-fidelity, feasible solutions over coarse discretization grids. Our key idea is to extend continuous-time satisfaction to contact constraints, specifically cross-complementarity constraints [1]. We introduce an integral form of cross-complementarity constraints expressed in continuous time, which ensures that contact mode changes occur at discretiza-tion nodes while eliminating the risk of missing contact events between nodes. In conjunction with time-dilation [3], where nodes are allowed to stretch or shrink over time, the generality of the resulting contact mode sequence is ensured. We formulate the full multibody dynamics of a robot in maximal coordinates rather than using reduced-order approx-imations such as SRBD [20] or centroidal dynamics [14]. Although maximal coordinates enlarge the state dimension, the associated dynamics and constraints are highly sparse, enabling efficient GPU parallelization. The model supports stick–slip friction, consistent with the maximum dissipation principle, and partially elastic impacts [18]. To handle com-plementarity constraints, we employ a homotopy scheme with backtracking that tightens the relaxation during the SCP iterations, ensuring reliable convergence. We implement the approach in stand-alone Python software that leverages JAX for GPU-accelerated differentiation and linearization, together with a custom parser for the convex subproblems in SCP that avoids the overhead of general-purpose modeling tools such as CVXPY. We demonstrate the approach on two-dimensional legged robot models, including the Gymnasium HalfCheetah model [19]. 
+
+A. Related Work 
+
+CITO has been studied extensively to generate locomo-tion solutions without prescribing contact schedules. Early approaches used direct collocation with complementarity constraints to enforce non-penetration and frictional con-tact [16], while contact-invariant optimization [10] handled contact through smooth penalties that encourage sticking and end-effector alignment, with dynamics enforced softly. These methods typically require fine time discretization to capture contact events accurately, yielding large-scale prob-lems whose solution quality depends strongly on the grid resolution. To mitigate the risk of missing contact events between nodes, cross-complementarity constraints were pro-posed [1]. More recent formulations such as FESD-J [11] and moving finite elements [8] extend this idea by enabling exact switch detection for systems with impacts and Coulomb friction, ensuring that contact events occur at finite-element boundaries. However, these are still inherently discrete-time constructions. 
+
+> arXiv:2604.09993v1 [cs.RO] 11 Apr 2026 Fig. 1: Overview of the proposed framework, including problem formulation, integral cross-complementarity and the CI-SCVX algorithm.
+
+Continuous-time trajectory optimization frameworks like CT-SCVX [3] enforce constraints in continuous time and thereby achieve accurate solutions with coarse discretization, but they have not been extended to CITO. In terms of mod-eling, many works adopt reduced-order approximations such as centroidal dynamics [14] or single-rigid-body dynamics (SRBD) [20]. While these simplifications can reduce the size of optimization problems and sometimes eliminate the risk of missing contact events [21], they often neglect whole-body effects and can lead to conservative solutions that underutilize the system’s full range of motion. 
+
+B. Contributions 
+
+This work introduces a continuous-time CITO framework for locomotion tasks and makes the following contributions: 1) The contact-implicit successive convexification (CI-SCVX) framework, an SCP-based approach for CITO that ensures continuous-time constraint satisfaction. 2) Integral cross-complementarity constraints that ensure contact mode changes occur at discretization nodes. Combined with time-dilation [3], this preserves gener-ality in contact mode sequences. 3) A backtracking homotopy scheme that progressively tightens the complementarity constraint relaxation within SCP iterations, ensuring reliable convergence. 4) A stand-alone Python software that leverages JAX for GPU-accelerated differentiation and linearization, together with a custom parser for the convex sub-problems in SCP that avoids the overhead of general-purpose modeling tools such as CVXPY. 5) Demonstration on two-dimensional locomotion tasks, including the Gymnasium HalfCheetah model [19], with comparisons to a state-of-the-art baseline. II. D YNAMICAL MODEL WITH CONTACT AND IMPACT 
+
+We adopt the following notation for the remainder of the development. Concatenation of vectors u ∈ Rn and 
+
+v ∈ Rm is (u, v ) ∈ Rn+m. The scalar components of 
+
+v ∈ Rn are denoted by v[i], for i = 1 , . . . , n . The ramp (ReLU) function is denoted by |x|+. Smooth pseudo-Huber approximations of the Euclidean norm, absolute value, and ramp functions with unit steepness parameter are denoted by ∥x∥∼, |x|∼, and |x|∼ 
+
+> +
+
+. For vector arguments, |x|∼ 
+
+> +
+
+is understood componentwise. We use maximal coordinates to model the dynamics of a multi-link robot. Let q ∈ Rnq
+
+denote the generalized position (pose) and v ∈ Rnq
+
+the generalized velocity. The equations of motion are obtained by applying Newton’s second law to each link, accounting for forces and torques from gravity, joint reaction forces, joint torques, joint stiffness and damp-ing, and contact forces. The robot has nc contact points with positions, expressed in the inertial (world) frame, given by 
+
+pc 
+
+> i
+
+(q) ∈ Rnd
+
+for i = 1 , . . . , n c. The Jacobian of the ith contact point (the contact Jacobian) is Jc 
+
+> i
+
+(q) = ∇pc 
+
+> i
+
+(q).Contact occurs on a smooth surface Hc = {p ∈
+
+Rnd
+
+| hc(p) = 0 }, where hc is a continuously differentiable function and nd ∈ { 2, 3} is the dimension of the position space. At each contact point, we define a contact frame con-sisting of the unit surface normal nc 
+
+> i
+
+(q) = ∇sd( pc 
+
+> i
+
+(q)) ⊤ ∈
+
+Rnd
+
+and (nd − 1) unit tangent vectors given by the columns of tc 
+
+> i
+
+(q) ∈ Rnd×(nd−1) . Together, the columns of tc 
+
+> i
+
+(q) and 
+
+nc 
+
+> i
+
+(q) form a right-handed basis. The rotation matrix that maps vectors from the contact frame to the world frame is 
+
+Rc 
+
+> i
+
+(q) = [ t c 
+
+> i
+
+(q) n c 
+
+> i
+
+(q) ] . Fig. 1 shows the frame definitions. The contact force at the ith contact point, represented in the contact frame, is ϕc 
+
+> i
+
+= ( ϕc,t 
+
+> i
+
+, ϕ c,n 
+
+> i
+
+), where ϕc,n 
+
+> i
+
+∈ R is the normal component along nc 
+
+> i
+
+(q) and ϕc,t 
+
+> i
+
+∈ Rnd−1 is the tangential component. Similarly, the contact impulse due to impact is Φc 
+
+> i
+
+= (Φ c,t 
+
+> i
+
+, Φc,n 
+
+> i
+
+) with the same component-wise interpretation. Let cj(q) = 0 nj impose the kinematic constraints that connect links at the joints and restrict degrees of freedom according to joint type. The effect of joint reaction forces on the generalized acceleration .
+
+v is captured by ∇cj(q)⊤ϕj,where ϕj concatenates all joint reaction forces in the world frame. An impact at any contact point induces a joint reaction impulse that instantaneously changes the generalized velocity via ∇cj(q)⊤Φj, where Φj concatenates joint reaction impulses in the world frame. 
+
+A. Continuous-Time Model 
+
+The equations of motion are given by 
+
+## .
+
+q = v, (1a) 
+
+M (q) .
+
+v = W (q, v, τ a, a g) + Jc(q)⊤Rc 
+
+> i
+
+(q)ϕc (1b) 
+
++ ∇cj(q)⊤ϕj,
+
+where Jc(q)⊤ = [Jc1 (q)⊤ · · · Jc 
+
+> nc
+
+(q)⊤], Rc(q) =blockdiag(R c1(q), . . . , Rc 
+
+> nc
+
+(q)) , and ϕc = (ϕc1, . . . , ϕ c 
+
+> nc
+
+).
+
+M (q) is the mass matrix, and W (q, v, τ a, a g) collects the generalized forces and torques due to gravity (with ag
+
+the gravitational acceleration), joint torques τ a, and joint stiffness and damping. To model physically realistic contact, we require (i) a no-penetration condition expressed as a complementarity constraint between the normal contact force and signed distance to the contact surface, and (ii) a tangen-tial contact force determined by the maximum dissipation principle subject to a friction cone constraint 
+
+0 ≤ ϕc,n ⊥ sd( pc 
+
+> i
+
+(q)) ≥ 0, (2a) 
+
+ϕc,t ∈ argmin 
+
+> ϕt
+
+ϕt⊤vc,t 
+
+> i
+
+(q, v ) s.t. ∥ϕt∥ ≤ μiϕc,n 
+
+> i
+
+, (2b) for i = 1 , . . . , n c, where μi is the friction coefficient and 
+
+vc,t 
+
+> i
+
+(q, v ) = t c 
+
+> i
+
+(q)⊤Jc 
+
+> i
+
+(q)v is the tangential velocity at the 
+
+ith contact. The first-order optimality conditions for (2b) are 
+
+0nd−1 = vc,t 
+
+> i
+
+(q, v ) + 2 γiϕc,t 
+
+> i
+
+, (3a) 
+
+0 ≤ γi ⊥ (μiϕc,n 
+
+> i
+
+)2 − | ϕc,t 
+
+> i
+
+|2 ≥ 0, (3b) where γi is the Lagrange multiplier and we denote γ =(γ1, . . . , γ nc ). The friction cone constraint is written in squared form to ensure differentiability at the boundary. When the ith contact is active (i.e., signed distance is zero), 
+
+γi is a continuous function of time. Two issues arise with (3): (i) the ∥ · ∥ 2 term causes numerical ill-conditioning, and (ii) when the ith contact is inactive (i.e., signed distance is positive), ϕc 
+
+> i
+
+= 0 nd , so (3a) reduces to the non-physical case that the contact point’s tangential velocity is zero, i.e., 
+
+tc 
+
+> i
+
+(q)⊤Jc 
+
+> i
+
+(q)v = 0 nd−1. We address both by rewriting (3) as 
+
+0nd−1 = ϕc,n
+
+> i
+
+ vc,t 
+
+> i
+
+(q, v ) + γi∇∥ ϕc,t 
+
+> i
+
+∥⊤
+
+> ∼
+
+, (4a) 
+
+0 ≤ γi ⊥ | μiϕc,n 
+
+> i
+
+|∼ − ∥ ϕc,t 
+
+> i
+
+∥∼ ≥ 0, (4b) using the smooth norm ∥ · ∥ ∼ and smooth absolute value 
+
+| · | ∼. The multiplication of ϕc,n 
+
+> i
+
+in (4a) enforces stationarity only when contact is active, i.e., normal contact force is pos-itive. Henceforth, we denote λc 
+
+> i
+
+(q, v, ϕ c 
+
+> i
+
+, γ i) = vc,t 
+
+> i
+
+(q, v ) + 
+
+γi∇∥ ϕc,t 
+
+> i
+
+∥⊤ 
+
+> ∼
+
+and ρc 
+
+> i
+
+(ϕc 
+
+> i
+
+, γ i) = |μiϕc,n 
+
+> i
+
+|∼ − ∥ ϕc,t 
+
+> i
+
+∥∼.Next, we eliminate the explicit joint reaction force in (1b) by enforcing joint constraints at the acceleration level 
+
+cj(q) = 0 nj =⇒ ∇ cj(q)v = 0 nj , (5a) 
+
+=⇒ ∇ cj(q) .
+
+v + ( . . . v ⊤∇2cj[i](q)v . . . ) = 0 nj , (5b) where cj[i](q) is the ith component of cj, for i = 1 , . . . , n j.From (5b) and (1b) we solve for ϕj and substitute into (1b). We rewrite (1) in state-space form as .
+
+x = f (x, u ), with state x = ( q, v ) ∈ Rnx
+
+, control input u = ( τ a, ϕ c, γ ) ∈
+
+Rnu
+
+, and dimensions nx = 2 nq and nu = na + nc(nd + 1) .The state and control input are subject to path constraints 
+
+g(x(t), u (t)) ≤ 0ng for all t ∈ [0 , t f ], which include, for each 
+
+i = 1 , . . . , n c, nonnegativity constraints on ϕc,n 
+
+> i
+
+, sd( pc 
+
+> i
+
+(q)) ,
+
+γi, and ρc 
+
+> i
+
+(ϕc 
+
+> i
+
+, γ i), together with general constraints on state and input (e.g., obstacle avoidance, kinematic limits). 
+
+B. Impulsive Impact Model 
+
+We consider impulsive impacts occurring at discrete in-stants. Let an impact occur at time ˆt. Stack the contact impulses as Φc = (Φ c1, . . . , Φc 
+
+> nc
+
+) with Φc 
+
+> i
+
+= (Φ c,t 
+
+> i
+
+, Φc,n 
+
+> i
+
+),and let Φj denote the joint reaction impulse. The impact dynamics are 
+
+M (q(ˆ t))( v(ˆ t+) − v(ˆ t−)) = Jc(q(ˆ t)) ⊤Rc(q(ˆ t))Φ c (6a) 
+
++ ∇cj(q(ˆ t)) ⊤Φj,
+
+0 ≤ Φc,n 
+
+> i
+
+⊥ sd( pc 
+
+> i
+
+(q(ˆ t))) ≥ 0, (6b) 
+
+0 = Φ c,n 
+
+> i
+
+nc 
+
+> i
+
+(q(ˆ t)) ⊤Jc 
+
+> i
+
+(q(ˆ t))( v(ˆ t+) + εc 
+
+> i
+
+v(ˆ t−)) , (6c) 
+
+0 = Φ c,n
+
+> i
+
+ vc,t 
+
+> i
+
+(q(ˆ t), v (ˆ t+)) + Γ i∇∥ Φc,t 
+
+> i
+
+∥⊤
+
+> ∼
+
+ , (6d) 
+
+0 ≤ Γi ⊥ | μiΦc,n 
+
+> i
+
+|∼ − ∥ Φc,t 
+
+> i
+
+∥∼ ≥ 0, (6e) 
+
+i = 1 , . . . , n c.
+
+Conditions (6d)–(6e) play the same role as (4). They de-termine the tangential contact impulse via a stationarity condition (multiplied by normal contact impulse) and the friction cone constraint, with Γi the associated Lagrange multiplier. Impact elasticity is governed by (6c), where εc
+
+> i
+
+is the coefficient of restitution at the ith contact. We remove the explicit joint reaction impulse in (6a) by imposing the joint constraint post impact at the velocity level, 
+
+∇cj(q(ˆ t+)) v(ˆ t+) = 0 nj . Solving the resulting constraint and (6a) yields an explicit expression for Φj, which we substitute back into (6a). III. I NTEGRAL CROSS COMPLEMENTARITY 
+
+We seek a solution to (1) and (6) over a time horizon 
+
+[0 , t f ]. We discretize [0 , t f ] into a grid of N nodes, 0 = 
+
+t1, . . . , t N = tf , and we isolate all contact mode switches to occur only at the grid nodes. These contact modes indicate either no contact, sticking contact or slipping contact. First, we introduce the following continuous-time cross-complementarity condition. Let a, b : [0 , t f ] → R+ be piecewise continuous with any discontinuities confined to the grid. Specifically, for each k = 1 , . . . , N − 1, a and b
+
+are continuous on (tk, t k+1 ]. They satisfy pointwise-in-time complementarity 
+
+0 ≤ a(t) ⊥ b(t) ≥ 0, ∀ t ∈ [0 , t f ]. (7) To ensure switches between a > 0, b = 0 and a = 0 ,
+
+b > 0 happen at the grid nodes, we impose, for each 
+
+k = 1 , . . . , N − 1,
+
+0 ≤ a(t) ⊥ b(t′) ≥ 0, ∀ t, t ′ ∈ (tk, t k+1 ], (8) together with 0 ≤ a(t1) ⊥ b(t1) ≥ 0. We then have the following continuous-time analogue of [11, Lem. 2]. 
+
+Lemma 1. Let (8) hold and fix k ∈ { 1, . . . , N − 1}. If 
+
+a(t) > 0 for some t ∈ (tk, t k+1 ], then b(t′) = 0 for all t′ ∈
+
+(tk, t k+1 ]. Conversely, if b(t′) > 0 for some t′ ∈ (tk, t k+1 ],then a(t) = 0 for all t ∈ (tk, t k+1 ].Proof. If a(t) > 0 at some t ∈ (tk, t k+1 ] and b(t′) > 0
+
+at some t′ ∈ (tk, t k+1 ], then (8) is violated, which is a contradiction. While (8) localizes switches to the grid nodes (a desirable property for both numerical reliability and physical realism), it is still a pointwise-in-time constraint and thus numerically intractable. Existing approaches [1, 11, 8] enforce discrete-time surrogates of (8) in aggregated forms, which risks inter-sample violations. To avoid this, we propose an integral re-formulation, referred to as an integral cross-complementarity 
+
+condition. 
+
+Proposition 1. For each k = 1 , . . . , N − 1, the constraint 
+
+0 ≤
+
+Z tk+1 
+
+> tk
+
+a(t) d t
+
+
+
+⊥
+
+Z tk+1 
+
+> tk
+
+b(t) d t
+
+
+
+≥ 0, (9) 
+
+is equivalent to (8) .Proof. (⇒) If (9) holds and R tk+1  
+
+> tk
+
+a(t) d t > 0, then the com-plementarity of the integrals implies R tk+1  
+
+> tk
+
+b(t) d t = 0 . Since 
+
+a and b are nonnegative and are continuous on (tk, t k+1 ], it follows that a(t) > 0 and b(t) = 0 for all t ∈ (tk, t k+1 ].The argument is symmetric if R tk+1  
+
+> tk
+
+b(t)d t > 0. Therefore, (8) holds. (⇐) If (8) holds, Lemma 1 implies that for each k =1, . . . , N − 1, either a(t) = 0 or b(t) = 0 (or both) for all 
+
+t ∈ (tk, t k+1 ]. Hence one (or both) of the integrals is zero, yielding (9). In practice, we compute the integrals in (9) by integrating an auxiliary dynamical system 
+
+## .
+
+y = ( .
+
+y[1] , .
+
+y[2] ) = ( a, b ), (10) and then impose the complementarity constraint 
+
+0 ≤ y[1] (tk+1 ) − y[1] (tk) ⊥ y[2] (tk+1 ) − y[2] (tk) ≥ 0. (11) If a or b are not inherently nonnegative, we enforce their nonnegativity through the path constraint function g. In (1), to ensure that contact mode switches occur only at the grid nodes, we impose integral cross-complementarity between the following pairs: (i) ϕc,n 
+
+> i
+
+and sd( pc 
+
+> i
+
+(q)) , (ii) ϕc,n 
+
+> i
+
+and 
+
+λc 
+
+> i
+
+(q, v, ϕ c 
+
+> i
+
+, γ i), and (iii) γi and ρc 
+
+> i
+
+(ϕc 
+
+> i
+
+, γ i).
+
+Remark 1. Discrete-time cross-complementarity formula-tions (e.g., FESD-J [11]) typically introduce additional cross-complementarity constraints to detect sign changes in the tangential velocity at each contact point. Our formulation obviates these by parameterizing the control input u on each interval (tk, t k+1 ], k = 1 , . . . , N −1, with C1 basis functions. Consequently, λc 
+
+> i
+
+is also C1 on (tk, t k+1 ], which precludes nonsmoothness of the tangential velocity between nodes. 
+
+IV. C ONTACT -I MPLICIT TRAJECTORY OPTIMIZATION 
+
+PROBLEM 
+
+In this section, we formulate the CITO problem for the maximal-coordinate model of Section II. The key steps are: (i) constructing an auxiliary system to handle path constraints and integral cross-complementarity, (ii) forming the time-dilated augmented system, (iii) parameterizing the control input and the dilation factor, and (iv) applying a smooth relaxation of the complementarity constraints. We employ time-dilation [7, 3] so that the time-discretization associated with integral cross complementarity does not constrain the contact mode sequence (e.g., gait cadence and pattern). 
+
+A. Auxiliary System 
+
+We first construct the auxiliary system, which serves two purposes: (i) encoding cumulative violation of path constraints [3, Lem. 2], and (ii) representing the integral cross-complementarity constraints (see (10)). The auxiliary dynamics are 
+
+## .
+
+y =
+
+
+
+....
+
+y[4( i−1)+ j]
+
+.... . . . . . . . . . ....
+
+y[4 nc+k]
+
+...
+
+
+
+=
+
+
+
+...
+
+ϕc,n
+
+> i
+
+λc 
+
+> i
+
+(q, v, ϕ c,n 
+
+> i
+
+, γ i)
+
+γi
+
+ρc 
+
+> i
+
+(ϕc 
+
+> i
+
+, γ i)
+
+.... . . . . . . . . . . . . . . M g |g(x, u )|∼
+
+> +
+
+
+
+= Ω( x, u ), (12) where i = 1 , . . . , n c, j = 1 , . . . , 4, k = 1 , . . . , N g , and 
+
+M g ∈ RN g ×ng
+
+is a nonnegative “mixing” matrix that allo-cates the ng components of |g(x, u )|∼ 
+
+> +
+
+across N g components of the auxiliary state. Let ny = 4nc + N g denote the dimension of the auxiliary state. Continuous-time satisfaction of the path constraints on each grid interval (tk, t k+1 ] is enforced by y[4 nc+i](tk+1 ) = y[4 nc+i](tk) for i = 1 , . . . , N g
+
+and k = 1 , . . . , N − 1. To preserve constraint qualification, we relax this to 
+
+y[4 nc+i](tk+1 ) − y[4 nc+i](tk) ≤ ϵ, (13) with a positive tolerance ϵ. With appropriate scaling and preconditioning of the resulting CITO problem, ϵ can be chosen as a small but numerically meaningful value (e.g., ∼
+
+10 −4), which leads to negligible continuous-time constraint violation. See [3] for further discussion and analysis. 
+
+B. Parameterized Time-Dilated Augmented System 
+
+We define the time-dilated augmented system on the normalized interval [0 , 1] with augmented state ˜x = ( x, y )
+
+and augmented control ˜u = ( u, s )
+
+> ◦
+
+˜x = s  f (x, u ), Ω( x, u ) = ˜f (˜ x, ˜u), (14) where ◦
+
+□ = d □/dτ for τ ∈ [0 , 1] , and s = d t/ dτ is the dilation factor, treated as a control input. Let n˜x = nx + ny
+
+and n˜u = nu + 1 .We form an integral representation of (14) over each grid interval from Section III. First, for each k = 1 , . . . , N − 1,we map [0 , 1] to [tk, t k+1 ], and parameterize the augmented control on [0 , 1] as 
+
+˜u(τ ) =  ν(τ )U, S ,
+
+where ν : [0 , 1] → R nu×nuN u
+
+is a matrix-valued polynomial basis function, and U ∈ RnuN u
+
+and S ∈ R are the corresponding coefficients. Then the integral form of (14) over [0 , 1] is 
+
+˜F (˜ x−, U, S ) = ˜ x− +
+
+Z 10
+
+˜f  ˜x(τ ), (ν(τ )U, S ) dτ, (15) for ˜x− ∈ Rn˜x
+
+, U ∈ RnuN u
+
+, and S ∈ R.
+
+C. Nonconvex Optimization Problem 
+
+We can now cast the CITO problem as a nonconvex opti-mization problem. A key aspect of most existing approaches for CITO is a smooth relaxation of the complementarity constraints. Complementarity is inherently nonsmooth: for scalars a and b the condition 0 ≤ a ⊥ b ≥ 0 is equivalent to 
+
+min( a, b ) = 0 , i.e., feasible set is the nonnegative coordinate axes. We employ the well-known C1 Fischer–Burmeister function to relax a complementarity constraint 
+
+FB δ (a, b ) ≤ 0, a ≥ 0, b ≥ 0, (16) where FB δ (a, b ) = a + b − √a2 + b2 + δ and δ > 0 controls the tightness of the relaxation. As δ → 0 the feasible set of (16) approaches that of min( a, b ) = 0 . Note, any other C1
+
+nonlinear complementarity function could be used in place of Fischer–Burmeister. The decision variables of the CITO problem are: (i) pre- and post-impact augmented states at the grid nodes ˜x− 
+
+> 1
+
+, ˜x+1 , . . . , ˜x− 
+
+> N
+
+, ˜x+ 
+
+> N
+
+, (ii) coefficients parameteriz-ing the augmented control input on each grid interval 
+
+U1, S 1, . . . , U N −1, S N −1, and (iii) contact impulses and associated multipliers at the nodes Φc1, Γ1, . . . , Φc 
+
+> N
+
+, ΓN .Here ˜x□ 
+
+> k
+
+= (x□ 
+
+> k
+
+, y □ 
+
+> k
+
+) with x□ 
+
+> k
+
+= (q□ 
+
+> k
+
+, v □ 
+
+> k
+
+), Φc 
+
+> k
+
+=(Φ c
+
+> k, 1
+
+, . . . , Φc 
+
+> k,n c
+
+) with Φc 
+
+> k,i
+
+= (Φ c,t
+
+> k,i
+
+, Φc,n 
+
+> k,i
+
+), and Γk =(Γ k, 1, . . . , Γk,n c ), for □ ∈ {+,−}, k = 1, . . . , N , and 
+
+i = 1 , . . . , n c.The CITO problem comprises of the following constraints. First, the augmented dynamics is enforced in integral form (15), for k = 1 , . . . , N −1. Next, (6a) is imposed at each grid node to allow potential impacts, along with continuity of pose and auxiliary state across impact, via ˜G(˜ x+ 
+
+> k
+
+, ˜x− 
+
+> k
+
+, Φc
+
+> k
+
+) = 0 n˜x ,for k = 1 , . . . , N . Next, we require the parameterization coefficients to lie in convex sets, i.e., Uk ∈ U and Sk ∈ S ,for k = 1 , . . . , N − 1. Set U encodes joint torque bounds, nonnegativity of the multiplier γ, and the contact force friction cone. Set S is a positive compact interval. Next, integral cross complementarity, relaxed via (16), and the relaxed path constraint satisfaction (13) are aggregated as 
+
+Ψδ,ϵ (y−
+
+> k+1
+
+, y + 
+
+> k
+
+) ≤ 0nΨ , for k = 1 , . . . , N − 1. Next, the conditions (6b)-(6e) are collected into Θδ (x+ 
+
+> k
+
+, x − 
+
+> k
+
+, Φc
+
+> k
+
+, Γk) ≤
+
+0nΘ using relaxation (16). Note that (6c) and (6d) are also expressed as complementarity constraints. Finally, we constrain the initial and terminal states xi and xf .The CITO problem is then given by 
+
+minimize         
+
+> ˜x+
+> k,˜x−
+> k, U k
+> Sk,Φc
+> k,Γk
+> N−1
+
+X
+
+> k=1
+
+Lk(x+ 
+
+> k
+
+, U k, S k) (17a) 
+
+subject to ˜x− 
+
+> k+1
+
+= ˜F (˜ x+ 
+
+> k
+
+, U k, S k), (17b) 
+
+Ψδ,ϵ (yk+1 , y k) ≤ 0nΨ , (17c) 
+
+Uk ∈ U , S k ∈ S , (17d) 
+
+k = 1 , . . . , N − 1,
+
+˜G(˜ x+ 
+
+> k
+
+, ˜x− 
+
+> k
+
+, Φc
+
+> k
+
+) = 0 n˜x , (17e) 
+
+Θδ (x+ 
+
+> k
+
+, x − 
+
+> k
+
+, Φc
+
+> k
+
+, Γk) ≤ 0nΘ , (17f) 
+
+k = 1 , . . . , N, x− 
+
+> 1
+
+= xi, x + 
+
+> N
+
+= xf . (17g) The cost function (17a) can represent various objectives, such as control effort, reference tracking, or maneuver time. V. S EQUENTIAL CONVEX PROGRAMMING WITH 
+
+BACKTRACKING HOMOTOPY 
+
+To solve the nonconvex problem (17), we employ sequen-tial convex programming (SCP), specifically the prox-linear method with exact penalization of nonconvex constraints [3, Sec. 4]. Each SCP iteration solves a convex subproblem in which the nonconvex constraints are linearized and penalized with an ℓ1 (exact) penalty, the convex constraints from (17) are kept intact, and a quadratic proximal term penalizes deviation from the previous iterate. With suitable weights for the proximal and exact-penalty terms, the iterates converge to a stationary point of the penalized nonconvex problem. If that point is feasible for (17), it is a KKT point. Applying SCP to problems with complementarity con-straints requires special care. When using a relaxation such as (16), fixing the tightness parameter δ a priori often stalls the algorithm and prevents convergence. For reliable conver-gence, δ is typically driven toward zero via a homotopy over the SCP iterations [9, 4]. We propose a homotopy scheme for δ, embedded within SCP (referred to as embedded 
+
+δ-homotopy) with backtracking, in which δ is tightened progressively but can be temporarily relaxed to allow larger steps and broader search directions before committing to a smaller value. Algorithm 1 describes the approach. Let 
+
+zj , δj , Jpx  
+
+> j
+
+, and Jep  
+
+> j
+
+denote the subproblem solution, the tightness parameter, the proximal term, and the exact-penalty term, respectively, at SCP iterate j. Inputs to the algorithm are the initial tightness parameter δ0, an initial guess z0,tolerances δmin (< δ 0), ϵpx , ϵep , a shrinkage factor α ∈ (0 , 1) ,and a stall horizon N stall . The update rule for the tightness parameter has three parts: (i) if neither Jpx  
+
+> j
+
+nor Jep  
+
+> j
+
+has decreased relative to iterate M = max( j − N stall , 1) , set 
+
+δj+1 to the log-scale bisection between δj and δM , (ii) else, if neither term has decreased relative to the previous iterate, set δj+1 = δj ; (iii) otherwise, shrink the tightness parameter as δj+1 = αδ j .
+
+Algorithm 1 δ-Homotopy                                                                                              
+
+> Require: z0,δ0,δmin ,ϵpx ,ϵep ,α,Nstall
+> Ensure: zj
+> 1: j←0, J px
+> j←0, J ep
+> j←0
+> 2: while Jpx
+> j> ϵ px ∨Jep
+> j> ϵ ep ∨δj> δ min do
+> 3: zj+1 , J px
+> j+1 , J ep
+> j+1 ←solve_subproblem (zj, δ j)
+> 4: M←max( j−Nstall ,1)
+> 5: if Jpx
+> j+1 > J px
+> M∨Jep
+> j+1 > J ep
+> Mthen
+> 6: δj+1 ←exp  12log( δjδM)
+> 7: else if Jpx
+> j+1 > J px
+> j∨Jep
+> j+1 > J ep
+> jthen
+> 8: δj+1 ←δj
+> 9: else
+> 10: δj+1 ←αδ j
+> 11: end if
+> 12: j←j+ 1
+> 13: end while 0246810 12 14 16
+> 0
+> 1
+> 2
+> 3
+> X Position (m)
+> Y Position (m) (a) Gait produced by a monoped locomotion solution. The path of the center of mass (CoM) of the upper leg is shown by the orange trace, and the path of the contact point (end of the lower leg) is shown by the cyan trace. The pose at grid nodes are displayed with higher opacity. −5
+> 0
+> 5
+> −1
+> 0
+> 1
+> 012345
+> −5
+> 0
+> 5
+> −1
+> 0
+> 1
+> Time (s)
+> Tangential Force (N)
+> Tangential Impulse (N-s)
+> Normal Force (N)
+> Normal Impulse (N-s)
+> (b) Time histories of the normal and tangential contact forces and impulses. Grid intervals with sustained contact are denoted by gray regions. 0200 400 600 800 1000
+> 10 −4
+> 10 −2
+> 1
+> 10 2
+> Objective
+> Proximal Term
+> Exact Penalty
+> Homotopy Update
+> CI-SCvx Iteration
+> Magnitude
+> (c) History of convergence metrics across CI-SCVX iterations, including the subproblem objective terms and homotopy tightness parameter δj.
+
+Fig. 2: Monoped locomotion solution on a flat surface, produced by CI-SCVX. 
+
+VI. E XPERIMENTAL RESULTS 
+
+In this section, we detail the implementation of the proposed CI-SCVX framework and present case studies on trajectory optimization for monopedal and bipedal multi-body robots, illustrating the versatility of CI-SCVX. A notable advantage of our algorithm and formulation is its suitability for GPU-parallelized execution. The key computational task in solving (17) is transcription, i.e., constructing and lin-earizing (17b) and (17e), which define the hybrid dynamical model due to contact and impact. We carry out transcription on the GPU using a JAX backend by exploiting two features of the formulation: (i) multiple shooting enables paralleliza-tion across grid intervals, and (ii) the maximal-coordinate representation enables parallel evaluation of model elements (joint constraints, contact Jacobians, etc.). Transcription on each grid interval uses Internal Numerical Differentiation (IND) [17] with a custom Runge-Kutta-Fehlberg integrator and a first-order-hold (FOH) control input parameterization that is allowed to be discontinuous at grid nodes. Although more advanced JAX-compatible integrators (e.g., Diffrax) are available, in our experiments they were slower and did not improve SCP convergence. Beyond transcription, the remaining nonconvex constraints in (17) are also linearized on the GPU. All linearized quantities are transferred from the GPU to the CPU and assembled, together with the convex constraints of (17), into a canonical-form second-order cone program (SOCP) using compressed sparse column (CSC) format for the constraint and objective matrices. This process is referred to as canonicalization. During assembly, we apply row-wise normalization (preconditioning) to all constraint matrices and affine scaling to the decision variables, which improves solver reliability and the practical convergence of SCP. The resulting sparse data are passed directly to the QOCO convex solver [2], allowing us to bypass general-purpose modeling tools (e.g., CVXPY) and produce high-fidelity solutions in near real time (tens of seconds). Figure 1 illustrates the full CI-SCVX architecture. All results are initialized by linearly interpolating poses at boundary conditions, setting velocities and joint torques to zero, and randomly sampling contact forces/impulses from the friction cone, which demonstrates that realistic trajectories can be obtained from naive initializations. A grid size of N = 15 and integration step count of 10 (per each grid interval) is chosen for all cases, demonstrating that we can resolve complex motions under sparse discretiza-tion. Each scenario minimizes the cumulative squared joint torques, with proximal and exact-penalty weights in the SCP subproblems set to 2000 and 50 , 000 , respectively. We also globally set δ0 = 1 , δmin = 10 −3, N stall = 10 , α = 0 .85 ,
+
+μi = 1 and ϵr 
+
+> i
+
+= 0 , for i = 1 , . . . , n c. All results are visualized with the Plotly library in Python and forward-simulated with time steps of 0.01 s. 
+
+A. Monoped on a Flat Surface 
+
+We consider locomotion for a simple two-link monoped (Fig. 2) on a flat contact surface. Fig. 2a shows a largely periodic gait in which contact is predominantly instantaneous (impulsive) over the horizon. The corresponding impulses (Fig. 2b) are nonzero over most of the trajectory, while con-tact forces remain zero, yielding an energy-efficient “touch-and-go” motion driven by torque minimization. Although impacts are inelastic, an apparent “bouncing” motion is produced due to the use of joint torques. Sustained contact (gray window) occurs only in two intervals at the lift-off and landing points for the final lateral jump, at which point both the contact forces and impulses are activated. During this jump, the lower leg of the monoped lifts close to the upper leg to shift the system mass distribution. Convergence metrics for CI-SCVX are shown in Fig. 2c. The tightness parameter δ decreases steadily with minor (a) Gait produced by a biped locomotion solution. The path of the torso CoM is shown by the orange trace, and the paths of the contact points (front and hind feet) are shown by the cyan traces. The zoomed view shows slipping with contact forces activating the friction cone. −6       
+
+> −4
+> −2
+> 0
+> 2
+> 0
+> 2
+> 4
+> 6
+> 00.5 11.5 22.5 3
+> −4
+> −2
+> 0
+> Time (s)
+> Tangential Velocity (m/s)
+> Max Dissipation Multiplier Friction Cone (N)
+> (b) Time histories of tangential velocity at contact point, max dissi-pation Lagrange multiplier and the friction cone term for the front foot, showing transitions between stick and slip motion. Impulses are not displayed as they are approximately zero for this scenario.
+
+Fig. 3: Biped locomotion solution on a sinusoidal surface, produced by CI-SCVX. 
+
+oscillations due to the backtracking rule in Algorithm 1. Solutions are obtained in roughly 40 s on average, over about 800 CI-SCVX iterations. We apply the termination criteria on scaled variables, which results in high-accuracy solutions. Lower-accuracy yet physically reasonable trajectories for closed-loop tracking can be generated more quickly. 
+
+B. Biped on a Sinusoidal Surface 
+
+Our second case study considers a five-link biped travers-ing a sinusoidal surface (Fig. 3). We approximate the signed distance of contact point to the contact surface as 
+
+sd( pc 
+
+> i
+
+(q)) ≈ hc(pc 
+
+> i
+
+(q)) 
+
+∥∇ hc(pc 
+
+> i
+
+(q)) ∥ . (18) This choice (i) becomes arbitrarily accurate as hc(pc 
+
+> i
+
+(q)) →
+
+0, (ii) is numerically stable far from the contact surface, and (iii) avoids solving a nonlinear optimization problem. This scenario showcases the capability of CI-SCVX to pro-duce solutions with stick–slip transitions. The resulting gait (Fig. 3a) combines sticking and slipping along the uneven terrain to achieve feasible, efficient motion. In Fig. 3b, the tangential velocity is (approximately) zero during the first two persistent-contact phases (gray regions), indicating stick. In the third phase, slipping is activated over two grid intervals: the friction cone term approaches its boundary (i.e., 
+
+|μiϕc,n 
+
+> i
+
+| − ∥ ϕc,t 
+
+> i
+
+∥ ≈ 0), the maximum dissipation multiplier 
+
+γi becomes nonzero, and the tangential velocity decreases toward zero. This behavior demonstrates that CI-SCVX can automatically determine the appropriate contact mode. 
+
+C. Demonstration with MuJoCo 
+
+The previous case studies demonstrated the expressivity of our formulation in simplified settings. Here we assess the ap-plicability of CI-SCVX in a high-fidelity environment. Specifi-cally, we use the Gymnasium HalfCheetah environment [19] with a MuJoCo backend, together with Google DeepMind’s MuJoCo MPC (MJPC) toolbox and its predictive sampling algorithm [6]. We employ MJPC for two purposes: (i) closed-loop tracking (with an LQR-style objective) of a given CI-SCVX trajectory, and (ii) a baseline controller optimized with a standalone reward which balances the default environment reward (maximize forward velocity, minimize normalized joint torques) with a gait-phasing term that encourages alternating foot contacts. Sample rollouts are discarded if the torso exceeds a critical pitch angle or drops below a critical height (indicating tip-over and slumping failure modes). Fig. 4 compares an MJPC forward rollout using the standalone reward to an MJPC rollout that tracks a CI-SCVX solution, both on a horizon of tf = 3.2 s . The CI-SCVX-tracked rollout requires less reward shaping than the standalone MJPC baseline and still achieves a 6.64% improvement in terms of the default environment objective as well as a 10.52% improvement in the cumulative joint torque cost. Qualitatively, the CI-SCVX trajectory yields a more stable gait, as illustrated in Fig. 4c. 
+
+D. Timing Comparisons to Existing SCP Implementations 
+
+Finally, we compare the fully GPU-accelerated, cus-tomized version of CI-SCVX described in Section VI, which we refer to as CI-SCVX-CUSTOM, against a baseline version (CI-SCVX-BASE), which inherits from implementation approaches in OpenSCvx v0.2.0 [5], a state-of-the-art SCP toolbox for trajectory optimization. Specifically, we compare against OpenSCvx’s GPU parallelization and convex subproblem parsing pipeline (which relies on CVXPY). As shown in Fig. 5, CI-SCVX-CUSTOM achieves speedups of approximately 
+
+6× (monoped) and 19 × (biped). Notably, CVXPY fails to parse the subproblem for models more complex than the biped. The primary advantages of CI-SCVX-CUSTOM rel-ative to CI-SCVX-BASE arise from (i) an efficient JAX-based implementation for transcription and nonconvex constraint linearization, and (ii) direct canonicalization of subproblem that bypasses general-purpose parsers such as CVXPY. VII. C ONCLUSION 
+
+In this work, we developed a successive convexifica-tion–based framework for contact-implicit trajectory opti-mization (CITO), CI-SCVX, which introduces integral cross-complementarity constraints to obtain high-fidelity solutions with sparse time discretization. The approach also employs a backtracking homotopy scheme to ensure reliable conver-gence. We demonstrated CI-SCVX on complex locomotion tasks, showing performance and solve-time improvements (a) Snapshots of the MJPC-tracked CI-SCVX solution visualized with Gymnasium. 
+
+(b) Gait produced by a standalone MJPC forward rollout. (c) Gait produced by MJPC tracking of a CI-SCVX solution. 
+
+Fig. 4: Comparison between solutions produced for the Gymnasium HalfCheetah environment. We note that the “head” of the model is not visualized in (b)-(c) as it is massless and does not contribute to the model dynamics. CI -SC VX -B ASE  
+
+> (monoped)
+> CI -SC VX -C USTOM
+> (monoped)
+> CI -SC VX -B ASE
+> (biped)
+> CI -SC VX -C USTOM
+> (biped)
+> 0
+> 100
+> 200
+> 300
+> 400
+> 500
+> 600
+> 700
+> 800 Convex Solve
+> Canonicalization
+> Linearization
+> Transcription
+> Configuration
+> Per-Iterate Solve Time (ms)
+
+Fig. 5: Timing results comparing the proposed CI-SCVX-CUSTOM implementation against the baseline CI-SCVX-BASE. 
+
+over baselines in the literature. Future work will refine the homotopy strategy and solver implementation to reduce runtime and expand benchmarking to a broader set of models and trajectory optimization solvers. REFERENCES [1] B.T. Baumrucker and L.T. Biegler. “MPEC strategies for optimiza-tion of a class of hybrid dynamic systems”. Journal of Process Control 19.8 (Sept. 2009), pp. 1248–1256. [2] Govind M Chari and Behçet Açikme¸ se. “QOCO: A quadratic objec-tive conic optimizer with custom solver generation”. arXiv preprint arXiv:2503.12658 (2025). [3] Purnanand Elango et al. “Continuous-time successive convexification for constrained trajectory optimization”. Automatica 180 (Oct. 2025), p. 112464. [4] Jonas Hall et al. “A sequential convex programming approach to solving quadratic programs and optimal control problems with linear complementarity constraints”. IEEE Control Systems Letters 6(2021), pp. 536–541. [5] Christopher R Hayner et al. “Continuous-Time Line-of-Sight Con-strained Trajectory Planning for 6-Degree of Freedom Systems”. 
+
+IEEE Robotics and Automation Letters (2025). [6] Taylor Howell et al. “Predictive sampling: Real-time behaviour synthesis with MuJoCo”. arXiv preprint arXiv:2212.00541 (2022). [7] Abhinav G Kamath et al. “Real-Time Sequential Conic Optimization for Multi-Phase Rocket Landing Guidance”. IFAC-PapersOnLine 
+
+56.2 (2023), pp. 3118–3125. [8] Saif R. Kazi, Kexin Wang, and Lorenz Biegler. “On optimal control of hybrid dynamical systems using complementarity constraints”. 
+
+Journal of Process Control 153 (Sept. 2025), p. 103492. [9] Danylo Malyuta and Behçet Açıkme¸ se. “Fast homotopy for space-craft rendezvous trajectory optimization with discrete logic”. Journal of Guidance, Control, and Dynamics 46.7 (2023), pp. 1262–1279. [10] Igor Mordatch, Emanuel Todorov, and Zoran Popovi´ c. “Discovery of complex behaviors through contact-invariant optimization”. ACM Transactions on Graphics 31.4 (July 2012), pp. 1–8. [11] Armin Nurkanovi´ c et al. “FESD-J: Finite Elements with Switch Detection for numerical optimal control of rigid bodies with impacts and Coulomb friction”. Nonlinear Analysis: Hybrid Systems 52 (May 2024), p. 101460. [12] Aykut Özgun Önol, Philip Long, and Ta¸ skın Padır. “Contact-implicit trajectory optimization based on a variable smooth contact model and successive convexification”. 2019 International Conference on Robotics and Automation (ICRA) . IEEE. 2019, pp. 2447–2453. [13] Aykut Özgun Önol et al. “Tuning-free contact-implicit trajectory optimization”. 2020 IEEE International Conference on Robotics and Automation (ICRA) . IEEE. 2020, pp. 1183–1189. [14] David E. Orin, Ambarish Goswami, and Sung-Hee Lee. “Centroidal dynamics of a humanoid robot”. Autonomous Robots 35.2–3 (June 2013), pp. 161–176. [15] Amir Patel et al. “Contact-Implicit Trajectory Optimization Using Orthogonal Collocation”. IEEE Robotics and Automation Letters 4.2 (Apr. 2019), pp. 2242–2249. [16] Michael Posa, Cecilia Cantu, and Russ Tedrake. “A direct method for trajectory optimization of rigid bodies through contact”. The Inter-national Journal of Robotics Research 33.1 (Oct. 2013), pp. 69–81. [17] Rien Quirynen. “Numerical simulation methods for embedded opti-mization”. PhD thesis. KU Leuven, 2017. [18] David E. Stewart. Dynamics with Inequalities: Impacts and Hard Constraints . Vol. 123. Other Titles in Applied Mathematics. Philadel-phia, PA: Society for Industrial and Applied Mathematics, 2011. 
+
+> ISBN
+
+: 978-1-61197-070-8. [19] Mark Towers et al. “Gymnasium: A standard interface for rein-forcement learning environments”. arXiv preprint arXiv:2407.17032 
+
+(2024). [20] Patrick M. Wensing et al. “Optimization-Based Control for Dynamic Legged Robots”. IEEE Transactions on Robotics 40 (2024), pp. 43– 63. [21] Alexander W. Winkler et al. “Gait and Trajectory Optimization for Legged Systems Through Phase-Based End-Effector Parameter-ization”. IEEE Robotics and Automation Letters 3.3 (July 2018), pp. 1560–1567.
