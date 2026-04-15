@@ -1,0 +1,576 @@
+Title: PAINT: Partner-Agnostic Intent-Aware Cooperative Transport with Legged Robots
+
+URL Source: https://arxiv.org/pdf/2604.12852v1
+
+Published Time: Wed, 15 Apr 2026 01:35:19 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# PAINT: Partner-Agnostic Intent-Aware Cooperative Transport with Legged Robots 
+
+Zhihao Cao 1,∗, Tianxu An 1,2,∗, Chenhao Li 1,3, Stelian Coros 2, Marco Hutter 1
+
+Fig. 1: Partner-agnostic intent-aware cooperative transport via purely proprioceptive feedback. Our framework enables quadrupedal robots to transport a shared payload with diverse partners across various terrains. Relying solely on proprioceptive signals, the robot infers the partner’s intent without external force-torque sensors or explicit payload pose tracking during transport. This lightweight approach ensures robust, compliant coordination across heterogeneous transport team configurations and can scale to multi-robot transport with flexible team sizes. https://paint-bot.github.io/ 
+
+Abstract — Collaborative transport requires robots to infer partner intent through physical interaction while maintaining stable loco-manipulation. This becomes particularly challenging in complex environments, where interaction signals are difficult to capture and model. We present PAINT, a lightweight yet efficient hierarchical learning framework for partner-agonistic intent-aware collaborative legged transport that infers partner intent directly from proprioceptive feedback. PAINT decouples intent understanding from terrain-robust locomotion: A high-level policy infers the partner interaction wrench using an intent estimator and a teacher-student training scheme, while a low-level locomotion backbone ensures robust execution. This enables lightweight deployment without external force-torque sensing or payload tracking. Extensive simulation and real-world experiments demonstrate compliant cooperative trans-port across diverse terrains, payloads, and partners. Further-more, we show that PAINT naturally scales to decentralized 
+
+This work was supported by Hilti AG, Schaan, Liechtenstein, the Lux-embourg National Research Fund (Ref. 18990533), and the Swiss National Science Foundation (Ref. 200021E 229503). 
+
+> ∗
+
+These authors are contributed equally to this work 
+
+> 1
+
+Robotic Systems Lab, ETH Zurich, Switzerland 
+
+> 2
+
+Computational Robotics Lab, ETH Zurich, Switzerland 
+
+> 3
+
+ETH AI Center, ETH Zurich, Switzerland 
+
+multi-robot transport and transfers across robot embodiments by swapping the underlying locomotion backbone. Our results suggest that proprioceptive signals in payload-coupled interac-tion provide a scalable interface for partner-agnostic intent-aware collaborative transport. 
+
+I. I NTRODUCTION 
+
+Collaborative transport in heterogeneous teams of humans and robots is an important topic with applications in fac-tory assistance and field operations. Collaborative robots can substantially reduce a partner’s physical workload by assisting in the transport of large and heavy payloads [1]. In practical collaborative transport, one partner typically acts as the leader, initiating the desired motion of the payload, while the collaborator follows by interpreting the leader’s mo-tion intent. Effective collaboration requires follower robots to maintain robust, terrain-aware locomotion under load while simultaneously inferring the partner’s motion intent to achieve smooth, compliant transport [2]. To be viable for real-world applications across diverse scenarios, the robot should be able to collaborate with heterogeneous partners, including humans and robots, across varying team sizes. 
+
+> arXiv:2604.12852v1 [cs.RO] 14 Apr 2026
+
+In this work, we aim to develop a control pipeline that enables a robot to interpret and follow a leader’s motion intent during collaborative transport. Motion intent is rep-resented by the force and torque that the leader applies to the payload to guide the transport movement [3], [4], [5]. The leading partner may be either a human or another robot, and the transport team may include additional heterogeneous robots. Our goal is therefore to enable partner-agnostic col-laboration during transport, inferring motion intent from the leading partner, while maintaining robust locomotion over uneven terrains. In addition, to minimize system overhead for practical applications, such as factories and construction sites, the pipeline must be lightweight and easily deployable. However, achieving this goal remains challenging for sev-eral reasons. First, motion intent is hard to capture and model across diverse environments with heterogeneous human-robot teams. For this reason, many intent-aware transport systems rely on external sensors, such as Force-Torque (FT) sensors, to estimate interaction intent [3], [4], [5]. Although informative, such sensors are often too expensive and fragile for high-impact, high-wear deployment on factory floors, and are susceptible to locomotion-induced noise that is hard to filter out. Second, most existing intent-aware frameworks are validated only on flat, structured laboratory terrain [6], [7], [8]. Their robustness on uneven terrain remains insufficiently explored, where the robot must maintain stable locomotion while correctly responding to the partner’s intent. Finally, most previous studies focus on single human-robot transport pairs, while extending such interaction mechanisms to larger teams remains less explored. Existing multi-robot transport systems often rely on motion capture infrastructure [9], remote control [10], or predefined team configurations [11], [12]. Such assumptions limit portability to infrastructure-free deployment, particularly in outdoor or field settings, and make it harder to team with a flexible number of robots or heterogeneous partners. To this end, we propose PAINT , a lightweight yet effi-cient hierarchical learning framework for Partner-Agnostic 
+
+INT ent-aware cooperative transport using only accessible joint-level proprioceptive signals. While PAINT is robot-agnostic and applies to other morphologies, we specifically focus on quadrupedal robots for their robust locomotion on uneven terrains [13], [14]. PAINT decouples intent under-standing from terrain-robust locomotion, where a High-Level (HL) transport policy infers partner intent from propriocep-tive histories without FT sensing or payload tracking, and a Low-Level (LL) locomotion backbone tracks base motion commands and stabilizes the robot in diverse uneven terrains. We adopt a teacher-student learning scheme to make the learned HL policy deployable under partial observability: a privileged teacher is trained with ground-truth interaction wrench data, while a student learns to reconstruct the in-teraction wrench via an intent estimator network from pro-prioception [15], [16]. PAINT can be zero-shot deployed to collaborative transport systems with team-member-agnostic coordination interface. When multiple robots interact through a shared payload, their collective behavior is facilitated by payload-coupled signals. This allows the team-level intent-aware interface to extend naturally to decentralized multi-robot transport and to transfer across robot embodiments by swapping the locomotion backbone. The contributions of this work are as follows.  
+
+> •
+
+A lightweight yet efficient hierarchical learning frame-work. We introduce a hierarchical framework that de-couples partner-intent inference from terrain-robust loco-motion, which simplifies policy learning across diverse environments. By leveraging a pretrained LL locomotion backbone, the HL policy can focus on generating transport behaviors aligned with partner motion intent, making the overall pipeline lightweight, efficient, and scalable.  
+
+> •
+
+Intent-aware HL policy. We design an intent estimator and a teacher-student training pipeline for HL policy to infer partner motion intent purely from joint-level proprio-ceptive signals, enabling deployment with diverse partners and payloads without FT sensors at the end-effector or explicit payload tracking.  
+
+> •
+
+Scalability to decentralized multi-robot transport. We show that the learned intent-aware formulation is not only partner-agnostic but can also be zero-shot transferred to multi-robot teams of flexible sizes. Through extensive sim-ulation and real-world experiments, we provide evidence that pure proprioceptive signals from payload-coupled interaction provide a scalable interface for decentralized team transport. II. R ELATED WORK 
+
+Cooperative transport is a classical case of Human-Robot Collaboration (HRC). Early work emphasizes compliance via impedance-admittance regulation, enabling intuitive leader-follower behaviors and safe assistance [17]. Recent ad-vancements are extending classical compliant cooperative transport toward intent-aware cooperative transport [3], [4], [5], [6]. Existing intent-aware approaches broadly follow two directions. Model-based methods achieve robustness through constraint-aware reasoning and structured inference [3], [6], [7], [8], [18]. They are effective under reliable state observability, but depend on accurate modeling. In contrast, learning-based intent encoding can better tolerate contact variability, adapt to complex payload-coupled dy-namics, and enable richer coordination behaviors [2], [4], [10], [12]. However, several systems still rely on FT sensing [3], [4], [5], [19], which improves observability but increases deployment overhead due to cost and fragility. This has motivated lightweight alternatives that infer partner intent with only joint states and body dynamics [2], [6], without FT sensors at the end-effector. Beyond the sensing modality, intent representation also matters. Explicit representation [20] makes the inferred intent physically meaningful and improves human interpretability. It also makes the intent estimator easy to modularize for downstream control. In addition, cooperative transport can build on progress in legged loco-manipulation. Legged systems are gaining attention because it naturally addresses rough terrain [2], Fig. 2: Overview of the partner-agnostic intent-aware cooperative transport framework. The system contains privileged training in simulation and lightweight real-world deployment via a hierarchical controller: (A) Intent (Force/Torque) Generator: In simulation, random forces and torques are applied to the payload to simulate partner guidance, producing diverse intent signals. (B) High-Level Controller: A HL policy maps intent to base commands and arm joint actions. The HL policy is trained with teacher-student scheme, where a teacher (B1) uses wrench observations, and a deployable student (B2) 
+
+relies on proprioceptive histories with an intent estimator network to infer interaction wrench; KL regularization (B3) distills the teacher’s action distribution into the student. (C) Low-Level Controller: A terrain-robust locomotion backbone tracks the HL planar commands and outputs leg actions for stable loco-manipulation under load. (D) Evaluation: The framework is developed in simulation (D1) and transferred to real-world deployment (D2) , where it operates without end-effector FT sensing or payload tracking. [18]. Whole-body frameworks [15], [21] are widely adopted for coordinating the robot’s arm and legs. However, this end-to-end control framework prevents reuse of established locomotion backbones [13], [14], [22] across diverse terrains, payloads, and partners, thereby requiring costly and time-consuming retraining. Instead, hierarchical designs can offer a simpler and more practical integration pathway [23], [20]. Beyond single-robot HRC, multi-robot cooperative trans-port introduces additional sensing and coordination chal-lenges. Prior work stabilizes collaboration via centralized tracking and planning [12], motion capture [9], remote control [10], or fixed team configurations [11], [12], [24], limiting scalability and field deployment. In addition, limited attention has been paid to inferring the team-level intent from physical payload-coupled interactions during multi-robot co-operative transport [2]. Our work targets an explicit intent representation learned from proprioceptive histories from payload-coupled physical interactions during collaborative transport, designed to pair with terrain-robust locomotion backbones and to naturally extend to team-level intent-aware coordination in multi-robot transport. III. M ETHOD 
+
+A. Overview 
+
+We formulate partner-agnostic intent-aware cooperative transport under physical coupling as a Partially Ob-servable Markov Decision Process (POMDP) M =(S, A, O, T , R, Ω, γ ). The latent state st ∈ S is the coupled robot-payload-partner dynamics, which is only partially ob-servable. At time t, the agent receives an observation ot ∈ O 
+
+from observation kernel Ω( ot|st), selects an action at ∈ A ,follows system transitions T (st+1 |st, a t) while producing a reward rt = R(st, a t). The goal is to learn a policy πθ that maximizes the expected discounted return Eπθ
+
+h P 
+
+> t≥0
+
+γtrt
+
+i
+
+with discount factor γ ∈ (0 , 1) .
+
+B. Hierarchical Framework 1) High-Level (HL) Policy (Fig. 2-B): The student HL policy only observes joint proprioception in H history steps: 
+
+otrans  
+
+> t
+
+:= 
+
+h
+
+qarm 
+
+> t−H:t
+
+, ˙qarm 
+
+> t−H:t
+
+, aarm 
+
+> t−H−1: t−1
+
+,
+
+i
+
+, H ∈ N (1) where qarm and ˙qarm are arm joint positions and velocities, 
+
+aarm is the previous arm joint position command. The teacher additionally accesses privileged observation: 
+
+owrench  
+
+> t
+
+:= Fxy force ,t , Θyaw torque ,t 
+
+ (2) where Fxy force and Θyaw torque are the interaction wrench applied to the payload. The HL policy outputs both a planar base motion command for locomotion execution and arm joint actions to maintain stable and compliant transport motion: 
+
+aHL  
+
+> t
+
+=
+
+h
+
+aLL  
+
+> t
+
+, aarm 
+
+> t
+
+i
+
+, aLL  
+
+> t
+
+∈ R3, aarm  
+
+> t
+
+∈ R6 (3) where the base command aLL  
+
+> t
+
+is observed by the LL policy: 
+
+ocmd  
+
+> t
+
+:= [ aLL  
+
+> t
+
+] := vxy cmd ,t , ω yaw cmd ,t 
+
+ (4) while aarm  
+
+> t
+
+is the target arm joint positions. 
+
+2) Low-Level (LL) Policy (Fig. 2-C): The LL locomotion policy πLL is a pre-trained velocity-tracking backbone that robustly executes the planar command on uneven terrain. Aligned with previous work on learned velocity-tracking locomotion backbones for legged mobile manipulation [23], [25], πLL takes locomotion proprioception and the base command from the HL policy, and outputs base joint position command: 
+
+aleg  
+
+> t
+
+= πLL 
+
+ oloco  
+
+> t
+
+, o cmd 
+
+> t
+
+ ∈ Rnleg . (5) where the observation oloco  
+
+> t
+
+contains three components, 
+
+oloco  
+
+> t
+
+:= oprop  
+
+> t
+
+, o pred  
+
+> t
+
+, o scan 
+
+> t
+
+, (6) where oprop  
+
+> t
+
+includes leg proprioceptions; opred  
+
+> t
+
+summarizes predicted external wrenches that act on the base, the current command, and base twist; and oscan  
+
+> t
+
+provides a local height scan around the feet. During HL policy training, πLL is kept fixed to avoid additional optimization complexity. 
+
+C. Intent Estimator in HL Student Policy 
+
+A key challenge in deployable intent-aware collaborative transport is that the interaction wrench at the payload is typically unobservable. Although FT sensors can measure interaction wrenches, they are not always available for high-impact, high-wear deployment in practice. Instead, time-correlated joint proprioceptive signals are real-world accessi-ble observations and can be used to infer partner-applied FT during payload-coupled interaction. Therefore, we augment the student HL policy with an intent estimator network that estimates the interaction wrench from proprioceptive histo-ries. The predicted wrench is then fed back into the policy as part of its observation. This estimator can be interpreted as learning an inverse observation kernel: while the observation kernel Ω maps the latent state st to the observation ot, the estimator infers latent intent variables from the observed proprioceptive signals induced by interaction. 
+
+1) The design of the intent estimator (Fig. 2-B2): Taking the arm proprioceptive observation otrans  
+
+> t
+
+as input, the intent estimator outputs an estimated interaction wrench vector: 
+
+βest  
+
+> t
+
+:= 
+
+h ˆFxy force ,t , ˆΘyaw torque ,t 
+
+i
+
+(7) which is concatenated with otrans  
+
+> t
+
+as input to the actor network of the student HL policy. Intuitively, ˆFxy force ,t captures the translational intent component, while ˆΘyaw torque ,t provides a rotational intent that is important for turning behaviors. 
+
+2) Training intent estimator: During training in simula-tion, we can get the ground-truth interaction wrench owrench  
+
+> t
+
+.We train the intent estimator with a regression loss: 
+
+Lest = ˆFxy force ,t − Fxy force ,t 
+
+> 22
+
++ ˆΘyaw torque ,t − Θyaw torque ,t 
+
+> 22
+
+(8) This intent estimator provides the student with physically meaningful interaction cues from proprioceptive histories, improving intent understanding under partial observability. 
+
+3) Deployment: At deployment time, the wrench signals 
+
+owrench are not available. The student HL policy relies on proprioceptive histories otrans  
+
+> t
+
+and the estimated intent βest 
+
+> t
+
+produced by the intent estimator, ensuring lightweight oper-ation while retaining an explicit intent representation. 
+
+D. Teacher-Student Training with KL Regularization 
+
+We adopt a teacher-student scheme in HL policy training to improve deployability and learn richer responses to partner intent. The key idea is to first learn a well-shaped intent-to-motion mapping with privileged intent information, and then distill it into a deployable policy that only relies on proprioceptive observations. TABLE I: Reward For Learning the Transport Policy                                               
+
+> Reward Term Expression Weight ( ×dt #)
+> Force Tracking Eq. (13) −2.0×10 −2
+> Torque Tracking Eq. (14) −1.0×10 −2
+> Payload Height Eq. (15) −3.0×10 −3
+> Joint torque penalty P
+> iτ2
+> i−2.0×10 −9
+> Joint DoF penalty P
+> i˙q2
+> i+ 0 .00025 ¨ q2
+> i−2.0×10 −4
+> Action penalty P
+> i(at,i −at−1,i )2+ 0 .5a2
+> t,i −2.0×10 −4
+> Termination I[terminated ]−50 .0/ dt
+> Arm posture penalty qarm −qdefault
+> arm 2−3.0×10 −3
+> dt #= 0 .02 s, denotes the control interval.
+
+1) Privileged teacher (Fig. 2-B1): We first train a priv-ileged HL teacher policy πTHL using PPO, with access to privileged intent observation owrench . The teacher learns an admittance-like mapping from interaction wrenches to arm and base motion commands while remaining robust to load variations and terrain-induced disturbances introduced during training. 
+
+2) Deployable student with KL regularization (Fig. 2-B3): 
+
+We then train a student policy πSHL (Fig. 2-B2) that only relies on proprioceptive observation otrans , where we use a short history window H to capture meaningful interaction cues, and optimize a joint objective composed of a standard expected return and a KL distillation term: 
+
+max 
+
+> θS
+
+E
+
+"X
+
+> t
+
+γtrt
+
+#| {z }
+
+> JRL (θS)
+
+− λKL JKL (θS) (9) 
+
+JKL (θS) = E
+
+h
+
+DKL 
+
+
+
+πSHL (·| otrans  
+
+> t
+
+, β est  
+
+> t
+
+) ∥ πTHL (·| oT 
+
+> t
+
+)
+
+i 
+
+(10) where oT 
+
+> t
+
+:= {otrans  
+
+> t
+
+, o wrench  
+
+> t
+
+}. The expected return JRL 
+
+encourages the student to improve task performance. The KL term JKL encourages the students to imitate teacher actions by penalizing deviations between πSHL and πTHL . The weight 
+
+λKL balances imitation and task performance. Moreover, when training both teacher and student, an asymmetric actor-critic structure [26] is used, which conditions the critic on additional observations, including the end-effector and payload position, velocity, and acceleration. This improves value estimation and reduces gradient variance. 
+
+E. Interaction Wrench Generation in Simulation 
+
+To generate diverse and smooth interaction cues during training, we apply an interactive wrench profile (Fig. 2-A) to the payload. For each episode, we sample a planar force 
+
+Fxy  
+
+> T
+
+and yaw moment Θyaw  
+
+> T
+
+, with Fxy  
+
+> T
+
+∈ {− 40 N , 40 N } and 
+
+Θyaw  
+
+> T
+
+∈ {− 10 N · m, 10 N · m}, and apply a time-varying scaling s(t) ∈ [0 , 1] ,
+
+Fxy force (t) = s(t) Fxy  
+
+> T
+
+, Θyaw torque (t) = s(t) Θ yaw  
+
+> T
+
+, (11) where s(t) uses a piecewise-linear schedule as follows. We set t↑ = 0 .1T , thold = 0 .8T , and t↓ = 0 .1T , where T denotes (a) Cooperative transport across diverse terrains, payloads, and team configurations. The quadruped-arm system reliably infers partner intent from arm proprioceptive histories without FT sensors, enabling stable co-carrying (I) across uneven terrains (e.g. stairs and gravel road), (II) with different payload (e.g. short and long box), and (III) with different partners (e.g. human and humanoid). 
+
+(b) Cooperative transport with multi-robot teams and diverse payloads in simulation (I) and real world (II). The proposed approach scales from pairwise co-carrying to decentralized teams of 2-4 legged robots that jointly move large, heavy, and irregular payloads. 
+
+(c) Cooperative transport with diverse legged robots. The proposed high-level intent policy enables robust co-carrying with a one-arm ANYmal (I) over rough or stepping terrain, and also generalizes to an ANYmal without an arm (II) for payload transport. 
+
+Fig. 3: Overview of partner-agnostic intent-aware cooperative transport results. The proposed intent-aware framework enables stable cooperative transport across diverse terrains, payloads, partners, robot teams, and robot embodiments. the duration of one episode: 
+
+s(t) = 
+
+ 
+
+> tt↑
+
+, 0 ≤ t < t ↑,
+
+1, t↑ ≤ t < t ↑ + thold ,
+
+1 − t−(t↑+thold ) 
+
+> t↓
+
+, t↑ + thold ≤ t < t ↑ + thold + t↓
+
+(12) The piecewise-linear schedule avoids impulsive transients and yields physically plausible interaction profiles. To en-courage fully compliant behavior, we also optionally sample zero-wrench segments with a fixed probability p = 0 .02 .
+
+F. Task Objective and Reward Design 
+
+The objective of cooperative transport is to follow the partner’s intended motion while maintaining stable payload handling. As the interaction wrench applied by the partner indicates the intended motion, we design task rewards that align the robot base motion with the interaction wrench on the payload. The corresponding rewards are defined as: 
+
+rforce = exp 
+
+
+
+− Fxy force /B force − vxy base  
+
+> 22
+
+/ σ force 
+
+
+
+, (13) 
+
+rtorque = exp 
+
+
+
+−  Θyaw torque /B torque − ωyaw base 
+
+2 / σ torque 
+
+
+
+. (14) Here Fxy  
+
+> force
+
+and Θyaw  
+
+> torque
+
+denote the interaction force and torque applied on the payload, and vxy  
+
+> base
+
+and ωyaw  
+
+> base
+
+are the robot base linear velocity and yaw rate. The coefficient 
+
+Bforce and Btorque scale the wrench into a velocity reference, similar to the gain in classical admittance control [20]. Meanwhile, to ensure stable transport, we penalize payload height deviations outside a safe range with: 
+
+rh =  max(0 , h min − hpbase ) + max(0 , h pbase − hmax )2
+
+(15) TABLE II: Quantitative Comparison on Collaborative Transport Metrics.                                                                                                                                                                                                                              
+
+> Mass Metrics Baseline Comparisons Ablation Studies Damped Arm Pure RL-4 BC Distill.-4 Force Est.-4 PAINT-4 PAINT-4 PAINT-8 PAINT-1
+> 2 kg
+> ∗Lin. Tracking Err. ( m/s )↓0.331 0.143 0.224 0.138 0.120 0.120 0.119 0.140
+> ∗Ang. Tracking Err. ( m/s )↓0.563 0.120 0.364 0.132 0.111 0.111 0.105 0.123
+> †F. Estimation Err. ( N)↓///3.321 3.041 3.041 2.764 4.367
+> †T. Estimation Err. ( N·m)↓///0.640 0.781 0.781 0.566 0.972
+> ‡E.E. Constraint Force ( N)↓8.403 3.351 10.712 2.269 2.929 2.929 2.024 3.663
+> ‡E.E. Constraint Torque ( N·m)↓4.168 1.605 2.364 1.596 1.857 1.857 1.098 1.672
+> §E.E. Intent Align. ( cossim  Fforce ,t ,vee ,t
+> )↑0.612 0.880 0.785 0.908 0.923 0.923 0.927 0.905
+> 4 kg
+> ∗Lin. Tracking Err. ( m/s )↓0.290 0.179 0.254 0.148 0.142 0.142 0.135 0.168
+> ∗Ang. Tracking Err. ( m/s )↓0.491 0.163 0.373 0.157 0.119 0.119 0.150 0.140
+> †F. Estimation Err. ( N)↓///4.361 4.008 4.008 3.471 5.117
+> †T. Estimation Err. ( N·m)↓///0.921 0.923 0.923 1.022 1.159
+> ‡E.E. Constraint Force ( N)↓14.671 10.791 17.138 7.404 7.291 7.291 7.136 11.213
+> ‡E.E. Constraint Torque ( N·m)↓6.241 3.617 6.898 3.401 2.346 2.346 2.688 3.720
+> §E.E. Intent Align. ( cossim  Fforce ,t ,vee ,t
+> )↑0.615 0.902 0.736 0.910 0.915 0.915 0.921 0.901
+> 8 kg
+> ∗Lin. Tracking Err. ( m/s )↓0.294 0.237 0.275 0.225 0.220 0.220 0.202 0.267
+> ∗Ang. Tracking Err. ( m/s )↓0.452 0.333 0.451 0.309 0.284 0.284 0.252 0.315
+> †F. Estimation Err. ( N)↓///7.875 7.956 7.956 6.658 8.041
+> †T. Estimation Err. ( N·m)↓///2.779 2.881 2.881 2.591 3.387
+> ‡E.E. Constraint Force ( N)↓27.910 25.031 29.722 27.319 25.982 25.982 25.962 28.746
+> ‡E.E. Constraint Torque ( N·m)↓12.637 11.566 12.835 10.935 10.621 10.621 10.055 11.278
+> §E.E. Intent Align. ( cossim  Fforce ,t ,vee ,t
+> )↑0.465 0.754 0.557 0.777 0.781 0.781 0.842 0.669
+> ∗
+
+The tracking errors between robot base motion and interaction force and torque, as explained in III-F.  
+
+> †
+
+The mean absolute errors between the estimated force and torque and their ground truth.  
+
+> ‡
+
+The magnitude of the force and torque exerted by the robot end-effector on the payload during steady-state transport.  
+
+> §
+
+The cosine similarity between commanded force and end-effector velocity direction: cossim  Fforce ,t , vee ,t 
+
+ = F⊤ 
+
+> force ,t vee ,t
+> ∥Fforce ,t ∥2∥vee ,t ∥2
+
+where hpbase is the measured payload height. (hmin , h max ) is the safe height range. All height values are represented in the robot base frame. This term prevents excessive tilting or dropping of the payload during transport. In our imple-mentation, we set σforce = 0 .25 , σtorque = 0 .25 , Bforce = 40 ,
+
+Btorque = 10 , hmin = 0 .05 m , and hmax = 0 .25 m . All rewards are summarized in Table I, including regularization terms that promote smooth and consistent behaviors. IV. I MPLEMENTATION DETAILS 
+
+We train our policies in Isaac Gym using 4096 parallel environments on a single RTX 3080Ti GPU. We additionally randomize the payload mass to avoid overfitting to a single payload-dynamics regime, sampling the mass uniformly from 
+
+0 kg to 10 kg . The LL policy follows the setup in [23]. For the HL policy, both the teacher and the student use three-layer MLP actor and critic networks with hidden dimensions (128, 128, 128). The intent estimator network adopts the same MLP architecture. The teacher and student HL policies are trained for 15k and 20k iterations. To further increase policy robustness and reduce sim-to-real gaps, domain randomiza-tion is applied to the robot’s proprioceptive observations and the generated interactive wrench. V. E XPERIMENTS AND RESULTS 
+
+A. Real-World Transport Across Diverse Situations 
+
+Fig. 3a demonstrates that the robot can reliably infer part-ner intent using only arm proprioceptive histories, without requiring FT sensors or payload tracking. Across uneven terrains, such as stairs and gravel, the learned HL policy produces smooth planar base commands that the LL locomo-tion backbone tracks robustly, resulting in stable co-carrying despite terrain-induced perturbations. Crucially, the method remains effective across variations in payload geometries and weights, indicating that the inferred intent is not overfitted to a single payload configuration. Finally, cooperative transport remains stable when partnering with different leaders, such as human and humanoid, supporting the claim that the proposed pipeline is partner-agnostic. 
+
+B. Quantitative Studies Across Different Payload Masses 
+
+Table II reports the single-agent quantitative results under different payload masses and the same interaction force and torque in simulation. The compared baselines include Damped Arm, Pure RL-4 [27], BC Distillation-4 [2], and Force Estimator-4 [15], [16]. Damped Arm is implemented via classical PD control: the arm is in damping mode, and the end-effector displacement induced by external forces and torques is passed to the PD controller to compute base mo-tion commands. A low-pass filter is used to improve motion smoothness. All other methods in baseline comparisons use 4-step ( 0.08 s ) proprioception histories, while in ablation studies, different history steps are compared. As payload mass increases, all methods generally degrade, suggesting that heavier loads induce more challenging coupled dynam-ics. Across masses, PAINT remains the most robust method, consistently achieving the best or near-best metrics. Notably, although Force Est.-4 achieves competitive FT estimation accuracy, its tracking errors are typically higher than those of PAINT-4, suggesting that PAINT benefits not only from informative interaction wrenches but also from the teacher-student distillation. The end-effector metrics further support this trend, with PAINT generally producing lower constraint FT and stronger intent alignment than the baselines. In ablation studies, we show that temporal history is critical under partial observability, where reducing history steps con-Fig. 4: Saliency analysis of the intent estimator under a sequential interaction schedule across arm joint positions. 
+
+Fig. 5: End-effector intent-alignment across payload masses. Means (boxes) and standard deviations (lines) are computed over 4096 environments, comparing single-agent and multi-agent transport from 12 kg to 28 kg payloads. sistently degrades both tracking and interaction performance, whereas longer histories further improve robustness. 
+
+C. Scaling to Multi-Robot Teams 
+
+Fig. 3b evaluates multi-robot scalability by deploying the same transport policy on teams of 2-4 legged robots trans-porting large and heavy payloads in simulation and the real world. The multi-robot teams successfully transport various payloads, including a sofa, a desk, and a barrel, over uneven terrain while maintaining coherent motions in simulation, and jointly carry an 8 kg long box with a human leader in the real world. Fig. 5 shows the improved performance of multi-robot teams when transporting heavy payloads. In the multi-robot setting, PAINT maintains high intent alignment across payloads up to 28 kg . Although trained in a single-agent setting with up to 10 kg payload, PAINT remains effective under challenging payload-coupled dynamics with higher payload masses and team sizes unseen from training. Notably, this coordination remains fully decentralized, with each robot running the same policy and inferring the team-level intent solely from its individual proprioceptive histories, without centralized planning or explicit state sharing. 
+
+D. Scaling to Different Robot Embodiments 
+
+In this experiment, we transfer PAINT to ANYmal without an arm. For the new robot embodiment, the HL policy takes proprioceptive signals from leg joints as input and outputs base motion commands for its LL locomotion backbone. Fig. 3c shows that both ANYmal with an arm and without arm achieve robust cooperative transport in simulation and in real-world trials over rough and stepping terrain. This indi-cates that the intent estimator can infer interaction wrenches from proprioception of either arm or leg joints, as both body parts can encode meaningful interaction cues. In Fig. 6, we show how the two robot embodiments track a synthetic yet human-like interaction wrench profile. The synthetic wrench command is generated by the Ornstein-Uhlenbeck 
+
+Fig. 6: Measured and commanded interaction wrenches on the payload for two robot embodiments in simulation. Process to model realistic human-induced FT [28]. The measured wrench data closely track the command profile with smooth responses, indicating that the PAINT pipeline can not only scale to different robot embodiments, but also facilitate smooth and compliant collaboration with unseen partner interaction profiles. The bottom row of Fig. 3b further demonstrates heterogeneous multi-robot transport in the real world, where two different robot embodiments jointly carry an 8 kg long box with a human leader. 
+
+E. Saliency Analysis of Intent Estimation 
+
+To better understand how partner intent is estimated from proprioceptive signals, we perform a gradient-based saliency analysis to reveal how the intent estimator dynamically shifts its attention across individual arm joints under varying interaction modes. Specifically, we compute the gradient of the scalar mean of the estimated interaction cue βest  
+
+> t
+
+with re-spect to the transport proprioception otrans  
+
+> t
+
+. A higher gradient magnitude indicates that the estimator is more sensitive to a particular joint channel, as instantaneous fluctuations in that channel more profoundly influence the output. As illustrated in Fig. 4, the attention patterns exhibit distinct spatial and temporal shifts depending on the applied force or torque on the payload. For clarity, we focus on joint position inputs from otrans  
+
+> t
+
+, as velocity and action inputs demonstrated redun-dant, less salient patterns. When a step force is applied along the y-direction, saliency is primarily localized at the shoulder rotation joint. In contrast, estimated interaction cues along the x-direction are predominantly derived from the flexion joints of the shoulder, elbow, and wrist. Estimating yaw in-teraction appears to require more complex and combinatorial signaling, though the most salient response originates from Fig. 7: The HL policy reacts purely to proprioceptive signals without active obstacle avoidance. When approaching obsta-cles (left), it cannot proactively adjust its motion, leading to collisions (middle) and causing locomotion failure (right). the forearm rotation joint. Furthermore, we observe a short and consistent temporal lag between the onset of external in-teraction and the emergence of salient responses. This latency suggests that the estimator undergoes an integration period to accumulate the joint-evolution patterns before forming a stable, informative intent representation. This result supports the use of proprioceptive histories to overcome partial ob-servability during collaborative transport tasks. Combined with the results in Section V-C, the saliency analysis also provides insight into the successful scaling of a single-robot policy to multi-robot teams: by leveraging distinct attention patterns on the proprioceptive signals from payload-coupled interaction, each robot can infer team-level interaction cues locally, enabling decentralized cooperative transport without centralized planning or explicit state sharing. 
+
+F. Failure Cases and Limitations 
+
+The proposed framework has limitations in environments requiring active obstacle avoidance. As shown in Fig. 7, when encountering obstacles such as walls or narrow struc-tures, the HL policy lacks explicit perception or planning ca-pabilities to proactively avoid collisions. Instead, it passively follows the leader’s motion, sending unsafe base commands to the LL locomotion backbone, which can cause locomotion failure when the leading partner does not provide sufficient corrective guidance. VI. C ONCLUSION AND FUTURE WORK 
+
+We present PAINT, a lightweight yet efficient partner-agnostic intent-aware framework for cooperative transport with legged robots. By combining a terrain-robust LL lo-comotion backbone with a HL transport policy that infers partner intent purely from joint-level proprioceptive histories, our approach enables lightweight deployment without FT sensors or payload tracking. Extensive simulation and real-world experiments demonstrate that the proposed frame-work supports stable cooperative transport across diverse environments, and generalizes across different payloads, team compositions, and robot embodiments. Furthermore, we validate that proprioceptive signals induced by payload-coupled interactions can encode meaningful interaction cues, overcoming partial observability in both robot-leader and multi-robot transport teams. Several directions remain for future work. First, partner intent is represented by a planar wrench, which is not suffi-cient for more complex environments. Full 6D interaction wrenches and more semantic-aware intent representations can be explored. Second, the current HL policy allows only limited arm motion. Future research can enable the arm to move more freely, thus improving the ability to perform payload reorientation and handle constrained maneuvers, such as turning in narrow corridors. Lastly, collaborative grasping and lifting can be incorporated to make the pipeline more complete and practical for payload transportation. VII. A CKNOWLEDGEMENT 
+
+We would like to thank Changan Chen, Feng Tian, Francesca Bray, and Junzhe He for their assistance with the hardware experiments. We also thank Andrei Cramariuc, Kaixian Qu and Shengzhi Wang for their thorough proof-reading of the manuscript and insightful comments. REFERENCES [1] Guanrui Li et al. Human-aware physical human–robot collaborative transportation and manipulation with multiple aerial robots. IEEE Transactions on Robotics , 41:762–781, 2024. [2] Yushi Du et al. Learning human-humanoid coordination for collabo-rative object carrying. arXiv:2510.14293 , 2025. [3] Xinbo Yu et al. Human-robot co-carrying using visual and force sensing. IEEE Transactions on Industrial Electronics , 68(9):8657– 8666, 2020. [4] Geeta Chandra Raju Bethala et al. H2-compact: Human-humanoid co-manipulation via adaptive contact trajectory policies.                                       
+
+> arXiv:2505.17627 , 2025. [5] Konstantinos Plotas et al. A control scheme for collaborative object transportation between a human and a quadruped robot using the mighty suction cup. In 2025 IEEE International Conference on Robotics and Automation (ICRA) , pages 16305–16311. IEEE, 2025. [6] Yifei Simon Shao et al. Constraint-aware intent estimation for dynamic human-robot object co-manipulation. arXiv:2409.00215 , 2024. [7] Nimesh Khandelwal et al. Compliant control of quadruped robots for assistive load carrying. arXiv:2503.10401 , 2025. [8] Sai Gu et al. Hierarchical cooperative locomotion control of human and quadruped robot based on interactive force guidance. IEEE/ASME Transactions on Mechatronics , 2025. [9] Hao Zhang et al. Cognition to control-multi-agent learning for human-humanoid collaborative transport. arXiv:2603.03768 , 2026. [10] Bikram Pandit et al. Multi-quadruped cooperative object transport: Learning decentralized pinch-lift-move. arXiv:2509.14342 , 2025. [11] Flavio De Vincenti et al. Centralized model predictive control for collaborative loco-manipulation. In Robotics: Science and Systems ,volume 2023, 2023. [12] Tianxu An et al. Collaborative loco-manipulation for pick-and-place tasks with dynamic reward curriculum. arXiv:2509.13239 , 2025. [13] Takahiro Miki et al. Learning robust perceptive locomotion for quadrupedal robots in the wild. Science robotics , 7(62):eabk2822, 2022. [14] Junzhe He et al. Attention-based map encoding for learning general-ized legged locomotion. Science Robotics , 10(105):eadv3604, 2025. [15] Tifanny Portela et al. Learning force control for legged manipulation. In 2024 IEEE International Conference on Robotics and Automation (ICRA) , pages 15366–15372. IEEE, 2024. [16] Peiyuan Zhi et al. Learning unified force and position control for legged loco-manipulation. arXiv:2505.20829 , 2025. [17] Ryojun Ikeura et al. Variable impedance control of a robot for cooperation with a human. In Proceedings of 1995 IEEE international conference on robotics and automation , volume 3, pages 3097–3102. IEEE, 1995. [18] Giulio Turrisi et al. Pacc: A passive-arm approach for high-payload collaborative carrying with quadruped robots using model predictive control. In 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pages 11139–11146. IEEE, 2024. [19] Alexander Schperberg et al. Safe whole-body loco-manipulation via combined model and learning-based control. arXiv:2603.02443 , 2026.
+
+[20] Xiang Zhou et al. Hac-loco: Learning hierarchical active compliance control for quadruped locomotion under continuous external distur-bances. In 2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pages 10649–10655. IEEE, 2025. [21] Guoping Pan et al. Roboduet: Learning a cooperative policy for whole-body legged loco-manipulation. IEEE Robotics and Automation Letters , 2025. [22] Joonho Lee et al. Learning quadrupedal locomotion over challenging terrain. Science robotics , 5(47):eabc5986, 2020. [23] Yuntao Ma et al. Combining learning-based locomotion policy with model-based manipulation for legged mobile manipulators. IEEE Robotics and Automation Letters , 7(2):2377–2384, 2022. [24] Shengzhi Wang et al. Shared object manipulation with a team of collaborative quadrupeds. arXiv:2510.00682 , 2025. [25] Mike Zhang et al. Learning to open and traverse doors with a legged manipulator. arXiv:2409.04882 , 2024. [26] Gaspard Lambrechts et al. A theoretical justification for asymmetric actor-critic algorithms. In International Conference on Machine Learning , pages 32375–32405. PMLR, 2025. [27] John Schulman et al. Proximal policy optimization algorithms. 
+
+arXiv:1707.06347 , 2017. [28] Gottfried Mayer-Kress et al. Modeling the control of isometric force production with piece-wise linear, stochastic maps of multiple time-scales. Fluctuation and Noise Letters , 3(01):L23–L29, 2003.

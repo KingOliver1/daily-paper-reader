@@ -6,48 +6,46 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-04-14
-- 运行时间：2026-04-14 20:09:18 UTC
+- 最新运行日期：2026-04-15
+- 运行时间：2026-04-15 20:41:58 UTC
 - 运行状态：成功
-- 本次总论文数：9
+- 本次总论文数：8
 - 精读区：4
-- 速读区：5
+- 速读区：4
 
 ### 今日简报（AI）
-今日聚焦足式机器人运动效率与全身协同操控，发布GPU加速优化与Real2Sim映射等9项关键进展。
-核心突破在于利用GPU加速连续时间凸优化提升足
-- 详情：[/202604/14/README](/202604/14/README)
+今日深度解析人形机器人触觉感知与复杂地形适应性，涵盖 8 篇机器人领域前沿成果。
+核心突破在于利用“触觉梦境”实现全能人形操作，并建立了泥泞地面足端阻力模型以优化腿式运动。
+推荐关注触觉学习与物理建模的结合，这是提升机器人复杂环境交互能力的关键路径。
+- 详情：[/202604/15/README](/202604/15/README)
 
 ### 精读区论文标签
-1. [GPU-Accelerated Continuous-Time Successive Convexification for Contact-Implicit Legged Locomotion](/202604/14/2604.09993v1-gpu-accelerated-continuous-time-successive-convexification-for-contact-implicit-legged-locomotion)  
+1. [Learning Versatile Humanoid Manipulation with Touch Dreaming](/202604/15/2604.13015v1-learning-versatile-humanoid-manipulation-with-touch-dreaming)  
    标签：评分：10.0/10、query:robot
-   evidence：足式机器人运动的接触隐式轨迹优化
-2. [Sumo: Dynamic and Generalizable Whole-Body Loco-Manipulation](/202604/14/2604.08508v2-sumo-dynamic-and-generalizable-whole-body-loco-manipulation)  
+   evidence：具有接触感知的人形机器人移动操作
+2. [A Foot Resistive Force Model for Legged Locomotion on Muddy Terrains](/202604/15/2604.12006v1-a-foot-resistive-force-model-for-legged-locomotion-on-muddy-terrains)  
    标签：评分：9.0/10、query:robot
-   evidence：Spot四足机器人的全身移动操纵
-3. [Natural Gradient Gaussian Approximation Filter on Lie Groups for Robot State Estimation](/202604/14/2604.10057v1-natural-gradient-gaussian-approximation-filter-on-lie-groups-for-robot-state-estimation)  
+   evidence：泥泞地面足式运动的阻力模型
+3. [PAINT: Partner-Agnostic Intent-Aware Cooperative Transport with Legged Robots](/202604/15/2604.12852v1-paint-partner-agnostic-intent-aware-cooperative-transport-with-legged-robots)  
    标签：评分：9.0/10、query:robot
-   evidence：基于李群的足式机器人状态估计
-4. [Simulator Adaptation for Sim-to-Real Learning of Legged Locomotion via Proprioceptive Distribution Matching](/202604/14/2604.11090v1-simulator-adaptation-for-sim-to-real-learning-of-legged-locomotion-via-proprioceptive-distribution-matching)  
-   标签：评分：9.0/10、query:robot
-   evidence：通过本体感受分布匹配进行足式机器人运动的从仿真到现实学习
+   evidence：复杂环境下足式机器人的意图感知协作运输
+4. [Bipedal-Walking-Dynamics Model on Granular Terrains](/202604/15/2604.11981v1-bipedal-walking-dynamics-model-on-granular-terrains)  
+   标签：评分：8.0/10、query:robot
+   evidence：颗粒介质上双足行走运动的动力学建模
 
 ### 速读区论文标签
-1. [DINO_4D: Semantic-Aware 4D Reconstruction](/202604/14/2604.09877v1-dino4d-semantic-aware-4d-reconstruction)  
+1. [Scalable Trajectory Generation for Whole-Body Mobile Manipulation](/202604/15/2604.12565v1-scalable-trajectory-generation-for-whole-body-mobile-manipulation)  
    标签：评分：7.0/10、query:robot
-   evidence：用于机器人感知和语义理解的4D重建
-2. [Ψ-Map: Panoptic Surface Integrated Mapping Enables Real2Sim Transfer](/202604/14/2604.10982v1--map-panoptic-surface-integrated-mapping-enables-real2sim-transfer)  
+   evidence：全身移动操作的可扩展轨迹生成
+2. [Evolving the Complete Muscle: Efficient Morphology-Control Co-design for Musculoskeletal Locomotion](/202604/15/2604.12855v1-evolving-the-complete-muscle-efficient-morphology-control-co-design-for-musculoskeletal-locomotion)  
    标签：评分：7.0/10、query:robot
-   evidence：用于机器人感知的全景表面集成制图
-3. [ABot-Claw: A Foundation for Persistent, Cooperative, and Self-Evolving Robotic Agents](/202604/14/2604.10096v1-abot-claw-a-foundation-for-persistent-cooperative-and-self-evolving-robotic-agents)  
+   evidence：肌肉骨骼运动的形态与控制协同设计
+3. [3D-Anchored Lookahead Planning for Persistent Robotic Scene Memory via World-Model-Based MCTS](/202604/15/2604.11302v1-3d-anchored-lookahead-planning-for-persistent-robotic-scene-memory-via-world-model-based-mcts)  
    标签：评分：6.0/10、query:robot
-   evidence：用于长时多机器人执行的具身控制架构
-4. [Optimal Kinodynamic Motion Planning Through Anytime Bidirectional Heuristic Search with Tight Termination Condition](/202604/14/2604.11587v1-optimal-kinodynamic-motion-planning-through-anytime-bidirectional-heuristic-search-with-tight-termination-condition)  
+   evidence：机器人场景记忆与基于世界模型的规划
+4. [Dynamic Modeling and Robust Gait Optimization of a Compliant Worm Robot](/202604/15/2604.12031v1-dynamic-modeling-and-robust-gait-optimization-of-a-compliant-worm-robot)  
    标签：评分：6.0/10、query:robot
-   evidence：用于机器人基准测试的动力学约束运动规划算法
-5. [Distributed State Estimation for Discrete-Time Systems With Unknown Inputs: An Optimization Approach](/202604/14/2604.11588v1-distributed-state-estimation-for-discrete-time-systems-with-unknown-inputs-an-optimization-approach)  
-   标签：评分：6.0/10、query:robot
-   evidence：具有未知输入的规模系统分布式状态估计
+   evidence：运动的动力学建模与步态优化
 
 
 <div class="dpr-home-promo-card">
