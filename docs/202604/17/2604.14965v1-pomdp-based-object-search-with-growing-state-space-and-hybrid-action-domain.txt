@@ -1,0 +1,3420 @@
+Title: POMDP-based Object Search with Growing State Space and Hybrid Action Domain
+
+URL Source: https://arxiv.org/pdf/2604.14965v1
+
+Published Time: Fri, 17 Apr 2026 01:10:29 GMT
+
+Number of Pages: 38
+
+Markdown Content:
+# POMDP-based object search with growing state space and hybrid action domain 
+
+> XXX(X):1–33
+> ©The Author(s) 2016 Reprints and permission: sagepub.co.uk/journalsPermissions.nav DOI: 10.1177/ToBeAssigned www.sagepub.com/
+
+SAGE 
+
+## Yongbo Chen 1, 2, 3 , Hesheng Wang 1, 3 , Shoudong Huang 4, and Hanna Kurniawati 2
+
+Abstract 
+
+Efficiently locating target objects in complex indoor environments with diverse furniture, such as shelves, tables, and beds, is a significant challenge for mobile robots. This difficulty arises from factors like localization errors, limited fields of view, and visual occlusion. We address this by framing the object-search task as a high-dimensional Partially Observable Markov Decision Process (POMDP) with a growing state space and hybrid (continuous and discrete) action spaces in 3D environments. Based on a meticulously designed perception module, a novel online POMDP solver named the growing neural process filtered k-center clustering tree (GNPF-kCT) is proposed to tackle this problem. Optimal actions are selected using Monte Carlo Tree Search (MCTS) with belief tree reuse for growing state space, a neural process network to filter useless primitive actions, and k-center clustering hypersphere discretization for efficient refinement of high-dimensional action spaces. A modified upper-confidence bound (UCB), informed by belief differences and action value functions within cells of estimated diameters, guides MCTS expansion. Theoretical analysis validates the convergence and performance potential of our method. To address scenarios with limited information or rewards, we also introduce a guessed target object with a grid-world model as a key strategy to enhance search efficiency. Extensive Gazebo simulations with Fetch and Stretch robots demonstrate faster and more reliable target localization than POMDP-based baselines and state-of-the-art (SOTA) non-POMDP-based solvers, especially large language model (LLM) based methods, in object search under the same computational constraints and perception systems. Real-world tests in office environments confirm the practical applicability of our approach. Project page: https://sites.google.com/view/gnpfkct .
+
+Keywords 
+
+Object-searching, partially observable Markov decision process (POMDP), Monte Carlo tree search (MCTS), 
+
+k-center clustering tree, neural process (NP), and belief tree reuse. 
+
+## 1 Introduction 
+
+Object search in partially familiar, cluttered environments is crucial for mobile robots. For example, a robot retrieving a customer’s order from a warehouse or fetching a Coke bottle from a kitchen must often locate a target object that is partially or fully obscured by other items. Known as the ‘Mechanical Search’ problem (Danielczuk et al., 2003), it typically involves leveraging partial environmental knowledge, like maps of large furniture (e.g., shelves, tables), while smaller objects (e.g., mugs, glasses) remain unlocalized due to frequent movement. Humans typically find smaller objects by relying on prior knowledge, assuming familiarity with the target, and removing obstructions as needed (Aydemir et al., 2013). Similarly, robots must adjust their configurations, strategically observe from multiple viewpoints, and interact with the environment by removing obstructions and retrieving the target object. This paper focuses on object search in a multi-room home environment with predefined workspaces. Equipped with 3D point cloud and 2D occupancy grid maps and provided with target photos, the robot aims to efficiently locate objects using onboard sensors, as shown in Fig. 1. The object search method depends on a compre-hensive support system that includes modules for         
+
+> 1School of Automation and Intelligent Sensing, Shanghai Jiao Tong University, Shanghai, 200240, People’s Republic of China
+> 2School of Computing, Australian National University (ANU), Canberra, ACT, 2601, Australia (The main part of this work is completed at ANU)
+> 3Key Laboratory of System Control and Information Processing, Ministry of Education of China, Shanghai, 200240, People’s Republic of China
+> 4Robotics Institute, University of Technology Sydney, Australia
+> Corresponding author:
+> Yongbo Chen, School of Automation and Intelligent Sensing, Shanghai Jiao Tong University, Shanghai, 200240, People’s Republic of China Email: shjtdx cyb@sjtu.edu.cn, chengyongbobobo@gmail.com
+> Prepared using sagej.cls [Version: 2017/01/17 v1.20]
+> arXiv:2604.14965v1 [cs.RO] 16 Apr 2026
+
+2 X XX(X)  
+
+> Figure 1. A scenario of object search involves a Fetch robot locating and removing a pink snack box from a table using feature matching. The robot actively adjusts its base, lift, and head (red) to change its view, with no prior knowledge of the size, number, or color of objects on the table.
+
+object segmentation, object detection, pose estima-tion, task-level planning, and action-level planning. Significant advancements have been made in these supporting areas, particularly through advanced learning technologies. For example, an impressive approach presented in (Shaban et al., 2017) show-cases an efficient one-shot learning method utilizing a fully convolutional network for pixel-level image segmentation. Similarly, other methods leverage architectures like neural radiance fields and convo-lutional neural networks (CNNs) to address chal-lenges in optimal grasp pose generation (S´ oti et al., 2023) and manipulation planning (Qureshi et al., 2020). In this study, we focus on task-level planning, aiming to select primitive actions and achieve long-term sequential goals for locating and retrieving target objects in complex, unlabeled environments. In this paper, we propose a partially observable Markov decision process (POMDP) formulation with a hybrid action domain for object search, integrating well-defined perception and action modules. To solve this formulation, we introduce a novel solver that leverages belief tree reuse, neural process filtering, and k-center clustering. The main contributions of this work are as follows: 
+
+• Realistic formulation : A complete POMDP formulation for object search task considering a realistic perception process. 
+
+• Better exploration trick : Introduction of the guessed target object with odds update for better exploration. 
+
+• Novel efficient POMDP solver : A novel solver for POMDP problem with growing state space, neural process filtering, and hybrid (continuous and discrete) action domain. 
+
+• Demo : Realistic gazebo simulations and real-world demos using two robots, showcasing the proposed framework with publicly available open-source code. This paper extends our previous work (Chen et al., 2024a) and an on-line document (Chen et al., 2024b). The paper is organized as follows: Section 2 reviews related work on POMDP models, existing solvers, and mechanical search. Section 3 outlines our problem formulation and solvers for the POMDP-based object search task. Section 4 details the POMDP formulation, including state, action, and observation spaces, and key functions. Section 5 introduces a novel online POMDP solver with theoretical discussions. In Section 6, we explain our action execution and perception parts using the Fetch robot with onboard sensors to support our POMDP formulation. Section 7 provides simulation and experimental results validating the practicality and high performance of the proposed method. Finally, we summarize our conclusions and present our future work in Section 8. 
+
+## 2 Related work 
+
+## 2.1 Mechanical search: Planning 
+
+Robots frequently encounter challenges navigating cluttered environments to locate target objects. Many contemporary approaches leverage advance-ments in learning technologies, including deep rein-forcement learning (RL) (Kurenkov et al., 2020), deep Q-learning (Yang et al., 2020), and deep-geometric inference systems (Huang et al., 2021). For instance, (Kurenkov et al., 2020) proposes an innovative learning procedure that combines an asymmetric architecture to exploit privileged information, guidance from suboptimal teachers, and mid-level representations for training deep RL agents to discover target objects hidden within piles of unknown items. However, these methods are tailored to specific environments, such as shelves or boxes, limiting their applicability in diverse, unstructured settings. Beyond learning-based methods, the POMDP framework offers a compact and effective approach for object search. As an example, in (Huang et al., 2022), a Monte-Carlo tree search method featuring a 1D occupancy distribution for objects is employed to swiftly identify and extract the target object. Due to its natural compatibility with scenarios involving multiple detected objects, the object-oriented POMDP (OO-POMDP) framework is widely adopted. This framework factors objects into classes with associated attributes, treating the beliefs for different objects as independent, which enables linear scaling of belief size and reduces  
+
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 3
+
+computational costs (Wandzel et al., 2019). To simplify computation, prior work often restricts the workspace to a 2D plane with simple transition and observation models. For example, (Aydemir et al., 2013) proposed a 2D POMDP formulation for object search in a room by evaluating candidate viewpoints. Recent efforts have extended this to 3D environments with object-size-friendly properties using multi-resolution planning algorithms (Zheng et al., 2021). The commonly used POMDP solver in these frameworks is partially observable Monte Carlo planning (POMCP) (Silver et al., 2010). We build on the OO-POMDP framework for real-world applicability, but go forward one step to consider the belief relationship between different objects in a complicated 3D environment including some challenging cases with partially and fully occluded objects. We also formulate the object-level POMDP formulation with a growing state space, a hybrid action domain, and a guessed target object. 
+
+## 2.2 Mechanical search: Reasoning 
+
+Earlier robotics approaches integrated reasoning directly into the planning process, such as updating probabilities, rather than treating it as a distinct module. As robotic systems became more sophisticated, reasoning evolved into aseparate layer, addressing high-level cognitive tasks like commonsense inference, contextual understanding, and hypothesis generation. This reasoning layer then informs a planning module to execute detailed action strategies. For instance, (Giuliari et al., 2023) demonstrates a reasoning module that uses environmental context and commonsense knowledge to infer plausible object locations, aiding localization in partially observed scenes. Similarly, (Ge et al., 2024) employs commonsense knowledge from large language models to construct scene graphs for improving object search. However, these methods struggle with unconventional object arrangements, such as randomized setups. In our scenario, objects are deliberately placed in configurations that defy typical human habits, increasing search complexity and requiring active robot-environment interactions, such as occlusion removal. Our reasoning idea is based on the probability update of the grid world. By representing the belief over the pose state of each object in the planning environment using particle filtering, the authors in (Garrett et al., 2020) incorporate probabilistic reasoning into a deterministic planner and then perform replanning when facing the base movement failure. Recent work (Huang et al., 2024) utilizes a video tracking-based memory model with integrated reasoning and planning capabilities. This allows the system to remember potential locations of occluded target objects and complete tasks using appropriate actions. 
+
+## 2.3 POMDP formulation and solvers 
+
+For a POMDP agent, the process commences with a brief, where the agent deduces and executes the optimal action to transition to anew state. This new state is concealed within an updated belief, refined through Bayesian inference based on observed data. Each step yields an immediate reward and contributes to a discounted cumulative reward, fostering a long-term objective. This iterative process continues until terminal conditions are met. The POMDP framework is a powerful tool for planning under uncertainty, excelling in non-deterministic and partially observable scenarios. Widely applied in robotics, it addresses tasks like autonomous underwater vehicle navigation (Hou et al., 2021), robot manipulation (Pajarinen et al., 2019), and Human-Robot collaboration (Burks et al., 2023). Our work adopts this approach, developing an object-oriented POMDP model with hybrid action domains. Finding the exact optimal strategy for a POMDP problem is widely recognized as computationally intractable (Papadimitriou et al., 1987). Over the past two decades, POMDP solvers have been categorized into offline and online methods. Offline solvers, such as point-based POMDP methods (Shani et al., 2013,K), can produce optimal solutions for small-scale problems. However, their significant memory requirements often make them impractical for use on standard computational platforms in real-world applications. In contrast, online solvers, especially sampling-based methods, offer a practical trade-off by achieving approximate optimality with greater computational efficiency, making them suitable for various applications. Sampling-based solvers, such as POMCP (Silver et al., 2010), adaptive belief tree (ABT) (Kurniawati et al., 2016), and determinized sparse partially observable tree (DESPOT) (Somani et al., 2013), share a common strategy: representing belief as particles and utilizing Monte Carlo tree search (MCTS) to expand the belief tree within computational limits. Despite significant advancements, solving POMDPs with high-dimensional continuous action spaces remains a substantial challenge. The key point in existing continuous-action POMDPs is to refine the action subset incrementally to improve the possibility that the selected subset of actions contains the best action. Methods like partially observable Monte Carlo planning with observation widening (POMCPOW) (Sunberg et al., 2018) use Progressive Widening to add new sampled actions after sufficient exploration, while others integrate  
+
+> Prepared using sagej.cls
+
+4 X XX(X) 
+
+techniques like Voronoi optimistic optimization (Lim et al., 2021) or Bayesian optimization (Mern et al., 2021). These methods commonly apply the UCB1 (Auer et al., 2002) algorithm for exploration and Monte Carlo backups for value estimation, differing mainly in how they refine the action domain. Despite advances, the challenges posed by growing state spaces and continuous state, action, and observation spaces remain formidable. 
+
+## 2.4 Neural process in robotics 
+
+As a more efficient alternative to Gaussian processes, neural processes excel in function regression by capturing uncertainty in predictions as a stochastic process. In numerous robotics tasks, the ability to account for uncertainty in predictions is crucial for enhancing system robustness and practicality. For instance, (Chen et al., 2022) introduces a conditional neural process (CNP)-based meta-learning algorithm to estimate grasp points from limited depth image trials. The versatility of CNPs is further demonstrated in applications such as 6D pose estimation (Li et al., 2022) and understanding social aspects of navigation (Yildirim et al., 2022). In our work, we utilize neural processes to address uncertain scoring function regression and primitive action filtering, creating a robust framework for decision-making in complex, dynamic environments. This idea was publicly released in our earlier work (Chen et al., 2024b), preceding several concurrent studies exploring neural process-based planning (Jain et al., 2025). 
+
+## 3 Overall framework 
+
+In a cluttered indoor environment with numerous unknown movable and immovable obstacles, arobot must locate and pick up a movable target object using onboard sensors and reference photos. To solve this, we use a POMDP-based approach, GNPF-kCT, with 4 alternating stages: planning, execution, observation, and filtering. In the planning stage, a look-ahead MCTS exploration uses an initial belief, transition, and reward functions, observation model, rollout strategy, and terminal function to sample particles and determine the best action. To address challenges from a growing state space and continuous action domain, we enhance the POMDP solver with belief tree reuse, neural process filtering, and k-center clustering, improving efficiency and performance. At the execution and observation stages, the algorithm performs the selected action on the robot, which gathers real-world measurements from onboard sensors, including 2D lidar scans, 3D point clouds, and RGBD camera images, without relying on markers like QR codes. These measurements are processed into state-space information through steps like robot pose estimation, point cloud filtering and segmentation, principal component analysis, object matching, and move-ability estimation. In the filtering stage, a particle filter updates the belief and prunes the belief tree using processed sensor data. The guessed target object and its grid world are updated via log-odds, similar to occupancy grid mapping. Robot pose estimation uses iterative closest point (ICP), initialized by adaptive Monte Carlo localization (AMCL). If the terminal condition is met, the task ends with the cumulative reward; otherwise, the updated belief reuses the existing belief tree and resamples particles to proceed with the MCTS. These steps, as shown in Fig. 2, collectively achieve object search and retrieval.  
+
+> Figure 2. The main steps in our proposed approach, GNPF-kCT
+
+## 4 POMDP formulation for object search 
+
+## 4.1 General hybrid and growing POMDP 
+
+In this paper, we consider a POMDP formulation P
+
+with a hybrid action domain. Formally, it is defined as an 8-tuple < S, A, O, T, Z, R, b0, γ > ,where the state space S at the k-th time step 
+
+Sk denotes the set of all possible states of the robot and the environment and is assumed to be continuous or discrete with growing property along: Sk = Sk−1 × △S k−1, where ⋆ × • denotes the direct product group of the group ⋆ and the group •, △S k−1 is the new added orthogonal subspace; the action space A ≜ Ac × A d denotes the set of all actions the robot can perform, where sub-domain Ac is assumed to be continuous and embedded in a bounded metric space with distance metric function (Typically, the metric space to be a D-dimensional bounded Euclidean space) and sub-domain Ad is discrete; the observation space O means the set of all observations the robot can perceive and is assumed to be discrete; the transition function T (s, a, s′) = P r (s′|s, a) 
+
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 5
+
+represents the nondeterministic effects of actions 
+
+a ∈ A working from the current state s ∈ S 
+
+to the resulting state s′ ∈ S ; the observation function Z(s′, a, o) = P r (o|s′, a) is commonly a conditional probability function that represents the observation o the robot may perceive after performing action a ∈ A in state s′ ∈ S ; the immediate reward function R(s, a, s′) shows a function mapping from a state, an action, a state–action pair, or a tuple of state, action, and subsequent state to a value; the state s ∈ S is initially hidden in an initial belief b0, which is a probability distribution on the state space S; γ is a discount factor following 0 < γ < 1, set as 0 .9 in this paper. The goal of solving a POMDP problem is to find an optimal policy Π ∗(b) = argmax a∈A Q(b, a) for belief b, where the Q(b, a)-value is the value of executing action a when the agent is at belief b
+
+and continuing optimally afterwards. 
+
+## 4.2 Focused object search problem 
+
+Our object search task involves locating amovable target object in clustered workspaces with unknown numbers ( n > 1) of obstacles (e.g., cups, laptops, or books) at unknown locations. We also have the point cloud and occupancy grid maps for a planning environment with furniture for robot navigation. While point clouds for some known obstacle objects are available, the target object and many other obstacles lack prior point cloud data, requiring detection via onboard sensors during execution. Unlike the assumption in OO-POMDP, because we measure the information about the object using real-world sensors, the object beliefs in our scenario are not independent and may have effects on each other. Additionally, the planning environment is continuous, with parameters such as object poses represented as continuous variables rather than discrete ones. 
+
+State space S. A state s =
+
+{sr , so0 , so1 , · · · , son } ∈ S consists of robot configuration and object-oriented factors, where 
+
+sr is the robot state and soi denotes the object state of the i-th object. A robot state is 
+
+sr = ( p⊤, l h, l p, l t)⊤, where p is the 6D base pose, 
+
+lh is the lift height, lp and lt are the pan and tilt angles of the robot head ∗. It is easy to know that, at the beginning stage, the robot may not get into the workspace, so no detected object is available. To guide the robot toward meaningful actions, we introduce a guessed target object with state 
+
+so0 = ( p⊤ 
+
+> o0
+
+, s xo0 , s yo0 , s zo0 , g⊤ 
+
+> o0
+
+, m o0 , u o0 )⊤ ∈ R20 ,where po0 = ( ppo0
+
+> ⊤
+
+, poo0
+
+> ⊤
+
+) is the 6D object pose; sxo0 , syo0 , and szo0 mean the sizes along the principal 3D axis of the object; go0 ∈ R8 indicates 8 grid odds for identifying target/obstacle status, updated through object matching. The positions of these 8 grids are linked to the object’s pose, indicating that each visual observation can only capture certain parts (surfaces or grids) of the object. This helps us to identify similar objects with the same visual surfaces. mo0 ∈ R is the odds value to evaluate the object’s move-ability; 
+
+uo0 ∈ {− 2, −1, 0, 1} marks the object’s status †.The belief of the position ppo0 of the guessed target object is saved in a grid world Gf generated by all workspaces W using many odds values Odd (Gf )with a given resolution. When sampling, within each grid cell, the object’s position is uniformly sampled, and the probability is determined by the corresponding odds value. It is noted that the grids for manually generated workspaces, which are the surfaces of the furniture, differ from 8 grids associated with objects. The odds values are updated based on the field of view (FOV) of the camera using real-world measurement in the excursion process, which is similar to the update of the occupancy grid map (Zhao et al., 2024b,C), following: log Odd (gj |z1: t) = log Odd (gj |zt)+ log Odd (gj |z1: t−1),Odd (gj |z1: t) = P r (gj |z1: t)/P r (¬gj |z1: t),
+
+(1) where P r (gj |z1: t) and P r (¬gj |z1: t) means the probability of the object belonging to and not belonging to the j-th grid gj ∈ G f based on multiple observations z1: t; Odd (gj |z1: t) is the corresponding odd value. However, during belief tree search, the odds values Odd (Gf ) remain unchanged and are used to sample the guessed target object for MCTS. In the planning stage, this grid world is just used to sample the potential position of the guessed target object in the root node. The guessed target object is special with a constant (no need to estimate) orientation (set as (0, 0, 0, 1)), size (0.1, 0.1, 0.1), and move-ability value (set as 100, movable). The grid values go0 and the declared value uo0 are update-able in the belief tree search but need to be reinitialized as the given value after each excursion. The guessed target object is not the really detected objects. Fig. 3 shows the scenario about grid world for the guessed target object. The other object 
+
+soi , i ̸ = 0 ∈ R1×20 follows the same format and but all parameters should be updated both in belief tree search and real-world excursion. It is noted that the pose of the other objects soi is estimated    
+
+> ∗Unless otherwise specified, all statements are based on the Fetch robot. Our framework is adaptable to similar mobile robots with minimal changes. For example, applying it to the Stretch robot excludes lhdue to its fixed camera height.
+> †-2 indicates the object has been removed; -1 means it is still updating without being declared or removed; 0 and 1 signify it has been declared as an obstacle or target object, respectively, and is no longer updating.
+> Prepared using sagej.cls
+
+6 X XX(X) 
+
+based on the point cloud which is independent of the grid world Gf . The newly detected objects after each real-world excursion will be appended to the state vector and form a growing state space (s, sadd ) ∈ S × △S . 
+
+> Figure 3. Grid world update in one frame
+
+Action space A. Our method is a task-level planning framework designed with multiple prim-itive actions, rather than control-level planning. These actions adjust the robot camera’s FOV to cover the workspace and enable object manipula-tion. The action space A comprises 3 primitive actions, including changing the robot configuration 
+
+ar , which belongs to a continuous action domain 
+
+ar ∈ R9 , declaring the updating object ( uoi = −1) to be the target ( uoi = 1) or obstacle object ( uoi =0), and removing i-th object using robot manip-ulator. Changing robot configuration ar contains the actions to move the robot base to a given target, to change the angles of the robot head pan (left/right) and tilt (up/down), and to move the height. Because the declaring and removing actions are discrete, our action space follows the previous setting with both continuous and discrete actions 
+
+Ac × A d. For simplicity, we assume all actions succeed with a 100% success rate. ‡
+
+Observation space O. The observation focuses on the FOV frustum V from the robot’s head camera. Each object is modeled as an oriented box with 8 grids. For every observation containing visible objects, we update the 4 nearest grids § of the observed object with noisy log-odds values: 
+
+−co + η (negative), co + η (positive), and η (near-zero), where co > 0 is a constant value and η is Gaussian noise. Due to occlusions caused by other objects, the robot’s camera may not detect all four nearest grids, but we still update 4 grids. We set the observation space to be discrete. By aggregating observations of no detected objects, the final observation for this step is represented as {{ i, · · · , j }, {o(i), · · · , o(j)}} , |{ i, · · · , j }| = no,where {i, · · · , j } indexes the observed objects with at least one updated grid, and {o(i), · · · , o(j)}
+
+contains their updated log-odds values, | ⋆ |
+
+represents the set’s cardinality. 
+
+Transition function T . The transition function 
+
+T primarily accounts for changes in camera motion induced by the robot’s configuration ar and updates to object states caused by declaring or removing actions. Camera motion follows a rigid transformation and the robot’s static structural information is obtained from the tf message. A Declaring actions update an object’s state uoi by comparing the mean of the two smallest log-odds values ( ν = 2) among its 8 grids to thresholds Cod
+
+(obstacle) and Cot (target). Objects remain static and rigid unless removed. When a removing action is performed on the i-th object, the object is moved outside the workspace, and its status uoi is set to -2, indicating that it will no longer obstruct the observation of other objects in the workspace. 
+
+Observation function Z. The coordinates of the eight grids for the i-th object are computed using the object’s center point ppoi , orientation pooi ,and size dimensions sxo0 , syo0 , and szo0 , estimated from point cloud data. After an action, the visible grids within the four nearest grids of different objects in the current frame are updated. The updated value depends on the mean log-odds of the grid: If the original mean log-odds value of this grid is positive and exceeds a positive threshold 
+
+νp > 0, the updated value will be set to be positive 
+
+c0 + η. If below a negative threshold νn < 0, the updated value will be set to be negative −c0 + η.Otherwise, the value between the positive and negative thresholds will generate a near-zero η. To encourage exploration, the initial grid values go0 of a fake object are reinitialized to values greater than the positive threshold νp > 0 after each real-world excursion. 
+
+Reward function R. The reward function is a crucial component of the POMDP formulation, guiding the agent toward successfully completing the task. The robot’s expected sequence of actions is that the robot begins by moving to the workspace for initial observation, iteratively adjusts its viewpoint to update log-odds in object grids, declares objects as obstacles or targets, and finally removes obstacles to improve visibility or directly removes the target to complete the task. Following these expected actions, successfully removing the           
+
+> ‡In practice, achieving 100% success is challenging, even in aGazebo simulator. For object removal, we use the set model state function with Gaussian noise to adjust the model’s state. This compromise will be improved in future work.
+> §The parameter 4 is manually set to simulate visual surfaces, but can be adjusted, e.g., based on the number of the visible grids in this frame.
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 7
+
+target yields the highest reward ( Rmax ≫ 0), while correct declarations of obstacles ( Rco ) and targets (Rct ) offer moderate rewards, with Rmax ≫ Rct >Rco ≫ 0. All actions will receive a negative step cost Rmin < 0. Due to the complexity of the removing action, its cost is set as 2 Rmin . Illegal actions result in a significant penalty Rill ≪ 0. Illegal actions include: (a) Moving to a target pose that is within an occupied grid of the occupancy map (violating collision avoidance); (b) Attempting to remove an object that is estimated to be non-movable; (c) Only the updating object is allowed to be declared and others are illegal; (d) Declaring an object that does not satisfy the declaration conditions; (e) Attempting to remove objects that have not been declared or objects that have already been removed. 
+
+## 5 Online POMDP solver: GNPF-kCT 
+
+## 5.1 Overview 
+
+GNPF-kCT is an anytime online POMDP solver that assumes the Q-value of the POMDP prob-lem follows Lipschitz continuity in the action space ¶. The solver alternates between planning, execution, observation, and filtering, focusing on planning to identify the optimal action from the current belief b0. To reduce the complexity of the high-dimensional continuous action domain, a pre-trained neural process predicts the feasibility of sampled actions with associated uncertainties, fil-tering out irrelevant actions. The remaining actions are clustered into hyperspheres using k-center clustering. A belief tree T is then constructed, where nodes represent beliefs and actions. Each belief node node o ∈ T is linked to a dynamic list 
+
+L(node o), initialized from the previous tree and augmented with newly generated hyperspheres to include connected action nodes. During episode simulations, L(node o) expands as k-center clus-tering refines the action space further. In POMDP problems with growing state spaces (e.g., detecting new objects), the observation introduces unpre-dicted states, requiring classical solvers to rebuild the entire belief tree, which is computationally expensive. GNPF-kCT avoids this by saving a his-tory tuple ¯H =< H s, H r , H, dim r (Hs) >. The list 
+
+Hs tracks all state histories from simulations, where rows represent particle IDs and columns track their state histories. Two additional lists, H (action-observation history) and Hr (immediate rewards), as well as a vector dim r (Hs) (depth vector) are associated with Hs. These saved histories allow the solver to approximate and reuse the previous belief tree by updating Hs, avoiding a full rebuild. Algorithm 1 outlines the complete method, with details provided in subsequent sections ‖.
+
+## 5.2 GNPF-kCT: NP network for filtering 
+
+5.2.1 Motivation about network filtering. In com-plex tasks, many primitive actions with contin-uous control parameters (Ac) are often ineffi-cient or impractical for achieving long-term goals, such as the optimal policy goal of POMDPs, or short-term goals, like completing a primitive action. Specifically, if the optimal action a∗ =
+
+argmax a∈A c Q(b, a) lies within the continuous action domain Ac, there exists a smaller feasible region X ⊆ A c that satisfies a∗ ∈ X . An intuitive idea is to use a score function g, with some inherent uncertainty, to quickly identify this region X given 
+
+s and α(P), where α(P) represents all configura-tion settings of the POMDP problem P. Gaussian Processes (GPs) are a natural choice for modeling such functions, leveraging probabilistic inference to update predictions, but they become com-putationally expensive in high-dimensional tasks. To address this, we propose to use Neural Pro-cesses (NPs), which also define distributions over functions while being computationally efficient and adaptable to various inputs leveraging the advantages of neural networks. Unlike traditional approaches like Q-learning (Hausknecht et al., 2015), which train complex networks with large minimum description lengths (Zhao et al., 2024a) to pursue X = a∗, we adopt a simpler scoring net-work. This network prioritizes short-term, physi-cally meaningful goals (e.g., single-step objectives), making training and implementation more practi-cal. The NP-based scoring network efficiently filters out ineffective actions, enabling a more compact POMDP framework to select optimal actions based on the filtered actions and current beliefs. We employ attentive NPs nn (μ(a), σ (a)) to learn the scoring function, where μ(a) is the mean func-tion and σ(a) is the kernel function. Importantly, our aim is not to mandate the use of the same network for all POMDP tasks but to highlight the action-filtering concept. Users are encouraged to train domain-specific networks tailored to their problems, integrating short-term primitive action learning with long-term POMDP frameworks in continuous action domains: 
+
+g(a, s, α (P)) ∼ nn (μ(a), σ (a)) . (2) To preserve the optimal action a∗, eliminate irrelevant actions, and accurately represent the complex feasible region X , we generate a set of actions ai ⊂ A c such that, with high probability, 
+
+g(ai, s, α(P)) ≥ 0. These samples are then                          
+
+> ¶Definition: A value function fmapping S ⊂ Rnto Rmis Lipschitz continuous at x∈ S if there exists a constant η
+> such that |f(y)−f(x)| ≤ η|y−x|for all y∈ S near x.
+> ∥Gray text provides explanations for the corresponding line.
+> Prepared using sagej.cls
+
+8 X XX(X) 
+
+Algorithm 1 GNPF-kCT framework 
+
+Input: Initial belief b0
+
+Output: Task is complete or not  
+
+> 1:
+
+b ← b0 
+
+> 2:
+
+isTerminal = False  
+
+> 3:
+
+while isTerminal is False do  
+
+> 4:
+
+—————–Planning stage—————- 
+
+> 5:
+
+if sadd ̸ = ∅ then  
+
+> 6:
+
+¯H ← Episode simulation along list( ¯H, sadd )
+
+▷ Update states s saved in Hs by transition and observation functions considering new states sadd ;See Algorithm 8.  
+
+> 7:
+
+T ← Grow tree( T , ¯H) ▷
+
+Grow the belief tree using these updated particles and decide terminal nodes by saved depth vector 
+
+dim r (Hs); See Algorithm 9.  
+
+> 8:
+
+end if  
+
+> 9:
+
+Ar = {ai} ← Network sampling( Odd (Gf ), P, b, 
+
+> 10:
+
+Cthreshold )▷ Sample a lot of candidate actions and filter them using neural network; See Algorithm 4.  
+
+> 11:
+
+Ca = {center i}, Ra = {range i} ← k-Clustering( Ar ) ▷ Generate high-dimension hyperspheres by partitioning and covering the candidate actions set using k-Clustering over some discrete actions, satisfying |C a| = |R a| = k. 
+
+> 12:
+
+L(node o) = Update( T , Ca, Ra) ▷ Extend the list of each belief node based on the cluster centers and ranges recursively.  
+
+> 13:
+
+while planning budget not exceeded do  
+
+> 14:
+
+s ← Sampling( b) 
+
+> 15:
+
+T , ¯H ← Episode simulation( T , s, h, ¯H) ▷
+
+Go through the MCTS sampling by refining the action domain, then save the tuple ¯H for each particle; See Algorithm 3.  
+
+> 16:
+
+end while  
+
+> 17:
+
+——Execution and observation stages——–  
+
+> 18:
+
+a∗, center ∗, range ∗ ← Get the best action in 
+
+T from b 
+
+> 19:
+
+while planning budget not exceeded do  
+
+> 20:
+
+aimplement ←
+
+Action sampling( a∗, center ∗ , range ∗) ▷ Get a discrete action from the selected domain.  
+
+> 21:
+
+if Reasonability check( aimplement ) then ▷
+
+Only select the reasonable discrete action, such as preventing a robot from moving into obstacles.  
+
+> 22:
+
+break  
+
+> 23:
+
+end if  
+
+> 24:
+
+end while  
+
+> 25:
+
+(o, isTerminal) ← Execute aimplement ▷ Exe-cute the selected action and get real observation; See Section 3  
+
+> 26:
+
+—————–Filtering stage—————–  
+
+> 27:
+
+if sadd ̸ = ∅ then  
+
+> 28:
+
+o ← Cut observation( o, s, sadd ) ▷
+
+Get the sub-observation available in the old tree T
+
+by removing sub-part related to sadd . 
+
+> 29:
+
+end if  
+
+> 30:
+
+b, T ←Filtering( b, T , aimplement , o) ▷
+
+Particle filtering to get a new belief and the corresponding sub-tree.  
+
+> 31:
+
+¯H ← Cutting( a∗, o, ¯H) ▷ Cut lists based on observation o; See Algorithm 7.  
+
+> 32:
+
+end while 
+
+encapsulated using high-dimensional hyperspheres to represent the feasible region. To ensure ahigh likelihood of selecting effective robot actions, we establish a predictive score bound for these samples, derived from the theorem: 
+
+Theorem 1. Let δ ∈ (0 , 1) , g(a, s, α(P)) ∼
+
+nn (μ(a), σ(a)) and set β∗ = (2 ln(1 /δ )) 12 .If μ(ai) > β ∗σ(ai), ∀i = 1 , · · · , T , then 
+
+P r [g(ai, s, α (P)) > 0] ≥ 1 − δ.
+
+Proof. Please refer to Appendix A. This theorem provides a condition for actions ai:If all the sampled actions using nn (μ(ai), σ (ai)) satisfying μ(ai) > β ∗ 
+
+> i
+
+σ(ai), then all samples will satisfy the constraint g(ai, s, α(P)) > 0 with probability at least 1 − δ. This simple conclusion offers a good way to sample good robot actions using their predictive scores. 
+
+5.2.2 Neural process filtering implemented for object searching task. The goal of the object search process is to locate the target object (assumed to be the i-th object) and update its grid belief 
+
+b(goi) from an initial belief b0(goi ) to a target belief bT (goi) by adjusting the robot’s FOV. This process involves passing a certain threshold to enable subsequent declaration and removal actions. Among all primitive actions A, those deemed efficient {ai, · · · } ∈ X are identified if, at step j, they can update the belief bj (goi )to move closer to the target belief bT (goi )within a bounded distance: ω△△ ≤ ∥ bj−1(goi ) −
+
+bT (goi )∥1 − ∥ bj (goi ) − bT (goi )∥1 ≤ △ , where △
+
+serves as a natural upper bound for grid updating, like updating one surface of the nontransparent object, since it is impossible to observe all surfaces of an opaque object simultaneously. ω△, 0 <ω△ < 1 means at least one grid is observed and updated correctly, ∥ ⋆ ∥1 means the L1 norm for ⋆.According to Theorem 1, if the action ai satisfies 
+
+μ(ai) > β ∗ σ(ai), the probability of the grid belief moving closer to bT (goi ) is at least 1 − δ. Given this, a successful action sequence that reaches the target belief and completes the task selected by the POMDP solver must include at least Nl =[∥b0(goi ) − bT (goi )∥1/△] efficient actions within 
+
+Np ≥ Nl potential primitive actions, where [⋆]means to round to an integer smaller than the value 
+
+⋆. Equality holds only if every primitive action is efficient. Faster task completion with higher rewards is achieved by prioritizing actions with larger β∗, satisfying μ(a) > β ∗σ(a). All these ideas rely on accurate learning of the scoring function. The scoring function g(a, s, α(P)) predicts the likelihood of the robot observing updated grids for the target object. This probability depends on the robot’s configuration sr , obstacle data from the fused point cloud of detected objects  
+
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 9
+
+{o0, o 1, · · · , o n} ∈ M ′
+
+> c
+
+, the grid world status Gf
+
+(represented as a 2D grayscale image), and the 8 grid odds goi of the target object (assume to be the i-th object), satisfying g(a, s, α(P)) ≜
+
+g(sr , Gf , M′
+
+> c
+
+, goi ). 
+
+5.2.3 Simulation data generator. To learn the scoring function, we use an iterative process to autonomously generate simulation data in a Gazebo environment with two simulators, as detailed in Algorithm 2. Initially, predefined action sequences generate point clouds of detected objects and the corresponding grid world for the guessed target object. Subsequently, we repeatedly modify the robot’s configuration and object grid arrangement, using object detection to calculate the probability of detecting the target object. This process operates fully autonomously once candidate actions and the workspace W
+
+are provided. Fig. 4 illustrates a scenario involving a sampled target object, a specific robot configuration, and successful online color-based object detection.  
+
+> Figure 4. Robot successfully detects the green grids in this scene and its variable ” score d” will add 1 in Algorithm 2.
+
+The inputs to Algorithm 2 include: 1) a 2D occupancy grid map for initializing 3D ICP matching; 2) A 3D point cloud map, employed to create a fused object point cloud by performing scan matching with the current 3D camera’s point cloud and filtering out points outside the workspace; 3) The Fetch simulator for real-time sensor data; 4) A set of manually selected candidate actions, Amanual , chosen from randomly generated actions to ensure good diversity. The outputs are training pairs for the neural network mapping, which connect the robot state sr , the generated grid world Gf , the detected objects in the workspace (represented as point clouds M′
+
+> c
+
+), and the status of the target object’s 8 grids goi
+
+to a scoring value. This scoring value represents the probability of updating the grids of the target object. 
+
+5.2.4 Network structure and training. Considering all the input formats, we employ various encoder networks, including partial pointNet (Qi et al., 2017), ResNet18 (He et al., 2017), and Multilayer perception (MLP) to process different inputs. The point cloud M′ 
+
+> c
+
+is encoded into the global feature vector with 1024 elements. The odds value for the grid world about the guessed target object is transformed into a 2D grayscale image and further encoded as a 1000-dimension vector using ResNet-18. The robot configuration and the 8-grid odds are processed by MLP to generate three 10-dimensional global features. The concatenated global features form a tensor of size M × 2054. For NPs, the whole tensor is divided into training data 
+
+M1 × 2054, including the context data ( xC , yC )and the target data ( xT , yT ), and test data M2 ×
+
+2054, satisfying M1 + M2 = M . With these data, the latent variable version of the NP model models these conditional distributions as: 
+
+p(yT |xT , xC , yC ) ≜
+
+∫
+
+p(yT |xT , z)
+
+q(z|r(xC , yC )) dz
+
+(3) where r(xC , yC ) is an encoder function that shows a representation of the context data using an MLP, 
+
+p(⋆|• ) denotes the conditional prior for ⋆ given •,and q(⋆|• ) means the variational posterior for ⋆
+
+given •. Then, with the latent variable z generated by the Gaussian sampling of the representation 
+
+r(xC , yC ), the MLP-based decoder process is applied for the latent variable z and the test data to model a final Gaussian distribution for prediction. The whole network structure without training based on the test data and the context data is shown in Fig. 26 in Appendix B. For training, the network about the encoder part to the latent variable needs to work on both the context data and the target data to get Kullback–Leibler (KL) divergence DKL (•||• ) between prior and posterior. The parameters of the whole network are learned by maximizing the evidence lower bound (ELBO) log p(yT |xT , xC , yC ) ≥ uELBO (Garnelo et al., 2018): 
+
+uELBO = Eq(z|xC , yC ) [log p(yT |xT , z)] + DKL (q(z|xT , yT )|| q(z|xC , yC )) , (4) where Eq(z|xC , yC ) [log p(yT |xT , z)] = ∫ q(z|xC ,
+
+yC ) log p(yT |xT , z)dz. Building on the findings in (Le et al., 2018) and to enhance learning performance, the context data are selected as a subset of the target data, and the observation variance is modeled as a latent variable constrained within a range of 0.1 to 1. Additionally, the NP model incorporates a self-attention module to preprocess context and test data tensors, reducing predictive uncertainty near context points, as shown in (Kim et al., 2019).  
+
+> Prepared using sagej.cls
+
+10 X XX(X) 
+
+Algorithm 2 Simulation dataset generator 
+
+Input: 2D occupancy grid map, corresponding 3D point cloud map, Fetch robot simulator in Gazebo environment, a set of manually selected candidate actions Amanual 
+
+Output: Data mappings ( sr , Gf , M′
+
+> c
+
+, goi ) → g(a, s, α(P))  
+
+> 1:
+
+while Dataset size is not enough do  
+
+> 2:
+
+Re-initialize the robot simulator and gazebo environment with different object numbers and poses. ▷
+
+Different scenarios.  
+
+> 3:
+
+Randomly generate I classes of action sequences {a1 
+
+> i
+
+, a2 
+
+> i
+
+, . . . , aJi }, aji ∈ A manual ⊆ A , i = 1 , 2, · · · , I 
+
+from Amanual with limited J steps. ▷ Different action sequences generate different observed point clouds and grid worlds.  
+
+> 4:
+
+for i = 1 to I do ▷ Different action sequences for different scenarios.  
+
+> 5:
+
+for j = 1 to J do ▷ Action steps for growing obstacle environment.  
+
+> 6:
+
+Set robot status based on the action aji with some noise. ▷ Apply the actions to generate different observed environment.  
+
+> 7:
+
+Collect and fuse point cloud M′ 
+
+> c
+
+= fF (P ⋃ P ji ) after ICP and filtering operations. ▷ Generate point cloud.  
+
+> 8:
+
+Compute the odds update for the grid world Gf based on FOV and object detection. ▷ Generate grid world with odds.  
+
+> 9:
+
+Remove the target object (identified) and undetected objects in gazebo environment. ▷ Use only the information from the detected obstacle environment for visual occlusion testing.  
+
+> 10:
+
+Collect and save M′ 
+
+> c
+
+and Odd (Gf ).  
+
+> 11:
+
+for k = 1 to K do  
+
+> 12:
+
+Uniformly sample and apply configurations sr in continuous action domain Ac. ▷ Generate robot configuration sr . 
+
+> 13:
+
+Build a cube with 8 red and green grids. The color distribution is decided by goi ∈ { 0, 1}8. ▷
+
+Avoid observed grids, marked as 1 and red color, to be re-observed assuming that i-th object has the highest probability to be target object.  
+
+> 14:
+
+Collect and save sr and go0 . 
+
+> 15:
+
+score d ← 0 ▷ Index to record the observed times under given parameters ( sr , Gf , M′
+
+> c
+
+, go0 ).  
+
+> 16:
+
+for l = 1 to L do ▷ Repeat multiple times to compute probability.  
+
+> 17:
+
+Sample the position of the cube with 8 grids in different positions based on odds value 
+
+Odd (Gf ).  
+
+> 18:
+
+if Object detection finds the green area based on the collected RGBD image is True then  
+
+> 19:
+
+score d ← score d + 1 ▷ Based on given parameters, record the times to update grids in 
+
+L times attempts.  
+
+> 20:
+
+end if  
+
+> 21:
+
+end for  
+
+> 22:
+
+g(a, s, α(P)) ← score d 
+
+> L
+
+× 100%.  
+
+> 23:
+
+Collect and save g(a, s, α (P)). ▷ Compute probability.  
+
+> 24:
+
+end for  
+
+> 25:
+
+Rearrange all objects based on their original poses before removing them. ▷ Recover the object setting to generate the grown point cloud and the updated grid world.  
+
+> 26:
+
+end for  
+
+> 27:
+
+end for  
+
+> 28:
+
+for m = 1 to M = I × J × K × L do  
+
+> 29:
+
+Normalize the following data mappings: ( sr , Odd (Gf ), M′
+
+> c
+
+, goi ) → g(a, s, α (P)). ▷ Get learning dataset.  
+
+> 30:
+
+end for  
+
+> 31:
+
+end while 
+
+## 5.3 GNPF-kCT: Belief Tree Construction 
+
+The belief tree T is a tree of which the nodes include the belief nodes node o and action nodes 
+
+node a and the edges are action a ∈ A and observation o ∈ O . The belief nodes node o save a set of states s ∈ b forming belief b. An action node node a is a child of the belief node node o
+
+via edge a if and only if transition function 
+
+T (s, a, s′) satisfies. Belief nodes are linked by the action–observation pairs ( a, o) based on transition function T (s, a, s′) and observation function 
+
+Z(s′, a, o). The episode simulation framework is in Algorithm 3. 
+
+5.3.1 Construction overview. To construct the belief tree T , our GNPF-kCT framework follows the standard select-expand-simulate-backup strat-egy used in many MCTS algorithms, with an adap-tive discretization mechanism based on the k-center clustering method for controllable discretization rates. As mentioned before, each belief node main-tains a dynamic list L(node o). If resources allow, episodes are continuously sampled to grow the belief tree T , at each episode, we select a path from the tree root with the format: s0, a0, o0, r0, s1, a1,
+
+o1, r1, · · · . Starting from the root belief, an action 
+
+ai ∈ L (node o) is selected using a revised UCB1 strategy (based on HOO, detailed in Section 5.3.2).  
+
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 11 
+
+Algorithm 3 Episode simulation( T , s, h, ¯H)
+
+Input: Belief tree T , sampled state s, history in episode h, the history tuple ¯H
+
+Output: Discounted reward value r, updated history tuple ¯H, and updated belief tree T . 
+
+> 1:
+
+H, H s, H r , dim r (Hs) ← ¯H 
+
+> 2:
+
+belief node node o ← (N (node o), V (node o)) based on history h 
+
+> 3:
+
+if node a is False then  
+
+> 4:
+
+Generate all action nodes node a ←
+
+(N (node o, a), V (node o, a)) based on list 
+
+L(node o);  
+
+> 5:
+
+r, hs, hr , ¯h, ←RolloutHeuristic Random( s,
+
+h + {a, o}) ▷ A rollout policy with the random action strategy. hs and ¯h are the record states and action-observation pairs from tree root until to the terminal of rollout.  
+
+> 6:
+
+Hs ← Hs ∪ { hs}, Hr ← Hr ∪ { hr }, H ← H ∪{¯h}, dim r (Hs) ← dim r (Hs) ∪{| h|} ▷
+
+Terminal node before rollout, so save lists and depth vector dim r (Hs), until terminal node, by Hash table format sharing the particle ID as keys.  
+
+> 7:
+
+return r ▷ Get the random rollout reward.  
+
+> 8:
+
+else  
+
+> 9:
+
+a∗ = argmax a∈L (node o)U (node o, a) ▷ Eq. (5)  
+
+> 10:
+
+T , H ←Refine( T , node o, a∗, H) ▷
+
+Grow list, revise tree, and update history list. See Algorithm 5.  
+
+> 11:
+
+a∗ 
+
+> u
+
+←Action sampling( a∗, center ∗, range ∗)
+
+▷ Sample a discrete action a∗ 
+
+> u
+
+from range 
+
+H(center ∗, range ∗); Refer to Section 5.3.3.  
+
+> 12:
+
+Get s′ and o based on a∗
+
+> u
+
+, T (s, a∗, s′), and 
+
+Z(s′, a∗, o) 
+
+> 13:
+
+if s is not terminal state then  
+
+> 14:
+
+r ← γEpisode simulation( T , s′, h +
+
+{a∗, o}, H s, H r , H, dim r (Hs)) + R(s, a∗, s′) ▷
+
+Recursively  
+
+> 15:
+
+Backup( T , node o, a∗, r, R(s, a∗, s′)) ▷
+
+See Algorithm 6.  
+
+> 16:
+
+else  
+
+> 17:
+
+Hs ← Hs ∪ { hs}, Hr ← Hr ∪ { hr }, H ←
+
+H ∪ { h}, dim r (Hs) ← dim r (Hs) ∪ {| h|} ▷
+
+Terminal node, so save state lists Hs, Hr and H
+
+as well as depth vector dim r (Hs) by Hash table format.  
+
+> 18:
+
+end if  
+
+> 19:
+
+end if  
+
+> 20:
+
+return ¯H ← < H , Hs, Hr , dim r (Hs) >, T .
+
+The selected action is executed from state si to achieve the next state si+1 and obtain observa-tion oi as well as reward ri based on transition 
+
+T (si, ai, si+1 ), observation Z(si+1 , ai, oi), and reward functions R(si, ai, si+1 ). Finally, we can update the belief bi = {si} to bi+1 = {si+1 }. If the terminal condition is met or no child node exists, the tree expands by adding a new belief node and associated action nodes based on L(node o). A roll-out policy, typically RolloutHeuristic Random( •), is simulated to provide an estimated value for new (terminal) nodes. States, action-observation, immediate rewards, and depths along the episode are recorded in lists Hs, H, Hr , and dim r (Hs)when the node is terminal due to reaching rollout or terminal state. Finally, backup operations update the estimated values for all visited nodes in the episode. 
+
+Algorithm 4 Network sampling( Odd (Gf ), Pj , b,
+
+Cthreshold )
+
+Input: The trained network nn (μ(a), σ (a)), the odds update for the whole grid world about the guessed target object Odd (Gf ), belief b = {si}, fused point cloud M′
+
+> c
+
+, throushold Cthreshold 
+
+Output: A set of potential actions {ai} satisfy the following condition P r [g(ai, si, α i(P)) > 0, ∀i] ≥
+
+Cthreshold  
+
+> 1:
+
+Transform odds value for the grid world as an image and save as a repeated tensor Todd . 
+
+> 2:
+
+Repeats the fused point cloud and saves it as a tensor Tpoint . 
+
+> 3:
+
+Samples a class of states {si}. 
+
+> 4:
+
+{sr }, {go0 } ← { si} and gets the robot state tensor 
+
+Tr and 8 grids odds tensor Tg . 
+
+> 5:
+
+Gets the predicted mean Tμ and variance tensors 
+
+Tσ based on Tr , Todd , Tpoint , Tg and the trained network nn (μ(a), σ (a)).  
+
+> 6:
+
+for μ(ai) ← Tμ, σ(ai) ← Tσ do  
+
+> 7:
+
+β∗ ← (2 log(1 /(1 − Cthreshold )) 12 
+
+> 8:
+
+Check μ(ai) > β ∗σ(ai) as well as μ(a) > 10% and collect the ones satisfying these two conditions to {ai}. 
+
+> 9:
+
+if satisfying the number limitation then  
+
+> 10:
+
+return selected action set {ai}. 
+
+> 11:
+
+end if  
+
+> 12:
+
+end for  
+
+> 13:
+
+return action set {ai} with the highest score. 
+
+Action clustering and list initial update before MCTS: Our key idea is to identify the feasible region X using Algorithm 4 and update the action list associated with belief nodes (Update( ·)). Due to the complexity of real-world problems, 
+
+X often has intricate shapes. A practical and efficient method is to get a lot of potential actions {ai} with a high probability of satisfying 
+
+g(ai, s, α (P)) > 0 based on NP filtering. Firstly, we quickly predict mean and variance values based on the highly-dimensional tensor format with only one-step network evaluation and then test values based on Theorem 1. Typically, efficient actions in X form scattered clusters across the continuous action domain Ac, as shown by the purple, red, and green regions in Fig. 5, reflecting the natural continuity of primitive action physical properties. We use the Elbow method (Thorndike et al., 1953) to determine the optimal number of clusters and each cluster is enclosed within high-dimensional hyperspheres with centers Ca and radii Ra. Hope the feasible region X can be a subset of the space covered by high-dimensional hyperspheres, such that X ⊆ ⋃ 
+
+> i
+
+H(center i, range i), where 
+
+center i ∈ C a and range i ∈ R a. The centers and radii are recursively added to the action list 
+
+L(node o) for observation nodes by traversing the entire tree.  
+
+> Prepared using sagej.cls
+
+12 X XX(X) 
+
+Figure 5. The neural process-based scoring function, some scattered clusters, and some samples. 
+
+5.3.2 Action selection strategy and list growing in MCTS. Inspired by the classical hierarchical optimistic optimization (HOO) idea, which comes from the continuous-arm bandit problem, we select an action from the set of candidate actions 
+
+L(node o) according to: 
+
+a∗ = argmax a∈L (node o)U (node o, a),U (node o, a) = ˆQ(node o, a)+ ω1
+
+√
+
+log N (node o)
+
+N (node o, a) + ω2range i
+
++ foption (ω3BD ),
+
+(5) where ˆQ(node o, a) represents the average reward received during rounds when the corresponding action node was selected; U (node o, a) denotes the upper-confidence bound for the maximum possible Q-value within the hypersphere region 
+
+H(center i, range i), akin to the UCB1 bound. This bound incorporates the effect of range i for the i-th hypersphere, adhering to the Lipschitz assumption. N (node o) and N (node o, a) repre-sent the visitation counts for the observation node 
+
+node o and its corresponding action node, respec-tively. The coefficients ω1, ω2, and ω3 adjust the relative contributions of different components. The 
+
+BD term refers to the belief distance associated with the growing state space, which is detailed in Section 5.4.2. This term is zero until a new object is detected. The belief difference heavily depends on the specific problem settings. It may disrupt the regret bounds derived for policies using UCB1 in multi-armed bandit problems (Auer et al., 2002) and the bias correction for estimated expected payoffs in MDPs (Kocsis et al., 2006). Hence, the BD term is optional for users and denoted as foption (⋆). We recommend setting foption (⋆) = 
+
+⋆ when the problem exhibits significant changes and the belief distance is large. For more com-mon scenarios ∗∗ , users may choose foption (⋆) = 0, simplifying the action selection to a UCB1-like term. This case is discussed further regarding convergence in Section 5.5. It is noted that we cannot guarantee its convergence to the optimal solution if selecting foption (⋆) = ⋆. Within the plan-ning budget, episodes begin at the root node, using the action selection strategy in Eq. (5) to select an action node or expand the belief tree T . If an action node associated with a high-dimensional hypersphere H(center i, range i) is visited more than an adaptive threshold, it is refined and divided into smaller clusters and hyperspheres: 
+
+N (node o, a) ≥ 1
+
+Cr range 2
+
+> i
+
+, (6) where Cr is a self-defined exploration constant and 
+
+N (node o, a) here provides a rough estimate of the quality of the reward estimation ˆQ(node o, a), which follows the adaptive refining strategy in (Hoerger et al., 2022) to limit the growth of the dynamic list L(node o) and ensures that a hypersphere is only refined when this action node has been visited sufficiently often. We also constraint the refining accuracy and limit the node number corresponding to the dynamic list 
+
+|L (node o)| by range i ≥ Dlim , where Dlim is the minimum radius for partitioning. Assuming the action node node a∗ containing 
+
+N (node o, a∗) episodes with the selected action 
+
+a∗ and hypersphere H(center ∗, range ∗)needs refinement, these actions in this node are divided into k clusters ∗ and then the hyperspheres are obtained with centers 
+
+{△ center i} and radii {△ range i}, i = 1 , 2, · · · , k 
+
+based on the KMeans algorithm. We then update the action a∗ of dynamic list 
+
+L(node o) and its corresponding hypersphere 
+
+H(center ∗, range ∗) by the alternative actions set {a∗, a|L (node o)|+2 ,, · · · , a|L (node o)|+k}
+
+and new hypersphere set {H (△center 1, flim (
+
+△range 1)) , · · · , H(△center k, f lim (△range k)) },where flim (⋆) controls the refinement rate, ensuring convergence and planning performance. 
+
+flim (⋆) = max( f ′
+
+> lim
+
+(⋆), D lim ),f ′
+
+> lim
+
+(⋆) = 
+
+
+
+¯ω1range ∗ if ⋆ ≥ ¯ω1range ∗
+
+⋆ if ¯ ω2range ∗ < ⋆ < ¯ω1range ∗
+
+¯ω2range ∗ if ⋆ ≤ ¯ω2range ∗
+
+,
+
+(7) where ¯ω1 and ¯ω2 are coefficients controlling the refining velocity, with 0 ≤ ¯ω2 < ¯ω1 ≤ 1. The original sub-tree with root node node a∗ is copied and connected to the observation node 
+
+node o as an additional child node based on               
+
+> ∗∗ In our experiments, adding or removing the BD term does not yield significant differences in the results.
+> ∗The optimal cluster number depends on the areas filtered by the neural process. By default, kis set to 3unless otherwise specified.
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 13 
+
+actions a|L (node o)|+2 , · · · , a|L (node o)|+k. All nodes generated from node a∗ are updated based on the clustered episode IDs, shown in Algorithm 5 and Fig. 6. 
+
+Figure 6. The refining process using clustered episode IDs. 
+
+Algorithm 5 Refine( T , node o, a∗, H)
+
+Input: The belief tree T , the belief node node o, the selected action a∗, the recorded action-observation history list H
+
+Output: The updated history list H and the new tree 
+
+T with the refined nodes  
+
+> 1:
+
+Collects all applied actions S′ 
+
+> r
+
+= {ai} in previous episodes passed leaf node of belief node node o with its action a∗; 
+
+> 2:
+
+if N (node o, a∗) ≥ 1 
+
+> Crrange 2
+> i
+
+and range i > D lim 
+
+then  
+
+> 3:
+
+{△ center i}, {△ range i}, clustered episode IDs ← k-Clustering( S′ 
+
+> r
+
+) 
+
+> 4:
+
+Update the dynamic list L(node o) ←L(node o) ⋃ {a|L (node o)|+2 ,, · · · , a|L (node o)|+k } 
+
+> 5:
+
+H(center i, flim (range i)) ← H (△center 1,flim (△range 1))  
+
+> 6:
+
+{H (center i, flim (range i)) } ← {H (center i,flim (range i)) } ⋃{H (△center 2, f lim (△range 2)) , · · · ,
+
+H(△center k , f lim (△range k )) } 
+
+> 7:
+
+Pick out sub-tree Tsub (node o, a∗) from T
+
+corresponding to the belief node node o with its action a∗; 
+
+> 8:
+
+Copy and generate new sub-trees based on sub-trees Tsub (node o, a∗) by list L(node o).  
+
+> 9:
+
+Revise all nodes of new sub-trees based on clustered episode IDs, as shown in Fig. 6  
+
+> 10:
+
+Attach generated sub-trees to the belief node 
+
+node o. 
+
+> 11:
+
+for Find h in H based on key: clustered episode ID do  
+
+> 12:
+
+Reach the observation o based on belief node 
+
+node o 
+
+> 13:
+
+Update the next action a∗ in 
+
+h by the corresponding element ¯a in dynamic list L(node o), satisfying a∗ ← ¯a ∈{a∗, a|L (node o)|+2 ,, · · · , a|L (node o)|+k } 
+
+> 14:
+
+end for  
+
+> 15:
+
+return updated tree T and the updated history list H. 
+
+> 16:
+
+end if 
+
+5.3.3 Action sampling. Since the selected action a∗ corresponds to the hypersphere 
+
+H(center ∗, range ∗), in order to execute the action, we assume that the sampled action is uniformly distributed in the hypersphere 
+
+H(center ∗, range ∗) and then sample a discrete action in this hypersphere, similar to ellipsoid sampling. 
+
+5.3.4 Backup. When each episode reaches the terminal state, our GNPF-kCT framework updates the estimation reward ˆQ(node o, a) as well as the visited numbers N (node o) and N (node o, a)of all nodes visited by this episode. Here, we present two classical stochastic backup methods including the Bellman backup (Algorithm 6), which is used in the ABT method and similar to the rule used in Q-learning, and the Monte-Carlo backup (Algorithm 6), which is widely used in many outstanding POMDP solvers, like POMCP, POMCPOW, and Voronoi Optimistic Monte Carlo Planning with Observation Weighting (VOMCPOW) (Lim et al., 2021). The Bellman update naturally follows the objective function of the POMDP formulation that aims to pursue optimal action in each step of the long-term planning. It helps the solver to explore deeper by focusing its search on promising parts of the belief tree. The main challenge for the Bellman backup is when facing unexpected observations, a lot of deeply explored belief trees will be frequently cut and this case causes poor planning performance. Hence, the Bellman backup gets a better performance when the good rewards are sparse in the belief tree, but it is not stable enough for the poor observation prediction. In contrast to selecting the reward with optimal action, the Monte-Carlo backup computes the average reward along with different action episodes, which means that the generated belief tree will be more robust when facing unexpected uncertainty in received observation. In our application for object search, the real visual observation is not well predictable for the observation model in the POMDP formulation and the robot camera will frequently receive unexpected measurements, which breaks the advantage of the Bellman update. We use the Monte-Carlo backup in our problem but the Bellman backup is commonly superior in other applications, so we present both two backup ways here. 
+
+## 5.4 GNPF-kCT: Reusing the belief tree 
+
+In constructing the belief tree, three history lists are maintained: state history Hs, immediate rewards Hr , and action-observation pairs H. The depth vector dim r (Hs) for terminal nodes from the previous tree is also tracked (lines 5 and 16, Algorithm 3). When the robot observes new objects, leading to non-empty states sadd , the new observation cannot directly map to a belief node. Sub-observations of newly detected objects are removed (line 28, Algorithm 3), and the remaining observation vector o with action a∗ identifies the root node among child nodes of the prior tree T .This process also trims Hs, Hr , H, and dim r (Hs)(Algorithm 7). Using the reduced histories, for  
+
+> Prepared using sagej.cls
+
+14 X XX(X) 
+
+Algorithm 6 Backup( T , node o, a, r, R)
+
+Input: The belief tree T , the observation mode 
+
+node o, the selected action a, the accumulated reward r, and the immediate reward R, optional type for backup: Bellman or Monte-Carlo. 
+
+Output: The updated tree T with the refined nodes  
+
+> 1:
+
+N (node o) ← N (node o) + 1 and 
+
+N (node o, a∗) ← N (node o, a∗) + 1  
+
+> 2:
+
+if Use Monte-Carlo backup then  
+
+> 3:
+
+ˆQ(node o, a∗) ← ˆQ(node o, a∗) +     
+
+> r−ˆQ(node o,a∗)
+> N(node o,a∗)
+> 4:
+
+else ▷ Bellman backup.  
+
+> 5:
+
+node ′ 
+
+> o
+
+is the child of node o 
+
+> 6:
+
+ˆQ(node o, a∗) ← ˆQ(node o, a∗) +       
+
+> R+γˆV∗(node ′
+> o)−ˆQ(node o,a∗)
+> N(node o,a∗)
+> 7:
+
+ˆV ∗(node o) ← max a∈L (node o) ˆQ(node o, a) 
+
+> 8:
+
+end if 
+
+each particle, we can update all states in the state history list Hs and the action-observation history 
+
+H by adding sub-state vectors and adjusting observations for newly detected objects based on the transition and observation functions, as shown in Algorithm 8. Finally, the updated histories grow the tree structure (Algorithm 9). 
+
+5.4.1 Cutting and updating state list and depth vector. The key to reusing the previous belief tree is maintaining and updating stored information, including Hs, Hr , H, and dim r (Hs), in the sampled particles. The first step refines action nodes (Algorithm 5). When an action, a∗, is refined into multiple new actions (e.g., a∗ to 
+
+{a∗, a|L (node o)|+2 ,, · · · , a|L (node o)|+k}), the history list H is updated accordingly. The second step prunes branches after executing a∗ and receiving observation o (Algorithm 7). For the new state ( s, sadd ), branches corresponding to the old state s in the previous tree T are assigned as the root of the new tree. The last significant operation is to update the state s′ by the added state vector s′ 
+
+> add
+
+corresponding to new objects based on the transition function T (( s, sadd ), a, s′
+
+> add
+
+) and observation function Z(( s, s′
+
+> add
+
+), a, o′) for each particle †, where o′ is the new observation including both the old objects and newly detected objects. In the state update, we consider the effect s′ →
+
+s′ 
+
+> add
+
+from the old state vector s, corresponding to old objects, to the added state vector s′
+
+> add
+
+,which is related to the newly detected objects. However, the old state vector s′ itself is not updated to preserve and reuse existing information. In other words, the belief of the old state does not 
+
+consider the effect from the new object s′
+
+> add
+
+̸ → s′.This process ensures updated histories for particles (Algorithm 8) while adhering to the allocated planning budget. 
+
+5.4.2 Rebuild the belief tree and resampling. 
+
+Starting from the identified root node, the new 
+
+Algorithm 7 Cutting( a∗, o, ¯H)
+
+Input: The selected action a∗, the received observa-tion o, the history tuple ¯H
+
+Output: The updated history tuple ¯H 
+
+> 1:
+
+H, H s, H r , dim r (Hs) ← ¯H 
+
+> 2:
+
+H′ ← ∅ , H′ 
+
+> s
+
+← ∅ , H′ 
+
+> r
+
+← ∅ , dim r (Hs)′ ← ∅  
+
+> 3:
+
+for h in H do  
+
+> 4:
+
+if h[0] == a∗ and h[1] == o then  
+
+> 5:
+
+Get key for h in H 
+
+> 6:
+
+Find states history hs and corresponding depth value dim r (Hs)[ key ] based on hash table key 
+
+key  
+
+> 7:
+
+h ← h/{h[0] , h[1] }, hs ← hs/{hs[0] }, hr ←
+
+hr / {hr [0] }, dim r (Hs) [ key ] ← dim r (Hs)[ key ] − 1
+
+▷ ⋆/ • means to remove sets or elements • from a set ⋆. 
+
+> 8:
+
+H′ ← H′ ⋃{h}, H′ 
+
+> s
+
+← H′
+
+> s
+
+⋃{hs},
+
+H′ 
+
+> r
+
+← H′
+
+> r
+
+⋃ {hr }, dim r (Hs)′ ←
+
+dim r (Hs)′ ⋃ dim r (Hs)[ key ] 
+
+> 9:
+
+end if  
+
+> 10:
+
+end for  
+
+> 11:
+
+H ← H, Hs ← H′
+
+> s
+
+, Hr ← H′ 
+
+> r
+
+, dim r (Hs) ←
+
+dim r (Hs)′ 
+
+> 12:
+
+return ¯H ← < H , Hs, Hr , dim r (Hs) >.
+
+belief tree T ′ is grown using the updated particles. This growth process follows the same exploration principles as the tree structure in MCTS sampling, leveraging the pre-updated particles. The main steps are outlined in Algorithm 9 and Algorithm 10. Notably, new belief nodes may be introduced while constructing the new belief tree T ′.Consequently, T ′ may not be a strict sub-tree of the previous belief tree T . Based on T ′, MCTS is then performed for all branches, including those with new actions and observations. The action selection strategy adheres to the UCB principle, incorporating the hypersphere range ω2range i,and the belief distance ω3BD , as detailed in Section 5.3.2. Let snew = ( s, ∅) and s′ 
+
+> new
+
+=(s′, s′
+
+> add
+
+), we know that the current optimal action should be selected following equation Eq. (8). Assuming our belief approximation is perfect outside the sub-tree with depth ∈ { 1, 2, 3, · · · } 
+
+layer ‡, of which one layer has action nodes and observation nodes, in the sub-tree of the new belief tree shown in Fig. 7, for depth =1, the only difference between two ways (ours and the direct resampling way) is from the last terms V ∗(b(s′ 
+
+> new
+
+: s′ ⇄ s′
+
+> add
+
+)) (correct by                            
+
+> †It is noted that because our current considered actions
+> a1and a2just perform on the old objects, the reward function does not need to update. Our reward function follows R(( s,sadd ),a1,(s′,s′
+> add )) = R(s,a1,s′), because the old action a1and a2just operate one object each step.
+> ‡This assumption is reasonable in our object search problem. Because, after they reach the threshold of the declaring action, different state vectors corresponding this object are considered the same in its physical meaning, the belief differences will become into 0.
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 15 
+
+max 
+
+> a∈A
+
+ ∑ 
+
+> snew ∈S
+
+R(snew , a, s′ 
+
+> new
+
+)b(snew ) + γ
+
+∑
+
+> o∈O
+
+∑ 
+
+> s′
+> new ∈S
+
+Z(s′ 
+
+> new
+
+, a, o′)T (snew , a, s′ 
+
+> new
+
+)V ∗(b(s′ 
+
+> new
+
+: s′ ⇄ s′
+
+> add
+
+)) 
+
+ .
+
+(8) 
+
+Algorithm 8 Episode simulation along list( ¯H, sadd )
+
+Input: The history tuple ¯H, the initial state for newly detected objects sadd 
+
+Output: The updated tuple ¯H.
+
+1: H, H s, H r , dim r (Hs) ← ¯H
+
+2: H′ ← ∅ , H′ 
+
+> s
+
+← ∅ , H′ 
+
+> r
+
+← ∅ , dim r (Hs)′ ← ∅ 
+
+3: for hs in Hs do 
+
+4: Get key for hs in Hs ▷ Get the hash table key. 
+
+5: h ← H[key ] ▷ Get the action-observation history based on hash table key key .
+
+6: i ← 0, h′ 
+
+> s
+
+← ∅ , h′ ← ∅ 
+
+7: for i < |hs| do 
+
+8: s ← hs[i], a ← h[2 ∗ i]
+
+9: s′ 
+
+> add
+
+← T (( s, sadd ), a, s′
+
+> add
+
+) ▷
+
+Transition function to get the states about newly detected object. 
+
+10: o′ ← Z(( s, s′
+
+> add
+
+), a, o′) ▷ Observation function to get the new observations o′ considering the extended state. 
+
+11: h′ 
+
+> s
+
+← h′
+
+> s
+
+⋃{(s′, s′
+
+> add
+
+)}
+
+12: h′ ← h′ ⋃{(a, o′)}
+
+13: end for 
+
+14: H′ 
+
+> s
+
+← H′
+
+> s
+
+⋃{h′
+
+> s
+
+}, H′ ← H′ ⋃{h′},
+
+H′ 
+
+> r
+
+← H′
+
+> r
+
+⋃{Hr [key ]}, dim r (Hs)′ ←
+
+dim r (Hs)′ ⋃ dim r (Hs)[ key ] ▷ The recorded immediate reward and depth will not be changed. 
+
+15: if planning budget exceeded then 
+
+16: break ▷ limitation. Left some time for resampling.This planning budget is commonly related to the whole planning limitation. Left some time for resampling. 
+
+17: end if 
+
+18: end for 
+
+19: H ← H′, Hs ← H′
+
+> s
+
+, Hr ← H′ 
+
+> r
+
+, dim r (Hs) ←
+
+dim r (Hs)′
+
+20: return ¯H ← < H , Hs, Hr , dim r (Hs) >.
+
+building tree) and V ∗(b(s′ 
+
+> new
+
+: s′ → s′
+
+> add
+
+)) (ours, without considering partial effect). Hence, we add the belief distance term, which is defined as BD ≜ ∑ 
+
+> o∈O
+
+Z(s′
+
+> new
+
+, a, o′)∥b(( s′, s′
+
+> add
+
+) : s′ →
+
+s′
+
+> add
+
+) − b(( s′, s′
+
+> add
+
+) : s′ ⇄ s′
+
+> add
+
+)∥1, to get a better estimation for the upper confidence bound. 
+
+Algorithm 9 Grow tree( T , ¯H)
+
+Input: The previous belief tree T , the history tuple ¯H
+
+Output: The updated tree T
+
+1: H, H s, H r , dim r (Hs) ← ¯H
+
+2: Get the root node node o from T
+
+3: for hs in Hs do 
+
+4: Get key for hs in Hs ▷ Get the hash table key. 
+
+5: h ← H[key ], hr ← Hr [key ] ▷ Get the action-observation history h and reward hisotry hr
+
+based on hash table key key .
+
+6: i ← 0
+
+7: T , r ←Simulation new objects( node o,
+
+hs, hr , h, dim r (Hs)[ key ], i)
+
+8: end for 
+
+Figure 7. Main steps for growing state space 
+
+Algorithm 10 Simulation new objects( node o,
+
+hs, hr , h, i)
+
+Input: The previous belief node node o, the updated histories in one particle hs, hr , h, the depth value 
+
+i
+
+Output: The updating tree T , the discounted accumulated reward r
+
+1: a∗ ← h[2 ∗ i]
+
+2: if i == dim r (Hs)[ key ] then ▷ Reach the terminal node in tree structure and the later part in this history is corresponding to rollout. 
+
+3: for all a ∈ A do 
+
+4: Action node node a ← (N (node o, a),V (node o, a), ∅) ▷ Generate the empty action nodes. 
+
+5: end for 
+
+6: return Rollout new objects( hr , i + 1) ▷ See Algorithm 11. 
+
+7: else 
+
+8: if no action nodes from node o and then 
+
+9: for all a ∈ A do 
+
+10: node a ← (N (node o, a), V (node o,
+
+a), ∅) ▷ Generate the empty action nodes. 
+
+11: end for 
+
+12: end if 
+
+13: snew ← hs[i], s′ 
+
+> new
+
+← hs[i + 1], o′ ← h[2 ∗ i +1], R(snew , a∗, s′ 
+
+> new
+
+) ← hr [i]
+
+14: belief node node o′ ← (N (node o′ ), V (node o′ )) based on node a and o′
+
+15: if i < |h′|rollout then 
+
+16: r ← γ Simulation new objects( node o′ , hs,
+
+hr , h, i + 1) ▷ Recursively 
+
+17: Collect {snew } in the belief node node o
+
+18: Backup( T , node o, a∗, r, R(snew , a∗, s′ 
+
+> new
+
+)) 
+
+▷ See Algorithm 6. 
+
+19: end if 
+
+20: end if 
+
+## 5.5 GNPF-kCT: Theoretical analysis 
+
+In this section, we aim to analyze the convergence of the proposed solver with some assumptions to  
+
+> Prepared using sagej.cls
+
+16 X XX(X) 
+
+Algorithm 11 Rollout new objects( hr , j )                       
+
+> Input: The reward history hr, the depth j
+> Output: Discounted total roll-out reward r
+> 1: if j== |hr|then
+> 2: return hr[j]
+> 3: else
+> 4: return hr[j] + γRollout new objects( hr, j + 1)
+> 5: end if
+
+improve the compactness of this work §. The focus is to answer: 
+
+Question 1. Does the GNPF-kCT algorithm converge in probability to the optimal value function in POMDPs? 
+
+Let’s recall our key steps in GNPF-kCT algorithm related to the convergence, including network filtering, k clustering for hierarchical partition, and the revised UCB strategy. It is easy to know that the prediction accuracy of the neural network will directly affect the performance of the method. 
+
+Assumption 1. The neural network used for action filtering does not filter the optimal action. The obtained feasible region X satisfies a∗ ∈X , a∗ = argmax a∈A Q(b, a).
+
+Satisfying assumption 1, the network filtering will not affect the convergence of the GNPF-
+
+kCT algorithm to the optimal result. The problem just has a smaller action domain with the same configuration. To answer Question 1 is equal to answer Question 2: 
+
+Question 2. Without considering network filter-ing, does the GNPF-kCT algorithm with k-center clustering and the revised UCB strategy converge in probability to the optimal value function in POMDPs? 
+
+Based on (Silver et al., 2010), we can answer Question 2 by considering POMDPs as a derived MDP. Let’s consider Lemma 1 about the value function and Lemma 2 about the rollout distribution (Silver et al., 2010): 
+
+Lemma 1. Given a POMDP M =<
+
+S, A, O, T, Z, R > consider the derived MDP with histories H as states, 
+
+˜M =< H, A, ˜T , ˜R > , where ˜T a 
+
+> h,hao
+
+=∑
+
+> s∈S
+
+∑ 
+
+> s′∈S
+
+b(s, h )T (s, a, s′)Z(s′, a, o),
+
+b(s, h ) means the belief over states given history h,
+
+hao means the updated history pruning the tree by 
+
+a and o, and ˜R(a, h) = ∑ 
+
+> s∈S
+
+b(s, h )R(s, a, s′).Then the value function ˜V π (h) of the derived MDP is equal to the value function V π (h) of the POMDP, ∀π, ˜V π (h) = V π (h), where value function V π (h) is the expected return from state when following policy π. (Silver et al., 2010) 
+
+Lemma 2. For any rollout policy π, the POMDP rollout distribution is equal to the derived MDP rollout distribution, ∀π, Dπ (hT ) = ˜Dπ (hT ).(Silver et al., 2010) 
+
+From Lemmas 1 and 2, proving POMDP solver convergence reduces to proving convergence for the corresponding MDP solver of the driver MDP. Thus, we reformulate Question 2 as: 
+
+Question 3. Does the GNPF-kCT algorithm converge in probability to the optimal value function in MDPs? 
+
+In order to connect our GNPF-kCT algorithm with some existing MDP solvers, we present the following assumption: 
+
+Assumption 2. The action partitioning results 
+
+Xd,i j , j = 1 , · · · , k generated by all k center clus-tering operations for the action domain Xd−1,i fol-low the properties of the hierarchical partitioning, satisfying Xd,i j
+
+⋂ Xd,i ′ 
+
+> j
+
+= ∅ for ∀ij , i ′ 
+
+> j
+
+∈ { i1, · · · , i k}
+
+and ⋃  
+
+> j=1 ,··· ,k
+
+Xd,i j = Xd−1,i .
+
+Under Assumption 2, the k-center clustering can be viewed as hierarchical partitioning. With hierarchical partitioning, our method follows the same search strategy as the HOO method but with different partitioning ways. Because we limit the refining accuracy range i and the corresponding list dimension |L (node o)|, we can consider it as the same problem with the finite discrete actions and each action a is a range instead of a value. We have the following new question: 
+
+Question 4. Does the action selection strat-egy Eq. (5) in the GNPF-kCT algorithm converge in probability to the optimal value function in MDPs with discrete action domains? 
+
+When the number of visits N (node o)approaches infinity, the action range range i will be the constant limitation Dlim ∈ R. For the action selection strategy (5), with a given coefficient ω2,we can ignore the region-related terms ω2range i
+
+due to the same constant value for all candidate action ranges. In this way, the action selection strategy becomes the standard UCB1 bound: ˆQ(node o, a) + ω1
+
+√ log N (node o)   
+
+> N(node o,a)
+
++ ω2range i →
+
+ˆQ(node o, a) + ω1
+
+√ log N (node o)   
+
+> N(node o,a)
+
++ ω2Dlim . So it follows the convergence analysis for the UCB1 in (Kocsis et al., 2006) and (Silver et al., 2010), following: 
+
+Lemma 3. For a suitable choice of ω1, the value function constructed by UCT converges in probability to the optimal value function.   
+
+> §In all these discusses, the belief distance term foption (BD )is set to be 0.
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 17 
+
+As the number of visits N (node o) approaches infinity, the bias of the value function is 
+
+O(log N (node o)/N (node o)) .
+
+This convergence result means that the method can find the optimal range action Aopt that has the largest mean value for all refined ranges with some probability. 
+
+Assumption 3. The obtained mean values 
+
+˜Q(b, Aopt ) and ˜Q(b, Asub ) corresponding to the optimal action range Aopt and any sub-optimal action range Asub satisfy: 
+
+˜Q(b, Aopt ) − ˜Q(b, Asub ) ≥ ηD lim . (9) Based on Lipschitz continuous, we have any action a ∈ A sub in the sub-optimal range Asub sat-isfies: Q(b, a) ≤ ˜Q(b, Asub ) + ηD lim . Then, con-sidering Assumption 3, we will have: ˜Q(b, Aopt ) ≥
+
+ηD lim + ˜Q(b, Asub ) ≥ Q(b, a). Because the best action ˜a∗ ∈ A opt in the optimal action range Aopt 
+
+satisfy Q(b, ˜a∗) ≥ Q(b, Aopt ), finally, for any action a ∈ A sub 
+
+⋃ Aopt in both sub-optimal range 
+
+Asub and optimal range Aopt , we have: ˜a∗ = a∗ and 
+
+Q(b, ˜a∗) = Q(b, a∗) ≥ Q(b, a), which means the obtained optimal range Aopt definitely includes the optimal action a∗. In short, under given assump-tions, GNPF-kCT probabilistically converges to a small range including the optimal solution for POMDPs with continuous action domains. The above discussion focuses solely on the case without belief tree reuse, assuming it perfectly approximates traditional MCTS. However, belief tree reuse can be seen as a mis-estimation of action and observation node values in the correct belief tree. To evaluate its approximation performance, we present the following results: 
+
+Theorem 2. We are considering the unweighted particles for approximating the extended full-correct belief b(s′ 
+
+> new
+
+: s′ ⇄ s′
+
+> add
+
+) = 1
+
+> N
+
+∑Ni=1 I(s′ 
+
+> new
+
+=
+
+sinew  
+
+> ′
+
+: s′ ⇄ s′
+
+> add
+
+) and the reused approximated belief b(s′ 
+
+> new
+
+: s′ → s′
+
+> add
+
+) = 1
+
+> N
+
+∑Ni=1 I(s′ 
+
+> new
+
+=
+
+sinew  
+
+> ′
+
+: s′ → s′
+
+> add
+
+). Assuming depth = 1 as well as the reward function is Borel measurable and bounded, denoted Rmax = ∥R∥∞, the belief distance L1 is limited in ∥b(s′ 
+
+> new
+
+: s′ ⇄
+
+s′
+
+> add
+
+) − b(s′ 
+
+> new
+
+: s′ → s′
+
+> add
+
+)∥1 ≤ δ, and the optimal action selected by building the whole tree is same as the one selected by approximated value 
+
+max a V (b(snew ), a) = max a ˆV (b(snew ), a) = a∗,the optimal value function of POMDP problem using our method V ∗(b(snew )) and the optimal value function using the direct resampling way 
+
+ˆV ∗(b(snew )) will satisfy the following bounding equation: 
+
+∥V ∗(b(snew )) − ˆV ∗(b(snew )) ∥1 ≤ γR max 
+
+1 − γ δ. (10) 
+
+Proof. Please refer to Appendix C. 
+
+Corollary 1. Considering multiple layers 
+
+depth ≥ 1 case, the extended full-correct belief 
+
+b(sdepth new : s′ ⇄ s′
+
+> add
+
+) and the reused approximated belief b(sdepth new : s′ → s′
+
+> add
+
+) are defined for terminal nodes in depth layer. Assuming the reward function is Borel measurable and bounded, the belief L1 distance for each belief node is limited in ∥b(s(depth ) 
+
+> new
+
+: s′ ⇄ s′
+
+> add
+
+) − b(s(depth ) 
+
+> new
+
+: s′ →
+
+s′
+
+> add
+
+)∥1 ≤ δ, and the optimal action for each observation node selected by building the whole tree are same as the ones selected by approximated value, the optimal value function of POMDP problem using our method V ∗(b(snew )) and the optimal value function using the direct resampling way ˆV ∗(b(snew )) will satisfy the following bounding equation: 
+
+∥V ∗(b(snew )) − ˆV ∗(b(snew )) ∥1 ≤ γR max 
+
+1 − γ δ. (11) 
+
+Proof. Please refer to Appendix D. It is noted that Theorem 2 and Controllary 1 are correct only under the assumption that each optimal action selected for each node using the approximation way is the same as the one using directly fully rebuilding the belief tree, which means that there are some bounds for the performance guarantee shown in Theorem 2 and Controllary 1 using the reuse approximation. 
+
+Discussion 1. As mentioned before, our belief tree reuse can be considered as the wrong estimation 
+
+△ of the action and observation node values in the correct belief tree. For all observation nodes with belief b, when the distance between the value function for the optimal action V (b, a∗)
+
+and the value function for any sub-optimal action 
+
+V (b, a∗
+
+> sub
+
+) is relatively large satisfying V (b, a∗) −
+
+V (b, a∗
+
+> sub
+
+) >> △,the estimation error △ will not affect the final solution and the convergence of our solver, which follows the method directly rebuilding the whole belief tree. 
+
+Following Discussion 1, we would like to get the exact performance bound to ensure that the obtained solution remains the same as the optimal solution using the fully-rebuild belief tree. Firstly, we have the following corollary: 
+
+Corollary 2. With the same assumption as Corollary 1, given the action-observation sequence 
+
+{a1, o1, a2, o2, · · · , oi}, i < depth and reach the observation node with belief b, the optimal action-value function of POMDP problem using our method V ∗(b, a) and the optimal value function using the direct resampling way ˆV ∗(b, a) for any given action a will satisfy the following bounding  
+
+> Prepared using sagej.cls
+
+18 X XX(X) 
+
+equation: 
+
+∥V ∗(b, a) − ˆV ∗(b, a)∥1 ≤ γR max 
+
+1 − γ δ. (12) 
+
+Proof. Just follows the similar proof process shown in Corollary 1, so we ignore it here. 
+
+Corollary 3. With the same assumption as Corollary 1, for any observation node with belief b
+
+within depth layer, if the distance between the value function V (b, a∗) for the optimal action a∗ and the value function V (b, a∗
+
+> sub
+
+) for any sub-optimal action a∗ 
+
+> sub
+
+is larger than 2γR max  
+
+> 1−γ
+
+δ, the optimal action obtained by the tree reuse approximation way will be same as the optimal action using the direct resampling way max a V (b, a) = max a ˆV (b, a) = 
+
+a∗.
+
+Proof. Please refer to Appendix E. 
+
+## 6 Action execution and perception 
+
+Unlike many state-of-the-art methods (Zheng et al., 2021,Z) that assume static objects and no robot-object interactions, our approach enables the robotic arm to actively clear obstacles, uncovering hidden spaces. Our perception module combines point cloud and image data to estimate object poses, sizes, movability, and detection, eliminating the need for manual markers like QR codes. 
+
+## 6.1 Action execution 
+
+Our object search framework supports mobile robots with 2D LiDAR and RGB-D cameras, focusing on the Fetch robot. Navigation relies on the ROS move base interface with an AMCL-based stack (Quigley et al., 2009). Lift height and head joints are controlled via ros control (Chitta et al., 2017), while object removal uses moveit (Sucan et al., 2012) to pick and place items outside the workspace. The basic actions are shown in Fig. 8.    
+
+> (a) Changing robot configuration (Move base)
+> (b) Changing robot configuration (Joints controller)
+> (c) Removing action
+
+Figure 8. Actions execution 
+
+## 6.2 Sensor data operations 
+
+To simplify the scenario with limited resources—a 2D LiDAR, a 3D RGB-D camera, and a 7-DoF robotic arm on the Fetch robot—we assume the availability of a pre-built point cloud map M
+
+and occupancy grid map of the environment ¶.These maps include furniture and known objects but exclude unknown objects with unknown poses. This assumption is realistic, as the maps can be created beforehand and reused during planning. During online planning and execution, the depth camera’s point cloud Fj from the j-th frame is fused with M using Iterative Closest Point (ICP), initialized by 2D LiDAR matching (Rusu et al., 2011). ICP provides a noisy robot pose measurement Zicp ∼ N ( ¯Zicp , Σicp ), fused with AMCL localization Zamcl ∼ N ( ¯Zamcl , Σamcl )in the filter part of the POMDP framework, where N (⋆, •) means the one-dimension or multi-dimension normal distribution with mean value/vector ⋆ and variance value/covariance matrix •. As frames accumulate, the combined point cloud Pj = M ⋃ F0
+
+⋃ · · · ⋃ Fj grows more complete. Subtracting the original map yields 
+
+M′ 
+
+> j
+
+= Pj /M, isolating n newly detected objects 
+
+{o0, o1, . . . , on} ∈ M ′ 
+
+> j
+
+via Euclidean cluster extraction, as shown in Fig. 9. Object poses and sizes are estimated by fitting minimum bounding boxes using principal component analysis. Data association matches local and global objects based on Mahalanobis and point-wise mean distances. 
+
+Figure 9. Measurement from point cloud            
+
+> ¶For the Stretch robot, which also has acamera and LiDAR but only a 3-DoF manipulator, we adapt to its constraints by using the IKPy tool (Manceron et al., 2022) for inverse kinematics combined with base motion to achieve the required grasp poses.
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 19 
+
+## 6.3 Object detector 
+
+State-of-the-art real-time object detection systems like YOLO classify objects into predefined categories, which may not match specific targets. Meanwhile, 3D point clouds provide valuable data for image segmentation. To tackle object detection with limited images and optional semantic cues, we combine traditional feature matching with YOLO, leveraging their strengths for accurate and efficient detection. Building on point cloud segmentation, we project segmented local frame point clouds onto the image using the camera configuration, creating sub-images. YOLOv5 (Jocher et al., 2020) generates sub-images with semantic scores 
+
+{syi , i = 1, 2, · · · , m}, where m̸ = n typically. A nearest-neighbor-based method aligns sub-images by matching those with sufficient overlap. Matched pairs link local sub-images to objects, and SIFT descriptors match these to the target object. Detection probability is defined as the ratio of matched features to total features, 
+
+{sdi , i = 1, 2, · · · , n }. For specified target types (e.g., a cup), semantic scores syi and detection probabilities sdi are averaged. As real-world object matching can lack robustness and perception is not our main focus, especially for uniform-colored objects (e.g., a red bottle), we add color matching. The main object detection process is shown in Fig.10.  
+
+> Figure 10. Object detector
+
+## 6.4 Move-ability estimation 
+
+In real-world settings, some objects may be immovable due to size, manipulator limits, or base motion constraints. Our framework focuses on clearing the FOV by manipulating objects, requiring the estimation of movability probabilities and updating these beliefs within the POMDP planning. Using point cloud segmentation on the fused global cloud, we isolate objects and use the Grasp Pose Detection (GPD) toolbox (Ten et al., 2017) to predict multiple grasp poses. To reduce complexity, k-means clustering selects k diverse, high-success poses pgi , i = 1 , 2, · · · , k . These poses and nearby obstacles are transformed into local frames T gr (pgi ) based on pre-visited robot poses 
+
+pri , ensuring feasibility. The transformed poses are used as planning targets for the robot manipulator via the moveit toolbox, within a time limit tm,but without execution. Feedback from moveit determines the movability probability 0 .5 < m oi ≤
+
+1. If no solution is found, moi = 0 .5 ‖, and objects above a size threshold are non-movable (moi = 0). During planning, movability is assessed by sampling and comparing with moi . Fig. 11 illustrates candidate grasp poses (blue forks).  
+
+> Figure 11. Candidate grasp poses
+
+## 7 Simulations and real-world experiments 
+
+## 7.1 Simulations 
+
+We validate our approach using Fetch and Stretch robot simulators in the Gazebo environment, implemented by C++ and Python. The neural process network is trained for 3000 iterations (approximately 4 hours) on a single NVIDIA 3090 GPU. Post-training, we execute our project on a desktop machine, utilizing only the CPU, operating on Ubuntu 18.04, and powered by an Intel Core i7-13700k processor. Our evaluation spans diverse object configurations and scenarios, comparing our method against benchmarks, including continuous action domain benchmark methods (POMCPOW and VOMCPOW) and classical POMDP methods with manual-setting discrete action domain (POMCP, GPOMCP (Chen et al., 2024a), and NPF-kCT, which is sub-version of our proposed GNPF-kCT method without belief tree reuse (Chen et al., 2024b).). 
+
+7.1.1 Problem settings. The simulations occur in a realistic Gazebo living environment with diverse object configurations. Navigation relies on a point cloud map and a 2D occupancy grid, featuring furniture and some predefined objects, while most objects are unknown. Large furniture surfaces serve as workspaces, with a target object (a blue  
+
+> ∥Our move-ability estimation is not very efficient to various environments due to the robot pose selection, so we still keep large guess for the object move-ability.
+> Prepared using sagej.cls
+
+20 X XX(X) 
+
+snack box) and various obstacles placed randomly. Methods are evaluated across five scenarios, with robot candidate positions defined by four red rectangles around each workspace, unrestricted in orientation. Except for parameter sensitivity analysis, the cluster number k for all simulations and experiments is set as 3 ∗∗ . The robot’s head motion is constrained to lp ∈ (− π 
+
+> 12
+
+, π 
+
+> 12
+
+), lt ∈
+
+(−0.5, 0.5), and the lift motion lh is limited to (0 .0, 0.4). In the context of POMDP models for explo-ration, based on the Fetch robot’s RGBD camera setting, the hexahedron FOV is defined by a 60-degree horizontal view angle and a vertical range with a height-width ratio of 480/600. The nearest and farthest planes to the camera center are set at 0.5 meters and 1.7 meters, respectively. The grid size of the grid world for the guessed target object is set as 2 cm. Each planning step is allotted a maximum of 60 seconds. Key parameters include grid updating thresholds vp = 0 .1 and vn = −0.1, re-initialized grid values for the guessed target object set at 0.2, and reward values are assigned as follows Rmax = 10 5, Rct = 5 × 10 4, Rco = 10 4,
+
+Rmin = −1, and Rill = −10 3.
+
+7.1.2 NP for primitive action. We evaluate the trained neural network’s ability to filter mean-ingless primitives using the PyTorch framework. We present the training loss (Fig. 12a) and val-idation loss (Fig. 12b) over epochs, highlighting the model’s performance and convergence behavior across 1000 iterations. Validation loss, calculated on testing data, is measured as the median log-likelihood loss, representing the log of the proba-bility density or mass function (higher values indi-cate better performance). The observed increase in validation loss, alongside the decrease in training loss, demonstrates effective learning and confirms the absence of overfitting issues.     
+
+> (a) Training loss (b) Validation loss
+> Figure 12. Loss Trends
+
+Fig. 13 shows the performance of the trained network after 3000 iterations, comparing observed test data (red line) with the predicted Gaussian distribution’s 2-σ bound (pink area, truncated to [0, 1]). Data are reordered by the robot’s position to highlight trends. Predicted accuracy Acc is defined as: 
+
+Acc = 1 − P ro w (13) where P ro w is the probability of considering 
+
+efficient actions (observed probability is larger than 0.05) as the useless actions (mean value is smaller than 0.05); is 99 .02% for the test dataset. We present visual results for two test samples, demonstrating that the NP network effectively filters useless actions, aiding the GNPF-kCT solver in reducing the continuous action domain and enhancing efficiency.  
+
+> Figure 13. The predicted and observed scores.
+
+7.1.3 GNPF-kCT framework.          
+
+> (a) Loose1 (b) Loose2
+> (c) Hidden1 (d) Covered1 (e) Complex1
+> Figure 14. The planning environment
+
+Comparison results Many existing object search methods rely on classical POMCP, which oper-ates in a discrete action domain. We evaluate our method against both discrete-action POMDP solvers (POMCP, GPOMCP) and continuous-action solvers (POMCPOW, VOMCPOW, NPF-
+
+kCT). For POMCP and GPOMCP, robot configu-rations ar are manually limited to combinations of 4 selected poses, 3 lift heights, and 9 head orientations, reducing coverage of the continuous action domain. Although this creates an unfair comparison, it highlights the benefits of broader continuous action domains. All methods address object search with a guessed target object and are    
+
+> ∗∗ In fact, because the workspace is located in 4 areas, the suitable parameters kshould be equal to 4, as demonstrated in Section 7.1.3. Without loss of genrality, we use 3 to get our main results, which still shows the dominant performance.
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 21 
+
+tested across five scenarios of varying complexity: Loose1 (4 objects, 1 workspace), Loose2 (6 objects, 2 workspaces), Hidden1 (7 objects, 1 workspace), Covered1 (7 objects, 1 workspace), and Complex1 (15 objects, 1 workspace), as shown in Fig. 14. The Covered1 and Complex1 scenarios are particularly challenging, as the robot is unable to observe the target object from most configurations, even when operating at the maximum lift height. Several representative cases illustrating occluded observa-tions, even under favorable robot configurations, are shown in Fig. 15. Each scenario involves 20 trials, and results, including the 95% confidence interval for discounted cumulative reward, steps, and success rate within 50 steps, are reported in Table 2 using the Fetch robot simulator. Because our GNPF-kCT solver is the combination of the GPOMCP and NPF-kCT, this result can also be considered as one of the ablation studies of our framework. Additionally, we know that the neural process is definitely useful for the task, so we do not remove the NP part and the rest ablation is implemented for the k-center clustering. In the NPF-kCT variant, we remove k-center clustering, which refines the continuous action domain (via Refine in Algorithm 3), while retaining action clustering and initial list updates before MCTS to summarize NP samples. Table 1 compares Loose1 and Hidden1 cases, demonstrating that k-center clustering significantly enhances the solver perfor-mance.   
+
+> Figure 15. Occluded observations even under good robot configurations.
+> Table 1. Ablation study based on NPF method
+
+Scenarios NPF Loose1 88653 .8 ± 6812 .4 | 6.7 ± 0.9|100% Hidden1 75139 .5 ± 11521 .5 | 11 .4 ± 2.7|100% Our method and NPF-kCT exhibit a significant advantage across all scenarios due to the efficient NP filtering and robust clustering refinement. These mechanisms optimize robot configurations—poses, lift heights, and head orientations—for effective object observation. The continuous action refinement further facilitates the discovery of rare and challenging configurations, which are typically difficult to pinpoint in a large continuous action domain. This capability allows the robot to effectively locate and observe target objects, as illustrated in Fig. 16.  
+
+> Figure 16. Good observations based on tricky robot configurations (very common to obtain based on our method).
+
+In simpler scenarios like Loose1 and Hidden1, NP filtering and refined clustering enable the robot’s FOV to quickly cover the workspace, often observing all objects in the first step. In these cases, belief tree reuse is less effective or counterproductive due to added complexity (Section 5.4), no new observations, and the more predictable measurements within the belief tree. However, belief tree reuse becomes advantageous in complex scenarios like Complex1 and Covered1, where the robot encounters numerous unexpected objects during the search process. We illustrate object search execution in the Covered1 scenario with a 16-step sequence of actions, including adjustments to the robot’s configuration, identification of obstacles and target objects, and their removal (highlighted with yellow dashed circles), as shown in Fig. 17. For each step, we display the grid world’s odds value, Odd (G), in the lower-left red image and the detected camera image in the lower-right blue image. Odds values consistently converge on the target object. 
+
+Results with different parameters Our method demonstrates robust performance against man-ual parameter settings. For example, as long as 
+
+Rmax ≫ Rmin , performance remains consistent. When Rmin changes from -1 to -20, the final performance shows minimal variation. Compara-tive results for Hidden1 emphasize this stability, attributed to the compact and well-structured POMDP design (Table 3). We also highlight several cases where certain parameters can significantly impact performance, such as the threshold for declaring actions nodds .This threshold determines the grid values used for comparison, crucial for assessing declaring action success. Smaller nodds increases task difficulty, requiring object detection from multiple orientations. We conducted statistical analyses in Fig. 18 with nodds = 2 , 4, 6 for several representative methods in a scenario featuring 6 objects (Fig. 19). While all methods achieved 100% success, the advantage of GNPF-kCT and NPF-kCT diminished with easier nodds setting. In  
+
+> Prepared using sagej.cls
+
+22 X XX(X) 
+
+Table 2. Discounted cumulative reward, steps, and successful rate for POMDP-based methods (within 50 steps) 
+
+Scenarios Loose1 Complex1 POMCP 78629 .6 ± 8472 .1 | 7.2 ± 0.7 | 100 % 27564 .2 ± 7591 .0 | 47 .9 ± 3.2 | 25% GPOMCP 79788 .0 ± 4787 .4 | 7.4 ± 0.6 | 100 % 40278 .0 ± 4957 .7 | 42 .9 ± 3.8 | 50% POMCPOW 72612 .0 ± 11102 .2 | 9.4 ± 2.1 | 100 % 37023 .4 ± 6951 .9 | 44 .2 ± 3.4 | 75% VOMCPOW 77622 .9 ± 11406 .1 | 8.5 ± 1.6 | 100 % 40555 .1 ± 6830 .9 | 41 .1 ± 4.4 | 90% NPF-kCT 94795 .1 ± 6350 .6 | 6.0 ± 0.7 | 100 % 44737 .1 ± 6669 .1 | 36 .3 ± 5.1 | 95 %GNPF-kCT 89548 .1 ± 7391 .9 | 6.7 ± 0.8 | 100 % 50527 .8 ± 5259 .7 | 33 .8 ± 5.0 | 95 %Scenarios Hidden1 Covered1 POMCP 45815 .2 ± 7260 .9 | 19 .4 ± 2.8 | 100 % 31506 .9 ± 6249 .7 | 32 .3 ± 6.0 | 80% GPOMCP 55574 .8 ± 6225 .3 | 15 .3 ± 2.0 | 100 % 34397 .8 ± 7381 .6 | 26 .7 ± 4.8 | 95% POMCPOW 61728 .4 ± 8791 .3 | 12 .9 ± 2.7 | 100 % 40762 .1 ± 8401 .1 | 23 .9 ± 6.3 | 90% VOMCPOW 58286 .8 ± 10101 .1 | 14 .9 ± 3.1 | 100 % 35725 .4 ± 9880 .5 | 25 .2 ± 5.9 | 90% NPF-kCT 83377 .1 ± 6427 .3 | 8.5 ± 1.4 | 100 % 44966 .1 ± 6340 .2 | 21 .7 ± 3.0 | 100 %GNPF-kCT 81270 .1 ± 5947 .1 | 8.3 ± 1.3 | 100 % 55596 .9 ± 8602 .0 | 19 .4 ± 3.8 | 100 %Scenarios Loose2 
+
+POMCP 38462 .6 ± 11221 .2 | 23 .2 ± 6.6 | 95% GPOMCP 51574 .1 ± 17930 .9 | 17 .4 ± 2.9 | 100 %POMCPOW 21785 .1 ± 6783 .1 | 32 .7 ± 6.5 | 70% VOMCPOW 26860 .0 ± 5779 .8 | 28 .2 ± 6.0 | 85% NPF-kCT 69992 .7 ± 8185 .8 | 11 .4 ± 2.0 | 100 %GNPF-kCT 68989 .1 ± 8585 .6 | 11 .1 ± 1.7 | 100 % (b) Loose2 
+
+Figure 17. The visual progress for Covered1 scenario. 
+
+Table 3. 95% confidence interval of discounted cumulative reward, steps, and successful rate (within 50 steps) 
+
+Scenarios Hidden 1 
+
+Rmin = −1 89548 .1 ± 7391 .9 | 6.7 ± 0.8 | 100 %
+
+Rmin = −20 91579 .4 ± 7536 .1 | 6.5 ± 0.9 | 100 %
+
+our real-world experiments with the Stretch robot (Fig. 22), nodds was set to 6. The parameter k significantly influences the refining speed of the continuous action domain, affecting performance across tasks. To assess its impact, we varied k from 2 to 8 for the 6-object scenario (Fig. 19). Fig. 20 shows the 95% confidence intervals for discounted cumulative rewards (black line) and steps (red line), with results grouped by colored dashed boxes for corresponding k values. The analysis indicates optimal clustering at k = 
+
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 23        
+
+> (a) Average step (b) Average reward
+> Figure 18. Results for different nodd values.
+> Figure 19. The scenario with 6 objects with candidate continuous position domain (red rectangles) and discrete pose domain (white triangles).
+
+4 and k = 7, while other values reduce solver performance.   
+
+> Figure 20. Results for different cluster numbers k.
+
+Results with another simulator: Our method is adaptable to any mobile robot with similar sensors and configurations, not limited to the Fetch robot. As an example, we integrated it with the Stretch robot simulator to further validate the framework’s applicability. Despite structural differences between the Stretch and Fetch robots, we tested the pre-trained Fetch network on Stretch without new data to evaluate its generalization in updating grid belief via the head camera. Problem settings from Section 7.1.1 were retained, except for removing lift motion lh. In Loose1 and Fig. 19 scenarios, the Stretch robot achieved discounted cumulative rewards, steps, and success rates of 85181 .2 ± 9092 .8 | 7.4 ± 1.3 | 100% (Loose1) and 52558 .4 ± 5255 .8 | 17 .5 ± 3.0 | 100% (Fig. 19), slightly lower than Fetch results (Table 2, Fig. 18) but showing robustness. We recollect the data using the Stretch robot simulator, re-train the network with the same settings, and finally re-run the whole planning. The updated results are 88813 .3 ± 6480 .2 | 6.8 ± 1.1 | 100% (Loose1) and 65189 .3 ± 9459 .3 | 13 .8 ± 3.0 | 100% (Fig. 19), aligning closely with the Fetch robot outcomes. A visual example of the Stretch robot completing Loose1 in 6 steps is shown in Fig. 21.  
+
+> Figure 21. Results for Loose1 scenario using Stretch robot.
+
+## 7.2 Real-world experiments   
+
+> Figure 22. The real-world planning environment.
+> Figure 23. The used maps in real world experiments.
+
+We validate our method on the real-world Stretch platform (Fig. 22). The environment’s 2D occupancy grid and point cloud maps, generated with RTAB-SLAM (Labb´ e et al., 2019), are shown in Fig. 23 a and b for localization. These maps are fused to create a safer navigation map with expanded obstacle areas (Fig. 23 c and d). While object-level primitives are assumed to be fully implemented (which is challenging in reality), performance may decrease due to failed actions, resulting in a success rate below 100% (6 successes in 20 trials). The robot’s goal is to locate a red  
+
+> Prepared using sagej.cls
+
+24 X XX(X) 
+
+bottle. In 20 real-world trials, all attempts with successful primitive actions were successful, while others failed due to the failure of the primitives because of hardware, communication, or perception issues. To illustrate the object search process, Fig. 24 shows the real robot’s action sequence in 5 steps, including pose adjustments, camera orientation changes, and declarations of obstacles and the target object (yellow dashed circle). Fig. 25 highlights four cases involving primitives, with additional experimental results available in the attached video.   
+
+> Figure 24. Real-world experimental results.
+> Figure 25. Failed and successful real-world primitive actions.
+
+## 7.3 Comparison with non-POMDP framework 
+
+All previous results were obtained using our pro-posed POMDP framework. In this section, we com-pare our method with several representative non-POMDP planning frameworks, including Random, NPF-G, SGoLAM (Kim et al., 2021), SayPlan (Rana et al., 2023), and MoMa-LLM (Honerkamp et al., 2024). Since these planning methods differ substantially in their original problem formulations and configuration settings, we adapt them to our task by minimally revising their action spaces and unifying the perception module across all methods, ensuring a fair comparison. We first provide aqualitative summary of the original capabilities of these methods, as reported in the corresponding references, in Table 4. As shown in Table 4, our framework is imple-mented in the high-fidelity Gazebo environment and operates with minimal prior information about the scene. The entire pipeline, including percep-tion and manipulation actions, is designed to be directly transferable to real robotic systems with very little modification. In contrast, LLM-based methods such as SayPlan and MoMa-LLM typ-ically rely on pre-given semantic annotations or simulator-provided ground-truth information. For example, MoMa-LLM directly accesses pixel-level semantic perception from the iGibson simulator and employs QR-code markers in real-world experi-ments, both of which are treated as uncertainty-free prior knowledge (marked as Pre-given in Table 4). These simplified assumptions make certain actions easier, for instance, exploration can be performed by a single rotation that immediately reveals all object labels. Moreover, SGoLAM and SayPlan do not support interactive actions that modify the environment configuration. While MoMa-LLM includes limited interactions such as opening doors or refrigerators, it does not allow interactive manip-ulation of detected objects. In contrast, our frame-work explicitly models environment interaction and uncertainty, enabling more realistic and transfer-able decision-making. We next detail the compared methods: 
+
+Random This baseline adopts a random high-level policy that selects actions uniformly at random from both discrete and continuous action spaces. Specifically, we first sample a scalar γs ∼U(0 , 1). If γs > 0.3, a continuous action is selected, and its parameters are sampled uniformly from the predefined continuous ranges. If γs ≤ 0.3, we check whether any objects are available for declaration or removal. If such objects exist, one is randomly selected for declaration or removal; otherwise, a continuous action is selected as in the case of γs >
+
+0.3. 
+
+NPF-G This baseline employs a greedy high-level decision-making strategy over both discrete and continuous actions. Since object declaration and target-object removal consistently yield positive rewards, these actions are always selected whenever available. Otherwise, a scalar γs ∼ U (0 , 1) is sampled and compared with 0.1. If γs > 0.1, a continuous action is selected by choosing the one with the highest signal-to-noise ratio among actions predicted as efficient by the trained neural network, with a likelihood of at least 20%. If γs ≤ 0.1, the policy checks for available removal actions and randomly selects one if present; if none are available, it defaults to the same continuous action selection strategy used when γs > 0.1.  
+
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 25  
+
+> Table 4. Ablation study based on NPF method
+
+Scenarios Simulator Semantic Perception Interactive actions Uncertainty Ours Gazebo Real (match, pose, size) True(remove objects) True SGoLAM Habitat Real (match, position) False True Sayplan No mention Pre-given False False MoMa-LLM iGibson Pre-given(QR code) True(open cover) False 
+
+SGoLAM SGoLAM (Kim et al., 2021) achieved top performance in the CVPR 2021 MultiON Challenge using a purely non-learning-based strategy. The method first conducts frontier-based exploration to search the environment and locate the target object, and then switches to a dedicated planner for efficient navigation. To ensure a fair comparison with our framework, which explicitly provides the workspace area, we reduce the frontier exploration step size and perform exploration directly in the continuous position domain (highlighted by red rectangles in Fig. 19). Without this modification, SGoLAM exhibits significantly degraded performance in our setting. Moreover, since the continuous exploration positions are already close to the objects, no additional navigation step is required to further increase the target object’s pixel size after frontier exploration. For perception, we use the same configuration as our method. At each frontier point, exploration is performed by selecting the three most distinctive orientations from 100 uniformly sampled candidates. 
+
+Sayplan : This baseline follows a prompt structure adapted from SayPlan (Rana et al., 2023), reformulated to use instruction-based reasoning and a scene graph represented in JSON format. To better fit our task setting, we extend the original action set by introducing additional primitive actions, including object declaration and removal of declared objects. Example prompts for high-level LLM-based reasoning and low-level navigation toward known objects are provided in Appendix H. The original SayPlan framework was evaluated using GPT-3 and GPT-4 (OpenAI, 2023). To assess the performance of this framework across different LLMs under identical prompts, we evaluate three models: gpt-3.5-turbo, gpt-4, and gpt-5, denoted as SayPlan3, SayPlan4, and SayPlan5, respectively, in Table 5.Each method, except ours (20 times), is repeated 10 times because of the high cost of API usage. For perception, we adopt the same configuration as SGoLAM, selecting the three most distinctive orientations at each exploration point. 
+
+MoMa-LLM This method (Honerkamp et al., 2024) employs high-level LLM-based reasoning over scalable and dynamic scene graphs, combined with efficient low-level policies for interactive manipulation tasks. An example of the high-level reasoning prompt is provided in Appendix H. For navigation actions, MoMa-LLM uses the same low-level prompt structure as SayPlan, as shown in Appendix H. The original MoMa-LLM framework was evaluated using GPT-3 and GPT-4 (OpenAI, 2023). To assess its performance across different LLM backends under identical prompts, we evaluate three models, including gpt-3.5-turbo, gpt-4, and gpt-5, and denote them as MoMa3, MoMa4, and MoMa5, respectively, in Table 5. The original MoMa-LLM method does not add the geometry properties of the objects, like the poses and sizes of the objects, in the high-level reasoning prompt. So as to further improve the capacity of this framework in this task, we add these information and the revised prompts are shown in Appendix H. The additional results using gpt-5 are shown in Table 5 and denote it as MoMa5 g. For perception, we adopt the same configuration as SGoLAM and SayPlan, selecting the three most distinctive orientations at each exploration point. The comparison results are shown in Table 5. Because the discounted cumulative rewards do not make sense here, we ignore them in this table. We can find that our method shows the better performance than the others. Most of these methods are developed and evalu-ated in large-scale environments using simulators such as iGibson and Habitat. When applied to our single-room setting, they exhibit substantially degraded performance. This motivates a discussion of several common misconceptions in the literature, which we summarize as follows: 
+
+Question 5. Is a single-room environment with clustered objects inherently easier for mobile robots than multi-room, multi-level environments with sparse objects? Are existing LLM-based methods currently superior to model-based approaches? 
+
+Discussion 2. Our answers to both questions are 
+
+no , as demonstrated by the experimental results presented earlier. A key reason is that the field of view (FOV) of common mobile robots becomes severely limited when operating close to objects, making visual blind spots frequent and unavoidable. At the same time, operating at longer distances is unfavorable for reliable object matching and precise manipulation, necessitating close-range interactions. Many existing works adopt simplified assumptions, for example, treating the object  
+
+> Prepared using sagej.cls
+
+26 X XX(X)                                                                                                                                                                                                                                  
+
+> Table 5. Steps and successful rate (within 50 steps) for non-POMDP framework
+> Scenarios Loose1 Hidden1 Covered1 Complex1 Random 45 .0±7.4|30% 50 .0±0.0|0% 50 .0±0.0|0% 50 .0±0.0|0% SGoLAM 21 .8±8.9|90% 27 .7±12 .4|80% 48 .1±3.4|20% 50 .0±0.0|0% NPF-G 11 .2±3.4|100 %14 .4±8.1|100 %18 .0±5.7|100 %35 .7±10 .2|60% Sayplan3 42 .5±9.0|30% 46 .6±7.7|10% 50 .0±0.0|0% 50 .0±0.0|0% Sayplan4 21 .0±7.3|90% 35 .9±13 .1|40% 46 .7±5.9|20% 50 .0±0.0|0% Sayplan5 12 .2±3.5|100 %20 .5±10 .0|90% 47 .4±5.8|10% 50 .0±0.0|0% MoMa3 32 .8±11 .1|60% 42 .3±9.4|30% 47 .8±5.0|10% 50 .0±0.0|0% MoMa4 19 .7±7.0|100 %46 .8±5.4|20% 45 .5±5.6|30% 50 .0±0.0|0% MoMa5 10 .7±2.7|100 %30 .1±11 .2|70% 38 .4±9.4|50% 48 .2±4.1|10% MoMa5 g 10 .6±1.8|100 %27 .7±10 .4|80% 32 .0±9.9|70% 49 .0±2.3|10% Ours 6.7±0.8|100 %8.3±1.3|100 %19 .4±3.8|100 %33 .8±5.0|95 %
+
+search task as complete once the target object enters a predefined sensing range, which are often unrealistic in practice. Such approaches also fail to fully exploit changes in the robot’s configuration, such as head orientation or lift height, thereby limiting their effectiveness in realistic object search scenarios, particularly when objects are densely clustered. Another contributing factor to the inferior per-formance of LLM-based methods in our setting is their limited capacity to faithfully represent physical constraints and spatial uncertainty. Natural lan-guage abstractions are inherently ambiguous and lack the precision required for fine-grained robotic execution. Importantly, object search in a cluttered single-room environment constitutes a physically grounded task involving perception, manipulation, and configuration changes, rather than a purely topological navigation problem commonly studied in large-scale, sparsely populated environments. Furthermore, we observe that for LLM-based methods, it remains challenging to design prompts that guarantee not only the feasibility but also the optimality of both the problem formulation and the resulting solution. Most existing studies primarily focus on whether a task can be completed, with limited analysis of optimal decision-making under uncertainty. This limitation is closely related to the absence of an explicit internal world model in current LLMs, which hinders long-horizon action–outcome simulation. Nevertheless, our results indicate a clear improvement in long-horizon planning performance from GPT-3.5 to GPT-5 (Table 5), suggesting that progress in this direction is ongoing. Overall, we believe that integrating model-based reasoning tailored to single-room physical interactions with learning-based global reasoning mechanisms represents a more promising research direction, and is likely to lead to more realistic and robust solutions for real-world object search tasks. 
+
+## 7.4 Limitation 
+
+Our approach faces several limitations. First, reliance on a pre-existing map is impractical for real-world robots, but this can be mitigated with advanced SLAM techniques. Second, achieving a 100% success rate for primitive actions in real-world scenarios is unrealistic, affecting overall performance. Additionally, our use of point cloud segmentation may generate incorrect bounding boxes for objects with large contact areas, leading to errors in data association and belief updates. Object detection methods like YOLO, SIFT, and color matching also face challenges in environments with limited features, low coverage, or poor lighting. But we believe these issues can be addressed through advances in perception, navigation, and execution, which are outside the scope of this paper. 
+
+## 8 Conclusion and future work 
+
+This paper introduces GNPF-kCT, a novel POMDP-based framework and solver for object search tasks in a 3D environment using a mobile robot manipulator. The problem is modeled as an 8-tuple POMDP, focusing on FOV adjustments and belief updates for observed objects. By incorporating a guessed target object, our approach efficiently locates hidden objects by removing obstacles, a limitation in existing methods. Our framework combines a pre-trained NP network to select potential primitive actions from Gazebo simulation data with adaptive k-clustering hypersphere partitioning to refine the continuous action space for efficient MCTS exploration. This integrates short-term learning with a compact long-term POMDP framework for improved performance. To address challenges from growing state spaces, we reuse the previous belief tree and apply a revised UCB1 bound, incorporating hypersphere range and belief distance for efficient and robust decision-making. Experiments show that, our solver surpasses classical methods in cumulative reward, task steps, and success  
+
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 27 
+
+rate under identical computational constraints. Notably, our framework requires only maps, photos, and onboard sensors, eliminating the need for geometric models or additional object-specific data, and making it highly practical for real-world applications. This paper lays the groundwork for autonomous object search. Future work will integrate advanced methods, such as LLMs (Zhao et al., 2024a) to embed expert knowledge via prompts (Tang et al., 2025), or world model (Yupeng et al., 2025) to fast predict system in latent space, and enable autonomous map creation and workspace generation. More importantly, in experimental results, we find that one of the main limitations is the success rate of the complicated primitive actions. Even though we can consider these uncertainties in the planning framework, they will still cause the low success rate of the whole system with poor preventive implementation. The well-signed Vision-Language-Action (VLA) method, like RT-2 (Zitkovich et al., 2023) and Octo (Team et al., 2024), may be helpful in completing better primitive actions. These advancements aim to develop fully autonomous, end-to-end systems capable of identifying any target in unknown environments with a single robotic platform and onboard sensors. 
+
+## Appendix A Proof for Theorem 1
+
+We rewrite the formulation by g′(θ) ≜
+
+g(a, s, α(P)) given fixed s and α(P). Based on g′(θ) ∼ nn (μ(θ), σ(θ)), with the fixed input θi and i ≤ 1, we have the Gaussian distribution g′(θi) ∼ N (μ(θi), σ(θi)). Let 
+
+zi = g′(θi)−μ(θi) 
+
+> σ(θi)
+
+∼ N (0 , 1). For a Gaussian distribution with mean 0 and variance 1, we have: 
+
+P r (zi > η i)=
+
+∫ +∞
+
+> ηi
+
+1
+
+√2π exp −z2/2 dz 
+
+=
+
+∫ +∞
+
+> ηi
+
+1
+
+√2π exp −(z−ηi)2/2−zη i+η2  
+
+> i/2
+
+dz 
+
+= exp −η2 
+
+> i/2
+
+∫ +∞
+
+> ηi
+
+1
+
+√2π exp −(z−ηi)2/2−zη i+η2 
+
+> i
+
+dz 
+
+= exp −η2 
+
+> i/2
+
+∫ +∞
+
+> ηi
+
+1
+
+√2π exp −(z−ηi)2/2 exp −zη i+η2 
+
+> i
+
+dz. 
+
+(14) were P r (⋆) is the probability of event ⋆. Because we can set ηi > 0 and zi > η i, we have: −zη i + η2 
+
+> i
+
+< 0. So, we have: 
+
+P r (zi > η i) ≤ exp −η2 
+
+> i/2
+
+∫ +∞
+
+> ηi
+
+1
+
+√2π exp −(z−ηi)2/2 dz 
+
+= exp −η2  
+
+> i/2
+
+/2.
+
+(15) Introduce zi = g′(θi)−μ(θi) 
+
+> σ(θi)
+
+, we have: 
+
+P r (g′(θi) − μ(θi) > η iσ(θi)) ≤ exp −η2  
+
+> i/2
+
+/2,P r (g′(θi) − μ(θi) < −ηiσ(θi)) ≤ exp −η2  
+
+> i/2
+
+/2.
+
+(16) We have: 
+
+P r (|g′(θi) − μ(θi)| > η iσ(θi)) ≤ exp −η2  
+
+> i/2
+
+.
+
+(17) The complementary set of |g′(θi) − μ(θi)| >ηiσ(θi) is |g′(θi) − μ(θi)| ≤ ηiσ(θi) and its corre-sponding probability is bigger than 1 − exp −η2 
+
+> i/2
+
+.Let δ = exp −η2  
+
+> i/2
+
+⇒ ηi = √−2 ln( δ), we have: 
+
+P r (|g′(θi) − μ(θi)| ≤ ηiσ(θi)) ≥ 1 − δ. (18) We have the scoring function g′(θi) is bounded by (μ(θi) − √−2 ln( δ)σ(θi), μ(θi) + √−2 ln( δ)σ(θi)) with a probability bigger than 1 − δ. So, if its lower bound μ(θi) − √−2 ln( δ)σ(θi) > 0 ⇔
+
+μ(θi) > √−2 ln( δ)σ(θi), the scoring function sat-isfying: 
+
+P r (g′(θi) > 0) > 1 − δ. (19) 
+
+## B Network structure for scoring function 
+
+The structure of the used NPs model for the scoring function is shown in Fig. 26. 
+
+## C Proof for Theorem 2
+
+Let’s consider one of the new extended beliefs 
+
+b(s′ 
+
+> new
+
+: s′ ⇄ s′
+
+> add
+
+). Based on the well-known α-vector and depth = 1, we have the optimal value of belief b(s′ 
+
+> new
+
+: s′ ⇄ s′
+
+> add
+
+) can be written as: 
+
+V ∗(b(s′ 
+
+> new
+
+: s′ ⇄ s′
+
+> add
+
+)) = max  
+
+> a
+
+Q∗(b(s′ 
+
+> new
+
+: s′ ⇄ s′
+
+> add
+
+), a)= ∑ 
+
+> s′
+> new ∈S
+
+α(s′
+
+> new
+
+)b(s′ 
+
+> new
+
+: s′ ⇄ s′
+
+> add
+
+),
+
+(20) where α(s′
+
+> new
+
+) = R(s′
+
+> new
+
+, a∗) + 
+
+γV ∗(s′
+
+> new
+
+, b(s′ 
+
+> new
+
+: s′ ⇄ s′
+
+> add
+
+), a∗) and a∗ is the optimal action. It is noted that the α-vector 
+
+α(s′
+
+> new
+
+) is bounded by Rmax  
+
+> 1−γ
+
+, introducing the particle representation for the belief b(s′ 
+
+> new
+
+: s′ ⇄
+
+s′
+
+> add
+
+) = 1
+
+> N
+
+∑Ni=1 I(s′ 
+
+> new
+
+= sinew  
+
+> ′
+
+: s′ ⇄ s′
+
+> add
+
+), so  
+
+> Prepared using sagej.cls
+
+28 X XX(X) 
+
+Figure 26. Architecture of the used network. 
+
+we have: 
+
+∥V ∗(b(s′ 
+
+> new
+
+: s′ ⇄ s′
+
+> add
+
+)) − V ∗(b(s′ 
+
+> new
+
+: s′ →
+
+s′
+
+> add
+
+)) ∥1
+
+= ∥ 1
+
+N
+
+> N
+
+∑
+
+> i=1
+
+α(s′
+
+> new
+
+)I(s′ 
+
+> new
+
+= sinew  
+
+> ′
+
+: s′ ⇄ s′
+
+> add
+
+)
+
+− 1
+
+N
+
+> N
+
+∑
+
+> i=1
+
+α(s′
+
+> new
+
+)I(s′ 
+
+> new
+
+= sinew  
+
+> ′
+
+: s′ → s′
+
+> add
+
+)∥1
+
+≤ ∥ 1
+
+N
+
+> N
+
+∑
+
+> i=1
+
+Rmax 
+
+1 − γ I(s′ 
+
+> new
+
+= sinew  
+
+> ′
+
+: s′ ⇄ s′
+
+> add
+
+)
+
+− 1
+
+N
+
+> N
+
+∑
+
+> i=1
+
+Rmax 
+
+1 − γ I(s′ 
+
+> new
+
+= sinew  
+
+> ′
+
+: s′ → s′
+
+> add
+
+)∥1
+
+(21) = Rmax 
+
+1 − γ ∥b(s′ 
+
+> new
+
+: s′ ⇄ s′
+
+> add
+
+) − b(s′ 
+
+> new
+
+: s′ →
+
+s′
+
+> add
+
+)∥1
+
+≤ Rmax 
+
+1 − γ δ. 
+
+Based on Eq. (8) and the optimal action a∗, we have: 
+
+∥V ∗(b(snew )) − ˆV ∗(b(snew )) ∥1
+
+= ∥ ∑ 
+
+> snew ∈S
+
+R(snew , a∗, s′
+
+> new
+
+)b(snew ) + γ ∑ 
+
+> o‘∈O
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 29 
+
+∑
+
+s′ 
+
+> new
+
+∈S
+
+Z(s′
+
+new , a∗, o′)T (snew , a∗, s′
+
+new )V ∗(b(s′
+
+new 
+
+: s′ ⇄ s′
+
+add )) − ∑
+
+snew ∈S
+
+R(snew , a∗, s′
+
+new )b(snew )
+
+− γ ∑
+
+o′∈O
+
+∑
+
+s′ 
+
+> new
+
+∈S
+
+Z(s′
+
+new , a∗, o′)T (snew , a∗, s′
+
+new )
+
+V ∗(b(s′
+
+new : s′ → s′
+
+add )) ∥1
+
+= ∥γ ∑
+
+o‘∈O
+
+∑
+
+s′ 
+
+> new
+
+∈S
+
+Z(s′
+
+new , a∗, o′)T (snew , a∗, s′
+
+new )
+
+V ∗(b(s′
+
+new : s′ ⇄ s′
+
+add )) − γ ∑
+
+o′∈O
+
+∑
+
+s′ 
+
+> new
+
+∈S
+
+Z(s′
+
+new , a∗
+
+, o′)
+
+T (snew , a∗, s′
+
+new )V ∗(b(s′
+
+new : s′ → s′
+
+add )) ∥1
+
+≤ γ ∑
+
+o‘∈O
+
+∑
+
+s′ 
+
+> new
+
+∈S
+
+Z(s′
+
+new , a∗, o′)T (snew , a∗, s′
+
+new )
+
+Rmax 
+
+1 − γ δ
+
+≤ γR max 
+
+1 − γ δ. 
+
+(22) The proof is completed. 
+
+## D Proof for Corollary 1
+
+Let’s consider one of the approximated belief nodes in the depth -1-th and depth -th layers with belief b(s(depth −1) 
+
+new : s(depth −1) → s(depth −1) 
+
+add )and b(s(depth )
+
+new : s(depth ) → s(depth )
+
+add ). Based on Eq. 25, compared between the approximate 
+
+b(s(depth )
+
+new : s(depth ) → s(depth )
+
+add ) and the correct belief b(s(depth )
+
+new : s(depth ) ⇄ s(depth )
+
+add ), its optimal value will satisfy: 
+
+∥V ∗(b(s(depth )
+
+new : s(depth ) ⇄ s(depth )
+
+add )) −
+
+V ∗(b(s(depth )
+
+new : s(depth ) → s(depth )
+
+add )) ∥1 ≤ Rmax 
+
+1 − γ δ. 
+
+(23) Based on Eq. (8) and the optimal action a∗ and the received observation o′, we have: 
+
+∥V ∗(b(s(depth −1) 
+
+new )) − ˆV ∗(b(s(depth −1) 
+
+new )) ∥1
+
+= ∥ ∑
+
+s(depth −1)  
+
+> new
+
+∈S
+
+R(s(depth )
+
+new , a∗, s(depth −1) 
+
+new )
+
+b(s(depth −1) 
+
+new : s(depth −1) ⇄ s(depth −1) 
+
+add )+ γ ∑
+
+o′∈O
+
+∑
+
+s(depth ) 
+
+> new
+
+∈S
+
+Z(s(depth )
+
+new , a∗, o′)T (s(depth −1) 
+
+new ,
+
+a∗, s(depth )
+
+new )V ∗(b(s(depth )
+
+new : s(depth ) ⇄ s(depth )
+
+add )) 
+
+− ∑
+
+s(depth −1)  
+
+> new
+
+∈S
+
+R(s(depth )
+
+new , a∗, s(depth −1) 
+
+new )
+
+b(s(depth −1) 
+
+new : s(depth −1) → s(depth −1) 
+
+add )
+
+− γ ∑
+
+o′∈O
+
+∑
+
+s(depth ) 
+
+> new
+
+∈S
+
+Z(s(depth )
+
+new , a∗, o′)T (s(depth −1) 
+
+new ,
+
+a∗, s(depth )
+
+new )V ∗(b(s(depth )
+
+new : s(depth ) → s(depth )
+
+add )) ∥1
+
+≤ ∥ ∑
+
+s(depth −1)  
+
+> new
+
+∈S
+
+R(s(depth )
+
+new , a∗, s(depth −1) 
+
+new )
+
+b(s(depth −1) 
+
+new : s(depth −1) ⇄ s(depth −1) 
+
+add )
+
+− ∑
+
+s(depth −1)  
+
+> new
+
+∈S
+
+R(s(depth )
+
+new , a∗, s(depth −1) 
+
+new )
+
+b(s(depth −1) 
+
+new : s(depth −1) → s(depth −1) 
+
+add )∥1+(24) 
+
+∥γ ∑
+
+o′∈O
+
+∑
+
+s(depth ) 
+
+> new
+
+∈S
+
+Z(s(depth )
+
+new , a∗, o′)T (s(depth −1) 
+
+new ,
+
+a∗, s(depth )
+
+new )V ∗(b(s(depth )
+
+new : s(depth ) ⇄ s(depth )
+
+add )) 
+
+− γ ∑
+
+o′∈O
+
+∑
+
+s(depth ) 
+
+> new
+
+∈S
+
+Z(s(depth )
+
+new , a∗, o′)T (s(depth −1) 
+
+new ,
+
+a∗, s(depth )
+
+new )V ∗(b(s(depth )
+
+new : s(depth ) → s(depth )
+
+add )) ∥1
+
+≤ Rmax ∥ ∑
+
+s(depth −1)  
+
+> new
+
+∈S
+
+b(s(depth −1) 
+
+new : s(depth −1) ⇄
+
+s(depth −1) 
+
+add ) − ∑
+
+s(depth −1)  
+
+> new
+
+∈S
+
+b(s(depth −1) 
+
+new : s(depth −1) 
+
+→ s(depth −1) 
+
+add )∥1 + γ ∑
+
+o′∈O
+
+∑
+
+s(depth ) 
+
+> new
+
+∈S
+
+Z(s(depth )
+
+new , a∗,
+
+o′)T (s(depth −1) 
+
+new , a∗, s(depth )
+
+new )∥V ∗(b(s(depth )
+
+new : s(depth )
+
+⇄ s(depth )
+
+add )) − V ∗(b(s(depth )
+
+new : s(depth ) →
+
+s(depth )
+
+add )) ∥1
+
+≤ Rmax δ + γ ∑
+
+o′∈O
+
+∑
+
+s(depth ) 
+
+> new
+
+∈S
+
+Z(s(depth )
+
+new , a∗, o′)
+
+T (s(depth −1) 
+
+new , a∗, s(depth )
+
+new ) Rmax 
+
+1 − γ δ
+
+≤ Rmax δ + γ Rmax 
+
+1 − γ δ
+
+= Rmax 
+
+1 − γ δ. 
+
+Prepared using sagej.cls 30 X XX(X) 
+
+This formulation is the same as the one in (23) in format. The δ is the upper bound of the belief distances of different belief nodes. Following asimilar recurrence process until the first layer, we can get: 
+
+∥V ∗(b(snew )) − ˆV ∗(b(snew )) ∥1
+
+= ∥ ∑ 
+
+> snew ∈S
+
+R(snew , a∗, s′
+
+> new
+
+)b(snew ) + γ ∑
+
+> o‘∈O
+
+∑ 
+
+> s′
+> new ∈S
+
+Z(s′
+
+> new
+
+, a∗, o′)T (snew , a∗, s′
+
+> new
+
+)V ∗(b(s′
+
+> new
+
+: s′ ⇄ s′
+
+> add
+
+)) − ∑ 
+
+> snew ∈S
+
+R(snew , a∗, s′
+
+> new
+
+)b(snew )
+
+− γ ∑
+
+> o′∈O
+
+∑ 
+
+> s′
+> new ∈S
+
+Z(s′
+
+> new
+
+, a∗, o′)T (snew , a∗, s′
+
+> new
+
+)V ∗
+
+(b(s′ 
+
+> new
+
+: s′ → s′
+
+> add
+
+)) ∥1
+
+= ∥γ ∑
+
+> o‘∈O
+
+∑ 
+
+> s′
+> new ∈S
+
+Z(s′
+
+> new
+
+, a∗, o′)T (snew , a∗, s′
+
+> new
+
+)
+
+V ∗(b(s′ 
+
+> new
+
+: s′ ⇄ s′
+
+> add
+
+)) − γ ∑
+
+> o′∈O
+
+∑ 
+
+> s′
+> new ∈S
+
+Z(s′
+
+> new
+
+, a∗
+
+, o′)T (snew , a∗, s′
+
+> new
+
+)V ∗(b(s′ 
+
+> new
+
+: s′ → s′
+
+> add
+
+)) ∥1
+
+(25) 
+
+≤ γ ∑
+
+> o‘∈O
+
+∑ 
+
+> s′
+> new ∈S
+
+Z(s′
+
+> new
+
+, a∗, o′)T (snew , a∗, s′
+
+> new
+
+)
+
+Rmax 
+
+1 − γ δ
+
+≤ γR max 
+
+1 − γ δ. 
+
+The proof is completed. 
+
+## E Proof for Corollary 3
+
+Proof. Based on Corollary 2, we have: ˆV (b, a∗
+
+> sub
+
+) ≤ V (b, a∗
+
+> sub
+
+) + γR max 
+
+1 − γ δ (26) and 
+
+V (b, a∗) − γR max 
+
+1 − γ δ ≤ ˆV (b, a∗). (27) The solution does not change, which means that the approximated value function using sub-optimal action asub is smaller than the one with optimal action, satisfying ˆV (b, a∗) > ˆV (b, a∗
+
+> sub
+
+). Here, considering Eq. (26) and Eq. (27), if the upper bound of ˆV (b, a∗
+
+> sub
+
+) is smaller than the lower bound of ˆV (b, a∗), satisfying: 
+
+V (b, a∗) − V (b, a∗
+
+> sub
+
+) > 2γR max 
+
+1 − γ δ
+
+⇒ V (b, a∗
+
+> sub
+
+) + γR max 
+
+1 − γ δ < V (b, a∗) − γR max 
+
+1 − γ δ. 
+
+(28) We have: ˆV (b, a∗
+
+> sub
+
+) < ˆV (b, a∗). (29) The proof is completed. 
+
+## F Parameter selection 
+
+Our solver relies on 8 parameters, including the refining clustering number k, coefficients ω1, ω2,and ω3 for the MCTS action selection strategy, a self-defined exploration constant Cr , the minimum radius for partitioning Dlim , and two coefficients controlling the refining velocity, with 0 ≤ ¯ω2 <
+
+¯ω1 ≤ 1. Most of these parameters were not fine-tuned for optimal performance; instead, they were quickly identified or chosen intuitively. Here, we would like to add some explanations to help users quickly determine the parameters within a short time, like 20 minutes. Let’s go through each parameter: 
+
+Refining Clustering Number k:Fig. 20 shows that k = 3 , 4, and 5 result in similar performance, indicating robustness and flexibility in selecting this parameter. For general POMDP problems, I recommend using the default value k = 3 (chosen arbitrarily before parameter experiments) or the optimal clustering value, obtained during the list initialization update before MCTS, which ki = 4 in our paper. If the value ki =4 obtained in the list initial update before MCTS is used, this parameter k becomes non-heuristic and consistently achieves good performance. 
+
+Coefficients ω1, ω2, and ω3:These coefficients are straightforward to select. Without specific domain knowledge, I use the common value ω1 = √2, derived theoretically from the multi-armed bandit problem based on Hoeffding’s inequality. For ω2 and ω3, ensure that 
+
+ω2range i and ω3BD are comparable to another two terms: ˆQ(node o, a) and ω1
+
+√ ln N (node o)   
+
+> N(node o,a)
+
+. Because adding or removing the BD term does not make too large differences and the final result is similar, 
+
+ω3 can be set smaller than ω2.
+
+Self-Defined Exploration Constant Cr :To determine Cr , users can follow this simple process: 
+
+• Run the POMDP problem for one step within the time limit and identify the number of their commonly used particles, like Np = 150. 
+
+• Estimate the mean partitioning radius based on the problem setting, like mean (range ∗) is about 0.5. 
+
+• The selection of Cr is to make sure that 1/(Cr mean (range ∗)2) is about 30%-50% of the particle number Np. This ensures  
+
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 31 
+
+partitioning refines the continuous action domain at least 3-4 times. 
+
+• We have the selection Cr is set as 1/((0 .3 to 0 .5) Npmean (range ∗)2). 
+
+Coefficients for Refining Velocity ¯ω2 and ¯ ω1:The coefficients ¯ω2 = 0 .3 and ¯ω1 = 0 .6 were chosen arbitrarily, without extensive consideration. Other similar settings should also work well. 
+
+Minimum Radius for Partitioning Dlim :In this paper, Dlim is set to 0.2 without significant adjustments. This value covers a small region in R9, including 6D base pose, p, lift height lh, and the pan and tilt angles lp and lt
+
+of the robot’s head, as demonstrated with the Fetch robot. For example, two configurations with a distance of 0.2 might differ by 0.05 meters in x, y axis, 0.1 radians (about 5.7 degrees) in orientation, 0.05 meters in lh, 0. 1 radians in lp,0. 1 radians in lt. The resulting Euclidean distance is √(0 .05) 2 · 2 + (0 .1) 2 · 3 + (0 .05) 2 = 0 .194, which are within this small range. For other POMDP problems, users can adjust Dlim to ensure actions within this range have similar physical meanings with acceptable differences. 
+
+## G LLM prompts example for Sayplan 
+
+The high-level LLM prompts example for Sayplan is shown in this section. 
+
+## H LLM prompts example for MoMa-LLM 
+
+The high-level LLM prompts example for MoMa-LLM is shown in this section. The high-level LLM prompts example for MoMa-LLM with more geometry properties is shown in this part. 
+
+Acknowledgements 
+
+This research is supported by the ANU Futures Scheme. 
+
+References 
+
+Auer P, Cesa-Bianchi N, and Fischer P (2002) Finite-time analysis of the multiarmed bandit problem. 
+
+Machine learning . 47: 235–256. Aydemir A, Pronobis A, G¨ obelbecker M, and Jensfelt P (2013) Active visual object search in unknown environments using uncertain semantics. IEEE Transactions on Robotics , 29(4): 986-1002. Burks L, Ray HM, McGinley J, Vunnam S, and Ahmed N (2023) HARPS: An Online POMDP Framework for Human-Assisted Robotic Planning and Sensing. 
+
+IEEE Transactions on Robotics , 39(4): 3024-3042. Chen Y, Huang S, and Fitch R. (2020) Active SLAM for mobile robots with area coverage and obstacle avoidance. IEEE/ASME Transactions on Mechatronics , 25(3): 1182-1192. Chen R, Gao N, Vien NA, Ziesche H, and Neumann G (2022) Meta-learning regrasping strategies for physical-agnostic objects. Scaling robot learning workshop in ICRA, Philadelphia, PA, USA: IEEE. Chen Y and Kurniawati H (2024a) POMDP planning for object search in partially unknown environment. In Advances in Neural Information Processing Systems, New Orleans, Louisiana, USA, 36. Chen Y and Kurniawati H (2024b) NPF-kCT: A k-center clustering solver with neural process filter for continuous POMDP-based object search. https: //openreview.net/forum?id=WYsNjw02DE .Chitta S, Marder-Eppstein E, Meeussen W, Pradeep V, Tsouroukdissian AR, Bohren J, Coleman D, Magyar B, Raiola G, L¨ udtke M, and Perdomo EF (2017) ros control: A generic and simple control framework for ROS. Journal of Open Source Software , 2(20): 456-456. Danielczuk M, Kurenkov A, Balakrishna A, Matl M, Wang D, Mart´ ın-Mart´ ın R, Garg A, Savarese S, and Goldberg K. (2019) Mechanical search: Multi-step retrieval of a target object occluded by clutter. In 2019 International Conference on Robotics and Automation (ICRA). Montreal, Canada: IEEE, pp. 1614-1621. Garrett CR, Paxton C, Lozano-P´ erez T, Kaelbling LP, and Fox D (2020). Online replanning in belief space for partially observable task and motion problems. In 2020 IEEE International Conference on Robotics and Automation (ICRA), Paris, France: IEEE, pp. 5678-5684. Garnelo M, Schwarz J, Rosenbaum D, Viola F, Rezende DJ, Eslami SM, and Teh YW (2018) Neural processes. arXiv preprint arXiv:1807.01622. Ge W, Tang C, and Zhang H (2024) Commonsense scene graph-based target localization for object search. arXiv preprint arXiv:2404.00343. Giuliari F, Skenderi G, Cristani M, Del Bue A, and Wang Y. (2023) Leveraging commonsense for object localisation in partial scenes. IEEE Transactions on Pattern Analysis and Machine Intelligence , 45(10): 12038-12049. Hausknecht M and Stone P (2015) Deep recurrent q-learning for partially observable mdps. In 2015 AAAI Conference on Artificial Intelligence (AAAI) fall symposium series, Austin, Texas, USA. He K, Zhang X, Ren S, and Sun J (2016) Deep residual learning for image recognition. In Proceedings of the IEEE conference on computer vision and pattern recognition (CVPR), Las Vegas, NV, USA: IEEE, pp. 770-778. Hoerger M, Kurniawati H, Kroese D, and Ye N. (2022) Adaptive discretization using Voronoi trees  
+
+> Prepared using sagej.cls
+
+32 X XX(X) 
+
+for continuous-action POMDPs. In International Workshop on the Algorithmic Foundations of Robotics, University of Maryland, College Park, USA: Springer, pp. 170-187. Honerkamp D, B¨ uchner M, Despinoy F, Welschehold T, Valada A. Language-grounded dynamic scene graphs for interactive object search with mobile manipulation. IEEE Robotics and Automation Letters . 2024 Aug 9. Hou M, Lin TX, Zhou H, Zhang W, Edwards CR, and Zhang F (2021) Belief space partitioning for sym-bolic motion planning. In 2021 IEEE International Conference on Robotics and Automation (ICRA). Montreal, Canada: IEEE, pp. 8245-8251. Huang H, Dominguez-Kuhne M, Satish V, Danielczuk M, Sanders K, Ichnowski J, Lee A, Angelova A, Vanhoucke V, and Goldberg K (2021) Mechanical search on shelves using lateral access x-ray. In 2021 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS). Prague, Czech Republic: IEEE, pp. 2045-2052. Huang H, Fu L, Danielczuk M, Kim CM, Tam Z, Ichnowski J, Angelova A, Ichter B, and Goldberg K (2022) Mechanical search on shelves with efficient stacking and destacking of objects. The International Symposium of Robotics Research :205-221. Huang Y, Yuan J, Kim C, Pradhan P, Chen B, Fuxin L, and Hermans T (2024) Out of sight, still in mind: Reasoning and planning about unobserved objects with video tracking enabled memory models. In 2024 IEEE International Conference on Robotics and Automation (ICRA), Yokohama, Japan: IEEE, pp. 3108-3115. Jocher G, Stoken A, Borovec J, Changyu L, Hogan A, Diaconu L, Ingham F, Poznanski J, Fang J, Yu L, and Wang M (2020) ultralytics/yolov5: v3. 1-bug fixes and performance improvements. Zenodo. Jain, A., Shaw, S. and Roy, N., 2025. Learning Attentive Neural Processes for Planning with Pushing Actions. arXiv preprint arXiv:2504.17924. Kim J, Lee E S, Lee M., Zhang D, and Kim YM. Sgolam: Simultaneous goal localization and mapping for multi-object goal navigation. arXiv preprint arXiv:2110.07171, 2021. Kim H, Mnih A, Schwarz J, Garnelo M, Eslami A, Rosenbaum D, Vinyals O and Teh YW (2019) Attentive neural processes. arXiv preprint arXiv:1901.05761. Kocsis L and Szepesv´ ari C (2006) Bandit based monte-carlo planning. In European conference on machine learning, Berlin, Heidelberg, Germany: Springer, pp. 282-293. Kurenkov A, Taglic J, Kulkarni R, Dominguez-Kuhne M, Garg A, Mart´ ın-Mart´ ın R, and Savarese S(2020) Visuomotor mechanical search: Learning to retrieve target objects in clutter. In 2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS). Las Vegas, USA: IEEE, pp. 8408-8414. Kurniawati H, Hsu D, Lee WS (2009) SARSOP: Effi-cient point-based POMDP planning by approx-imating optimally reachable belief spaces. In Robotics: Science and Systems (RSS) IV, MIT Press, pp.65-72. Kurniawati H and Yadav V (2016) An online POMDP solver for uncertainty planning in dynamic environment. In Robotics Research: The 16th International Symposium (ISRR). Singapore: Springer, pp. 611-629. Labb´ e M and Michaud F (2019) RTAB-Map as an open-source lidar and visual simultaneous localization and mapping library for large-scale and long-term online operation. Journal of Field Robotics , 36(2): 416-446. Le TA, Kim H, Garnelo M, Rosenbaum D, Schwarz J, and Teh YW (2018) Empirical evaluation of neural process objectives. In NeurIPS workshop on Bayesian Deep Learning, Montr´ eal, Canada. Li Y, Gao N, Ziesche H, and Neumann G(2022) Category-agnostic 6d pose estimation with conditional neural processes. arXiv preprint arXiv:2206.07162. Lim MH, Tomlin CJ, and Sunberg ZN (2021) Voronoi progressive widening: efficient online solvers for continuous state, action, and observation POMDPs. In 2021 60th IEEE Conference on Decision and Control (CDC), Austin, Texas, USA: IEEE, pp. 4493-4500. Manceron P, IKPy, Zenodo, 2022, doi: https://doi.org/10.5281/zenodo.6551158. Mern J, Yildiz A, Sunberg Z, Mukerji T, and Kochenderfer MJ (2021) Bayesian optimized Monte Carlo planning. In Proceedings of the AAAI Conference on Artificial Intelligence (AAAI). virtual, pp. 11880-11887. OpenAI. ”GPT-4 technical report.” arXiv preprint arXiv:2303.08774, 2023. Pajarinen J, Lundell J, and Kyrki V (2022) POMDP planning under object composition uncertainty: Application to robotic manipulation. 
+
+IEEE Transactions on Robotics , 39(1): 41-56. Papadimitriou CH and Tsitsiklis JN (1987) The com-plexity of Markov decision processes. Mathematics of operations research , 12(3): 441-450. Qi CR, Su H, Mo K, and Guibas LJ (2017) Pointnet: Deep learning on point sets for 3d classification and segmentation. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), Honolulu, Hawaii, USA: IEEE, pp. 652-660. Quigley M, Conley K, Gerkey B, Faust J, Foote T, Leibs J, Berger E, Wheeler R, and Ng A (2009) ROS navigation stack.  
+
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 33 
+
+http://wiki.ros.org/navigation. Qureshi AH, Dong J, Choe A, and Yip MC (2020) Neural manipulation planning on constraint manifolds. IEEE Robotics and Automation Letters ,5(4): 6089-6096. Rana K, Haviland J, Garg S, Abou-Chakra J, Reid I, and Suenderhauf N, Sayplan: Grounding large language models using 3d scene graphs for scalable robot task planning. arXiv preprint arXiv:2307.06135, 2023. Rusu RB and Cousins S (2011) 3d is here: Point cloud library (pcl). In 2011 IEEE International Conference on Robotics and Automation (ICRA), Shanghai, China: IEEE, pp. 1-4. Schmalstieg F, Honerkamp D, Welschehold T, Valada A. Learning hierarchical interactive multi-object search for mobile manipulation. IEEE Robotics and Automation Letters . 2023 Nov 2;8(12):8549-56. Shaban A, Bansal S, Liu Z, Essa I, and Boots B, 2017. One-shot learning for semantic segmentation. arXiv preprint arXiv:1709.03410. Shani G, Pineau J, and Kaplow R (2013) A survey of point-based POMDP solvers. Autonomous Agents and Multi-Agent Systems , 27: 1-51. Silver D and Veness J (2010) Monte-Carlo planning in large POMDPs. In Advances in Neural Information Processing Systems (Neurips). Vancouver, British Columbia, Canada, 23. S´ oti G, Hein B, and Wurll C. (2023) Gradient-based grasp pose optimization on a nerf that approximates grasp success. In International Conference on Intelligent Autonomous Systems (IAS). Switzerland: Springer Nature, pp. 303-318. Somani A, Ye N, Hsu D, and Lee WS (2013) DESPOT: Online POMDP planning with regularization. In Advances in Neural Information Processing Systems (Neurips). Lake Tahoe, Nevada, United States, 26. Sucan IA, Moll M, and Kavraki LE (2012) The open motion planning library. IEEE Robotics & Automation Magazine , 19(4): 72-82. Sunberg Z and Kochenderfer M (2018) Online algorithms for POMDPs with continuous state, action, and observation spaces. In Proceedings of the International Conference on Automated Planning and Scheduling (ICAPS). Delft, The Netherlands, pp. 259-263. Tang, W., He, X., Huang, Y., Xiao, Y., Lu, C. and Cai, P., 2025. Tru-POMDP: Task Planning Under Uncertainty via Tree of Hypotheses and Open-Ended POMDPs. arXiv preprint arXiv:2506.02860. Ten P. A, Gualtieri M, Saenko K, and Platt R(2017) Grasp pose detection in point clouds. The International Journal of Robotics Research , 36(13-14): 1455-1473. Team OM, Ghosh D, Walke H, Pertsch K, Black K, Mees O, Dasari S, Hejna J, Kreiman T, Xu C, Luo J. Octo: An open-source generalist robot policy. arXiv preprint arXiv:2405.12213. 2024 May 20. Thorndike RL (1953) Who belongs in the family? Psychometrika, 18(4): 267-276. Wandzel A, Oh Y, Fishman M, Kumar N, Wong LL. and Tellex S (2019) Multi-object search using object-oriented pomdps. In 2019 International Conference on Robotics and Automation (ICRA). Montreal, Canada: IEEE, pp. 7194-7200. Yang Y, Liang H, and Choi C (2020) A deep learning approach to grasping the invisible. IEEE Robotics and Automation Letters , 5(2): 2232-2239. Yildirim Y and Ugur E (2022) Learning social navigation from demonstrations with conditional neural processes. Interaction Studies, 23(3): 427-468. Yupeng Zheng, Pengxuan Yang, Zebin Xing, Qichao Zhang, Yuhang Zheng, Yinfeng Gao, Pengfei Li, Teng Zhang, Zhongpu Xia, Peng Jia, Dongbin Zhao: World4Drive: End-to-End autonomous driv-ing via intention-aware physical latent world model. In 2025 International Conference on Computer Vision (ICCV), Honolulu, Hawai’i, USA. Zitkovich B, Yu T, Xu S, Xu P, Xiao T, Xia F, Wu J, Wohlhart P, Welker S, Wahid A, and Vuong Q, Rt-2: Vision-language-action models transfer web knowledge to robotic control. In 2023 Conference on Robot Learning (CoRL), pp. 2165-2183. Zhao Z, Lee W S, and Hsu D. (2024a) Large language models as commonsense knowledge for large-scale task planning. In Advances in Neural Information Processing Systems, New Orleans, Louisiana, USA. 36. Zhao L, Wang Y, and Huang S (2024b) Occupancy-slam: Simultaneously optimizing robot poses and continuous occupancy map. arXiv preprint arXiv:2405.10743. Zheng K, Sung Y, Konidaris G, and Tellex S (2021) Multi-resolution POMDP planning for multi-object search in 3D. In 2021 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS). Prague, Czech Republic: IEEE, pp. 2022-2029. Zheng K, Chitnis R, Sung Y, Konidaris G, and Tellex S (2022) Towards optimal correlational object search. In International Conference on Robotics and Automation (ICRA), Philadelphia, PA, USA: IEEE, pp. 7313-7319. Zheng K, Paul A, and Tellex S. (2023). A system for generalized 3d multi-object search. arXiv preprint arXiv:2303.03178. Zhou K, Zheng K, Pryor C, Shen Y, Jin H, Getoor L, Wang XE. Esc: Exploration with soft commonsense constraints for zero-shot object navigation. In International Conference on Machine Learning 2023 Jul 3 (pp. 42829-42842). PMLR.  
+
+> Prepared using sagej.cls
+
+34 X XX(X) 
+
+LLM prompts example for Sayplan 
+
+Content: You are a Fetch robot in an unexplored house. Your task is to find and remove a blue snack box, its corresponding property is labelled as target object, based on your head camera. You have the coordinates of the four vertices of each workspace, and all objects are limited to these known workspaces: Workspace 1: (5.7, 0.61), (5.66, 1.29), (7.5, 1.29), (7.5, 0.61). You know the move ranges of your pan (radian), tilt (radian), and lift (meter) joints are: (-0.261666667, 0.261666667), (0.0, 0.5), (0.0, 0.4) 
+
+You have the following actions available that you can use to achieve this task: 
+
+1. navigate(room name, object name): navigate to a configuration (pose and joint angles) that can observe this object in this room. 2. claim to obstacle(room name, object name): claim this object is the obstacle object, when the object has a high possibility to be the obstacle object. 3. claim to target(room name, object name): claim this object is the target object, when the object has a high possibility to be the obstacle object. 4. remove(room name, object name): remove this target or obstacle object to complete task or free some field of view for better exploration. 5. explore(room name): randomly select a frontier to explore the unknown space near one of the rooms that is not fully explored yet. 6. done(): call when the task (target object is removed) is completed or if you are unable to take any further actions. 
+
+Output Response Format: Analysis: describe where you could find the objects of interest and what actions you need to execute to get there. 
+
+Reasoning: justify why the next action is important to solve the task. 
+
+Command: function call’, ’role’: ’system’, {’content’: ’Scene Graph: {nodes: [{pos: (8.383142272116066, 0.3976500981658697, 0), pos map: (131.756, 365.228), room id: 0, node type: <NODETYPE.ROOM: 2>, frontier points: set(), id: room-0 },
+
+{bbox: array([0.32000007, 0.26699999, 0.24999995]), semantic class name: obstacle object, pos: (7.150000083170853, 0.9799999103916819), orn: -2.7124770079457416, name: object 1, states: not move able, viewpoint: array([6.802738406863281, -0.4402219209680013, 0.0, 0.0, 0.0, 0.5381722605035929, 0.8425332814648375, 0.0, 0.0, 0.0], dtype=object), room id: 0, pos map: (143, 340, 0), closest vor node: (134.0, 330.0), node type: <NODETYPE.OBJECT: 3>, pos in world: (7.12174225331974, 0.9598501065433025), closest vor node in world: (6.621742245869159, 0.50985009983778), id: object 1 }, {bbox: array([0.26000006, 0.14, 0.31999994]), semantic class name: updating object(reach obstacle index), pos: (6.550000178538284, 1.0499998436344797), orn: 3.1415926469292366, name: object 2, states: not move able, viewpoint: array([6.811979331502813, -0.4331814501971404, 0.0, 0.0, 0.0, -0.2516452028034676, 0.9676042215118779, 0.0, 0.0, 0.0], dtype=object), room id: 0, pos map: (144, 328, 0), closest vor node: (133.5, 339.5), node type: <NODETYPE.OBJECT: 3>, pos in world: (6.521742244379043, 1.0098501072883606), closest vor node in world: (7.096742252947211, 0.4848500994652509), id: object 2 }, {bbox: array([0.09000008, 0.12, 0.11999994]), semantic class name: updating object(reach obstacle index), pos: (5.900000083170853, 0.8599999056233103), orn: -0.48065383129846045, name: object 3, states: move able, viewpoint: array([4.561832653037297, 0.8680199317907509, 0.0, 0.0, 0.0, -0.9903361548528572, 0.13868778025208775, 0.0, 0.0, 0.0], dtype=object), room id: 0, pos map: (141, 315, 0), closest vor node: (141.0, 310.0), node type: <NODETYPE.OBJECT: 3>, pos in world: (5.871742234693288, 0.8598501050531864), closest vor node in world: (5.621742230967998, 0.8598501050531864), id: object 3 },
+
+{bbox: array([0.13000007, 0.07, 0.14999995]), semantic class name: target object, pos: (7.0999998924359895, 0.6499998674763376), orn: -3.0692694745833773, name: object 4, states: move able, viewpoint: array([6.802738406863281, -0.4402219209680013, 0.0, 0.0, 0.0, 0.5381722605035929, 0.8425332814648375, 0.0, 0.0, 0.0], dtype=object), room id: 0, pos map: (136, 339, 0), closest vor node: (133.5, 339.5), node type: <NODETYPE.OBJECT: 3>, pos in world: (7.071742252574682, 0.6098501013278961), closest vor node in world: (7.096742252947211, 0.4848500994652509), id: object 4 }, {location: room-0, id: robot }], links: [room-0 - object 2, room-0 - object 4, room-0 - object 1, room-0 - object 3, room-0 - robot] }, 
+
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 35 
+
+History: explore(room-0) - failure, claim to target(room-0, object 4) - success, navigate(room-0, object 4) - success, claim to target(room-0, object 4) - failure, explore(room-0) - failure. What is the best next action to complete the task as efficiently as possible? I you don’t think that the object can be found in a known room, prioritize opening doors over exploring a room. 
+
+Remember: 
+
+1. Respond with a function call 2. You can only use the objects and rooms that you have already found. Object names have to match the description exactly. 3. You can only explore the found rooms that contain unexplored areas. The explore action allows the robot to adjust its configuration, change its field of view, and make an initial observation of the object. This first observation is essential, as it provides the basis for updating the object and reaching its index. 4. To observe objects from different directions first to get the belief update until reach obstacle or target index. If the updating object reaches the obstacle or target index, call the claim action first. If it is claimed as a target object (greatly welcome), directly call the remove action and then be done. Task completed and you do not need to navigate to it. 5. If an object is likely to be the target object, it is good to navigate to this object and observe it from different directions for later claim action. 6. The claim of both the target and obstacle objects is encouraged. After an object is claimed as the obstacle object, it is legal to remove it to free some field of view. However, the removal action often fails in real-world settings, so obstacle removal should be used cautiously and only attempted occasionally. 7. If some actions are repeated several times, they may not be possible and you need to observe that object from more directions using explore action. 8. Each object needs to be claimed as the target or obstacle object first and then it is legal to remove it. Directly remove is illegal. 9. You can’t explore rooms that haven’t been found yet. 
+
+LLM prompts example for low-level navigation action 
+
+{Content: This is the response result in this step: **Analysis:** The target object "object 3" has been successfully identified in room-0. The next best action would be to navigate to the updating object "object 4" and observe it from different directions to update its belief until reaching the obstacle index. **Reasoning:** By navigating to the updating object "object 4" and observing it from different directions, we can update its belief until reaching the obstacle index. This will allow us to determine if "object 4" is the obstacle object that needs to be removed to complete the task efficiently. **Command:** navigate(room-0, object 4) The object coordinate is (5.900000083170853, 0.8599999056233103). The last robot configuration (pose, pan joint, tilt joint, lift joint) viewed this object is [4.991183852927918 1.2915176222424134] (coordinate), -0.3063040772599799 (orientation), 0.0 (pan angle: radian), 0.0 (tilt angle: radian), 0.0 (lift height: meter). You know the move ranges of your pan (radian), tilt (radian), and lift (meter) joints are: (-0.261666667, 0.261666667), (0.0, 0.5), (0.0, 0.4) ’, ’role’: ’system’ } 
+
+> Prepared using sagej.cls
+
+36 X XX(X) 
+
+{’Content’: ’Can you pick out a position from following coordinates and determine the orientation, pan joint, tilt joint, lift joint within given ranges for next pose to help robot to view the other side of the object? (4.555492215079635, 0.34620009739920476), (5.6804422318426955, 2.4674501290082924), (4.621742216066837, 0.8598501050531864), (6.34674224177134, 2.4848501292675733), (4.999192221691279, 1.3299501120582216), (6.046742237300991, 2.507350129602849), (7.096742252947211, -0.01514990798532967), (7.221742254809856, -0.18179991046860788), (6.59674224549663, 2.384850127777457), (7.302942256019831, 2.459550128890574), (6.59674224549663, 2.449150128735602), (5.146742223889946, 0.584850100955367), (5.996742236555933, 2.5098501296401023), (8.39674227231872, 0.7348501031905412), (8.39674227231872, 1.0348501076608896), (8.39674227231872, 1.334850112131238), (4.830942219184161, 1.0848501084059476), (7.696742261887907, 2.37805012767613), (7.396742257417559, 2.453050128793717), (6.9967422514570945, 2.4848501292675733), (6.696742246986746, 2.4705501290544865), 
+
+Remember: 
+
+1. Respond with a function call. 2. Make sure that the output vector only includes 6 numbers corresponding to the position (x axis), the position (y axis), orientation, pan joint, tilt joint, lift joint and divided by ;. 
+
+}
+
+LLM prompts example for MoMa-LLM 
+
+Content: You are a Fetch robot in an unexplored house. Your task is to find and remove a blue snack box, its corresponding property is labelled as target object, based on your head camera. You have the coordinates of the four vertices of each workspace and all objects are limited in these known workspaces: Workspace 1: (5.7, 0.61), (5.66, 1.29), (7.5, 1.29), (7.5, 0.61). You know the move ranges of your pan (radian), tilt (radian), and lift (meter) joints are: (-0.261666667, 0.261666667), (0.0, 0.5), (0.0, 0.4) 
+
+You have the following actions available that you can use to achieve this task: 
+
+1. navigate(room name, object name): navigate to a configuration (pose and joint angles) that can observe this object in this room. 2. claim to obstacle(room name, object name): claim this object is the obstacle object, when the object has a high possibility to be the obstacle object. 3. claim to target(room name, object name): claim this object is the target object, when the object has a high possibility to be the obstacle object. 4. remove(room name, object name): remove this target or obstacle object to complete task or free some field of view for better exploration. 5. explore(room name): randomly select a frontier to explore the unknown space near one of the rooms that is not fully explored yet. 6. done(): call when the task (target object is removed) is completed or if you are unable to take any further actions. 
+
+Output Response Format: Analysis: describe where you could find the objects of interest and what actions you need to execute to get there. 
+
+Reasoning: justify why the next action is important to solve the task.  
+
+> Prepared using sagej.cls
+
+Yongbo Chen et al. 37 
+
+Command: function call ’role’: ’user’, {’content’: ’You are currently in the room-0. You are standing next to the following objects: [object 2, object 3, object 4, object 5, object 6, object 7]. Furthermore, you have found the following rooms, objects, and the corresponding properties of the objects in the house so far: - The names of the objects in room-0: [object 1, object 2, object 3, object 4, object 5, object 6, object 7]. - The corresponding properties of the objects in room-0: [obstacle object, obstacle object, obstacle object, obstacle object, updating object(reach obstacle index), obstacle object, updating object(reach target index)]. The only found rooms are [room-0] No other rooms are found. Your 5 previous actions were: navigate(room-0, object 5) - success, navigate(room-0, object 7) - success, claim to target(room-0, object 7) - failure, explore(room-0) -failure, navigate(room-0, object 7) - success. What is the best next action to complete the task as efficiently as possible? Remember: 
+
+1. Respond with a function call. 2. You can only use the objects and rooms that you have already found. Object names have to match the description exactly. 3. You can only explore the found rooms that contain unexplored areas. The explore action allows the robot to adjust its configuration, change its field of view, and make an initial observation of the object. This first observation is essential, as it provides the basis for updating the object and reaching its index. 4. To observe objects from different directions first to get the belief update until reach obstacle or target index. If the updating object reaches the obstacle or target index, call the claim action first. If it is claimed as a target object (greatly welcome), directly call remove action and then done. Task completed and You do not need to navigate to it. 5. If an object is likely to be target object, it is good to navigate to this object and observe it from different directions for later claim action. 6. The claim of both the target and obstacle objects is encouraged. After an object is claimed as the obstacle object, it is legal to remove it to free some field of view. However, the removal action often fails in real-world settings, so obstacle removal should be used cautiously and only attempted occasionally. 7. If some actions are repeated several times, they may not be possible and you need to observe that object from more directions using the explore action. 8. Each object needs to be claimed as the target or obstacle object first and then it is legal to remove it. Directly removing is illegal. 9. You can’t explore rooms that haven’t been found yet.’ },
+
+LLM prompts example for MoMa-LLM with more geometry properties 
+
+Content: You are a Fetch robot in an unexplored house. Your task is to find and remove a blue snack box, its corresponding property is labeled as target object based on your head camera. You have the coordinates of the four vertices of each workspace and all objects are limited to these known workspaces: Workspace 1: (5.7, 0.61), ((5.66, 1.29)), ((7.5, 1.29)), ((7.5, 0.61)). You know the move ranges of your pan (radian), tilt (radian), and lift (meter) joints are: (-0.261666667, 0.261666667), (0.0, 0.5), (0.0, 0.4) 
+
+You have the following actions available that you can use to achieve this task:  
+
+> Prepared using sagej.cls
+
+38 X XX(X) 
+
+1. navigate(room name, object name): navigate to a configuration (pose and joint angles) that can observe this object in this room. 2. claim to obstacle(room name, object name): claim this object is the obstacle object, when the object has a high possibility to be the obstacle object. 3. claim to target(room name, object name): claim this object is the target object, when the object has a high possibility to be the obstacle object. 4. remove(room name, object name): remove this target or obstacle object to complete task or free some field of view for better exploration. 5. explore(room name): randomly select a frontier to explore the unknown space near one of the rooms that is not fully explored yet. 6. done(): call when the task (target object is removed) is completed or if you are unable to take any further actions. 
+
+Output Response Format: Analysis: Describe where you could find the objects of interest and what actions you need to execute to get there. 
+
+Reasoning: justify why the next action is important for solving the task. 
+
+Content: ’You are currently in the room-0. You are standing next to the following objects: [object 2]. Furthermore, you have found the following rooms, objects, and the corresponding properties of the objects in the house so far: - The names of the objects in room-0: [object 2]. - The corresponding properties of the objects in room-0: [updating object (likely to be obstacle object)]. - The corresponding poses of the objects (coordinate and quaternion, 7 elements each object) in room-0: [(5.900000083170853, 0.8599999056233103, 0.8800000636606228, 0.0, 0.0, -0.2380201103608644, 0.9712600145230841)]. - The corresponding sizes of the objects (longest horizontal axis is x axis, shorter horizontal axis is y axis, and vertical one is z axis, 3 elements each object) in room-0: [(0.09000007805983846, 0.12000000067840325, 0.11999994465407036)]. The only found rooms are [room-0] No other rooms are found. Your 5 previous actions were: explore(room-0) - success, claim to obstacle(room-0, object 2) - failure, explore(room-0) - success, explore(room-0) - success, explore(room-0) - success. What is the best next action to complete the task as efficiently as possible? 
+
+Remember: 
+
+1. Respond with a function call. 2. You can only use the objects and rooms that you have already found. Object names have to match the description exactly. 3. You can only explore the found rooms that contain unexplored areas. The explore action allows the robot to adjust its configuration, change its field of view, and make an initial observation of the object. This first observation is essential, as it provides the basis for updating the object and reaching its index. 4. To observe objects from different directions first to get the belief update until reach obstacle or target index. If the updating object reaches the obstacle or target index, call the claim action first. If it is claimed as a target object (greatly welcome), directly call remove action and then done. Task completed and You do not need to navigate to it. 5. If an object is likely to be target object, it is good to navigate to this object and observe it from different directions for later claim action. 6. The claim of both the target and obstacle objects is encouraged. After an object is claimed as the obstacle object, it is legal to remove it to free some field of view. However, the removal action often fails in real-world settings, so obstacle removal should be used cautiously and only attempted occasionally. 7. If some actions are repeated several times, they may not be possible and you need to observe that object from more directions using explore action. 8. Each object needs to be claimed as the target or obstacle object first and then it is legal to remove it. Directly remove is illegal. 9. You can’t explore rooms that haven’t been found yet.’,
