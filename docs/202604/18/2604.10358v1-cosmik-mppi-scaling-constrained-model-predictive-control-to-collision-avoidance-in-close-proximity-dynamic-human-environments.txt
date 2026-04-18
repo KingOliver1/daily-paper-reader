@@ -1,0 +1,482 @@
+Title: COSMIK-MPPI: Scaling Constrained Model Predictive Control to Collision Avoidance in Close-Proximity Dynamic Human Environments
+
+URL Source: https://arxiv.org/pdf/2604.10358v1
+
+Published Time: Tue, 14 Apr 2026 00:54:49 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# COSMIK-MPPI: Scaling Constrained Model Predictive Control to Collision Avoidance in Close-Proximity Dynamic Human Environments 
+
+Ege Gursoy 1∗, Maxime Sabbah 1∗, Arthur Haffemayer 2, Joao Cavalcanti Santos 3,Pietro Noah Crestaz 1,6, Vladimir Petrik 2, Nicolas Mansard 1,4, Vincent Bonnet 1,5
+
+Abstract — Ensuring safe physical interaction between torque-controlled manipulators and humans is essential for deploying robots in everyday environments. Model Predictive Control (MPC) has emerged as a suitable framework thanks to its capacity to handle hard constraints, provide strong guar-antees and zero-shot adaptability through predictive reason-ing. However, Gradient-Based MPC (GB-MPC) solvers have demonstrated limited performance for collision avoidance in complex environments. Sampling-based approaches such as Model Predictive Path Integral (MPPI) control offer an alter-native via stochastic rollouts, but enforcing safety via additive penalties is inherently fragile, as it provides no formal con-straint satisfaction guarantees. We propose a collision avoidance framework called COSMIK-MPPI combining MPPI with the the toolbox for human motion estimation RT-COSMIK and the Constraints-as-Terminations transcription, which enforces safety by treating constraint violations as terminal events, without relying on large penalty terms or explicit human motion prediction. The proposed approach is evaluated against state-of-the-art GB-MPC and vanilla MPPI in simulation and on a real manipulator arm. Results show that COSMIK-MPPI achieves a 100% task success rate with a constant computation time (22 ms) largely outperforming GB-MPC. In simulated infeasible scenarios, COSMIK-MPPI consistently generates collision-free trajectories, contrary to vanilla MPPI. These properties enabled safe execution of complex real-world human–robot interaction tasks in shared workspaces using an affordable markerless human motion estimator, demon-strating a robust, compliant and practical solution for pre-dictive collision avoidance (cf. results showcased in https: //exquisite-parfait-ffa925.netlify.app ). 
+
+I. I NTRODUCTION 
+
+Trajectory planning and safe control of robotic manip-ulators in human-shared environments remains challenging due to nonlinear dynamics, sensing uncertainty, and strict safety requirements. In human–robot interaction, robots must guarantee collision avoidance under limited reaction time and noisy perception, while operating in dynamic environments shaped by hard-to-predict human motion. These constraints make anticipatory and robust motion generation a central challenge for collaborative manipulation [1], [2]. Collision avoidance for articulated manipulators has been widely studied using reactive and predictive approaches [3],        
+
+> * equal contribution, corresponding author: egursoy@laas.fr
+> 1LAAS-CNRS, Universit´ e de Toulouse, CNRS, Toulouse, France
+> 2CIIRC, Czech Technical University, Prague
+> 3LIRMM, Universit´ e de Montpellier, CNRS, Montpellier, France
+> 4Artificial and Natural Intelligence Toulouse Institute (ANITI), Toulouse, France
+> 5Image and Pervasive Access Laboratory (IPAL), CNRS-UMI, 2955, Singapore
+> 6Industrial Engineering Department, University of Trento, Trento, Italy
+
+(a) 
+
+(b) (c) 
+
+Fig. 1: Visualization of the NLF-based human mesh recov-ery [11] (left) and human collision capsules (rendered as cylinders only visually) and output of the inverse kinematics pipeline used to position collision primitives (right). [4], [5], [6]. Reactive methods, such as damped least-squares velocity filters or potential-field repulsion strategies, are computationally efficient but remain fundamentally myopic. As they do not explicitly reason over a planning horizon, they can exhibit oscillations, conservative behaviors near narrow passages, or unstable avoidance in dynamic scenarios [3], [5]. Predictive control methods, on the other hand, enable horizon-based anticipation and principled trade-offs between task execution, dynamics, and safety [7], [6]. In torque-controlled systems, such formulations further allow collision avoidance to be handled directly at the level of actuator constraints. Most predictive collision avoidance approaches rely on Gradient-Based Model Predictive Control (GB-MPC) formulations, which have mainly relied on second order opti-mization solvers [8], [9], yet raising several bottlenecks. First of all, the non-convexity of collision constraints typically induce multiple homotopy classes of feasible solutions. As a result, GB-MPC solvers are highly sensitive to initialization, may converge to suboptimal local minima, or may fail to meet real-time constraints due to the associated computa-tional burden. These issues were highlighted in the works in-troducing diffusion-warm-start MPC [10] and SafeFlowMPC [6]. Secondly, GB-MPC poorly scales when facing many constraints simultaneously saturating. As collision pairs must be created between several convex shapes, a typical robotic application deals with multiple collision constraints, for which GB-MPC has a hard time to handle, as it will be shown in the present study. An additional limitation is the reliance on accurate ob-stacle motion estimation and prediction. Optimization-based predictive controllers typically assume access to present 
+
+> arXiv:2604.10358v1 [cs.RO] 11 Apr 2026
+
+and future obstacle trajectories, which is unrealistic in col-laborative scenarios characterized by noisy sensing, partial observability, and non-stationary human behavior. This issue is further exacerbated by markerless human pose estimation. Despite recent progress, including volumetric human shape representations such as Neural Localizer Fields (NLF) [11], markerless approaches remain sensitive to occlusions, view-point changes, and latency, leading to noisy and biomechan-ically inconsistent pose estimates. These errors propagate directly to collision constraints, forcing a trade-off between overly conservative safety margins and optimistic predictions that may compromise safety. Sampling-based predictive control methods, such as Model Predictive Path Integral (MPPI) control, offer an alternative by evaluating large sets of control perturbations through forward rollouts of the system dynamics, rather than relying on local gradient information [12]. This enables MPPI to naturally handle non-smooth objective functions and explore multiple candidate futures in parallel, reducing sensitiv-ity to local minima induced by collision constraints [13]. Moreover, uncertainty in human pose estimation can be incorporated directly by sampling obstacle configurations from noisy measurements, without committing to a single predicted human trajectory. Recent works have demonstrated the feasibility of MPPI for high-dimensional manipulators in rather simple scenarios involving dynamic obstacles [14]. However, in most MPPI formulations, safety constraints are handled through additive penalty terms in the running costs. Finite penalties cannot reliably prevent constraint violations, while large penalties introduce severe tuning difficulties and numerical instability. Furthermore, early ter-mination of violating rollouts often used to reduce computa-tion, can artificially reduce accumulated cost, inadvertently encouraging unsafe behaviors. To address these limitations, Constraints as Terminations (CaT) [15] was proposed as a principled mechanism that treats constraint violations as terminal events, making unsafe trajectories highly unlikely under the sampling distribution. While CaT was originally introduced in reinforcement learning, constraint discounting within MPPI was first proposed in TD-CD-MPPI [16], where it was combined with value-function learning for locomotion control. The present work uses CaT by proposing a compliant COSMIK-MPPI formulation for predictive collision avoid-ance for human–robot interactions in shared workspace. The method operates with noisy, markerless human perception and avoids explicit human motion prediction. In light of the above limitations of existing predictive collision avoidance methods for robotic manipulators, the contributions of this paper are:  
+
+> •
+
+A new COSMIK-MPPI controller for complex dynamic collision avoidance.  
+
+> •
+
+A systematic comparison between state-of-the-art GB-MPC [17], vanilla MPPI [18], and the proposed COSMIK-MPPI formulation for collision avoidance, analyzing robustness to local minima, sensitivity to human motion uncertainty, compliance and real-time feasibility in simulation and on a real robotic manip-ulator arm.  
+
+> •
+
+A demonstrator for human–robot interactions in shared workspace that operates directly with markerless, noisy human pose estimates. II. M ETHODS 
+
+A. Gradient-Based Model Predictive Control 
+
+The Optimal Control Problem (OCP) solved in this part, is identical to the one described in [10]: 
+
+min  
+
+> x,u
+> T−1
+
+X
+
+> t=0
+
+ℓt(xt, ut) + ℓT (xT ) (1a) subject to xt+1 = ft(xt, ut) ∀ 0 ≤ t < T (1b) 
+
+ct(xt, ut) ≥ 0, ∀ 0 ≤ t < T (1c) 
+
+cT (xT ) ≥ 0 (1d) where x = ( x0, . . . , xT ) and u = ( u0, . . . , uT −1) are the discretized state-control sequences, and more specifically, 
+
+xt = ( qt, vt) is the robot state and ut is the joint torques at time t; ft is the discretized robot dynamics model along the horizon of length T ; ℓt are the running costs and ℓT is the terminal cost; ct and cT represent the inequality constraints (comprising the collision avoidance ones defined as in [17]) for the running and the terminal nodes. The OCP running costs ℓt for the time t are composed of:  
+
+> •
+
+Goal reaching task cost: 
+
+ℓee (xt) = || log( T −1 
+
+> goal
+
+· Tee (qt)) || 2 
+
+> Qee
+
+(2)  
+
+> •
+
+State regularization cost: 
+
+ℓx(xt) = || xt − x0|| 2 
+
+> Qx
+
+(3)  
+
+> •
+
+Control regularization cost: 
+
+ℓu(xt, ut) = || u − ugrav (qt)|| 2 
+
+> Qu
+
+(4) with Qee ⪰ 0 a weight matrix setting the relative impor-tance of translational and rotational errors; Qx ⪰ 0 and 
+
+Qu ⪰ 0 the weight diagonal matrices of the state and control penalizations; Tgoal ∈ SE(3) is the pose of the target; 
+
+ugrav is the gravity compensation torque computed from the robot dynamics model. The terminal cost ℓT is defined the same without the control regularization. The OCP is solved in a receding-horizon scheme and implemented within the Crocoddyl library [8] using the constrained Sequential Quadratic Programming (SQP) solver from the mim solver library [19]. 
+
+B. Vanilla Model Predictive Path Integral 
+
+As a sampling-based baseline, we consider the STORM [20] formulation of MPPI, which performs receding-horizon optimization in joint space. At each control cycle, the con-troller samples a batch of open-loop control sequences, rolls them out through an approximate model of the manipulator, evaluates their finite-horizon costs, and updates the sampling distribution toward lower-cost trajectories. Reusing the formulation introduced in the previous sec-tion, MPPI maintains a Gaussian distribution over control sequences : 
+
+πμ = 
+
+> T−1
+
+Y
+
+> t=0
+
+N (ut; μt, Σt) (5) parameterized by the sequence of means μ =(μ0, . . . , μT −1) and covariance matrices Σ =(Σ0, . . . , ΣT −1).At each control update, K control sequences are sampled from (5) and propagated through the approximate dynamics model. Starting from the measured initial state x0, the rollout is formulated as: 
+
+uk = ( u0,k , u1,k , . . . , uT −1,k ), k = 1 , . . . , K (6) 
+
+xt+1 ,k = ft(xt,k , ut,k ), t = 0 , . . . , T − 1 (7) Each rollout is assigned a discounted finite-horizon cost: 
+
+Lk = 
+
+> T−1
+
+X
+
+> t=0
+
+γt ℓt,k + γT ℓT,k (8) where γ ∈ [0 , 1] is a discount factor, for rollout k, ℓt,k is the running cost at timestep t, and ℓT,k is the terminal cost. In this vanilla formulation, 
+
+ℓt,k = ℓee (xt,k )+ ℓx(xt,k )+ ℓu(xt,k , ut,k )+ ℓcoll (xt,k ) (9) with ℓee , ℓx, and ℓu the costs respectively introduced in (2), (3), and (4). The additional collision penalty cost is computed from convex approximations of the robot links, the environment, and the human body. Let dsgn  
+
+> r
+
+(xt,k ) denote the signed distance associated with collision pair r, where neg-ative values indicate free space and positive values indicate overlap. To ensure a non-negative collision cost, the cost is defined as: 
+
+ℓcoll (xt,k ) = X
+
+> r
+
+max( dsgn  
+
+> r
+
+(xt,k ) + dth , 0) (10) where dth > 0 is the safety-margin threshold. Following MPPI, the rollout weights are computed as 
+
+ηk =exp 
+
+
+
+− 1 
+
+> β
+
+(Lk − min i=1 ,...,K Li)
+
+PKj=1 exp 
+
+
+
+− 1 
+
+> β
+
+(Lj − min i=1 ,...,K Li)
+
+ (11) where β > 0 is the temperature parameter. These weights define a soft-min over sampled trajectories and assign larger importance to lower-cost rollouts. Finally, the control sequence is updated as a weighted average of the sampled controls 
+
+μh ← (1 − αμ) μh + αμKX
+
+> k=1
+
+ηkut,k , t = 0 , . . . , T − 1 (12) where αμ ∈ (0 , 1] is a step size. The control is applied in a receding-horizon manner. Only the first control of the optimized sequence is applied, after which the horizon is shifted and the optimization is repeated from the new measured state. This allows MPPI to react online to perception noise, model mismatch, and changes in the human configuration. 
+
+C. COSMIK–Model Predictive Path Integral 
+
+To replace the additive collision penalty used in vanilla MPPI, the proposed formulation relies on CaT [15]. The motivation is that, in a standard additive-cost formulation, collision avoidance remains a soft trade-off against the task objective and therefore depends strongly on the tuning of the collision weight. In contrast, CaT treats collision proximity as a progressive loss of future utility. Rollouts that come too close to the obstacle become less competitive over the remainder of the horizon. The task-related stage and terminal costs are therefore defined separately as 
+
+ℓtask  
+
+> t,k
+
+= ℓee (xt,k ) + ℓx(xt,k ) + ℓu(xt,k , ut,k ) (13) 
+
+ℓtask  
+
+> T,k
+
+= ℓee (xT,k ) + ℓx(xT,k ) (14) The collision constraint provides a dense nonnegative violation magnitude 
+
+vct,k = ℓcoll (xt,k ), (15) with ℓcoll defined in (10). Intuitively, vct,k = 0 corresponds to a safe rollout at stage t, while increasing values indicate that the rollout is approaching or violating the collision margin. This violation is mapped to a per-stage termination hazard 
+
+δct,k = pc 
+
+> max
+
+clip 
+
+ vct,k 
+
+cc
+
+> max
+
+, 0, 1
+
+
+
+(16) where pc 
+
+> max
+
+∈ (0 , 1] controls the maximum termination probability and cc 
+
+> max
+
+is updated online as an exponential moving average of the maximum observed violation: 
+
+cc 
+
+> max
+
+← τ cc cc 
+
+> max
+
++ (1 − τ cc ) max  
+
+> t,k
+
+vct,k τ cc ∈ [0 , 1) (17) This normalization makes the hazard adaptive to the scale of the currently observed violations and avoids having to hand-tune a fixed normalization constant. The corresponding rollout survival factor is then 
+
+St,k =
+
+> t
+
+Y
+
+> m=0
+
+(1 − δcm,k ) (18) which can be interpreted as the probability that rollout k has remained collision-safe up to stage t. As a result, trajectories that repeatedly approach collision lose future influence in the MPPI weighting, whereas safe trajectories preserve their contribution over the full horizon. This provides a stronger safety bias than a standard additive collision term while retaining a dense signal for optimization. A direct multiplication of the MPPI costs by St,k would be incorrect in a cost-minimization setting, since terminating a rollout early would also stop the accumulation of future costs. To preserve the CaT interpretation, we introduce a shifted positive reward associated with the task cost: 
+
+rt,k = b − ℓtask 
+
+> t,k
+
+rT,k = bT − ℓtask 
+
+> T,k
+
+(19) where b and bT are baselines chosen such that rt,k ≥ 0 and 
+
+rT,k ≥ 0 for all sampled rollouts. In practice, the baselines (a)  
+
+> (b) (c)
+
+Fig. 2: Experimental validation, reported in [21], comparing RT-COSMIK human motion estimation (green) with a ref-erence marker-based optical motion capture system (grey) during a collaborative human–robot scenario. are updated online using upper-envelope exponential moving averages: 
+
+¯b = max  
+
+> t,k
+
+ℓtask  
+
+> t,k
+
+, b ← max  τbb + (1 − τb)¯b, ¯b + ε
+
+¯bT = max  
+
+> k
+
+ℓtask  
+
+> T,k
+
+, bT ← max  τbbT + (1 − τb)¯bT , ¯bT
+
+ + ε
+
+(20) where τb ∈ [0 , 1) and ε > 0 is a small numerical constant. The modified trajectory score is then written as the pseudo-cost 
+
+LCaT  
+
+> k
+
+= − 
+
+> T−1
+
+X
+
+> t=0
+
+γtSt,k rt,k − γT ST,k rT,k (21) Equivalently, −St,k rt,k and −ST,k rT,k can be interpreted as running and terminal pseudo-costs, which allows the MPPI cost-to-go to be reused. The importance weight of rollout k is finally computed as 
+
+ηk =exp 
+
+
+
+− 1
+
+> β
+
+ LCaT  
+
+> k
+
+− min i=1 ,...,K LCaT 
+
+> i
+
+PKj=1 exp 
+
+
+
+− 1
+
+> β
+
+ LCaT  
+
+> j
+
+− min i=1 ,...,K LCaT 
+
+> i
+
+ (22) This formulation preserves the sampling-based nature of MPPI and replaces additive collision penalties by termina-tions. Rollouts that approach the human too closely experi-ence a drop in survival and therefore lose future contribution, which strongly reduces their importance weights without requiring excessively large collision costs. For the whole study, we call this framework COSMIK-MPPI to differentiate it from vanilla MPPI. III. I MPLEMENTATION DETAILS 
+
+A. Real-time human motion estimation 
+
+Human motion estimation was performed using RT-COSMIK [21], a markerless solution based on two RGB cameras and a biomechanically constrained inverse kine-matics pipeline. Across a range of industrial tasks, joint angles are estimated with an average root-mean-square error of approximately 7 degrees. RT-COSMIK is designed to be robust to noisy and incomplete observations, making it well suited for human–robot interaction scenarios. In its latest version, RT-COSMIK is based on NLF [11], which represent the human body as a continuous implicit field mapping 3D spatial locations to body-part occupancy, enabling pose and shape estimation without explicit keypoint detection. By formulating localization as dense field regres-sion, NLF avoids brittle keypoint associations and remains robust to occlusions and self-collisions. Inference relies on efficient neural field queries followed by lightweight opti-mization, enabling real-time operation (10 to 30 ms). Fig.2 illustrates representative accuracy and robustness results, extracted from [21], comparing RT-COSMIK markerless estimates against a reference marker-based optical motion capture system. RT-COSMIK pipeline is based on 3 steps: 1) human pose estimation: relying on GPU TensorRT YOLO model [22] for human detection and on NLF model for estimating a dense set of 2D body keypoint positions expressed in each camera frame (Fig. 1). 2) triangulation and filtering: which converted the 2D key-points extracted in multiple cameras into 3D keypoints using a direct linear transform with the calibrated camera parameters; 3) inverse kinematics: which uses a full body biomechan-ical model to recover the vector of joint angles match-ing at best the virtual markers solving a constrained quadratic programming problem. The overall frequency of the pipeline was benchmarked at 20Hz with two rolling shutter RGB webcams (1280 x 720 MJPEG, 40fps) positioned approximatly at 3 m of the scene to see the participant’s upper limbs. 
+
+B. Collision Avoidance 
+
+For real-time performance, both the robot and the hu-man body are approximated as unions of strictly convex primitives, primarily capsules. Capsules provide a tight and smooth approximation of articulated limbs while preserving closed-form distance computation between pairs. The signed distance between two capsules admits an analytical solution based on segment-to-segment distance, thus enabling high-frequency evaluation during rollouts. As shown in Fig. 1, 11 capsules are attached to the robot (red), 5 to the scene (table and boxes), and 8 to the human (blue, rendered as cylinders for visuals only). In that case, the control scheme consider a total of 24 collisions pairs. 
+
+C. Low-level controller 
+
+For fairness, the comparison between GB-MPC and MPPI has been performed using the low-level joint torque con-troller available on the robot. Yet, the torques references and the gains used are differently obtained. 
+
+a) GB-MPC: The dynamic model f (x, u) in Eq. 1.b is implemented as a feed-forward torque integration, where u
+
+is the joint torque, following the classical approach of GB-MPC litterature [8], [23]. As the GB-MPC steps take longer than 1ms (the direct low-level control frequency), the Ricatti gains are used to interpolate between two solver iterations. The commanded joint torques are then: 
+
+τ = u⋆(x0) + K⋆(x0) ( x − x0) (23) where x is the latest state measurement, x0 is the state measurement available when the latest OCP solution has Scenario 1 Scenario 2 Scenario 3   
+
+> Scenario 4 Scenario 5 Scenario 6
+
+Fig. 3: Views of the 6 scenarios used to assess collision avoidance abilities in simulation.The red and green dots are the alternative targets. been computed; u⋆, K⋆ are given by the OCP and its derivatives, and called the feedforward and the feedback Ricatti gains. The resulting controller has the shape of an impedance controller, whose gains are defined by the resolution of the problem. 
+
+b) MPPI: Following the MPPI literature [13], [14], the rollout dynamics model ft in (7) is implemented as a joint-space second-order integrator with acceleration control. The control input ut = at is interpreted as a desired joint acceleration. MPPI returns an updated horizon-length con-trol sequence {u⋆t+h}T −1 
+
+> h=0
+
+, of which only the first element, denoted u⋆(x0), is applied. This command is integrated online with step ∆t to produce the next reference state 
+
+x⋆
+
+> 1
+
+(x0, u⋆(x0)) . The commanded joint torques between two solver iterations are then: 
+
+τ = τ ff + Kfix (x⋆
+
+> 1
+
+(x0, u⋆(x0)) − x) (24) where τ ff = RNEA( q⋆ 
+
+> 1
+
+, v⋆ 
+
+> 1
+
+, u⋆(x0)) is the feedforward inverse-dynamics torque typically obtained thanks to the Pinocchio library [24], and Kfix is a fixed state-feedback gain acting on the tracking error. IV. S IMULATION BENCHMARK 
+
+As shown in Fig. 3, predictive collision avoidance is evaluated in simulation using six scenarios of increasing geometric complexity, all based on the same pick-and-place task and sharing identical task parameters and initial warm starts for GB-MPC and MPPI:  
+
+> •
+
+Scenario 1: Baseline pick-and-place task  
+
+> •
+
+Scenario 2: A single static collision capsule is intro-duced in the workspace.  
+
+> •
+
+Scenario 3: The collision capsule is elongated, in-creasing geometric complexity and restricting feasible avoidance homotopies.  
+
+> •
+
+Scenario 4: Four collision primitives create a non-convex configuration.  
+
+> •
+
+Scenario 5: A dense circular arrangement of collision capsules emulates a highly constrained, strongly non-convex environment and stresses computational scala-bility.  
+
+> •
+
+Scenario 6: A long collision box blocks the direct path to the target, rendering the task geometrically infeasible and serving as a negative-control benchmark. TABLE I: Simulation comparison of GB-MPC, vanilla MPPI and COSMIK-MPPI for collision avoidance.                                                                                            
+
+> Sc. Method Success Rate Dist. to Target (cm) Dist. to Obst. (cm) Smooth-ness Comp. Time (ms)
+> 1GB-MPC 1.00 1.05 –1.50 15
+> Vanilla MPPI 1.00 1.88 –18 .59 22
+> COSMIK-MPPI 1.00 1.98 –20 .14 22
+> 2GB-MPC 1.00 0.51 8.78 2.31 89
+> Vanilla MPPI 1.00 1.79 9.32 20 .83 22
+> COSMIK-MPPI 1.00 1.62 10 .65 17 .54 22
+> 3GB-MPC 1.00 0.26 4.69 2.18 81
+> Vanilla MPPI 1.00 1.95 4.09 24 .65 22
+> COSMIK-MPPI 1.00 1.83 5.35 19 .97 22
+> 4GB-MPC 0.00 54 .21 23 .10 0.00 415
+> Vanilla MPPI 1.00 1.91 3.57 24 .57 22
+> COSMIK-MPPI 1.00 1.95 1.62 20 .72 22
+> 5GB-MPC 0.00 73 .97 14 .87 0.00 1812
+> Vanilla MPPI 1.00 1.86 4.35 17 .82 22
+> COSMIK-MPPI 1.00 1.76 5.87 18 .75 22
+> 6GB-MPC 0.00 11 .29 4.75 11 .75 80
+> Vanilla MPPI 0.00 14 .65 −0.91 19 .37 21
+> COSMIK-MPPI 0.00 11 .99 5.28 69 .57 21
+
+Performance is evaluated using the following metrics:  
+
+> •
+
+Task success rate: Fraction of trials completed without collision [10], [6], [25].  
+
+> •
+
+Distance to target: Final Euclidean distance between the end-effector and the target pose.  
+
+> •
+
+Distance to obstacles: Minimum signed distance to collision objects along the trajectory, averaged across trials [14].  
+
+> •
+
+Trajectory smoothness: Integrated squared joint torque variation.  
+
+> •
+
+Computation time: Average control computation time per planning step [18]. Experiments were conducted on a workstation equipped with an Intel Core i9-14900K CPU and an NVIDIA RTX 5000 Ada GPU. Both GB-MPC and MPPI were evaluated using a prediction horizon of 50 steps at a control frequency of 50Hz. The GB-MPC implementation used 10 SQP itera-tions per control step, while MPPI was configured with 1000 rollouts. Table I reports a comparative evaluation of GB-MPC, vanilla MPPI, and the proposed COSMIK-MPPI under in-creasing scenario complexity. Across Scenarios 1–3, all controllers achieve a 100% success rate, indicating that the task remains tractable in lightly constrained environments. However, their computational behaviors differ significantly. GB-MPC solves Scenario 1 in 15ms, but its computation time increases by a factor of five in Scenarios 2 and 3, revealing sensitivity to added collision constraints. In contrast, both vanilla MPPI and COSMIK-MPPI maintain nearly constant computation times (21–22ms) across scenarios, highlighting a key advantage of sampling-based methods: their cost is largely independent of constraint complexity. This improved scalability comes at the expense of reduced trajectory smoothness. At the planner level, MPPI’s stochas-tic sampling and importance-weighted updates introduce higher-frequency variations in the control sequence, whereas GB-MPC solves a structured OCP with quadratic regulariza-tion that naturally promotes smooth solutions. This difference is reinforced at the control level: GB-MPC computes time-varying Riccati gains and feedforward torques within the same optimization, ensuring planning–execution consistency, while MPPI relies on fixed PD gains with feedforward torques reconstructed via inverse dynamics, leading to higher torque variations as reported in Table I. This divergence becomes critical in Scenarios 4 and 5, which feature non-convex geometries and multiple simul-taneous avoidance constraints. In these cases, GB-MPC fails to compute feasible solutions within real-time limits, whereas both vanilla MPPI and COSMIK-MPPI successfully complete the tasks while maintaining constant computa-tional performance. These results confirm that sampling-based methods scale more effectively than GB-MPC in the presence of dense and non-convex collision constraints. Scenario 6 is intentionally infeasible and serves to eval-uate controller behavior under persistent constraint viola-tion. None of the methods reaches the target. GB-MPC and COSMIK-MPPI exhibit the most conservative behavior, prioritizing collision avoidance over goal convergence. Comparing the sampling-based methods, COSMIK-MPPI retains the same real-time efficiency as vanilla MPPI while improving robustness in constrained settings. It avoids the collision violations observed with vanilla MPPI in Scenarios 6 and achieves comparable or better goal accuracy in most cases. By embedding safety directly through trajectory ter-mination rather than large penalty weights, COSMIK-MPPI consistently biases the solution toward safer behaviors as complexity increases. V. E XPERIMENTAL VALIDATION 
+
+To evaluate the proposed approach, we refer the reader to the accompanying video, which illustrates the system behav-ior in dynamic human–robot interaction in shared workspace scenarios. As summarized in Fig. 4 and further shown in the video, we consider a set of pick-and-place experiments of increasing complexity based on a common baseline task. The robot is instructed to grasp a cubic object placed in front of it and translate it by 30cm along the horizontal plane to a predefined target location. Five experimental scenarios are designed to progressively assess safety, robustness, and on-line replanning capabilities in human–robot interaction. All experiments share the same task parameters, initialization, number of collision pairs, and robot configuration, while the surrounding environment is modified through human interaction: label=e) 1) Static environment: A simple pick-and-place task per-formed in a static environment, serving as a baseline. 2) Physical perturbations and compliance: During execu-tion, the robot is physically perturbed using a rigid stick, evaluating its compliant behavior and ability to safely react to unexpected contacts while replanning to complete the task. 3) Human-aware collision avoidance with dynamic cap-sules: A human operator deliberately blocks the robot motion with one arm. Human pose is estimated online using the RT-COSMIK framework to infer dynamic collision capsules. The robot autonomously replans and safely moves below the arm to complete the task. 4) Concurrent human activity: The robot performs the pick-and-place task while a human simultaneously transfers spray paints between two bins in the same workspace. Human motion is unconstrained and does not explicitly account for the robot, introducing con-tinuous and unpredictable workspace occupancy. 5) Highly constrained human–robot interaction: The hu-man forms a closed loop with both arms, creating a narrow passage and a non-convex collision setup. The robot must navigate through this constrained region to complete the task without contact. Results are reported for a single execution per scenario. As MPPI is stochastic and the experiments aim to probe distinct interaction modes rather than provide statistical validation, we focus on qualitative behavior, execution time, and motion characteristics. Reported times are indicative and used for relative comparison. In the baseline static experiment (Fig. 4(a)), the task was completed in 6s with a smooth, near-straight trajectory and no replanning, serving as a reference. Under large physical perturbation (Fig. 4(b)), execution time increased to 7.5s. The robot reacted compliantly, briefly slowing while continuing toward the goal along a diagonal path. The replanned motion remained smooth, without abrupt velocity or acceleration changes, demonstrating safe recovery through gradual adaptation. In the concurrent human activity scenario (Fig. 4(c)), exe-cution time increased to 40s, mainly due to the time required for the human to complete the box-filling task and clear the target area, after which the robot finalized its motion. Frequent replanning led to back-and-forth adjustments as the robot adapted to the evolving workspace while maintaining safe operation. In the human-aware collision avoidance scenario (Fig 4.d), the execution time further increased to 50s. As shown in the accompanying video, the human actively blocked the robot motion before positioning the arm along the nomi-nal trajectory. The robot successfully replanned online and passed below the arm. Despite close proximity, the motion remained smooth and safe. Near the end of execution, the robot approached a kinematic singularity, requiring addi-tional reconfiguration; it again slowed down and generated a smooth, collision-free motion, deliberately trading speed for safety. The final experiment, involving a highly constrained and non-convex collision scenario (Fig. 4.e), in which the human formed a circle with both arms, was completed in 18s. As shown in Fig. 5, the increased execution time was solely due to the robot deliberately reducing its speed while navigating the narrow passage. When the distance to the human became very small, the robot slowed down to reconfigure safely t=4s t=16s t=45s t=42s              
+
+> e)
+> t=15s t=20s
+> t=20s t=30s t=55s t=50s t=45s t=4s
+> d)
+> t=4s t=16s
+> c)
+> t=11s t=67s t=57s t=27s
+> t=4.6s t=3s t=4s t=4.2s t=5.5s t=7s
+> t=6s t=0s t=2s t=4s t=7s t=8s
+> a) b)
+
+Fig. 4: Five tasks used to assess COSMIK-MPPI safety and robustness for collision avoidance with with human. a) Static environment during baseline pick-and-place. b) Physical perturbations and compliance. c) Human-aware collision avoidance. d) Concurrent human activity. e) Highly constrained human–robot interaction. Minimum  collision distance  [m]  
+
+> 0.05
+> 0.45
+> 0.25
+> 0.0
+> 0.15
+> Cartesian speed [m.s -1]
+> 0.00 30 Time [s]
+
+Fig. 5: Analysis of the minimum collision distance between the robot and the environment and the human with the Cartesian end-effector velocity during scenario 5. before accelerating again. As expected in this scenario, the minimum collision distance remained small throughout the task but collisions were never observed. These experiments reveal a consistent qualitative behav-ior: as environment and interaction complexity increases, the robot naturally trades execution speed for safety. The proposed approach produces smooth and conservative mo-tions, even in highly constrained situations, and leverages compliance and online replanning to ensure safe operation in close proximity to humans. VI. D ISCUSSION 
+
+The present paper benchmarked in simulation classical GB-MPC, vanilla MPPI, and the proposed COSMIK-MPPI for collision avoidance, and experimentally validate the use of COSMIK-MPPI for complex human robot shared workspace. Simulation results demonstrate that while GB-MPC per-forms well in simple settings and often yields smoother motions, its performance rapidly degrades in the presence of multiple collision primitives and non-convex geome-tries. In such scenarios, GB-MPC fails to find feasible solutions within real-time constraints due to the growing number of active collision constraints. In contrast, MPPI-based methods maintain consistent real-time performance (21–22ms) and generate smooth, collision-free trajectories even in highly constrained environments. COSMIK-MPPI further improves robustness by embedding safety directly into the rollout termination, avoiding the need for large penalty weights while preserving motion smoothness and reactivity. These differences can be attributed to the un-derlying computational structure. The GB-MPC state-of-the-art implementation based on Crocoddyl [8] relies on constrained SQP optimization executed on a single CPU thread. As the number of collision constraints increases, the problem complexity grows rapidly, and although cer-tain components can be parallelized, the core optimization loop remains sequential, limiting scalability. This issue has been previously reported [17] and has motivated diffusion-based warm-start strategies for GB-MPC [10], [6]. While GB-MPC provides attractive hard safety guarantees through explicit constraints, these guarantees come at the expense of scalability, particularly in dynamic and noisy human–robot interaction scenarios. In contrast, MPPI avoids warm-started optimization and accommodates numerous collision con-straints through sampling and cost shaping. Although it lacks strict optimality guarantees, the experiments show that the trade-off is acceptable in practice as safety emerges from conservative motion generation, compliance, and continuous replanning. COSMIK-MPPI further improves robustness by terminating unsafe rollouts which result in more reliable behavior. All the approaches rely on the robot’s intrinsic compli-ance, which is essential for safe human–robot workspace and is achieved by the low-level controller described in section III-C. Compliance allows the robot to absorb physical perturbations (Experiment 2) and maintain smooth predictive planning without aggressive reactions. Even if not the main topic of this study, an important feature of the proposed framework is the integration of RT-COSMIK [21] for markerless online human pose estima-tion, which directly supports the human–robot interaction scenarios in Experiments 3–5. RT-COSMIK achieves real-time performance and robustness to partial and dynamic occlusions through NLF, a property that is essential in close-proximity interactions involving self and robot-induced oc-clusions. The inverse kinematics stage used to infer dynamic collision capsules from the estimated pose further acts as a filtering layer, reducing noise and local inconsistencies in the collision geometry. While primarily leveraged here for collision avoidance, this perception pipeline also lays the groundwork for richer physical and task-level human–robot interaction. Additionally, our framework can be directly extended without additional development cost to take into account accurate predictions of human motion, which will improve further the efficiency of the interaction. This study demonstrates the safety and qualitative ro-bustness of the proposed controller in controlled and semi-controlled scenarios. In future, extending it to a thorough assessment of robustness and efficiency ultimately requires large-scale evaluations with industrial operators or end users performing realistic tasks. The safe behavior exhibited by COSMIK-MPPI, even under close and highly constrained human–robot interaction, is a key enabler for such studies, as it allows extensive user evaluations without imposing restrictive assumptions on human behavior. REFERENCES [1] S. Robla-G´ omez, V. M. Becerra, J. R. Llata, E. Gonzalez-Sarabia, C. Torre-Ferrero, and J. Perez-Oria, “Working together: A review on safe human-robot collaboration in industrial environments,” Ieee Access , vol. 5, pp. 26 754–26 773, 2017. [2] W. Li, Y. Hu, Y. Zhou, and D. T. Pham, “Safe human–robot col-laboration for industrial settings: a survey,” Journal of Intelligent Manufacturing , vol. 35, no. 5, pp. 2235–2261, 2024. [3] A. De Luca and F. Flacco, “Integrated control for phri: Collision avoidance, detection, reaction and collaboration,” in 2012 4th IEEE RAS & EMBS international conference on biomedical robotics and biomechatronics (BioRob) . IEEE, 2012, pp. 288–295. [4] S. Xu, G. Li, and J. Liu, “Obstacle avoidance for manipulator with arbitrary arm shape using signed distance function,” in 2018 IEEE International Conference on Robotics and Biomimetics (ROBIO) ,2018, pp. 343–348. [5] M. Safeea, P. Neto, and R. Bearee, “On-line collision avoidance for collaborative robot manipulators,” in Proceedings of the IEEE International Conference on Robotics and Automation (ICRA) , 2019. [6] T. Oelerich, G. Ebmer, C. Hartl-Nesic, and A. Kugi, “Safeflowmpc: Predictive and safe trajectory planning for robot manipulators with learning-based policies,” arXiv preprint arXiv:2602.12794 , 2026. [7] A. Haffemayer, A. Jordana, L. De Matte¨ ıs, K. Wojciechowski, L. Righetti, F. Lamiraux, and N. Mansard, “Collision avoidance in model predictive control using velocity damper,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) , 2025, pp. 16 140–16 146. [8] C. Mastalli, R. Budhiraja, W. Merkt, G. Saurel, B. Hammoud, M. Naveau, J. Carpentier, L. Righetti, S. Vijayakumar, and N. Mansard, “Crocoddyl: An efficient and versatile framework for multi-contact optimal control,” in Proceedings of the IEEE Interna-tional Conference on Robotics and Automation (ICRA) , 2020. [9] R. Verschueren, G. Frison, D. Kouzoupis, J. Frey, N. v. Duijkeren, A. Zanelli, B. Novoselnik, T. Albin, R. Quirynen, and M. Diehl, “aca-dos—a modular open-source framework for fast embedded optimal control,” Mathematical Programming Computation , vol. 14, no. 1, pp. 147–183, 2022. [10] A. Haffemayer, A. Chapin, A. Jordana, K. Wojciechowski, F. Lami-raux, N. Mansard, and V. Petrik, “Warm-starting collision-free model predictive control with object-centric diffusion,” IEEE Robotics and Automation Letters , 2026. [11] I. S´ ar´ andi and G. Pons-Moll, “Neural localizer fields for continuous 3d human pose and shape estimation,” in Advances in Neural Information Processing Systems (NeurIPS) , 2024. [12] G. Williams, P. Drews, B. Goldfain, J. M. Rehg, and E. A. Theodorou, “Aggressive driving with model predictive path integral control,” in 
+
+2016 IEEE International Conference on Robotics and Automation (ICRA) , 2016, pp. 1433–1440. [13] G. Williams, B. Goldfain, P. Drews, K. Saigol, J. Rehg, and E. Theodorou, “Robust Sampling Based Model Predictive Control with Sparse Objective Information,” in Robotics: Science and Systems XIV . Robotics: Science and Systems Foundation. [Online]. Available: http://www.roboticsproceedings.org/rss14/p42.pdf [14] Y. Zhou et al. , “Parallel mppi with gradient-velocity modulated signed distance costs for high-dimensional manipulators,” IEEE Transactions on Robotics , 2025. [15] E. Chane-Sane, P.-A. Leziart, T. Flayols, O. Stasse, P. Sou` eres, and N. Mansard, “Cat: Constraints as terminations for legged locomotion reinforcement learning,” in IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2024. [16] P. N. Crestaz, L. De Matteis, E. Chane-Sane, N. Mansard, and A. Del Prete, “Td-cd-mppi: Temporal-difference constraint-discounted model predictive path integral control,” IEEE Robotics and Automation Letters , vol. 11, no. 1, pp. 498–505, 2025. [17] A. Haffemayer, A. Jordana, M. Fourmy, K. Wojciechowski, G. Saurel, V. Petr´ ık, F. Lamiraux, and N. Mansard, “Model predictive control under hard collision avoidance constraints for a robotic arm,” in 2024 21st International Conference on Ubiquitous Robots (UR) . IEEE, 2024, pp. 701–706. [18] G. Williams, A. Aldrich, and E. A. Theodorou, “Model predictive path integral control: From theory to parallel computation,” Journal of Guidance, Control, and Dynamics , vol. 40, no. 2, pp. 344–357, 2017. [19] A. Jordana, S. Kleff, A. Meduri, J. Carpentier, N. Mansard, and L. Righetti, “Structure-exploiting sequential quadratic programming for model-predictive control,” IEEE Transactions on Robotics , 2025. [20] M. Bhardwaj, B. Sundaralingam, A. Mousavian, N. D. Ratliff, D. Fox, F. Ramos, and B. Boots, “Storm: An integrated framework for fast joint-space model-predictive control for reactive manipulation,” in 
+
+Proceedings of the Conference on Robot Learning (CoRL) , 2022, pp. 750–759. [21] Anonymous, “RT-COSMIK: a Real-Time low-Cost and Open-Source toolbox for Markerless Inverse Kinematics,” Mar. 2026, submitted to IEEE Transactions on Automation Science and Engineering. [Online]. Available: https://hal.science/hal-05533093 [22] A. Wang, H. Chen, L. Liu, K. Chen, Z. Lin, J. Han et al. , “Yolov10: Real-time end-to-end object detection,” Advances in neural informa-tion processing systems , vol. 37, pp. 107 984–108 011, 2024. [23] J.-P. Sleiman, F. Farshidian, M. V. Minniti, and M. Hutter, “A unified mpc framework for whole-body dynamic locomotion and manipula-tion,” IEEE Robotics and Automation Letters , vol. 6, no. 3, pp. 4688– 4695, 2021. [24] J. Carpentier, G. Saurel, G. Buondonno, J. Mirabel, F. Lamiraux, O. Stasse, and N. Mansard, “The pinocchio c++ library: A fast and flexible implementation of rigid body dynamics algorithms and their analytical derivatives,” in 2019 IEEE/SICE International Symposium on System Integration (SII) . IEEE, 2019, pp. 614–619. [25] N. Gafur et al. , “Dynamic collision avoidance for multiple robotic ma-nipulators via nonlinear mpc,” 2021, arXiv preprint arXiv:2103.00583.
