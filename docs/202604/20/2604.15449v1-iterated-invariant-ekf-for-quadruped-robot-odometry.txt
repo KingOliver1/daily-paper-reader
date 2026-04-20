@@ -1,0 +1,2067 @@
+Title: Iterated Invariant EKF for Quadruped Robot Odometry
+
+URL Source: https://arxiv.org/pdf/2604.15449v1
+
+Published Time: Mon, 20 Apr 2026 00:10:22 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+> 1
+
+# Iterated Invariant EKF for Quadruped Robot Odometry 
+
+Hilton Marques Souza Santana 1,2∗, Jo˜ ao Carlos Virgolino Soares 1, Sven Goffin 3, Ylenia Nistic` o1, Silv` ere Bonnabel 4, Claudio Semini 1, Marco Antonio Meggiolaro 2
+
+Abstract —Kalman filter–based algorithms are fundamental for mobile robots, as they provide a computationally efficient solution to the challenging problem of state estimation. However, they rely on two main assumptions that are difficult to satisfy in practice: (a) the system dynamics must be linear with Gaussian process noise, and (b) the measurement model must also be linear with Gaussian measurement noise. Previous works have extended as-sumption (a) to nonlinear spaces through the Invariant Extended Kalman Filter (IEKF), showing that it retains properties similar to those of the classical Kalman filter when the system dynamics are group-affine on a Lie group. More recently, the counterpart of assumption (b) for the same nonlinear setting was addressed in [1]. By means of the proposed Iterated Invariant Extended Kalman Filter (IterIEKF), the authors of that work demonstrated that the update step exhibits several compatibility properties of the classical linear Kalman filter. In this work, we introduce a novel open-source state estimation algorithm for legged robots based on the IterIEKF. The update step of the proposed filter relies solely on proprioceptive measurements, exploiting kine-matic constraints on foot velocity during contact and base-frame velocity, making it inherently robust to environmental conditions. Through extensive numerical simulations and evaluation on real-world datasets, we demonstrate that the IterIEKF outperforms the vanilla IEKF, the SO(3) -based Kalman Filter, and its iterated variant in terms of both accuracy and consistency. 
+
+I. INTRODUCTION Contact-aided inertial state estimation for legged robots is characterized by nonlinear dynamics, hybrid contact switch-ing, and intrinsic unobservable directions such as global po-sition and yaw. While Extended Kalman Filter (EKF)–based approaches remain widely used due to their computational efficiency, their statistical consistency critically depends on how estimation errors are modeled and linearized. Over the past decade, filtering-based algorithms have been widely adopted for state estimation in legged robots. Most approaches follow the traditional complementary-filter frame-work used in navigation [2, p. 393], in which an Inertial Measurement Unit (IMU) is rigidly mounted on the robot’s body. The resulting high-frequency inertial measurements are integrated to provide a motion estimate that largely bypasses  
+
+> *Corresponding author,
+
+hiltonmarquess@gmail.com 
+
+> This study was financed in part by the Coordenac ¸ ˜ ao de Aperfeic ¸oamento de Pessoal de N´ ıvel Superior – Brasil (CAPES) – Finance Code 001, the Fundac ¸ ˜ ao de Amparo ` a Pesquisa do Estado do Rio de Janeiro (FAPERJ), the European Union – NextGenerationEU, the PNRR MUR Project PE000013 “Future Artificial Intelligence Research (FAIR)”. CNPq - Brasil also provided a fellowship for Prof. M.A. Meggiolaro.
+> 1Dynamic Legged Systems Lab, Istituto Italiano di Tecnologia, Genoa, Italy.
+> 2Department of Mechanical Engineering, Pontifical Catholic University of Rio de Janeiro, Brazil.
+> 3Department of Electrical Engineering and Computer Science, University of Li` ege, Belgium.
+> 4Mines Paris PSL, Centre for Robotics, 60 bd Saint-Michel, 75006 Paris, France.
+
+Fig. 1: Time of convergence of the four filters considered in this work (IterIEKF, IEKF, SO(3) -EKF and Iter SO(3) -EKF) with the same initial state, process and measurement white noise. The simulation stops when the error in the base velocity is less than 0.05 m /s and the error in gravity direction is less than 0.015 rad . The result shows that the IterIEKF converges faster than the other three filters. the need to model the platform’s full dynamics. However, due to sensor noise and biases, this integration rapidly drifts from the true trajectory. To correct this nominal estimate in a proprioceptive setting, observations are typically incorporated under a static-contact assumption. Common choices include comparing forward-kinematics predictions with body motion inferred from foot contacts [3], [4], or using the average foot velocities expressed in the base frame as an estimate of the base velocity [5]. It was shown in these works [3], [5], that by means of this proprioceptive measurement, the velocity in the base frame, pitch, and roll angles are observables. Within the Kalman filtering framework, two main method-ologies are commonly employed. The first is the classic EKF, which represents the robot’s orientation using either quaternions or the SO(3) group [3], [6], [7]. In our paper, this approach is referred to as the SO(3) -EKF. The second methodology [4], [8] is based on the Invariant Extended Kalman Filter (IEKF) [9], in which orientation and position are no longer treated as independent variables, enabling a more faithful propagation of the robot’s probability distribution. Both methodologies share a common limitation: during the update step, the measurement function is linearized in order to obtain a Gaussian approximation of the posterior, whose mean is then used as the state estimate. However, it can be shown that the mean of this approximated Gaussian may differ substantially from a meaningful estimate of the true posterior distribution, and in particular from its mode. The mode, defined as the maximum of the posterior distribution, is computed by solving a nonlinear minimization problem using 
+
+> arXiv:2604.15449v1 [cs.RO] 16 Apr 2026 2
+
+the Iterated Extended Kalman Filter [10, p. 279], provided that the robot state evolves in a vector space. An algorithmic approach to solve this minimization problem is to recast it as a Gauss–Newton iteration following [11]. This methodology has been extended to nonlinear state spaces: [12] considers Lie groups, while [13] generalizes the framework to manifolds. In this work, we refer to the approach of [12] as Iter SO(3) -EKF. A limitation of this methodology is that it does not incorporate the invariant observer theory proposed in [9]. A principled extension in this direction was recently proposed by Goffin et al. [1], who introduced the Iterated Invariant EKF (IterIEKF). The IterIEKF is an invariant filtering approach that preserves some compatibility properties of the linear Kalman filter in the presence of noise-free measurements. By incorporating a Gauss–Newton-based iterative update, the IterIEKF computes a maximum a posteriori (MAP) estimate and can significantly improve state estimation performance in nonlinear systems. However, the interaction between invariance and iteration in hybrid contact-aided legged systems remains insufficiently understood. In practice, velocity-based contact measurements and contact switching may partially violate strict invariance assumptions. It is therefore unclear whether iterative refine-ment can compensate for structural inconsistencies when in-variance is not preserved, or whether iteration instead amplifies incorrect observability modeling. This work investigates this question through a complete geometric derivation and sys-tematic evaluation of four filtering architectures: SO(3) -EKF, Iter SO(3) -EKF, IEKF, and IterIEKF (see Fig. 1), using Monte Carlo simulations and dataset analysis to clarify the effects of symmetry preservation and iterative refinement in convergence behavior and statistical consistency. 
+
+A. Contributions 
+
+To the best of our knowledge, this is the first formulation of the IterIEKF for quadruped robots. Unlike [4], we rely only on velocity in the base frame as a measurement update. We compare our proposed filter with three other filters: IEKF, 
+
+SO(3) -EKF and Iter SO(3) -EKF. The performance improve-ment is shown in simulations and a real-world dataset. Our key contributions can be summarized as follows:  
+
+> •
+
+We derive formulations of invariant and non-invariant iterated filtering for contact-aided quadruped state esti-mation, explicitly accounting for foot contact velocity measurements expressed in the base frame. We emphasize that, to the best of our knowledge, the formulations of IterIEKF and Iter SO(3) -EKF are presented for the first time in this setting.  
+
+> •
+
+We provide, to our knowledge, the first systematic study of the impact of iterative invariant updates on the ac-curacy and statistical consistency of legged robot state estimation. Through controlled Monte Carlo simulations, we show that IterIEKF significantly improves NEES consistency and accuracy compared to single-step in-variant filtering. More specifically, simulations indicate a reduction of up to 60% in the error of base velocity and gravity direction estimates. In real-world dataset, we observe a reduction of approximately 12% in the pitch angle estimation error.  
+
+> •
+
+We demonstrate that combining invariance with itera-tive refinement reduces convergence time under large initialization errors and measurement uncertainty, while preserving statistical consistency. In some experiments, a reduction of up to 60% in convergence time is observed for the IterIEKF to reach the same error level as the IEKF. Aditionally, we open-source the proposed framework 1, in-cluding simulation tools, to facilitate reproducibility and fur-ther research. The remainder of this paper is organized as follows. Sec. II shows the literature review. Sec. III outlines the mathematical background required to understand the proposed approach. Sec. IV presents a simple motivating example that highlights the characteristics of the IterIEKF in comparison with other methods. Sec. V describes the complete methodology for developing the IterIEKF and the Iter SO(3) -EKF, including a discussion of uncertainty in the observation model. Sec. VI presents the experimental results and provides a detailed analysis. Sec. VII discusses the limitations of the proposed method, and Sec. VIII concludes the paper and outlines directions for future work. II. LITERATURE REVIEW State estimation for legged robots is fundamentally con-strained by nonlinear inertial dynamics, intermittent contact constraints, and intrinsic unobservabilities (global position and yaw). Classical error-state EKF formulations [3] operate in local coordinates and rely on first-order linearization around a nominal trajectory. While computationally efficient, these approaches are known to suffer from inconsistency when the linearized error dynamics do not preserve the system’s symmetry structure, as formalized in the context of SLAM in [14]. Invariant filtering [9], [15] addresses this limitation by defining the estimation error on matrix Lie groups and ex-ploiting the group-affine system structure. When the dynamics and observations satisfy appropriate invariance properties, the resulting error dynamics become autonomous, i.e., the error dynamic does not depend on the system state, leading to improved consistency and reduced sensitivity to linearization. The theoretical foundations of non-linear error-based filter-ing [16], and Lie group state estimation [17], [18] provide the structural justification for this approach. For legged robots, [4] formulated contact-aided inertial navigation on SE 2+ N (3) , demonstrating that invariant filtering improves accuracy relative to SO(3) -EKF implementations. This formulation leverages the natural embedding of pose, velocity, and contact positions in an extended Lie group, aligning propagation with the geometry of SE 2(3) . The geo-metric interpretation of IMU-driven dynamics and uncertainty transport further supports this construction [19]. However, strict invariance requires the observation model to respect the underlying group action. In practical legged systems, measurements such as base-frame velocity or contact-relative constraints often violate full invariance, weakening theoretical guarantees. This occurs, for example, under the 
+
+> 1https://hilton-santana.github.io/Legged-IterIEKF/ 3
+
+rigid contact assumption, where foot velocities are constrained to be zero in the world frame. In such cases, performance im-provements become empirical rather than structurally guaran-teed. Legged locomotion introduces hybrid dynamics through contact switching. Early approaches relied on deterministic contact detection via force thresholds [5], [20], an assumption shown to be fragile on compliant or deformable terrain [21]. From an estimation-theoretic standpoint, contact modeling affects both observability and covariance contraction. Learning-based approaches [22] [23] infer contact events or velocity estimates from proprioceptive data and inject them as pseudo-measurements into an IEKF framework. While improving robustness to ambiguous contact conditions, these methods introduce model-dependent corrections whose statis-tical properties are difficult to characterize. Robust formulations incorporating scale-variant cost func-tions within invariant filtering [24] attempt to mitigate slippage and outliers without abandoning geometric structure. More recent hybrid architectures combine invariant filtering with neural compensators [25], seeking to preserve group-consistent propagation while correcting for unmodeled effects. Although promising, these methods shift part of the estimator behavior outside the geometric framework, potentially affecting observ-ability preservation. Multi-sensor state estimation systems such as Pronto [6], MUSE [7] and VILENS [20] enhance robustness by incor-porating exteroceptive sensing. However, these architectures often rely on classical filtering or smoothing back-ends, and do not explicitly exploit invariant error dynamics to enforce structural consistency. Invariant formulations have also been extended to smooth-ing. Yoon et al. [26] proposed a Lie-group-based framework that preserves symmetry and retains consistency properties analogous to those of the IEKF, while improving linearization accuracy. This demonstrates that invariance extends to batch estimators, but at the cost of increased computation and latency. In contrast, this work focuses on recursive iterated invariant filtering suitable for real-time locomotion. Iterated EKF schemes were originally introduced to reduce linearization bias by repeatedly re-linearizing the measurement model [11]. On manifolds, such iterations require consistent retraction operators and covariance transport [13]. On Lie groups, these operations can be simplified due to the underly-ing group structure [12]. The recently proposed IterIEKF [1] further improves this framework by re-linearizing invariant measurement residuals rather than arbitrary ones. Although iterative refinement improves convergence in strongly nonlinear regimes, it remains unclear whether it-eration preserves, restores, or potentially degrades statistical consistency when the underlying error representation does not respect system symmetries. In particular, the practical role of iteration in hybrid contact-aided legged locomotion has not been systematically evaluated. In summary, prior work establishes that symmetry preser-vation improves consistency and that iterative updates reduce linearization bias. However, practical legged systems deviate from ideal group-affine assumptions: contact switching, soft-terrain interactions [21], and velocity-based updates introduce departures from strict invariance. Robust invariant formula-tions [24] and structure-preserving inertial filtering approaches (e.g., [27]) emphasize the importance of maintaining geometric coherence under such disturbances. The existing literature therefore clarifies individual mecha-nisms (symmetry preservation, contact modeling, and iterative refinement) but does not resolve how they interact in hybrid legged locomotion. In particular, the effect of iterative invari-ant updates under partially violated invariance assumptions has not been systematically quantified. III. BACKGROUND This work considers two matrix Lie groups, SE 2(3) in-troduced in [16, p. 18] and SO(3) × R6. These groups are diffeomorphic as manifolds but not isomorphic as groups. Consequently, they share the same topology while exhibiting different geometric structures. Previous work has shown that incorporating the geometry of SE 2(3) simplifies the IMU dynamics, yielding the so-called natural frame dynamics [28]. Although SO(3) × R6 and SE 2(3) are diffeomorphic, endow-ing the state space with the Lie group structure of SE 2(3) 
+
+induces a different connection and parallelization. Under this geometry, the IMU dynamics acquire a more structured form, which leads to an improved estimation performance [29, pg. 58]. Every matrix Lie Group G has an associated Lie Algebra g,which is a vector space, simpler than G. Both G and g have the same dimension n. We define the isomorphisms between 
+
+g and Rn as follows: Hat : Rn → g, v 7 → v∧ =
+
+> n
+
+X
+
+> i=1
+
+viEi, (1) Vee : g → Rn, v∧ 7 → (v∧)∨ = v =
+
+> n
+
+X
+
+> i=1
+
+viei, (2) where {Ei} is a basis for g and {ei} is a basis for Rn.In this work, we extensively use the Rn representation of 
+
+g. Furthermore, g and G are related by the following local homeomorphism [30, p. 179]: 
+
+exp G : g → G, v∧ 7 → exp G(v∧) = 
+
+> ∞
+
+X
+
+> i=0
+
+v∧i
+
+i! , (3) with its inverse locally defined as log G : G → g. We also define Exp G(v) := exp G(v∧) and Log G := log G(X )∨ for all 
+
+v ∈ Rn, X ∈ G. Sometimes the subscript G is omitted when the Lie Group is clear from the context. The exponential and logarithm maps for the Lie groups considered in this work are defined in Appendix A. Following [17], we also overload the following operations: left-⊕ : G × Rn → G, X ⊕ u = X Exp( u),
+
+right-⊕ : Rn × G → G, u ⊕ X = Exp( u)X . (4) A common approximation of the exponential map for the case 
+
+∥u∥ ≈ 0 is using the right-Jacobian, Jr,G (·), which allows us to write [17]: 
+
+Exp G(a + u) ≈ Exp G(a) ⊕ J r,G (a)u. (5) 4
+
+Let TX denote the tangent space at X ∈ G, then TX is isomorphic to TE , the tangent space at the identity element E,
+
+by the adjoint map: Ad X : Rn → Rn, u → Ad X u = ( X u∧X −1)∨. (6) The following definition (Definition 1) is fundamental for the IterIEKF formulation: 
+
+Definition 1 (Observed Sets [1]) . Let G be a Lie Group that is represented linearly by matrices of Rd×d. The submanifold of G denoted by SX −1d=y is defined as: 
+
+SX −1d=y := {X ∈ G | X −1d = y}, d, y ∈ Rd. (7) 
+
+Proposition 1. Observed sets are right-cosets of the stabilizer subgroup Gd:
+
+Gd := {X ∈ G | X d = d}. (8) 
+
+Proof. See Appendix B. Proposition 1 gives a geometric interpretation for the ob-served sets defined in [1]: they are cosets of a stabilizer subgroup of the Lie Group G.For the state of the robot, we assume the Single Rigid Body assumption and treat the robot as a floating body. We estimate the orientation of the robot R ∈ SO(3) , the body velocity v ∈
+
+R3 and the centroid position p ∈ R3. All of these quantities are in relation to an inertial frame. We embed the state into two Lie groups, the SE 2(3) = SO(3) ⋉ R 6, introduced in [9] 
+
+X := ( R, x) := ( R, v, p) := 
+
+
+
+R v p01,3 1 0
+
+01,3 0 1
+
+ ∈ R5×5, (9) with the inverse given as: 
+
+X −1 := ( RT , −RT x) = ( RT , −RT v, −RT p). (10) The other embedding is given by: 
+
+xi := {Ri, vi, pi} ∈ SO(3) × R6. (11) Finally, we adopt a Bayesian approach, where the true (un-known) state at instant ti, Xi and xi, are random variables with known initial distribution [31, p. 91]. The initial distribution is defined in the Lie Algebra g and projected onto G with the exponential map. For SE 2(3) we have: 
+
+ξ0 ∼ N (09,1, P0),
+
+¯X0 = ξ0 ⊕ ˆX0, ¯X0 ∼ N R( ˆX0, P0), (12) where ξ0 ∈ R9 is the initial error, ¯X0 is the initial nominal state, P0 ∈ R9×9 is a covariance matrix, ˆX0 ∈ SE 2(3) is a known mean and NR( ˆX0, P0) is the right projection of the tangent covariance known as concentrated Gaussian [32], [15]. Analogously, for SO(3) × R6 we have: 
+
+δx0 ∼ N (09,1, Σ0 ∈ R9×9),
+
+¯x0 = δx0 ⊕ ˆx0, ¯x0 ∼ N R( ˆ x0, Σ0). (13) In this work, we represent the state with respect to the world frame. Since the measurement is expressed in the base frame, this choice leads to a right-invariant error formulation [28]. Although the primary observable quantity, the base velocity, is measured in the body frame, we adopt this formulation to facilitate the integration of the proposed method into existing navigation pipelines. For completeness, in Appendix C we derive an analogous robocentric formulation, which leads to a left-invariant error. IV. MOTIVATING EXAMPLE In this section, we illustrate the differences between the four filtering approaches considered in this work: SO(3) -EKF, IEKF, Iter SO(3) -EKF and IterIEKF. For this, we only consider the update step of a simple localization problem with known landmarks (Fig. 2). The details of the formulation of each filter will be given in the next sections. We consider a 2D quadruped robot moving in the plane, and the state given by the robot’s orientation (yaw angle), velocity and position. We parametrize the robot’s state as an element of two, diffeomorphic by ϕ : SE 2(2) → SO 2 × R4, Lie groups: 
+
+SE 2(2) for IEKF and IterIEKF, and SO(2) × R4 for SO(2) -EKF and Iter SO(2) -EKF. Let X =: ( R, v, p) ∈ SE 2(2) - and equivalently x := ϕ(X ) ∈ SO(2) ×R4 - be the true state of the robot, {b1, b2} ∈ R2 be two landmarks, and {y1, y2} ∈ R2
+
+denote two almost noise-free measurements of X with relation to the landmarks: 
+
+y1 := 
+
+RT (b1 − p)01
+
+ =
+
+RT −RT v −RT p02,1 1 0
+
+02,1 0 1
+
+
+
+b1
+
+01
+
+ := X −1d1,
+
+(14) 
+
+y2 := X −1d2 = X −1 b2 0 1T . (15) The measurement models are in invariant form for SE 2(2) , as defined in [9]. The observed sets for these two measurements are circumferences centered in the landmarks as shown in Fig. 2a. On the other hand, the measurement y = RT (b − p) is not in invariant form for SO(2) × R2×2. To be invariant, the measurement model should be in the form X d or X −1d.Let ¯X ∈ SE 2(2) ∼ NR(09, P) - and equivalently 
+
+¯x = ϕ( ¯X ) - be the current noisy estimate of the state. We consider no uncertainty in the velocity error, so that 
+
+P = diag (( eR)2, 0, 0, (ex)2, (ey )2), where e = ( X ¯X −1)∨.In Fig. 2 we show the results of two consecutive update steps with IEKF, SO(2) -EKF, Iter SO(2) -EKF, and IterIEKF. In Fig. 2c and Fig. 2b we show the updates with IEKF and 
+
+SO(2) -EKF. It can be seen that after the update step, there is no guarantee that the state will be in the observed sets 
+
+SX −1d1=y1 and SX −1d2=y1 . In Fig. 2d we show the updates with Iter SO(2) -EKF. In this case, the first update lands the state inside the observed set, but the second update did not converge. On the other hand, with IterIEKF in Fig. 2e, both updates land the state inside the observed set, so that X ++ lies at the intersection of the two observed sets, which corresponds to the true state. This happens because after the update step, the IterIEKF constrains the search space to the first observed set, and then the optimization process can find the convergence easier than Iter SO(2) -EKF. 5(b) (c) (d) (e)    
+
+> (a) (b) (c)
+> (d) (e)
+
+Fig. 2: a) Setup of a simple localization problem with two known landmarks with almost noise-free measurements. b) Two consecutive updates with SO(2) -EKF. No update lies in the observed sets. c) Two consecutive updates with IEKF using almost noise-free measurements. d) Two consecutive updates with Iter SO(2) -EKF. Only the first update lies in the observed sets. The second update did not converge. e) Two consecutive updates with IterIEKF. Both updates lie in the observed sets, being the last update on their intersection. We emphasize that the IterIEKF update admits a clear geometric interpretation. Let PR be a covariance matrix with dominant uncertainty in rotation and negligible uncertainty in velocity and position. Similarly, let Pp represent dominant uncertainty in position, with negligible uncertainty in rota-tion and velocity. Figure 3 illustrates the IterIEKF update in both cases. When rotational uncertainty dominates ( PR), the updated state exhibits a significant change in orientation while the position remains nearly unchanged. In contrast, when positional uncertainty dominates ( Pp), the update results in an almost pure translation, since the rotation is nearly certain. Let ˆξR (and analogously ˆξp) denote the final error estimate associated with covariance PR. Consider the one-parameter subgroup H =
+
+n
+
+Exp 
+
+
+
+s ˆξR
+
+
+
+| s ∈ R
+
+o
+
+, generated by ˆξ∧ 
+
+> R
+
+∈
+
+g [18, pg. 56]. The updated state can be interpreted as the intersection between the right coset H ¯X and the measurement constraint set SX −1d=y, which is by Proposition 1 the right coset GdX . When both cosets form nonlinear submanifolds of 
+
+G, computing this intersection becomes a nonlinear problem. On the other hand, under covariance Pp, the right coset 
+
+Exp 
+
+
+
+s ˆξp
+
+ ¯X is linear. In this case, IterIEKF reduces to the standard IEKF. In essence, IterIEKF can be interpreted as searching for the intersection of cosets of subgroups of G.
+
+Fig. 3: Comparison of update step with IterIEKF in two scenarios: first with a prevalent uncertainty in the rotational error ( PR) and the second with a prevalent positional error (Pp). The dotted red curves are the right-cosets Exp( s ˆξR) ¯X
+
+and Exp( s ˆξp) ¯X , s ∈ R.V. METHODOLOGY 
+
+A. Base velocity as measurement model 
+
+In this work, we restrict the measurement model to foot velocity during contact and exclude forward kinematics-based foot position measurements. Iterated filtering techniques are particularly sensitive to covariance mischaracterization. While the covariance of base velocity measurements can be empir-ically estimated using motion capture systems or GNSS in outdoor environments, the uncertainty associated with forward 6
+
+kinematics-based position measurements is more difficult to model accurately. It depends not only on encoder noise, but also on joint compliance, kinematic parameter errors, structural flexibility, and contact effects, which introduce state-dependent and potentially biased errors that are not easily captured by a fixed Gaussian covariance model. Since iterated filters rely heavily on accurate uncertainty characterization to ensure consistency and convergence, incorporating measure-ments with poorly modeled covariance may degrade perfor-mance. To avoid introducing such unmodeled uncertainties, we therefore limit our measurement model to stance foot velocity constraints. Instead of including foot contact positions in the state, in a way that is reminiscent of SLAM [3, p. 3], we consider foot detection as null velocity measurement (up to noise), along the lines of the velocity-update (ZUPT) of pedestrian navigation [33]. The feet velocity as a measurement was first proposed for quadruped robots in [5]. It can be obtained as follows: 
+
+˜vif,B = ω× 
+
+> i,B
+
+pf,B + JK ˙qi,B , (16) where the subscript B denotes the base frame, pf = K(q)
+
+is the foot contact position obtained by forward kinematics and JK is the linear Jacobian of K. Moreover, under the static contact assumption, we have the following measurement for the base velocity: 
+
+˜vB,i := − 1
+
+|S|
+
+X
+
+> i∈S
+
+˜vif,B = vB + wf,i , (17) where S is a set with the IDs of all legs in contact and 
+
+wf,i ∼ N (03,1, Qf ). Note that the covariance matrix Qf
+
+depends on the noise of three distinct sources: angular ve-locity measured by the IMU, kinematics calibration and joint encoders. Due to the complexity of its evaluation we follow the convention of previous works [5], [34] and assume Qf
+
+as a user-prescribed parameter. To understand the structure of this covariance matrix, we performed a simulation on MuJoCo [35] with the QuadrupedPyMPC library [36]. We let the robot perform an eight-shape trajectory for 8 seconds on flat terrain with trotting gait. We compared the ground truth base velocity with the one obtained from (16) and computed the covariance matrix of the error. The results are shown in Fig. 4. It can be seen that the covariance matrix is not isotropic, with the largest uncertainty in the z direction. The second largest covariance is in the forward direction. In Fig. 5 we can see a comparison between the ground truth base velocity and the one obtained from (16). We observed that when the two feet are in the swing phase, (16) is a good estimate of the base velocity (Fig. 5a). In contrast, during the touchdown event, when the feet transition from swing to stance phase, the estimation error increases, predominantly in the z direction (Fig. 5b). Finally, we recall that we need to transform the measured velocity from the base frame to the IMU frame, since all filtering operations are performed there. Let {I RB , B rBI }, 
+
+> I
+
+RB ∈ SO(3) and B rBI ∈ R3, be the coordinate transfor-mation from the base frame to the IMU frame, then we can write: 
+
+˜vI,i = I RB
+
+ ˜vB,i + ˜ ωB,i × B rBI 
+
+ ≈ I RB ˜vB,i , (18) 0.00 0.01 0.02          
+
+> (~ vB;x  ! vB;x )2
+> 0.00 2.00 4.00
+> (~ vB;y  ! vB;y  )2 #10 -3
+> 012345678
+> Time (s)
+> 0.00 0.05
+> (~ vB;z  ! vB;z  )2
+
+Fig. 4: Covariance matrix of the base velocity obtained from foot velocities in contact on a virtual environment. The co-variance matrix is not isotropic, with the largest uncertainty in the z direction. The mean for each direction was given by 
+
+Qf = diag (8 .02 ×10 −4, 6.28 ×10 −5, 1.25 ×10 −3). The video of the simulation can be watched here. 
+
+(a) (b) 
+
+Fig. 5: Comparison between true base velocity in the base frame (black arrow) with the one obtained from feet velocities in contact (blue arrow). a) During the swing phase, the foot velocity is a good estimate of the base velocity. b) During the touchdown event, there is an increase in the error in the z and forward directions. where we considered the quantity ˜ωB,i × B rBI negligible in relation to ˜vB,i , because for quadruped robots the IMU frame is always close to the body frame. The new covariance will be transformed according Qf := I RB Qf I RTB .
+
+B. IEKF and IterIEKF 
+
+Following previous works [3], [4], we adopt the Single Rigid Body assumption and approximate the robot as a floating box moving in R3. Then, the dynamics of the box are governed by the linear acceleration ˜aI and angular velocity ˜ωI measured by the IMU: 
+
+˜ωI,i = ωI,i + wg,i , wg,i ∼ N (03,1, Qg ∈ R3×3),
+
+˜aI,i = aI,i + wa,i , wa,i ∼ N (03,1, Qa ∈ R3×3), (19) where the subscript I denotes the IMU frame. We assume that the measurements as piecewise constant in [ti, t i + ∆ t] and corrupted with white Gaussian noise. Notice that we assume, for simplicity, negligible IMU biases in this work. We define a new variable wi to accommodate all input noise: 
+
+wi := 
+
+wg,i 
+
+wa,i 
+
+
+
+∼ N (06,1, Qi), Qi := 
+
+Qg 03
+
+03 Qa
+
+
+
+. (20) 7
+
+Santana et al. [24] showed that the prediction step can be cast as the natural frame dynamics defined in [28]: 
+
+X i|i−1 := Fi−1(X i−1, ˜ωI,i −1, ˜aI,i −1, wi−1, ∆t) ≈
+
+
+
+¯Ri−1Exp( ωI,i −1∆t)Exp( G1
+
+> i−1
+
+wg,i −1)¯vi−1 + ( ¯Ri−1 ˜aI,i −1 + g)∆ t
+
+¯pi−1 + ¯ vi−1∆t + ( ¯Ri−1 ˜aI,i −1 + g) ∆t2
+
+> 2
+
+ =
+
+ ¯Ri−1Exp( ωI,i +1 ∆t) exp( G1
+
+> i−1
+
+wg,i −1)
+
+Fi−1xi−1 + di−1 + ¯Ri−1 ∗ si−1 + ¯Ri−1 ∗ G2
+
+> i−1
+
+wa,i −1
+
+
+
+=
+
+Wi−1Φi−1( ¯Xi−1) ¯Yi−1(wi−1),
+
+(21) where ∗ denotes an element-wise multiplication: R ∗ x := [Rv , Rp ]T , ¯(·) denotes the nominal state, g = [0 , 0, −9.81] 
+
+is the gravity vector and 
+
+Wi−1 = ( I3, di−1),
+
+¯Yi−1 = (Exp SO(3) (ωI,i −1∆t)Exp SO(3) (G1
+
+> i−1
+
+wg,i −1),
+
+si−1 + G2
+
+> i−1
+
+wa,i −1),
+
+Φi−1(X i−1) = ( ¯Ri−1, Fi−1 ¯xi−1),
+
+Fi−1 =
+
+ I3 03
+
+∆tI3 I3
+
+
+
+,
+
+di−1 =
+
+ ∆tg 
+
+> ∆t2
+> 2
+
+g
+
+
+
+, si−1 =
+
+ aI,i −1∆t
+
+aI,i −1 ∆t2
+
+> 2
+
+
+
+,
+
+G1 
+
+> i−1
+
+= −J r, SO(3) ( ˜ ωI,i −1∆t)∆ t, G2 
+
+> i−1
+
+=
+
+ I3∆t
+
+I3 ∆t2
+
+> 2
+
+
+
+.
+
+(22) Notice that Φi : SE 2(3) → SE 2(3) is an automorphism which ensures that the covariance propagation of the (right) invariant error without process noise is exact and autonomous [9], [28] (see also Theorem 18 in [37]). In the presence of process noise, the approximate propagation was obtained in [19][24] as follows: 
+
+ξi|i−1 ≈ Ai−1ξi−1 + Bi−1wi−1, (23) where 
+
+Ai−1 := Ad Wi−1 Mi−1, Bi−1 := Ad ¯Xi|i−1 Gi−1,
+
+Mi−1 =
+
+ I3 03,9
+
+09,3 Fi−1
+
+
+
+, Gi−1 =
+
+G1 
+
+> i−1
+
+03
+
+06,3 G∗2
+
+> i−1
+
+
+
+,
+
+G∗2 
+
+> i−1
+
+= −
+
+ Exp SO 3 (− ˜ωI,i −1∆t)∆ t
+
+Exp SO 3 (− ˜ωI,i −1∆t) ∆t2
+
+> 2
+
+
+
+.
+
+(24) The covariance propagation is given by: 
+
+Pi|i−1 ≈ Ai−1Pi−1ATi−1 + Bi−1Qi−1BTi−1. (25) In the following, we outline the modifications introduced in the measurement update of the IterIEKF proposed in [1] with respect to the classical IEKF update step. If we embed the measurement into R5 then, it can be obtained as a noisy action of the true state Xi:
+
+yi := 
+
+
+
+˜vI,i 
+
+−10
+
+ =
+
+RTi vi + wf,i 
+
+−10
+
+ =
+
+RTi −RTi vi −RTi pi
+
+03,1 1 00 0 1
+
+
+
+03,1
+
+−10
+
+ +
+
+
+
+wf,i 
+
+00
+
+ =
+
+X −1 
+
+> i
+
+d + ni,
+
+(26) where 
+
+wf,i ∼ N (03,1, Qf ),
+
+ni ∼ N 
+
+
+
+05,1, Ni := 
+
+ I3
+
+02,3
+
+
+
+Qf
+
+I3 03,2
+
+ 
+
+, (27) is white Gaussian noise. For the right-invariant error, the innovation is defined as [28]: 
+
+zi := ¯Xi|i−1yi − d =¯Xi|i−1X −1 
+
+> i
+
+d − d + ¯Xi|i−1n =
+
+δX −1 
+
+> i
+
+d − d + ¯Xi|i−1n =Exp( ξi)−1d − d + ¯Xi|i−1n,
+
+(28) where δXi := Xi ¯X −1 
+
+> i|i−1
+
+:= Exp( ξi) represents the current right-invariant error in the Lie Group. In the IEKF, the error 
+
+ξi is assumed to be small, and the following approximation is applied: 
+
+δX −1 
+
+> i
+
+d − d = Exp( ξi)−1d − d ≈
+
+(I9 − ξ∧ 
+
+> i
+
+)d − d =
+
+−ξ∧ 
+
+> i
+
+d =
+
+−
+
+(ξRi )∧(03,1) + ξv 
+
+> i
+
+(−1) + ξp 
+
+> i
+
+(0) 
+
+01,3(03,1) + 0( −1) + 0(0) 
+
+01,3(03,1) + 0( −1) + 0(0) 
+
+ =
+
+
+
+0∧ 
+
+> 3,1
+
+I3 03
+
+01,3 01,3 01,3
+
+01,3 01,3 01,3
+
+ξRi
+
+ξv
+
+> i
+
+ξp
+
+> i
+
+ = Hξi,
+
+(29) where Exp( ξi) ≈ (I9 + ξ∧ 
+
+> i
+
+). Then, it follows that: 
+
+zi ≈ Hξi + ˆ ni, (30) where ˆni ∼ N (05,1, ˆNi := ¯Xi|i−1Ni ¯X Ti|i−1) and the estimate of the error ˆξi is obtained via EKF equations at the tangent space R5. Observing that the last two lines of zi are zeros, we can reduce its dimension to 3 as follows: 
+
+˜zi := [ zi]1:3 , (31) and then we have: 
+
+˜zi ≈ ˜Hiξi + ˆ˜ni, (32) where ˜Hi := 03 I3 03
+
+ , (33) and ˆ˜ni ∼ N (03,1, ˆ˜Ni := ¯Ri|i−1Qf ¯RTi|i−1).In this work, we follow [1] and define the estimate ˆξi as the mode of the posterior distribution: 
+
+ˆξi := arg max 
+
+> ξi
+
+p(ξi|yi) = arg max 
+
+> ξi
+
+p(ξi|zi) = arg max 
+
+> ξi
+
+p(ξi)p(zi|ξi) = arg max 
+
+> ξi
+
+N (ξi; 09,1, Pi|i−1)N (zi; Exp( ξi)−1d − d, ˆNi) = arg min 
+
+> ξi
+
+12 ∥ξi∥2 
+
+> Pi|i−1
+
++ 12 ∥zi − Exp( ξi)−1d + d∥2ˆNi
+
+,
+
+(34) where, in the last equality, the negative of its logarithm was applied. The equality p(ξi | yi) = p(ξi | zi) holds because 8
+
+yi 7 → zi is a bijection (see (28)). The justification for the form of the conditional distribution p(zi | ξi) can be found in [31, p. 45]. The mean of the prior error is taken as zero after each update [24], [38, p. 210]. Finally, ∥x∥2 
+
+> A
+
+= xT A−1x denotes the Mahalanobis distance. In [1], two important results were demonstrated. First, (34) can be solved using the Gauss-Newton method, provided a linearization of Exp( ξi)−1d is available. Second, when (34) is used as the update step with highly precise measurements, that is, ˆNi → 0, the resulting filter exhibits properties similar to those of the linear Kalman Filter that both the standard EKF and standard IEKF lack. To obtain the linearization, we first recall [17] 
+
+Exp( ξi + δ)−1 = Exp( −ξi − δ), (35) then, following Lemma 2 of [1]: 
+
+Exp( ξi + δ)−1d − d = Exp( −ξi − δ)d − d (5) 
+
+≈
+
+Exp( −ξi)Exp( −J r (−ξi)δ)d − d (35) 
+
+=Exp( −ξi)Exp( Jr (−ξi)δ)−1d − d (29) 
+
+≈
+
+Exp( −ξi)( d + HiJr (−ξi)δ) − d =Exp( −ξi)d + Exp( −ξi)HiJr (−ξi)δ − d (33) 
+
+=[Exp( −ξi)d − d]1:3 + Exp SO(3) (−[ξi]1:3 ) ˜HiJr (−ξi)δ.
+
+(36) From Proposition 2 in [1], or, more generally, from the methodology of the iterated EKF [11], follows the Gauss-Newton sequence for the optimization problem in (34): 
+
+˜Hj+1  
+
+> i
+
+= Exp SO(3) (−[ξji ]1:3 ) ˜HiJr (−ξji ), (37) 
+
+Sj+1  
+
+> i
+
+= ˜Hj+1  
+
+> i
+
+Pi|i−1( ˜Hj+1  
+
+> i
+
+)T + ˆ˜Ni, (38) 
+
+Kj+1  
+
+> i
+
+= Pi|i−1( ˜Hj+1  
+
+> i
+
+)T (Sj+1  
+
+> i
+
+)−1, (39) 
+
+ξj+1  
+
+> i
+
+= Kj+1  
+
+> i
+
+(˜ zi − [Exp( −ξji )d − d]1:3 + ˜Hj+1  
+
+> i
+
+ξji ), (40) 
+
+ξ0 
+
+> i
+
+:= 09,1. (41) Finally, let k denote the last iteration, then the update step for the right-invariant error IterIEKF is given as follows: 
+
+ˆξi := ξki , (42) 
+
+¯Xi := ¯Xi|i := ˆξi ⊕ ¯Xi|i−1, (43) 
+
+Pi|i = ( I9 − K0 
+
+> i
+
+H0 
+
+> i
+
+)Pi|i−1, (44) where we just need to update the covariance matrix once since 
+
+Hi does not depend on ξi [1]. To obtain the last iteration, we implemented as stopping criterion the condition ∥ξj−1 −ξj ∥ <δ, where δ = 10 −4. We also implemented a second optional stopping criterion based on the computation of the loss in (34). If it increases, the algorithm stops. 
+
+C. SO (3) -EKF and Iter SO (3) -EKF 
+
+In this section we develop the SO(3) -EKF and its iterated version to serve as a baseline for the proposed method, although the later has never been formulated in the context of legged robot state estimation before, to our knowledge, and thus can be considered as a secondary contribution, as mentioned in Sec. I-A. The SO(3) -EKF formulation is similar to the quaternion-based one proposed in [5]. The main differ-ences are: (a) a world-centric view instead of robot-centric, (b) we do not consider IMU biases, and (c) we implement an error-state Extended Kalman Filter instead of an Unscented Kalman Filter. The true state was defined in (11), while the nominal state is ¯xi := { ¯Ri, ¯vi, ¯pi}. We define the right error-state at each iteration as: 
+
+δxi := {δϕi, δ vi, δ pi} := 
+
+{Log SO(3) (Ri ¯RTi ), vi − ¯vi, pi − ¯pi},δxi ∼ N (09, Σi),
+
+(45) where Σi ∈ R9×9, represents the (right) error covariance. While prediction step follows (21), the evolution of the error-state is given approximately by ([39, p. 57],[40, p. 15]): 
+
+δϕi ≈ δϕi−1 + Adj ¯Ri|i−1 G1
+
+> i−1
+
+wg,i −1, (46) 
+
+δvi ≈ δvi−1 − ( ¯Ri−1 ˜aI,i −1)∧δϕi−1∆t − ¯Ri−1wa,i −1∆t, 
+
+(47) 
+
+δpi ≈ δpi−1 + δvi−1∆t − ( ¯Ri−1 ˜aI,i −1)∧δϕi−1
+
+∆t2
+
+2
+
+− ¯Ri−1wa,i −1
+
+∆t2
+
+2 .
+
+(48) The covariance propagation is given approximately by: 
+
+Σi|i−1 ≈ ¯Ai−1Σi−1 ¯ATi−1 + ¯Bi−1Qi−1 ¯BTi−1, (49) where 
+
+¯Ai−1 =
+
+
+
+I3 03 03
+
+−( ¯Ri−1 ˜aI,i −1)∧∆t I3 03
+
+−( ¯Ri−1 ˜aI,i −1)∧ ∆t2 
+
+> 2
+
+I3∆t I3
+
+ ,
+
+¯Bi−1 =
+
+
+
+Ad ¯Ri|i−1 G1 
+
+> i−1
+
+03
+
+03 − ¯Ri−1∆t
+
+03 − ¯Ri−1 ∆t2
+
+> 2
+
+ .
+
+(50) Although SE 2(2) and SO(3) ×R6 are diffeomorphic as smooth manifolds, they do not share the same Lie group structure. As a result, the map Φ in (21) is not a group automorphism of 
+
+SO(3) × R6. Consequently, the corresponding noise-free error dynamics depend on the current state and are not autonomous (see Theorem 18 in [37]). For the SO(3) -EKF, the innovation is defined as [3]: 
+
+δzi := ˜ vB,i − ¯RTi ¯vi =(δϕi ⊕ ¯Ri)T (¯ vi + δvi) − ¯RTi ¯vi + wf,i ≈
+
+¯RTi ¯v∧ 
+
+> i
+
+δϕi + ¯RTi δvi + wf,i ,
+
+(51) then we define 
+
+¯Hi( ¯ xi) := ¯RTi
+
+¯v∧ 
+
+> i
+
+I3 03
+
+ , (52) and we consider Exp( δϕi) ≈ (I3 + δϕ∧ 
+
+> i
+
+) and δϕ∧ 
+
+> i
+
+δvi ≈ 03.Notice that the measurement model depends on the nominal 9
+
+state ¯xi through ¯Hi, because the measurement function is not an invariant observer for the group SO(3) ×R6. Finally, the up-date step is obtained with the well-known EKF equations [3]: 
+
+¯Si = ¯HiΣi|i−1 ¯HTi + Qf , (53) 
+
+¯Ki = Σi|i−1 ¯HTi ¯S−1 
+
+> i
+
+, (54) 
+
+δ ˆxi = ¯Kiδzi, (55) 
+
+Σi|i = ( I9 − ¯Ki ¯Hi)Σi|i−1. (56) The Iter SO(3) -EKF can be derived by considering the minimization problem analogous to (34): 
+
+arg min 
+
+> δx
+
+12 ∥δx∥2 
+
+> Σi|i−1
+
++12 ∥˜vB,i − (δϕ ⊕ ¯Ri|i−1)T (¯ vi|i−1 + δv)
+
+| {z } 
+
+> f(δx)
+
+∥2 
+
+> Qf
+
+. (57) Analogously to the IterIEKF, we can solve (57) using the Gauss-Newton method. We just need to provide a linearization of f (δx):
+
+(Exp( δϕ + ϵr ) ¯Ri)T (¯ vi + δv + ϵv ) ≈
+
+[(Exp( δϕ)Exp( Jr, SO(3) (δϕ)ϵr ) ¯Ri]T (¯ vi + δv + ϵv ) ≈
+
+[Exp( δϕ)( I3 + [ Jr, SO(3) (δϕ)ϵr ]∧) ¯Ri]T (¯ vi + δv + ϵv ) ≈
+
+[Exp( δϕ) ¯Ri]T (¯ vi + δv)+ ¯RTi Exp( −δϕ)(¯ vi + δv)∧Jr, SO(3) (−δϕ)ϵr +¯RTi Exp( −δϕ)ϵv ,
+
+(58) where in the last approximation we considered ϵ∧ 
+
+> r
+
+ϵv ≈ 03.Then, the Gauss-Newton sequence for Iter SO(3) -EKF is given as follows: 
+
+¯Hj+1  
+
+> i
+
+= ( δϕji ⊕ ¯Ri)T
+
+(¯ vi + δvji )∧Jr, SO(3) (−δϕji ) I3 03
+
+ , (59) 
+
+¯Sj+1  
+
+> i
+
+= ¯Hj+1  
+
+> i
+
+Σi|i−1( ¯Hj+1  
+
+> i
+
+)T + Qf , (60) 
+
+¯Kj+1  
+
+> i
+
+= Σi|i−1( ¯Hj+1  
+
+> i
+
+)T (¯Sj+1  
+
+> i
+
+)−1, (61) 
+
+δxj+1  
+
+> i
+
+= ¯Kj+1  
+
+> i
+
+(˜ vB,i − f (δxji ) + ¯Hj+1  
+
+> i
+
+δxji ), (62) 
+
+¯H0 
+
+> i
+
+:= ¯Hi(09,1), δ x0 
+
+> i
+
+:= 09,1. (63) Let k denote the last iteration, then the update step for the Iter SO(3) -EKF is given as follows: 
+
+δ ˆxi := δxki , (64) 
+
+¯xi := ¯ xi|i = δ ˆxi ⊕ ¯xi|i−1, (65) 
+
+Σi|i = ( I9 − ¯Kki ¯Hki )Σi|i−1. (66) The update step of Iter SO(3) -EKF can be seen as a natural extension of the Iterated Kalman Filter presented in [11]. The main difference is that the optimization is being performed on a Lie group instead of Rn, as the state variable encoding the orientation does not live in a vector space. For completeness, we give a geometrical interpretation of the Iterated Kalman Filter in Fig. 6. This also helps to justify why we use the last Jacobian ¯Hki to update the covariance matrix. We can see in 
+
+Fig. 6: Geometrical interpretation of the Iterated Kalman Filter. The red curve is the level set of the non-linear measurement 
+
+f (x) = y. At each iteration j, the measurement function is linearized around the state ¯xi|i−1 +δxj−1 
+
+> i
+
+, and the first contact point of the ellipsoid (prior) with the tangent plane gives an estimate of the error δxi.Fig. 6 that at each iteration j, the measurement function is linearized around the current estimate of the state, and the first contact point of the ellipsoid (prior) with the tangent plane gives an estimate of the error δxi. Therefore, at the last iteration k, the covariance matrix should be updated with the last Jacobian ¯Hki .
+
+D. Observability analysis 
+
+For the observability analysis, we consider the dynamics of the right-invariant error without process noise and measure-ment noise: 
+
+ξi = Aiξi−1 =
+
+
+
+I3 03 03
+
+∆tg× I3 03∆t2 
+
+> 2
+
+g× I3 I3
+
+ ξi−1,
+
+zi = Exp( ξi)−1d − d.
+
+(67) Following [4, p. 21], we built the observability matrix: 
+
+
+
+zi
+
+zi+1 
+
+zi+2 
+
+ =
+
+
+
+Exp( ξi)−1d − d
+
+Exp( Aiξi)−1d − d
+
+Exp( A2 
+
+> i
+
+ξi)−1d − d
+
+ ≈
+
+ HHA i
+
+HA 2
+
+> i
+
+ ξi =
+
+ 03 I3 03
+
+∆tg× I3 03
+
+2∆ tg× I3 03
+
+| {z }
+
+> O
+
+ξi.
+
+(68) By inspecting O in (68), we see that the position is not observable. Moreover, as the third column of g× is composed of zeros, we have that the yaw angle is also not observable. This conclusion was the same as the one obtained in [5], although our approach required far less computation as it leverages natural SE 2(3) Lie group coordinates, in which the observablity matrix is independent of the state, contrary to a more standard analysis [5]. Notice that the fact that the velocity part of the right-invariant error is observable means that the velocity in the IMU frame is observable. This is shown in the following calculation [24, p. 5]: 
+
+ev := v − R ¯RT ¯v = Jl, SO(3) (ξR) ξv
+
+|{z} 
+
+> →03
+
+→ 03 =⇒
+
+¯RT ¯v → RT v.
+
+(69) 10 
+
+As the estimation error converges to zero, the velocity ex-pressed in the base frame also converges, demonstrating its observability. For this reason, the velocity is presented in the base frame in the Results section. Analogously, we have that any rotation is observable except for the one around the gravity vector. Mathematically, this means that ξRx → 0 and ξRy → 0 and, in the limit, ξR → ξRz e3,
+
+e3 := [0 0 1] T . Moreover, this implies that only the gravity direction in the base frame, u := RT e3, is observable: 
+
+u = RT e3 =¯RT Exp SO(3) (−ξR) = ¯RT [I3 − (αI3 − β(ξR)∧)( ξR)∧]e3 
+
+> ξR→ξRze3
+
+=⇒
+
+¯RT [e3 − ξRz (αI3 − βξ Rz e∧ 
+
+> 3
+
+) e∧ 
+
+> 3
+
+e3
+
+| {z } 
+
+> 03
+
+)] = ¯RT e3 := ¯ u,
+
+(70) where α and β are coefficients of the Rodrigues’ rotation formula [17]. We denote by roll and pitch angles the following components of u: θ := atan2( uy , u z ) and ϕ := asin( ux) [41, p. 114]. 
+
+E. Geometric Interpretation of Invariant Iterated Kalman Fil-ter in the face of noise-free measurements 
+
+First, recall that in the face of noise-free measurements, the linear Kalman Filter update is given by [1, p. 4]: 
+
+xi+1 = xi + PiHT (HP iHT )−1(yi − Hx i) = 
+
+xi + K(yi − Hx i). (71) If we consider yi = 0, then (71) can be rewritten as: 
+
+xi+1 = ( I − KH )xi = Πx i. (72) It happens that (72) has a simple geometric interpretation: it is the first contact of the distribution N (xi, Pi) with the set Ker H. This point of contact can be obtained by the oblique projection (defined by Π) of xi on Ker H, i.e. Πx i. This idea is illustrated in Figure 7a for a 2D example. It can be observed that the current covariance is collapsed in the direction of Π
+
+and the covariance of the new state, Pi+1 = ΠP iΠT , is contained in Ker H. This implies that there is no uncertainty along Im H, i.e. HP i+1 HT = 0. The same reasoning was used in [42, p. 4] for dealing with the exact state’s constraint. The main breakthrough of [37], [1] was showing that a natural extension to this methodology exists when X belongs to a particular nonlinear manifold M that arises in robot state estimation. Let SX −1  
+
+> id=yi
+
+denote the observed set associated to a noise-free measurement yi (see Definition 1). Then, it can be shown that, after the update with IterIEKF, two properties are ensured for ˆXi and Pi|i:1) The state will belong to the observed set. We prove this property as follows. As discussed in the previous section, if the Gauss-Newton descent properly converges, say to 
+
+ˆξi, then the constraint zi − Exp( ˆξi)−1d + d = 03 is satisfied, which implies: 
+
+zi − Exp( − ˆξi)d − d = 03 =⇒
+
+Exp( − ˆξi)d − d = ¯Xiyi − d =⇒
+
+Exp( − ˆξi)d = ¯Xiyi =⇒
+
+(Exp( ˆξi) ¯Xi)−1d = yi,
+
+(73) then, after the update step, ¯Xi = ˆξi ⊕ ¯Xi|i−i ∈
+
+SX −1  
+
+> id=yi
+
+, and the velocity in the base frame ˆRTi ˆvi
+
+will be identical to the true value in face of a noise-free measurement. 2) There will be no uncertainty transversal to the set, i.e., Im Pi = T ˆX S, where the tangent space is expressed in the Lie algebra associated to right translations on the group (see Theorem 2 in [1]). On the other hand, no counterpart of those properties exists for the vanilla EKF, and only the first property is ensured for the iterated EKF on Lie group (represented in this work by Iter SO(3) -EKF). This is illustrated in Fig. 7b. In the following, we describe the topology of the observed set for the proposed measurement model. For simplicity, we choose to illustrate in two dimensions using the group SE 2(2) ,with d = [ 02,1, 1, 0] T . For this problem, the isotropy group 
+
+Gd is given by: 
+
+Gd = {(R, {v, p}) ∈ SE 2(2) |R ∈ SO(2) , v = 02, p ∈ R2},
+
+(74) and the observed set is GdX , where X is a fixed true state. Notice that, different from the observed set discussed in Section IV, the rotation-translation component in this case is not bounded. This reflects the fact that position and yaw angle are unobservable. Now, we describe the influence of the covariance ma-trix in the update state found by IterIEKF. Let P =diag( Pθ , P vx , P vy , P xx , P xy ) and the error state ξi|i−1 =
+
+{ξθ , ξ vx, ξ vy , ξ px, ξ py } ∼ N (0, P). As shown in Fig. 3, the estimated error ˆξi is dependent on the computed innovation 
+
+zi and current covariance P. Similarly, we now demonstrate how its components impact the proposed update step. In Fig. 8a, we considered three initial states, spaced by 1m along the 
+
+y-axis, ¯X = {i(π/ 3) , i + 1 , i + 1 , 0, i } with i ∈ { 0, 1, 2}, and a true state X = {π/ 3, 1, 1, 4, 2}. We simulated an update with IterIEKF using an almost noise-free true base velocity. First, note that if P vx = P vy = 0 , then trivially ˆξi = 05,since there is no uncertainty in the velocity error. Moreover, if P vx = P vy = c, then the solution is ˆξi = {0, ξ x, ξ y , 0, 0} =
+
+{0, RT v − ¯vi}, which is a linear problem that can be solved exactly with IEKF. The situation becomes more interesting when P vx = 0 or P vy = 0 . In this case, there is only one non-zero component in the velocity error, ξx or ξy . Let us say that 
+
+P vy = 0 , then the only way to appear a component y in the error velocity (in the base frame) is by means of a rotational component ξθ in the error. Analogously, when P vx = 0 , ξθ is also required in order to appear a component x in the error velocity. This makes the problem nonlinear and unsolvable by IEKF. However, IterIEKF can solve it exactly. The results show that even in highly nonlinear cases, the update with IterIEKF successfully recovered the true base velocity. The number of iterations required for convergence in i = 2 was 
+
+5 for P vy = 0 and 20 for P vx = 0. We also considered an intermediate case where P vy /P vx = 2 , which required 6
+
+iterations to converge. As expected, the position and yaw angle remain unobservable. To illustrate the difference between IterIEKF and IEKF, we also performed an update step with IEKF under the same 11  
+
+> Ker
+> (a) (b)
+
+Fig. 7: a) The Kalman Filter update can be seen as an oblique projection on the observed set. b) Update step with EKF ( ˆX + δ ˆx) and IterIEKF ( ˆξ ⊕ ˆX ). While after the update with IterIEKF the state is guaranteed to belong to the constraint and there is no uncertainty orthogonal to it, neither of these properties can be guaranteed by the EKF.  
+
+> (a) (b)
+
+Fig. 8: Comparison of the update step using IterIEKF a) for different values of P b) and IEKF with almost noise-free velocity measurements in the base frame. conditions as before. The result is shown in Fig. 8b, where the iterations of IterIEKF are also highlighted. We considered the case P vy = 0 to enforce a nonlinear problem. We can observe that IEKF is unable to perform a rotation in order to match the measured base velocity, it is only able to correct the velocity linearly. 
+
+F. On the modification of the update step to avoid abrupt jumps 
+
+As discussed in Section V-E, IterIEKF applies at each iteration a corrective rotation about the z-axis in order to enforce the linear velocity measurement in the base frame. In simulation, however, we observed that this mechanism may introduce noticeable jumps in the estimated yaw angle, as illustrated in Fig. 9a. It is important to emphasize that these yaw variations do not affect the quantities constrained by the measurement model: the linear velocity expressed in the base frame, as well as roll and pitch angles, remain unchanged. This behavior reflects the fact that yaw is non-observable under the considered sensing configuration. Consequently, the filter is free to adjust the yaw angle without violating the measurement constraints, which can lead to abrupt but dynam-ically consistent changes. While this does not compromise the estimator consistency, such discontinuities may be undesirable in applications that rely directly on the yaw estimate, e.g., for navigation or high-level planning. To improve practical usabil- 
+
+> (a) (b)
+
+Fig. 9: a) The IterIEKF update (in red) causes abrupt jumps in the position estimate. b) Mitigation of the abrupt changes caused by the update step, applying the modification proposed in proposed in (75). ity, we therefore introduce an optional post-update correction step that removes the spurious z-axis rotation while preserving all measurement-consistent quantities. Specifically, after the IterIEKF update, we apply 
+
+ˆXi|i := 
+
+h
+
+01,2 − ˆξRz,i 01,6
+
+iT
+
+⊕ ˆXi|i, (75) which cancels the unnecessary yaw component introduced during the iterative correction. The same simulation with this optional modification is shown in Fig. 9b. VI. RESULTS In the following sections, we compare the IEKF, IterIEKF, 
+
+SO(3) -EKF, and Iter SO(3) -EKF across four experimental settings. The first evaluates the convergence time in a MuJoCo simulation, the second consists of a Monte Carlo study with synthetic data, the third is a Monte Carlo study using data from a quadruped robot simulator, and the fourth presents results using a real-world dataset. Monte Carlo simulations are performed by first defining an initial true state X0, white-noise models for the IMU measure-ments and base velocity, and an initial error covariance P0.At the beginning of each realization k, an error vector ξk 
+
+> 0
+
+is sampled from N (09,1, P0). Then, for the invariant filters, the simulation is initialized as ¯X0 = ( −ξk 
+
+> 0
+
+) ⊕ X 0 = ( ¯R0, ¯v0, ¯x0).12 
+
+For the non-invariant filters, first we find a linear relation between ξk 
+
+> 0
+
+and δxk 
+
+> 0
+
+which is given by [4, pg. 39]: 
+
+δxk 
+
+> 0
+
+≈
+
+
+
+I3 03 03
+
+−¯v∧ 
+
+> 0
+
+I3 03
+
+−¯p∧ 
+
+> 0
+
+03 I3
+
+ ξk 
+
+> 0
+
+= Jkξk 
+
+> 0
+
+, (76) thus it follows the covariance initialization Σk 
+
+> 0
+
+= JkP0Jk,T 
+
+and the nominal state is taken as ¯x0 = δxk 
+
+> 0
+
+⊕ x0. At each time step, the estimation error with respect to the ground truth is computed and used to evaluate the average Normalized Estimation Error Squared (NEES) as a measure of filter consistency [31, p. 165]: 
+
+NEES SE 2(3)  
+
+> i
+
+= 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+ξk,T i (Pki )−1ξki ,
+
+NEES SO(3) ×R6 
+
+> i
+
+= 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+δxk,T i (Σki )−1δxki ,
+
+ξki = Log SE 2(3) (Xi( ¯Xi|i)−1),δxki = Log SO 3×R6 (xi( ¯ xi|i)−1),
+
+(77) where K is the total number of realizations. In this work, we considerer two metrics, Mean Absolute Error (MAE), and Root Mean Square Error (RMSE), of the observable state, composed of base velocity in the base frame ( ¯RTi|i ¯vi|i), gravity direction ( ¯ui|i), pitch angle ( ¯ϕi|i), and roll angle ( ¯θi|i). We use MAE for cases in which a large initial error was introduced, and RMSE for cases in which no such error was present. They are given as follows:       
+
+> MAE x= 1
+> n
+> nX
+> i=1
+> e(¯ xi|i,xi),RMSE x:=
+> vuut1
+> n
+> nX
+> i=1
+> e(¯ xi|i,xi)2,
+> (78)
+
+where n is the number of timestamps, equal to the frequency of the proprioceptive sensors multiplied by the duration of the trajectory, and e(xi, ¯xi|i) is a metric that measures the error between the estimate ¯xi|i and the corresponding interpolated reference xi at time step i. For most estimates, this metric is the Euclidean norm, e := ∥xi − ¯xi|i∥. For the gravity direction, however, we use e := acos(¯ ui|i · ui), which provides a more natural interpretation of the error. 
+
+A. State Estimation in MuJoCo Simulation under large initial error 
+
+In this experiment, we evaluate the performance of the four filters on the eight-shape trajectory described in Section V-A. To increase the level of difficulty, a ramp is introduced at the start of the trajectory, and the initial state is perturbed with a large error, resulting in the following nominal initial state: 
+
+¯X0 =
+
+
+
+¯R0 ¯v0 ¯p0
+
+03,1 1 0
+
+03,1 0 1
+
+ , x0 = { ¯R0, ¯v0, ¯p0},
+
+¯R0 =
+
+
+
+0 0 −10 1 01 0 0
+
+ , ¯v0 =
+
+
+
+2.52.03.0
+
+ , ¯p0 =
+
+
+
+−0.50.00.2
+
+ .
+
+(79) IMU measurements are corrupted with covariance Qi =10 −2I6, while the base velocity measurement covariance is estimated from a preliminary run and given by 
+
+wf,i ∼ N (03,1, diag(7 .84 , 4.00 , 25 .00) × 10 −4). (80) Performance is assessed in terms of convergence time to reach predefined error thresholds of 0.05 m /s for base ve-locity and 0.015 rad for the gravity direction. As shown in Fig. 1, IterIEKF converges 2.5 times faster than IEKF, while Iter SO(3) -EKF achieves a similar convergence rate to IEKF. This demonstrates that the iterated filtering approach significantly improves convergence speed in the presence of large initial errors. 
+
+B. Monte Carlo Simulation with synthetic data 
+
+In this experiment, we assume that the IMU is measuring a constant linear acceleration and angular velocity. More-over, we consider as measurement covariance the matrix 
+
+diag(10 −4, 10 −5, 10 −3) which is a typical covariance matrix for a simulated quadruped robot walking on a flat terrain (see Section V-A). Once fixing the IMU measurements, we apply the prediction and update steps for m times in a row. We repeat this procedure for K realizations. We also assume white noise acceleration in all directions. For the motion to remain in the x − y plane, we only assume gyroscope white noise in the z-direction (yaw angle). All parameters are described as follows: 
+
+P0 = diag 
+
+ π
+
+12 
+
+2
+
+I3, (0 .1) 2I3, (0 .1) 2I3
+
+
+
+,
+
+wa,i ∼ N (03,1, 5 × 10 −3I3),
+
+wg,i ∼ N (03,1, diag (0 , 0, 3 × 10 −2)) ,
+
+wf,i ∼ N (03,1, diag(10 −4, 10 −5, 10 −3),
+
+aI,i =
+
+
+
+109.81 
+
+ , ωI,i =
+
+
+
+00
+
+> π
+> 30
+
+ ,m = 300 , ∆t = 0 .05 , K = 100 .
+
+(81) We present the main simulation results in Fig. 10. Figures 10a and 10b show the average norm of the velocity error and the average of gravity direction error, respectively. Both IterIEKF and Iter SO(3) -EKF converged faster than their classical coun-terparts. More specifically, IterIEKF required 40% less time to achieve the same error as IEKF. To measure accuracy, we com-puted the MAE over the first 5 s of the average error. IterIEKF reduced the error in the velocity by 27% and in the gravity direction by 10% with respect to IEKF. Figure 10c reports the average NEES, which, for this problem, should be close to 9.Here, we observe the false observability issue that is common in the SO(3) -EKF methodology: the filter becomes overcon-fident because the observability matrix for this problem is incorrectly modeled as fully observable. This issue is not re-solved by IterSO(3)-EKF. In contrast, IterIEKF remains close to 9 from the start, indicating consistent uncertainty estimates. Fig. 10d compares the number of iterations required during the update step: both methods behave similarly, typically converg-ing in about six iterations. Finally, Fig. 10e shows a Monte 13 0 5 10 15    
+
+> Time (s)
+> 10 -2
+> 10 -1
+> 10 0
+> E[ k 7RTiji 7viji ! RTi vik] (m/s)
+> IEKF IterIEKF SO3-EKF IterSO3-EKF
+
+(a) 0 5 10 15       
+
+> Time (s)
+> 10 -2
+> 10 -1
+> 10 0
+> 10 1
+> 10 2
+> E[acos( 7uiji " ui)]( /) IEKF IterIEKF SO3-EKF IterSO3-EKF
+
+(b) 0 5 10 15       
+
+> Time (s)
+> 10 0
+> 10 2
+> 10 4
+> 10 6
+> 10 8
+> NEES i IEKF IterIEKF SO3-EKF IterSO3-EKF
+
+(c) 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 # iterations 010 20 30 40 50 Frequency of occurrence (%)  IterIEKF IterSO3-EKF 
+
+> 30
+> //
+
+(d) (e) 
+
+Fig. 10: Results of the numerical Monte Carlo experiment with synthetic data. a) Average normalized error for the velocity in the base frame. b) Average normalized error for the gravity direction. c) Average NEES. d) Histogram for the number of iterations required for IterIEKF and Iter SO(3) -EKF convergence. e) One realization of the Monte Carlo simulation. Carlo realization, highlighting that position and yaw are unob-servable, while body-frame velocity is accurately estimated. 
+
+C. Monte Carlo Simulation with a simulated quadruped robot on an irregular terrain 
+
+In this section, we perform a Monte Carlo simulation of a quadruped robot walking along the forward direction on a simulated terrain of non-constant curvature. The terrain was chosen to introduce significant pitch variations. It is composed of three bumps, which present a variability of the robot’s pitch angle. We started the state estimation methods when the robot is already in the middle of the first bump, as shown in Fig. 11. The initial covariance, IMU’s measurements covariance, 
+
+Fig. 11: Simulated quadruped robot on a challenging terrain using Gazebo. We start the estimation as soon the robot enters the first bump. The whole trajectory can be seen here. and feet velocity covariance were defined as follows: 
+
+P0 = diag 
+
+ π
+
+4
+
+2
+
+I3, (1 .0) 2I3, (0 .1) 2I3
+
+
+
+,
+
+wa,i ∼ N (03,1, 4.0 × 10 −2I3),
+
+wg,i ∼ N (03,1, 2.0 × 10 −3I3),
+
+wf,i ∼ N (03,1, diag(0 .502 , 0.740 , 5.149) × 10 −4),K = 50 .
+
+(82) The measurement covariance wf,i was obtained by a first run of the simulation. We computed the sample covariance matrix based on the history of the velocities in the base frame obtained with (17). We assumed that a foot is in contact if the z component of its ground reaction force was above a fixed threshold of 30 N . The calculation was corrupted by the gyroscope noise wg,i defined in (82). The result is shown in Fig. 12. Figures 12a and 12b reports the average normalized error of the velocity (expressed in the base frame) and of the gravity vector, respectively. We observe that IterIEKF required 60% less time to achieve the same error as IEKF. In terms of accuracy, IterIEKF reduced the MAE over the first 5 s in the velocity by 63% 
+
+and in the gravity direction by 60% with respect to IEKF. Furthermore, the other iterated approach, Iter SO(3) -EKF, only improves upon SO(3) -EKF and performs worse than the IEKF. This behavior is due to its lack of consistency. As indicated by the average NEES in Fig. 12c, Iter SO(3) -EKF exhibits the poorest consistency among all methods, whereas IterIEKF shows the best. Figure 12d also reports the number of iterations required for convergence over 50 Monte Carlo realizations. We can see that IterIEKF requires more iterations (most of the time 5), while Iter SO(3) -EKF converges most of 14    
+
+> (a) (b) (c)
+> (d) (e)
+
+Fig. 12: Results of the numerical Monte Carlo experiment with a simulated quadruped robot on a challenging terrain. a) Average normalized error for the velocity in the base frame. b) Average normalized error for the gravity direction. c) Average NEES. d) Histogram for the number of iterations required for IterIEKF and Iter SO(3) -EKF convergence. e) Average estimated pitch angle for each method. the time in 3 iterations. Finally, Fig. 12e shows the average estimated pitch angle ϕ. IterIEKF achieves a very small error relative to the ground truth starting approximately 3 s after the simulation begins, whereas the other methods require more time to reach a comparable accuracy. 
+
+D. Real-world dataset evaluation 
+
+In this section, we evaluate the performance of the pro-posed filter using a public dataset that contains a real-world experiment conducted with the Anymal D robot [43]. The dataset employed in this evaluation is Pilatus-Hike2 2,which is part of the GrandTour dataset [44]. The recorded trajectory follows a zigzag trail commonly used by hikers to ascend Mount Pilatus in Switzerland. The robot first traverses the trail downhill, descending approximately 30 m in altitude, and then repeats the same path in the opposite direction, ascending approximately 22 m . The duration of the trajectory is approximately 400 s , and the total distance traveled by the robot is around 250 m . Some parts of the trajectory are illustrated in Fig. 13a. A key characteristic of this experiment is the significant variation in terrain inclination along the trajectory. For instance, at the beginning of the run, the robot descends a staircase with an inclination of approximately 
+
+30 ◦, as shown in Fig. 13b. Although the dataset includes exteroceptive information, we use only proprioceptive mea-surements. Specifically, we rely on the IMU, which provides accelerometer and gyroscope data; joint-state measurements, including joint positions and velocities; and foot force sensors that measure Ground Reaction Forces (GRFs). All of these sensors have an acquisition frequency of 400 Hz . A robot 
+
+> 2https://grand-tour.leggedrobotics.com/dataset#mission-19-on
+
+foot is assumed to be in contact with the ground when the 
+
+z-component of the GRF exceeds a fixed threshold of 60 N .
+
+> (a)
+> (b)
+
+Fig. 13: a) Samples of the trajectory followed by the AnymalD robot in the Pilatus-Hike2 dataset. b) Poses of the reference trajectory during its beginning, where it descends a staircase with an inclination of approx 30 ◦.The reference pose trajectory used for the evaluation (also shown in Fig. 13b) was obtained with a 200 Hz CPT7 sensor 3
+
+mounted on the robot. This sensor combines a high-end IMU with a dual-antenna GNSS receiver and provides accurate pose 
+
+> 3https://novatel.com/products/gnss-inertial-navigation-systems/ combined-systems/cpt7 15
+
+estimates in the global frame. To obtain reference velocity estimates, we applied a Savitzky–Golay filter to the reference pose trajectory. The filter parameters were chosen as a window length of 25 and a polynomial order of 5. Since the estimation error is evaluated at every estimator timestamp, the reference pose must be interpolated to match the 400 Hz estimation rate. The initial parameters for the filters are described as follows. First, we fixed the maximum number of iterations to 4 for the iterated filters. This number was chosen to combine the results of the previous experiments presented in earlier sections with a small value that does not introduce any relevant increase in computational time. The other parameters are: 
+
+P0 = diag 
+
+ π
+
+20 
+
+2
+
+I3, (0 .1) 2I3, (0 .1) 2I3
+
+
+
+,
+
+wa,i ∼ N (03,1, diag(1 .0, 1.0, 2.25)) ,
+
+wg,i ∼ N (03,1, 2.5 × 10 −3I3),
+
+wf,i ∼ N (03,1, diag(0 .280 , 0.009 , 0.018)) ,
+
+(83) where the covariance of wf,i was obtained in a first run by comparing the reference velocity with the nominal velocity obtained using (17). To reduce the amount of noise, we also employed a simple averaging between the current velocity and the one obtained in the previous step. Although this slightly reduced the uncertainty, the measurement noise re-mains significantly higher than the one obtained in simulation (see (82)). We therefore expect this amount of noise to reduce the superconvergent behavior of the IterIEKF observed in the previous experiments. In Fig. 14, we compare the z-component of the velocity in the base frame obtained from the reference (CPT7 sensor) and the nominal velocity obtained using (17). Besides the higher noise level, we observe large intermittent peaks that occur during foot contact (see Fig. 5) and a change in variance over time, which suggests heteroscedasticity. These observations indicate that the measurement noise is non-Gaussian. We analyze the estimation performance of the four filters, IEKF, IterIEKF, SO(3) -EKF, and Iter SO(3) -EKF, under three distinct scenarios:  
+
+> •
+
+Scenario 1: Estimation of the complete trajectory using the parameters in (83) and the same initial state as the reference trajectory.  
+
+> •
+
+Scenario 2: Same parameters as in Scenario 1, but with a large error introduced in the initial pose.  
+
+> •
+
+Scenario 3: Same configuration as Scenario 2, except that the nominal velocity is replaced by the reference velocity corrupted with additive white noise, wf,i ∼N (03×1, 10 −4I3).The RMSE results for Scenario 1 are shown in Table I, while the corresponding time evolution of the estimates is shown in Fig. 15. Overall, in this scenario, all filters performed similarly, with IterIEKF achieving slightly lower errors in all observ-ables. From Fig. 15, we observe that the velocity estimates (Figs. 15a–15c) are less accurate than the pitch (Fig. 15d) and roll (Fig. 15e) angle estimates. More specifically, while the angular errors are less than half a degree, the velocity error is about 15 % of the average velocity of 0.625 m /s. This may be due to the non-Gaussian nature of the measurement 
+
+Fig. 14: Comparison of the z-component relative velocity in the base frame, obtained with the reference trajectory, and the nominal velocity obtained with 17. The measurement noise is significantly higher than that obtained in the simulation. noise. The large intermittent peaks suggest the use of heavy-tailed distributions, such as Huber or Tukey losses, to model the measurement noise, as also suggested in [24]. However, identifying the best parameters for these distributions remains an active area of research. Despite the RMSE values, we em-phasize that the filtered velocities significantly reduce the error compared to the non-filtered measurements, as can be seen by comparing Fig. 14 and Fig. 15c. Finally, Fig. 15f shows the estimated trajectories for all filters, where the invariant filters outperform the non-invariant ones. This is because the non-invariant filters are affected by the false observability issue, which causes them to be overconfident about the unobservable states [14]. TABLE I: Comparison of RMSE (and standard deviation) of the observable state between different filters in Scenario 1.                                 
+
+> RMSE vel (m/s )RMSE u(◦)RMSE ϕ(◦)RMSE θ(◦)
+> IterIEKF 0.097769 0.44342 0.34482 0.28518
+> (0.0514) (0.1336) (0.1468) (0.1347) IEKF 0.097771 0.44359 0.34483 0.28544 (0.0514) (0.1336) (0.1469) (0.1348)
+> SO 3-EKF 0.097819 0.46437 0.36711 0.29098 (0.0513) (0.1326) (0.1496) (0.1386) Iter SO 3-EKF 0.097823 0.46307 0.36599 0.29029 (0.0513) (0.1325) (0.1495) (0.1383) Smallest RMSE is marked in bold, while the second smallest is highlighted.
+
+In Table II and Fig. 16, we present the MAE results over the first 5 s and the estimates for Scenario 2. In this scenario, the MAE was adopted due to the large error introduced in the initial state. The estimation begins 17 s after the start of the trajectory in order to analyze the transient behavior of the filters. For the velocity components (Figs. 16a–16c), all filters performed similarly, with IEKF achieving the smallest error. Iter SO(3) -EKF performed slightly better than SO(3) -16 
+
+(a) (b) (c) 
+
+(d) (e) (f) 
+
+Fig. 15: Estimates obtained with different filters on the Pilatus-Hike2 dataset under Scenario 1 conditions. a) x-component, b) y-component, c) z-component of the relative velocity ¯Ri|i ¯vi|i. d) Estimate of the pitch angle ¯ϕi|i. e) Estimate of the roll angle ¯θi|i. f) Estimate of the trajectory ¯pi|i.TABLE II: Comparison of MAE over the first 5 s of the observable state for different filters in Scenario 2. Percentages indicate increase relative to the lowest error in each column.                                 
+
+> MAE vel (m/s )MAE u(◦)MAE ϕ(◦)MAE θ(◦)
+> IterIEKF 0.088708 1.2244 0.68245 1.0423 (+0.43%) (+2.93%) (0%) (+13.22%) IEKF 0.088332 1.2884 0.76842 1.1141 (0%) (+8.31%) (+12.59%) (+20.99%)
+> SO 3-EKF 0.089225 1.4766 0.94817 1.198 (+1.01%) (+24.12%) (+38.90%) (+30.15%) Iter SO 3-EKF 0.088866 1.1896 0.86155 0.9206
+> (+0.60%) (0%) (+26.26%) (0%) Smallest MAE is marked in bold, while the second smallest is underlined.
+
+EKF, while IterIEKF performed slightly worse than IEKF, possibly due to the high level of measurement noise. For the pitch angle (Fig. 16d), IterIEKF achieved the smallest error, TABLE III: Comparison of MAE over the first 5 s of the observable state for different filters in Scenario 3. Percentages indicate increase relative to the lowest error in each column.                                 
+
+> RMSE vel (m/s )RMSE u(◦)RMSE ϕ(◦)RMSE θ(◦)
+> IterIEKF 0.015924 0.85114 0.56495 0.62606
+> (0%) (0%) (0%) (0%) IEKF 0.016019 0.9857 0.7303 0.65386 (+0.60%) (+15.81%) (+29.27%) (+4.44%)
+> SO 3-EKF 0.020007 6.954 2.8188 6.7823 (+25.64%) (+716.89%) (+399.00%) (+983.00%) Iter SO 3-EKF 0.016519 1.7165 1.5552 0.70186 (+3.74%) (+101.67%) (+175.33%) (+12.11%) Smallest MAE is marked in bold, while the second smallest is underlined.
+
+12 % less than IEKF. It also converged faster than all filters. Similarly, Iter SO(3) -EKF converged faster than SO(3) -EKF. For the roll angle (Fig. 16e), Iter SO(3) -EKF performed best, 17 
+
+with 20 % less error than IEKF. For the gravity direction in Fig. 16f we also observe a faster convergence rate of IterIEKF in relation to IEKF. Finally, Fig. 17 and Table III present the results for Sce-nario 3. This scenario is similar to Scenario 2, but the mea-surement function was artificially replaced by the reference measurement corrupted with white noise of small covariance, 
+
+wf,i ∼ N (03,1, 10 −4I3). The MAE values in the velocities decrease considerably for all filters, highlighting the impact of non-Gaussian noise in the previous scenarios. For the velocity components (Figs. 17a–17c), all filters, but SO(3) -EKF, continue to perform similarly, with IterIEKF achieving the lowest error. For the remaining states, the iterated invariant filter shows clear improvements. In particular, for the pitch angle and gravity direction (Figs. 17d and 17f), IterIEKF demonstrates the superconvergent behavior observed in pre-vious experiments. This experiment confirms that when the measurement noise is truly white and has small covariance, IterIEKF outperforms the classical filters. VII. LIMITATIONS There are two important limitations of the iterated filters. First, the covariance of the measurement function must be well known. Second, it should be small. Experimental results indicate that if an incorrect covariance matrix is used for the iterated filters, the estimate may be worse than that of their non-iterated counterparts. This is a classical feature of iterated filters, though, as they better incorporate the measurement by finding the actual maximum a posteriori: if the measurement does not bring much information, their advantage is limited and iterating on a bad measurement may prove counter-productive. Moreover, we observe that if the measurement covariance matrix of the measured velocity has relatively large values ( > 10 −2I3 (m 2/s2)), the improvement achieved by the iterated filters is significantly reduced, as shown in the previous section. VIII. CONCLUSIONS AND FUTURE WORK In this work, we proposed a novel IterIEKF for state estima-tion in legged robots, building on the latest developments in invariant filtering theory. Through numerical simulations and a real-world dataset, we demonstrated that the proposed filter remains effective even in the presence of noisy measurements, thus extending the theoretical properties established in [1] to realistic scenarios. Furthermore, we showed that as few as four iterations are sufficient to achieve a considerable improvement in the estimates, without introducing a significant increase in computational time. As future work, we plan to extend the IterIEKF to other state-estimation scenarios. As shown in Fig. 2, its superior accuracy in classical localization suggests strong potential for SLAM applications. We also aim to develop an IterIEKF for-mulation based on the Two-Frame Group [28] to incorporate accelerometer bias, and to investigate how additional mea-surements, such as forward kinematics, can further improve performance within an iterated filtering framework. APPENDIX 
+
+A. Lie Group formulas for SE 2(3) and SO(3) × R6
+
+Here we define exponential and logarithm maps for SE 2(3) 
+
+and SO(3) × R6:
+
+R9 7 → SE 2(3) Exp SE 2(3) (ξ) := Exp([ ξR ξv ξp]T ) = 
+
+
+
+Exp SO(3) (ξR) Jl, SO(3) (ξR)ξv Jl, SO(3) (ξR)ξp
+
+01,3 1 0
+
+01,3 0 1
+
+ ,
+
+(84) 
+
+R9 7 → SO(3) × R6
+
+Exp SO(3) ×R6 (δx) := Exp([ δxR δxv δxp]T ) = 
+
+{Exp SO(3) (δxR), δ xv, δ xp},
+
+(85) 
+
+SE 2(3) 7 → R9
+
+Log SE 2(3) (X ) := 
+
+
+
+Log SO(3) (R)
+
+Jl, SO(3) (Log SO(3) (R)) −1v
+
+Jl, SO(3) (Log SO(3) (R)) −1p
+
+ , (86) 
+
+SO(3) × R6 7 → R9
+
+Log SO(3) ×R6 (x) := 
+
+
+
+Log SO(3) (R)
+
+vp
+
+ , (87) where 
+
+Jl, SO(3) (ξR) = I3 + 1 − cos( ∥ξR∥)
+
+∥ξR∥2 [ξR]×+
+
+∥ξR∥ − sin( ∥ξR∥)
+
+∥ξR∥3 ([ ξR]×)2,
+
+(88) 
+
+Jl, SO(3) (ξR)−1 = I3 − 12 [ξR]×+
+
+ 1
+
+∥ξR∥2 − 1 + cos( ∥ξR∥)2∥ξR∥ sin( ∥ξR∥)
+
+
+
+([ ξR]×)2,
+
+(89) 
+
+Exp SO(3) (ξR) = I3 + sin( ∥ξR∥)
+
+∥ξR∥ [ξR]×+1 − cos( ∥ξR∥)
+
+∥ξR∥2 ([ ξR]×)2,
+
+(90) 
+
+Log SO(3) (R) = θ
+
+2 sin( θ) (R − RT )∨,θ = acos 
+
+ tr( R) − 12
+
+
+
+,
+
+(91) and (·)× is the skew-symmetric operator and (·)∨ is its inverse. The right-jacobian for SE 2(3) , Jr, SE 2(3) , is given by [29]: 
+
+Jr, SE 2(3) (ξ) = Jl, SE 2(3) (−ξ), (92) 
+
+Jl, SE 2(3) (ξ) = 
+
+
+
+Jl, SO(3) (ξR) 0 0
+
+Q(ξR, ξv) Jl, SO(3) (ξR) 0
+
+Q(ξR, ξp) 0 Jl, SO(3) (ξR)
+
+ , (93) 18 17.4 17.5 17.6 17.7 17.8 17.9 
+
+Time (s) 
+
+-2 -1 01
+
+> Relative Velocity X (m/s)
+
+IEKF IterIEKF SO3-EKF IterSO3-EKF Reference 
+
+(a) 17.4 17.5 17.6 17.7 17.8 17.9 
+
+Time (s) 
+
+-0.5 00.5 11.5 2
+
+> Relative Velocity Y (m/s)
+
+IEKF IterIEKF SO3-EKF IterSO3-EKF Reference (b) 17.4 17.5 17.6 17.7 17.8 17.9 
+
+Time (s) 
+
+-0.5 00.5 11.5 2
+
+> Relative Velocity Z (m/s)
+
+IEKF IterIEKF SO3-EKF IterSO3-EKF Reference (c) 17.4 17.5 17.6 17.7 17.8 17.9 
+
+Time (s) 
+
+-20 020 40 60 80 100 
+
+> Pitch Angle ( /)
+
+IEKF IterIEKF SO3-EKF IterSO3-EKF Reference 
+
+(d) 17.4 17.5 17.6 17.7 17.8 17.9 
+
+Time (s) 
+
+-200 -100 0100 
+
+> Roll Angle ( /)
+
+IEKF IterIEKF SO3-EKF IterSO3-EKF Reference (e) 17.4 17.5 17.6 17.7 17.8 17.9 
+
+Time (s) 
+
+020 40 60 80 
+
+> Error in Gravity Direction ( /)
+
+IEKF IterIEKF SO3-EKF IterSO3-EKF (f) 
+
+Fig. 16: Estimates obtained with different filters on the Pilatus-Hike2 dataset under Scenario 2 conditions. a) x-component, b) y-component, c) z-component of the relative velocity ¯Ri|i ¯vi|i. d) Estimate of the pitch angle ¯ϕi|i. e) Estimate of the roll angle ¯θi|i. f) Error in the gravity direction acos(¯ ui|i · ui).17.4 17.5 17.6 17.7 17.8 17.9 
+
+Time (s) 
+
+-2 -1 01
+
+> Relative Velocity X (m/s)
+
+IEKF IterIEKF SO3-EKF IterSO3-EKF Reference 
+
+(a) 17.4 17.5 17.6 17.7 17.8 17.9 
+
+Time (s) 
+
+-0.5 00.5 11.5 2
+
+> Relative Velocity Y (m/s)
+
+IEKF IterIEKF SO3-EKF IterSO3-EKF Reference (b) 17.4 17.5 17.6 17.7 17.8 17.9 
+
+Time (s) 
+
+-0.5 00.5 11.5 2
+
+> Relative Velocity Z (m/s)
+
+IEKF IterIEKF SO3-EKF IterSO3-EKF Reference (c) 17.4 17.5 17.6 17.7 17.8 17.9 
+
+Time (s) 
+
+020 40 60 80 100 
+
+> Pitch Angle ( /)
+
+IEKF IterIEKF SO3-EKF IterSO3-EKF Reference 
+
+(d) 17.4 17.5 17.6 17.7 17.8 17.9 
+
+Time (s) 
+
+-150 -100 -50 050 100 
+
+> Roll Angle ( /)
+
+IEKF IterIEKF SO3-EKF IterSO3-EKF Reference (e) 17.4 17.5 17.6 17.7 17.8 17.9 
+
+Time (s) 
+
+050 100 150 
+
+> Error in Gravity Direction ( /)
+
+IEKF IterIEKF SO3-EKF IterSO3-EKF (f) 
+
+Fig. 17: Estimates obtained with different filters on the Pilatus-Hike2 dataset under Scenario 3 conditions. a) x-component, b) y-component, c) z-component of the relative velocity ¯Ri|i ¯vi|i. d) Estimate of the pitch angle ¯ϕi|i. e) Estimate of the roll angle ¯θi|i. f) Error in the gravity direction acos(¯ ui|i · ui).
+
+Q(ξR, ξu) = 12 U + a(VU + UV + VUV )
+
+−b(VVU + UVV − 3VUV )+c(VUVV + VVUV ),
+
+V = ( ξR)×, θ = ∥ξR∥, U = ( ξu)×,a = θ − sin θθ3 , b = 1 − θ2
+
+2 − cos θθ4 ,c = − 12
+
+1 − θ2
+
+2 − cos θθ4 − 3 θ − sin θ − θ3
+
+6
+
+θ5
+
+!
+
+.
+
+(94) 
+
+B. Proof of Proposition 1
+
+Let G be the same Lie Group as in Definition 1 and let Gd
+
+be a subgroup of G defined as: 
+
+Gd := {X ∈ G | X d = d}, (95) known as the stabilizer of d. Let X0 ∈ SX −1y=d such that 
+
+X −10 d = y. Then, for any element X ∈ GdX0, we have: 
+
+X −1d = ( X −10 H−1)d = X −10 (H−1d) = X −10 d = y, (96) 19 
+
+where H ∈ Gd, so that GdX0 ⊆ SX . Conversely, for any 
+
+X ∈ SX −1d=y, let H := X X −10 , notice that: 
+
+Hd = X X −10 d = X y = d, (97) then H ∈ Gd and SX −1d=y = GdX0.
+
+C. Robocentric Formulation of IterIEKF 
+
+In this section, we develop a robot-centric formulation of the IterIEKF. While the proposed world-centric formulation is well-suited for navigation, a robot-centric approach is more appropriate for control, since the base velocity in the state is naturally expressed in the base frame. We define the robocentric state, χ, by using the inverse of X defined in (10): 
+
+χ := X −1 = ( RT , −RT v, −RT p) := ( C, v, r) := ( C, e),
+
+(98) where C := RT and e := [ v, r]T . Notice we keep the same notation as [5]. We obtain the prediction step by inverting (21): 
+
+¯χi|i−1 = F−1
+
+> i−1
+
+( ¯Xi−1) = F−1
+
+> i−1
+
+( ¯ χi−1) = ¯Y−1
+
+> i−1
+
+(wi−1)Φ −1
+
+> i−1
+
+( ¯ χi−1)W−1 
+
+> i−1
+
+:= ¯Υi−1(wi−1)Φ i−1( ¯ χi−1)Γ i−1
+
+(99) Each inverse is obtained individually, as follows: 
+
+Φ−1
+
+> i−1
+
+( ¯X ) = [( I3, (Fi−1 − I6) ∗ x) ◦ ( ¯Ri−1, ¯xi−1)] −1 =( ¯Ri−1, ¯xi−1)−1(I3, (Fi−1 − I6) ∗ ¯xi−1)−1 =( ¯Ci−1, ¯ei−1)( I3, (Fi−1 − I6) ∗ ¯CTi−1¯ei−1) = ( ¯Ci−1, ( ¯Ci−1 ∗ ¯Fi−1 ∗ ¯CTi−1) ∗ ¯ei−1) = ( ¯Ci−1, Fi−1 ∗ ¯ei−1) = Φ i−1(χi−1),
+
+(100) where the last equality followed because Fi−1 commutes with 
+
+¯Ci−1 (see Proposition 1 in [28]). We also have: 
+
+Γi−1 := W−1 
+
+> i−1
+
+= ( I3, −di−1), (101) and 
+
+Υi−1 := ¯Y−1 
+
+> i−1
+
+=(Exp SO(3) (G1
+
+> i−1
+
+wg,i −1)T Exp SO(3) (ωI,i −1∆t)T
+
+−Exp SO(3) (G1
+
+> i−1
+
+wg,i −1)T Exp SO(3) (ωI,i −1∆t)T
+
+(si−1 + G2
+
+> i−1
+
+wa,i −1).
+
+(102) By composing all inverses we obtain the prediction step: 
+
+χi|i−1 =
+
+ ¯Gi−1 ¯Ci−1, − ¯Gi−1 ∗  si−1 + G2
+
+> i−1
+
+wa,i −1
+
++¯Gi−1 ∗ Fi−1¯ei−1 − ( ¯Gi−1 ¯Ci−1) ∗ di−1
+
+
+
+,
+
+(103) where 
+
+¯Gi−1 := Exp SO(3) (G1
+
+> i−1
+
+wg,i −1)T Exp SO(3) (ωI,i −1∆t)T .
+
+(104) By expanding (103) we can obtain the same IMU integration as [5]. In the robocentric framework, the appropriate measure of error is the left-invariant, ξl. This happens because we have a measurement in the base frame; otherwise, if we have a measurement in the world frame, the appropriate error would be the right invariant [28]. The opposite happens when we have a world-centric formulation. The state part of the propagation of the left-invariant error was obtained in [19] and given as follows: 
+
+ξl,i |i−1 = ˆAi−1ξl,i , ˆAi−1 := Ad Γ−1
+
+> i−1
+
+Fi−1. (105) The noisy part is given by: 
+
+¯χi|i−1 ⊕ ξl,i |i−1 = Ad ¯χi|i−1 ξl,i |i−1 ⊕ ¯χi|i−1 =Υi−1(06,1)Φ i−1( ¯ χi|i−1)Γ i−1 =⇒
+
+Ad ¯χi|i−1 ξl,i |i−1 ⊕ ¯Υi−1(wi−1)Φ( ¯ χi|i−1)Γ i−1 =Υi−1(06,1)Φ i−1( ¯ χi|i−1)Γ i−1 =⇒
+
+ξl,i −1 = Ad ¯χ−1
+
+> i|i−1
+
+Log(Υ i−1(06,1) ¯Υ−1
+
+> i−1
+
+)
+
+(106) To obtain Log(Υ i−1(06) ¯Υ−1
+
+> i−1
+
+), notice: 
+
+Log(Υ i−1(06,1) ¯Υ−1
+
+> i−1
+
+) = Log( Yi−1(06,1)−1 ¯Yi−1(wi−1)) = Log(( ¯Yi−1Yi−1)−1) (24) 
+
+≈
+
+Log(Exp( Gi−1wi−1)−1) = 
+
+−Gi−1wi−1.
+
+(107) The final error propagation is given as: 
+
+ξl,i |i−1 = ˆAi−1Pi−1 ˆAT +(Ad χ−1
+
+> i|i−1
+
+Gi−1)Qi−1(Ad χ−1
+
+> i|i−1
+
+Gi−1)T . (108) The base velocity as a measurement can be obtained as an action of the state: 
+
+yi := 
+
+
+
+˜vI,i 
+
+−10
+
+ =
+
+RTi vi + wf,i 
+
+−10
+
+ =
+
+
+
+Ci vi ri
+
+03,1 1 00 0 1
+
+
+
+03,1
+
+−10
+
+ +
+
+
+
+wf,i 
+
+00
+
+ =
+
+χid + ni,
+
+(109) For the left-invariant error, the innovation is defined as [28]: 
+
+zi := ¯ χ−1
+
+> i|i−1
+
+yi − d =Exp( ξl,i )d − d + ¯ χ−1
+
+> i|i−1
+
+n ≈−Hξl,i + ¯ χ−1
+
+> i|i−1
+
+n := ˆHξl,i + ¯ χ−1
+
+> i|i−1
+
+n.
+
+(110) Finally, to obtain the update step of the left-invariant IterIEKF, we minimize the equivalent of (34), by means of the Gauss-Newton iterations proposed in [1]: 
+
+˜ˆHj+1  
+
+> i
+
+= Exp SO(3) ([ ξjl,i ]1:3 ) ˜ˆHiJr (ξjl,i ), (111) 
+
+Sj+1  
+
+> i
+
+= ˜ˆHj+1  
+
+> i
+
+Pi|i−1( ˜ˆHj+1  
+
+> i
+
+)T + ˆ˜Ni, (112) 
+
+Kj+1  
+
+> i
+
+= Pi|i−1( ˜ˆHj+1  
+
+> i
+
+)T (Sj+1  
+
+> i
+
+)−1, (113) 
+
+ξj+1  
+
+> l,i
+
+= Kj+1  
+
+> i
+
+(˜ zi − [Exp( ξjl,i )d − d]1:3 + ˜ˆHj+1  
+
+> i
+
+ξjl,i ), (114) 
+
+˜ˆH0 
+
+> i
+
+:= ˜ˆHi, ξ0 
+
+> l,i
+
+:= 09,1. (115) 20 
+
+Let k denote the last iteration, then the update step for the left-invariant error IterIEKF is given as follows: 
+
+ˆξl,i := ξkl,i , (116) 
+
+¯χi := ¯ χi|i := ¯ χi|i−1 ⊕ ˆξl,i (117) 
+
+Pi|i = ( I9 − K0
+
+> i
+
+˜ˆH0 
+
+> i
+
+)Pi|i−1. (118) REFERENCES [1] S. Goffin, A. Barrau, S. Bonnabel, O. Br¨ uls, and P. Sacr´ e, “Iterated Invariant Extended Kalman Filter (IterIEKF),” IEEE Trans. Autom. Control , pp. 1–8, 2025. [2] R. G. Brown and P. Y. Hwang, “Introduction to random signals and applied kalman filtering: with matlab exercises and solutions,” Intro-duction to random signals and applied Kalman filtering: with MATLAB exercises and solutions , 1997. [3] M. Bloesch, M. Hutter, M. Hoepflinger, S. Leutenegger, C. Gehring, C. Remy, and R. Siegwart, “State estimation for legged robots -consistent fusion of leg kinematics and IMU,” in RSS , 07 2012. [4] R. Hartley, M. G. Jadidi, R. M. Eustice, and J. W. Grizzle, “Contact-aided invariant extended Kalman filtering for robot state estimation,” Int. J. Robot. Res , vol. 39, pp. 402 – 430, 2019. [5] M. Bloesch, C. Gehring, P. Fankhauser, M. Hutter, M. A. Hoepflinger, and R. Siegwart, “State estimation for legged robots on unstable and slippery terrain,” in 2013 IEEE/RSJ Int. Conf. Intell. Robots Syst. , 2013, pp. 6058–6064. [6] M. Camurri, M. Ramezani, S. Nobili, and M. Fallon, “Pronto: A multi-sensor state estimator for legged robots in real-world scenarios,” Front. Robot. AI , vol. 7, p. 68, 2020. [7] Y. Nistic` o, J. C. V. Soares, L. Amatucci, G. Fink, and C. Semini, “MUSE: A Real-Time Multi-Sensor State Estimator for Quadruped Robots,” IEEE Robot. Autom. Lett , vol. 10, no. 5, pp. 4620–4627, Jan. 2025. [8] T.-Y. Lin, T. Li, W. Tong, and M. Ghaffari, “Proprioceptive invariant robot state estimation,” arXiv preprint arXiv:2311.04320 , 2023. [9] A. Barrau and S. Bonnabel, “The invariant extended kalman filter as a stable observer,” IEEE Trans. Autom. Control , vol. 62, no. 4, pp. 1797– 1812, 2016. [10] A. Jazwinski, Stochastic processes and filtering theory , ser. Math. Sci. Eng. New York, NY [u.a.]: Acad. Press, 1970, no. 64. [11] B. M. Bell, “The iterated kalman smoother as a gauss–newton method,” 
+
+SIAM J. Optim. , vol. 4, no. 3, pp. 626–636, 1994. [12] G. Bourmaud, R. M´ egret, A. Giremus, and Y. Berthoumieu, “From in-trinsic optimization to iterated extended kalman filtering on lie groups,” 
+
+J. Math. Imaging Vis. , vol. 55, no. 3, pp. 284–303, 2016. [13] D. He, W. Xu, and F. Zhang, “Kalman filters on differentiable mani-folds,” arXiv preprint arXiv:2102.03804 , 2021. [14] A. Barrau and S. Bonnabel, “An ekf-slam algorithm with consistency properties,” arXiv preprint arXiv:1510.06263 , 2015. [15] ——, “Invariant kalman filtering,” Annu. Rev. Control. Robot. Auton. Syst. , vol. 1, no. 1, pp. 237–257, 2018. [16] A. Barrau, “Non-linear state error based extended kalman filters with applications to navigation,” Ph.D. dissertation, Mines Paristech, 2015. [17] J. Sol` a, J. Deray, and D. Atchuthan, “A micro lie theory for state estimation in robotics,” ArXiv , vol. abs/1812.01537, 2018. [18] B. C. Hall, “Lie groups, lie algebras, and representations,” in Quantum Theory Math. Springer, 2013, pp. 333–366. [19] M. Brossard, A. Barrau, P. Chauchat, and S. Bonnabel, “Associating uncertainty to extended poses for on lie group IMU preintegration with rotating earth,” IEEE Trans. Robot. , vol. 38, no. 2, pp. 998–1015, 2021. [20] D. Wisth, M. Camurri, and M. Fallon, “VILENS: Visual, inertial, lidar, and leg odometry for all-terrain legged robots,” IEEE Trans. Robot. ,vol. 39, no. 1, p. 309–326, Feb. 2023. [21] S. Fahmi, G. Fink, and C. Semini, “On state estimation for legged locomotion over soft terrain,” IEEE Sens. Lett. , vol. 5, no. 1, p. 1–4, Jan. 2021. [22] T.-Y. Lin, R. Zhang, J. Yu, and M. Ghaffari, “Legged robot state estimation using invariant kalman filtering and learned contact events,” 
+
+arXiv preprint arXiv:2106.15713 , 2021. [23] D. Youm, H. Oh, S. Choi, H. Kim, S. Jeon, and J. Hwangbo, “Legged robot state estimation with invariant extended kalman filter using neural measurement network,” in 2025 IEEE Int. Conf. Robot. Autom. , 2025, pp. 670–676. [24] H. M. S. Santana, J. C. V. Soares, Y. Nistic` o, M. A. Meggiolaro, and C. Semini, “Proprioceptive state estimation for quadruped robots using invariant kalman filtering and scale-variant robust cost functions,” in 
+
+2024 IEEE-RAS Int. Conf. Humanoid Robots . IEEE, 2024, pp. 213– 220. [25] S. Lee, H.-B. Kim, and K.-S. Kim, “Legged robot state estimation using invariant neural-augmented kalman filter with a neural compensator,” in 
+
+2025 IEEE/RSJ Int. Conf. Intell. Robots Syst. , 2025, pp. 15 445–15 452. [26] Z. Yoon, J.-H. Kim, and H.-W. Park, “Invariant smoother for legged robot state estimation with dynamic contact event information,” IEEE Trans. Robot. , vol. 40, pp. 193–212, 2024. [27] G. Fink and C. Semini, “Proprioceptive sensor fusion for quadruped robot state estimation,” in 2020 IEEE/RSJ Int. Conf. Intell. Robots Syst. ,2020, pp. 10 914–10 920. [28] A. Barrau and S. Bonnabel, “The geometry of navigation problems,” 
+
+IEEE Trans. Autom. Control , vol. 68, no. 2, pp. 689–704, 2022. [29] M. Brossard, “Deep learning, inertial measurements units, and odometry: some modern prototyping techniques for navigation based on multi-sensor fusion,” Ph.D. dissertation, Universit´ e Paris sciences et lettres, 2020. [30] J. Stillwell, Naive Lie Theory , ser. Undergraduate Texts in Mathematics. Springer New York, 2008. [31] Y. Bar-Shalom, T. Kirubarajan, and X.-R. Li, Estimation with Applica-tions to Tracking and Navigation . USA: John Wiley & Sons, Inc., 2002. [32] Y. Wang and G. S. Chirikjian, “Error propagation on the euclidean group with applications to manipulator kinematics,” IEEE Trans. Robot. ,vol. 22, no. 4, pp. 591–602, 2006. [33] E. Foxlin, “Pedestrian tracking with shoe-mounted inertial sensors,” 
+
+IEEE Comput. Graph. Appl. , vol. 25, no. 6, pp. 38–46, 2005. [34] W. Yu, J. Xu, C. Zhao, L. Zhao, T.-M. Nguyen, S. Yuan, M. Bai, and L. Xie, “I2EKF-LO: A dual-iteration extended Kalman filter based LiDAR odometry,” in 2024 IEEE/RSJ Int. Conf. Intell. Robots Syst. 
+
+IEEE, 2024, pp. 10 453–10 460. [35] E. Todorov, T. Erez, and Y. Tassa, “MuJoCo: A physics engine for model-based control,” in 2012 IEEE/RSJ Int. Conf. Intell. Robots Syst. ,2012, pp. 5026–5033. [36] G. Turrisi, V. Modugno, L. Amatucci, D. Kanoulas, and C. Semini, “On the benefits of GPU sample-based stochastic predictive controllers for legged locomotion,” in 2024 IEEE/RSJ Int. Conf. Intell. Robots Syst. ,2024, pp. 13 757–13 764. [37] A. Barrau and S. Bonnabel, “Extended kalman filtering with nonlin-ear equality constraints: A geometric approach,” IEEE Trans. Autom. Control , vol. 65, no. 6, pp. 2325–2338, 2019. [38] J. Farrell, Aided Navigation: GPS with High Rate Sensors , ser. McGraw-Hill professional engineering: Electronic engineering. McGraw Hill LLC, 2008. [39] J. Sola, “Quaternion kinematics for the error-state kalman filter,” 2017. [40] C. Forster, L. Carlone, F. Dellaert, and D. Scaramuzza, “On-manifold preintegration for real-time visual–inertial odometry,” IEEE Trans. Robot. , vol. 33, no. 1, p. 1–21, Feb. 2017. [41] P. Corke, W. Jachimczyk, and R. Pillat, Robotics, Vision and Control: Fundamental Algorithms in MATLAB , 3rd ed. Springer International Publishing, 2023. [42] S. Ko and R. R. Bitmead, “State estimation of linear systems with state equality constraints,” IFAC Proceedings Volumes , vol. 38, no. 1, pp. 241–246, 2005. [43] M. Hutter, C. Gehring, D. Jud, A. Lauber, C. C. Bellicoso, V. Tsounis, J. Hwangbo, K. Bodie, P. Fankhauser, M. Bloesch, et al. , “Anymal-a highly mobile quadrupedal robot,” in 2016 IEEE/RSJ Int. Conf. Intell. Robots Syst. IEEE, 2016, pp. 3136–3143. [44] J. Frey, T. Tuna, F. Fu, K. Patterson, T. Xu, M. Fallon, C. Ca-dena, and M. Hutter, “Grandtour: A legged robotics dataset in the wild for multi-modal perception and state estimation,” arXiv preprint arXiv:2602.18164 , 2026.

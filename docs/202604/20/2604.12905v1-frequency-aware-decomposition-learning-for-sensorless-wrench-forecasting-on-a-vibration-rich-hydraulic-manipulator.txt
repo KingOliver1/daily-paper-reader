@@ -1,0 +1,965 @@
+Title: Frequency-aware Decomposition Learning for Sensorless Wrench Forecasting on a Vibration-rich Hydraulic Manipulator
+
+URL Source: https://arxiv.org/pdf/2604.12905v1
+
+Published Time: Wed, 15 Apr 2026 01:24:27 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+> PREPRINT NOT PEER REVIEWED 1
+
+## Frequency-aware Decomposition Learning for Sensorless Wrench Forecasting on a Vibration-rich Hydraulic Manipulator 
+
+Hyeonbeen Lee, Min-Jae Jung, Tae-Kyeong Yeu, Jong-Boo Han, Daegil Park, and Jin-Gyun Kim 
+
+Abstract —Force and torque (F/T) sensing is critical for robot-environment interaction, but physical F/T sensors impose con-straints in size, cost, and fragility. To mitigate this, recent studies have estimated force/wrench sensorlessly from robot internal states. While existing methods generally target relatively slow interactions, tasks involving rapid interactions, such as grinding, can induce task-critical high-frequency vibrations, and estimation in such robotic settings remains underexplored. To address this gap, we propose a Frequency-aware Decomposition Net-work (FDN) for short-term forecasting of vibration-rich wrench from proprioceptive history. FDN predicts spectrally decomposed wrench with asymmetric deterministic and probabilistic heads, modeling the high-frequency residual as a learned conditional distribution. It further incorporates frequency-awareness to adaptively enhance input spectra with learned filtering and impose a frequency-band prior on the outputs. We pretrain FDN on a large-scale open-source robot dataset and transfer the learned proprioception-to-wrench representation to the down-stream. On real-world grinding excavation data from a 6-DoF hydraulic manipulator and under a delayed estimation setting, FDN outperforms baseline estimators and forecasters in the high-frequency band and remains competitive in the low-frequency band. Transfer learning provides additional gains, suggesting the potential of large-scale pretraining and transfer learning for robotic wrench estimation. Code and data are available at GitHub. 
+
+Index Terms —Force and torque estimation, contact-rich ma-nipulation, transfer learning, hydraulic manipulators, industrial robotics 
+
+I. I NTRODUCTION 
+
+# FORCE and torque (F/T) sensing is critical for robotic ap-plications as it provides direct information about contact, and has been particularly highlighted in minimally invasive surgery [1], haptic feedback in teleoperation systems [2], force-based control [3], and force-informed robot learning [4]. However, measuring these quantities often requires the installation of physical sensors, which introduces bottlenecks including their size, weight, fragility, and cost, thereby limiting their widespread deployment [5]. To address hardware limitations, sensorless approaches for robotic force or wrench estimation have been actively studied.               
+
+> This work has been submitted to the IEEE for possible publication. Copyright may be transferred without notice, after which this version may no longer be accessible. This research was supported by a grant from Endowment Project of “Development of Core Technologies for Operation of Marine Robots based on Cyber-Physical System” funded by Korea Research Institute of Ships and Ocean Engineering (PES5200) ( Corresponding author: Jin-Gyun Kim ). H. Lee, M.J. Jung, and J.G. Kim are with the Department of Mechanical Engineering, Kyung Hee University, South Korea (e-mail: {lhbsharp; jmhahh; jingyun.kim }@khu.ac.kr) .T.K. Yeu, J.B. Han, and D. Park are with the Korea Research Institute of Ships and Ocean Engineering (KRISO), South Korea (e-mail: {yeutk; jbhan; daegilpark }@kriso.re.kr )
+
+Widely used model-based methods leverage inverse robot dynamics or state observers, which rely on identified mathe-matical models of system dynamics [6]. These methods are physically interpretable and theoretically grounded, but are generally less adaptable to varying environments and systems. Challenges also remain in parameter identification, dynamics modeling, and numerical stability [7], [8]. Along with recent advances in machine learning, data-driven approaches for robotic force or wrench estimation have also received increasing attention. Typically based on neural networks and regression models, they capture underlying dy-namics directly from data without the need for explicit math-ematical models, which offers enhanced modeling flexibility [6], [9]–[12]. However, most existing data-driven methods for robotic force or wrench estimation only partially incorporate ad-vances in modern machine learning. In particular, recent deep time-series forecasting models improve sequential modeling through decomposition-, frequency-, and patch-based architec-tures [13], [14], which may be suitable for capturing the tem-poral structure of output wrench trajectories. They also have potential for delay-compensated prediction beyond conven-tional instantaneous estimation. Moreover, large-scale pretrain-ing and transfer learning have demonstrated strong potential for improving generalization across tasks, embodiments, and environments in robot learning [15]. In parallel, high-quality multimodal robot datasets including wrench measurements have become available [16]. These developments motivate the exploration of large-scale pretraining for data-driven wrench estimation. Nevertheless, the integration of the aforementioned advances into the literature remains underexplored. Another underexplored challenge is the estimation of high-frequency wrench components. Most previous works focus on smooth wrench signals arising from relatively slow in-teractions such as grasping [6], [9]–[12]. However, tasks involving more rapid interactions, such as robotic grinding [17], milling [18], and polishing [19], which are prevalent in industrial and surgical robotics, can generate substantial task-relevant high-frequency vibrations. Additional vibrations may also arise from the actuation mechanism itself, for instance, through pressure fluctuations in hydraulic actuation systems [20]. These signals are often difficult to estimate because of the low-frequency bias and overfitting of neural networks [21], [22], as well as model mismatch, derivative noise, and observer lag in model-based estimators [6], [17], [23]. Accordingly, the effectiveness of sensorless wrench estimation in contact-and vibration-rich settings remains insufficiently validated. Related studies on machining force prediction address similar phenomena [24], [25], but they focus on more periodic and  
+
+> arXiv:2604.12905v1 [cs.RO] 14 Apr 2026 PREPRINT NOT PEER REVIEWED 2
+
+homogeneous oscillations than the transient and unstructured wrench fluctuations encountered in robotic interactions [17]– [19]. Altogether, these gaps motivate a deliberate integration of modern machine learning methods for contact- and vibration-rich wrench estimation in robotics. To this end, we pro-pose a Frequency-aware Decomposition Network (FDN) that incorporates decomposition-based probabilistic model-ing, frequency-awareness, and large-scale proprioception-to-wrench pretraining for sensorless short-term wrench forecast-ing. We validate the proposed framework on real-world grind-ing excavation with a 6-DoF hydraulic manipulator, where the target wrench exhibits substantial high-frequency vibrations arising from rapid contact transients. Under this setting, we compare the proposed framework against baselines from both robotic wrench estimation and time-series forecasting, with particular attention to band-specific performance in the low-and high-frequency ranges under delayed estimation. Ablation studies and transfer analyses further examine the effectiveness and behavior of the proposed design choices. II. P RELIMINARIES 
+
+A. Robot dynamics and wrench estimation 
+
+The dynamic model of a robot manipulator in joint space 
+
+Rn is generally expressed as: 
+
+M( q)¨q + C( q, ˙q) ˙q + G( q) + F( ˙q) = τ + J( q)T W (1) where q ∈ Rn, ˙q, and ¨q represent joint position, velocity, and acceleration vectors, respectively. M( q) ∈ Rn×n denotes a positive definite inertia matrix, C( q, ˙q) ∈ Rn×n is the Coriolis and centrifugal matrix, G( q), F( ˙q) ∈ Rn denote gravity and friction terms. τ ∈ Rn is joint actuator torque, J( q) ∈ R6×n is the robot Jacobian, and W = [ f ; m] ∈ R6 is Cartesian space wrench induced by robot-environment interaction. To solve the second-order dynamics, we define a state vector y = [ q, ˙q]T ∈
+
+R2n and rewrite Eq. 1 as a first-order system: 
+
+˙y = h(y, τ , W) (2) where ˙y = [ ˙q, ¨q]T and 
+
+¨q = M −1(q)  τ + J( q)T W − C( q, ˙q) ˙q − G( q) − F( ˙q)
+
+(3) Then, the solution of Eq. 2 can be obtained via recursive numerical integration: 
+
+yt+1 = Φ ∆t(yt, ˙yt) (4) where Φ∆t denotes a numerical integrator with a time step size ∆t.Traditionally, the inverse dynamics model of Eq. 1 is favored for wrench or force estimation: 
+
+W = J −T (q) M( q)¨q + C( q, ˙q) ˙q + G( q) + F( ˙q) − τ 
+
+= ψ(y, ˙y, τ ) (5) In contrast, data-driven models such as neural networks do not require an explicit mathematical model and can capture the underlying dynamics of W directly from the data [6], [9], [10], [12]. 
+
+B. Wrench forecasting model 
+
+Beyond instantaneous estimation of Wt based on Eq. 1, we extend the formulation to forecasting a future wrench sequence 
+
+[Wt+1 , Wt+2 , · · · ], which allows the sequential modeling of the wrench trajectory in a predictive manner. By combining Eq. 2 and 4 into Eq. 5, we obtain the one-step dependence: 
+
+Wt+1 = ψ Φ∆t
+
+ yt, h (yt, τ t, Wt), ˙yt+1 , τ t+1 
+
+ (6) which implies temporal dependence between one-step-ahead wrench Wt+1 and current joint states yt = [ qt, ˙qt]T , actuator torque τ t, and wrench Wt. For a sufficiently small ∆t and locally smooth states, we can adopt local approximations 
+
+˙yt+1 ≈ ˙yt and τ t+1 ≈ τ t and rewrite Eq. 6 as: 
+
+Wt+1 = T∆t(qt, ˙qt, ¨qt, τ t, Wt) + et+1 (7) where we define an approximate one-step transition T∆t and an approximation error term et+1 . Letting Xt = [ qt, ˙qt, ¨qt, τ t]
+
+and rolling out T∆t yields: 
+
+Wt+k ≈ T ∆t(Xt+k−1, Wt+k−1), k = 1 , · · · , T (8) which suggests that Wt+1: t+T = [Wt+1 , · · · , Wt+T ] de-pends on the trajectories of recursively propagated motion, actuator torque, and wrench up to time t + T − 1.The approximate recursive dependency in Eq. 8 motivates short-term forecasting, but the rollout is not feasible due to partial observability. Specifically, we presume a situation where (i) the wrench is not measurable and (ii) the states are observed up to the present time t. Alternatively, we can model a conditional distribution of the T -step future wrench sequence given a finite L-step history of observable states x:
+
+Wt+1: tf ∼ P (· | xth:t), xt = [ qt, ˙qt, ¨qt, ut] (9) where th = t − L + 1 is history start index and tf = t + T
+
+is future end index. Here, we replace τ with an observable actuation signal u, such as joint differential hydraulic pressure, motor torque, or motor current. We then approximate P with a model Mθ :
+
+ˆWt+1: tf ∼ Mθ (· | xth:t) (10) 
+
+θ denotes learnable parameters of the model. To bridge the discrepancy between Eq. 8 and 10 where—(i) τ is replaced with u, (ii) W is removed, and (iii) time steps are observ-able up to t only—we assume that (i) u provides sufficient information about τ , (ii) motivated by Eq. 1, a finite history of robot states retains information about recent wrench effects, and (iii) we focus on a short-term forecasting horizon T , where the system dynamics typically evolve smoothly and a finite history xth:t can serve as an informative summary of recent interaction trends. Then, we can let the model Mθ capture the underlying correlations from data while absorbing these modeling assumptions. III. F REQUENCY -AWARE DECOMPOSITION NETWORK 
+
+A. Learning from spectral decomposition 
+
+The proposed FDN model is illustrated in Fig. 1. To address the challenge of learning the high-frequency dynamics in our PREPRINT NOT PEER REVIEWED 3Initial Position 
+
+Channel 
+
+Mixing 
+
+> Residual  Head
+
+Learned Conditional Distribution 
+
+> Low -pass Filter High -pass  Filter
+> Trend Head
+
+Pointwise Regression 
+
+<latexit sha1_base64="8S7ACJUJaM7yHsKf5/9Iz8jRVbw=">AAAB73icbVA9TwJBEJ3DL8Qv1NJmI5hYkTsKtCTaWGIiHwlcyN7eHmzY2z1390zIhT9hY6Extv4dO/+NC1yh4EsmeXlvJjPzgoQzbVz32ylsbG5t7xR3S3v7B4dH5eOTjpapIrRNJJeqF2BNORO0bZjhtJcoiuOA024wuZ373SeqNJPiwUwT6sd4JFjECDZW6lUHJJRGV4fliltzF0DrxMtJBXK0huWvQShJGlNhCMda9z03MX6GlWGE01lpkGqaYDLBI9q3VOCYaj9b3DtDF1YJUSSVLWHQQv09keFY62kc2M4Ym7Fe9ebif14/NdG1nzGRpIYKslwUpRwZiebPo5ApSgyfWoKJYvZWRMZYYWJsRCUbgrf68jrp1Gteo9a4r1eaN3kcRTiDc7gED66gCXfQgjYQ4PAMr/DmPDovzrvzsWwtOPnMKfyB8/kDa8uPlA==</latexit> 
+
+· · · 
+
+Trend 
+
+Residual 
+
+<latexit sha1_base64="tLMTtkVvjfylYWjghmx/3syUpYk=">AAAB6nicbVDLSgNBEOz1GeMr6tHLYCIIQtjNIXoMevEY0TwgWcLsZJIMmZ1dZnqFsOQTvHhQxKtf5M2/cZLsQRMLGoqqbrq7glgKg6777aytb2xubed28rt7+weHhaPjpokSzXiDRTLS7YAaLoXiDRQoeTvWnIaB5K1gfDvzW09cGxGpR5zE3A/pUImBYBSt9FC6LPUKRbfszkFWiZeRImSo9wpf3X7EkpArZJIa0/HcGP2UahRM8mm+mxgeUzamQ96xVNGQGz+dnzol51bpk0GkbSkkc/X3REpDYyZhYDtDiiOz7M3E/7xOgoNrPxUqTpArtlg0SCTBiMz+Jn2hOUM5sYQyLeythI2opgxtOnkbgrf88ippVspetVy9rxRrN1kcOTiFM7gAD66gBndQhwYwGMIzvMKbI50X5935WLSuOdnMCfyB8/kDK+ONFA==</latexit> 
+
++
+
+<latexit sha1_base64="tLMTtkVvjfylYWjghmx/3syUpYk=">AAAB6nicbVDLSgNBEOz1GeMr6tHLYCIIQtjNIXoMevEY0TwgWcLsZJIMmZ1dZnqFsOQTvHhQxKtf5M2/cZLsQRMLGoqqbrq7glgKg6777aytb2xubed28rt7+weHhaPjpokSzXiDRTLS7YAaLoXiDRQoeTvWnIaB5K1gfDvzW09cGxGpR5zE3A/pUImBYBSt9FC6LPUKRbfszkFWiZeRImSo9wpf3X7EkpArZJIa0/HcGP2UahRM8mm+mxgeUzamQ96xVNGQGz+dnzol51bpk0GkbSkkc/X3REpDYyZhYDtDiiOz7M3E/7xOgoNrPxUqTpArtlg0SCTBiMz+Jn2hOUM5sYQyLeythI2opgxtOnkbgrf88ippVspetVy9rxRrN1kcOTiFM7gAD66gBndQhwYwGMIzvMKbI50X5935WLSuOdnMCfyB8/kDK+ONFA==</latexit> 
+
++
+
+<latexit sha1_base64="8S7ACJUJaM7yHsKf5/9Iz8jRVbw=">AAAB73icbVA9TwJBEJ3DL8Qv1NJmI5hYkTsKtCTaWGIiHwlcyN7eHmzY2z1390zIhT9hY6Extv4dO/+NC1yh4EsmeXlvJjPzgoQzbVz32ylsbG5t7xR3S3v7B4dH5eOTjpapIrRNJJeqF2BNORO0bZjhtJcoiuOA024wuZ373SeqNJPiwUwT6sd4JFjECDZW6lUHJJRGV4fliltzF0DrxMtJBXK0huWvQShJGlNhCMda9z03MX6GlWGE01lpkGqaYDLBI9q3VOCYaj9b3DtDF1YJUSSVLWHQQv09keFY62kc2M4Ym7Fe9ebif14/NdG1nzGRpIYKslwUpRwZiebPo5ApSgyfWoKJYvZWRMZYYWJsRCUbgrf68jrp1Gteo9a4r1eaN3kcRTiDc7gED66gCXfQgjYQ4PAMr/DmPDovzrvzsWwtOPnMKfyB8/kDa8uPlA==</latexit> 
+
+· · · <latexit sha1_base64="QrKJ6hbjQmogBclTu0fHoajZaII=">AAACBXicbVDLSsNAFJ3UV62vqEtdBFtBEErSRRVXRUFcVrAPaEKYTCft0MmDmRuhhGzc+CtuXCji1n9w5984abPQ6oELh3Pu5d57vJgzCab5pZWWlldW18rrlY3Nre0dfXevK6NEENohEY9E38OSchbSDjDgtB8LigOP0543ucr93j0VkkXhHUxj6gR4FDKfEQxKcvXDmj3GkNoBhrHnp9dZ5qZwal2A62c1V6+adXMG4y+xClJFBdqu/mkPI5IENATCsZQDy4zBSbEARjjNKnYiaYzJBI/oQNEQB1Q66eyLzDhWytDwI6EqBGOm/pxIcSDlNPBUZ36tXPRy8T9vkIB/7qQsjBOgIZkv8hNuQGTkkRhDJigBPlUEE8HUrQYZY4EJqOAqKgRr8eW/pNuoW81687ZRbV0WcZTRATpCJ8hCZ6iFblAbdRBBD+gJvaBX7VF71t6093lrSStm9tEvaB/fDbqYSw==</latexit> 
+
+ˆFt+1: tf
+
+Robot Dataset Pretraining 
+
+Frequency Band Prior 
+
+Future Wrench 
+
+<latexit sha1_base64="q9bGHsb500++dT8RrEWHUh7dqSw=">AAACAXicbVDLSsNAFJ3UV62vqBvBTbAVXJWkiyquim5cVrAPaEOYTCbt0MmDmRuxhLjxV9y4UMStf+HOv3HSZqGtB4Y5nHMv997jxpxJMM1vrbSyura+Ud6sbG3v7O7p+wddGSWC0A6JeCT6LpaUs5B2gAGn/VhQHLic9tzJde737qmQLArvYBpTO8CjkPmMYFCSox/Vhm7EPTkN1Jc+ZE4KzvgSspqjV826OYOxTKyCVFGBtqN/Db2IJAENgXAs5cAyY7BTLIARTrPKMJE0xmSCR3SgaIgDKu10dkFmnCrFM/xIqBeCMVN/d6Q4kPmOqjLAMJaLXi7+5w0S8C/slIVxAjQk80F+wg2IjDwOw2OCEuBTRTARTO1qkDEWmIAKraJCsBZPXibdRt1q1pu3jWrrqoijjI7RCTpDFjpHLXSD2qiDCHpEz+gVvWlP2ov2rn3MS0ta0XOI/kD7/AHjy5cv</latexit> 
+
+## xth:t
+
+<latexit sha1_base64="HZRCpbbbdhz7RuT8qaWxEiDiRhQ=">AAACCHicbVC7TsMwFHXKq5RXgJEBixaJqUo6FMYKhMRYJPqQmihyHLe16jiR7SBVUUYWfoWFAYRY+QQ2/gYnZICWK1k+Ovde3XOOHzMqlWV9GZWV1bX1jepmbWt7Z3fP3D/oyygRmPRwxCIx9JEkjHLSU1QxMowFQaHPyMCfXeX9wT0Rkkb8Ts1j4oZowumYYqQ05ZnHDSdEairC9JrjzEsdP2KBnIf6S5Msa3hm3WpaRcFlYJegDsrqeuanE0Q4CQlXmCEpR7YVKzdFQlHMSFZzEklihGdoQkYachQS6aaFkQyeaiaA40joxxUs2N8bKQplLk5P5qrlYi8n/+uNEjW+cFPK40QR7bM4NE4YVBHMU4EBFQQrNtcAYUG1VoinSCCsdHY1HYK9aHkZ9FtNu91s37bqncsyjio4AifgDNjgHHTADeiCHsDgATyBF/BqPBrPxpvx/jNaMcqdQ/CnjI9vyfWafA==</latexit> 
+
+Enc u
+
+<latexit sha1_base64="dsp94syit0gQ+hxbqp+VPFyV3E0=">AAACDHicbVC7TsMwFHV4lvIqMLJEtEhMVdKhMFYgJMYi0YfUhMhxnNaqHQfbQaqifAALv8LCAEKsfAAbf4MTMkDLlSwfnXuv7jnHjymRyrK+jKXlldW19cpGdXNre2e3trfflzwRCPcQp1wMfSgxJRHuKaIoHsYCQ+ZTPPCnF3l/cI+FJDy6UbMYuwyOIxISBJWmvFq94TCoJoKllxHKvNTxOQ3kjOkvvcs86xZnDT1lNa2izEVgl6AOyup6tU8n4ChhOFKIQilHthUrN4VCEURxVnUSiWOIpnCMRxpGkGHppoWZzDzWTGCGXOgXKbNgf2+kkMlcoJ7Mlcv5Xk7+1xslKjxzUxLFicLaa3EoTKipuJknYwZEYKToTAOIBNFaTTSBAiKl86vqEOx5y4ug32ra7Wb7ulXvnJdxVMAhOAInwAanoAOuQBf0AAIP4Am8gFfj0Xg23oz3n9Elo9w5AH/K+PgGjYmb8g==</latexit> 
+
+Enc qe
+
+0
+
+> Frequency Enhancement Filter
+
+Relative Position 
+
+Joint Velocity 
+
+Joint Acceleration 
+
+Actuation Signal 
+
+<latexit sha1_base64="LDjK4Hzbj0XXrHYxJ+NOR6g7DYs=">AAACAHicbVC7TsMwFHV4lvIKMDCwWLRITFXSoTBWwMBYJPqQmqhyHKe16tjBdpCqqAu/wsIAQqx8Bht/g9NmgJYjWT46517de0+QMKq043xbK6tr6xubpa3y9s7u3r59cNhRIpWYtLFgQvYCpAijnLQ11Yz0EklQHDDSDcbXud99JFJRwe/1JCF+jIacRhQjbaSBfVz1bgjTCHqBYKGaxObLHqbVgV1xas4McJm4BamAAq2B/eWFAqcx4RozpFTfdRLtZ0hqihmZlr1UkQThMRqSvqEcxUT52eyAKTwzSggjIc3jGs7U3x0ZilW+m6mMkR6pRS8X//P6qY4u/YzyJNWE4/mgKGVQC5inAUMqCdZsYgjCkppdIR4hibA2mZVNCO7iycukU6+5jVrjrl5pXhVxlMAJOAXnwAUXoAluQQu0AQZT8AxewZv1ZL1Y79bHvHTFKnqOwB9Ynz9WO5ZE</latexit> 
+
+!q
+
+<latexit sha1_base64="kzLqM78ELftSd97q4Z/oOShWNCQ=">AAAB/3icbVA7T8MwGHR4lvIKILGwWLRITFXSoTBWsDAWiT6kNqocx2mtOnawHaQqZOCvsDCAECt/g41/g9NmgJZPsny6+04+nx8zqrTjfFsrq2vrG5ulrfL2zu7evn1w2FEikZi0sWBC9nykCKOctDXVjPRiSVDkM9L1J9e53n0gUlHB7/Q0Jl6ERpyGFCNtqKF9XB34ggVqGpkrHQRCp/dZVh3aFafmzAYuA7cAFVBMa2h/GS9OIsI1ZkipvuvE2kuR1BQzkpUHiSIxwhM0In0DOYqI8tJZ/gyeGSaAoZDmcA1n7G9HiiKVJzSbEdJjtajl5H9aP9HhpZdSHieacDx/KEwY1ALmZcCASoI1mxqAsKQmK8RjJBHWprKyKcFd/PIy6NRrbqPWuK1XmldFHSVwAk7BOXDBBWiCG9ACbYDBI3gGr+DNerJerHfrY766YhWeI/BnrM8fgcyWbw==</latexit> 
+
+˙q
+
+<latexit sha1_base64="hHoBUWWEeJhJz5OtATRFTmnB9zE=">AAACAHicbVC7TsMwFHXKq5RXgIGBxaJFYqqSDoWxgoWxSPQhNVHlOG5r1bGD7SBVURZ+hYUBhFj5DDb+BqfNAC1Hsnx0zr26954gZlRpx/m2SmvrG5tb5e3Kzu7e/oF9eNRVIpGYdLBgQvYDpAijnHQ01Yz0Y0lQFDDSC6Y3ud97JFJRwe/1LCZ+hMacjihG2khD+6TmBYKFahaZL/XCUOj0IctqQ7vq1J054CpxC1IFBdpD+8sLBU4iwjVmSKmB68TaT5HUFDOSVbxEkRjhKRqTgaEcRUT56fyADJ4bJYQjIc3jGs7V3x0pilS+oqmMkJ6oZS8X//MGiR5d+SnlcaIJx4tBo4RBLWCeBgypJFizmSEIS2p2hXiCJMLaZFYxIbjLJ6+SbqPuNuvNu0a1dV3EUQan4AxcABdcgha4BW3QARhk4Bm8gjfryXqx3q2PRWnJKnqOwR9Ynz9HRpbd</latexit> 
+
+¨q
+
+<latexit sha1_base64="mZULZx6mY49MvUzgd0fqNT8a6iw=">AAAB+XicbVC7TsMwFL0pr1JeAUYWixaJqUo6FMYKFsYi0YfURpXjOK1Vx4lsp1IV9U9YGECIlT9h429w2gzQciTLR+fcKx8fP+FMacf5tkpb2zu7e+X9ysHh0fGJfXrWVXEqCe2QmMey72NFORO0o5nmtJ9IiiOf054/vc/93oxKxWLxpOcJ9SI8FixkBGsjjWy7NvRjHqh5ZK4sXdRGdtWpO0ugTeIWpAoF2iP7axjEJI2o0IRjpQauk2gvw1IzwumiMkwVTTCZ4jEdGCpwRJWXLZMv0JVRAhTG0hyh0VL9vZHhSOXZzGSE9USte7n4nzdIdXjrZUwkqaaCrB4KU450jPIaUMAkJZrPDcFEMpMVkQmWmGhTVsWU4K5/eZN0G3W3WW8+Nqqtu6KOMlzAJVyDCzfQggdoQwcIzOAZXuHNyqwX6936WI2WrGLnHP7A+vwBiMyTnA==</latexit> 
+
+u
+
+<latexit sha1_base64="lvBdAhd4LGCrDG1mU+DNxBWDvLU=">AAAB/XicbVA7T8MwGHTKq5RXeGwsFi0SU5V0KIwVLIxFog+pDZHjuK1Vxw62g1Siir/CwgBCrPwPNv4NTpsBWk6yfLr7Pvl8Qcyo0o7zbRVWVtfWN4qbpa3tnd09e/+grUQiMWlhwYTsBkgRRjlpaaoZ6caSoChgpBOMrzK/80CkooLf6klMvAgNOR1QjLSRfPuo0g8EC9UkMld6P/WdO1Lx7bJTdWaAy8TNSRnkaPr2Vz8UOIkI15ghpXquE2svRVJTzMi01E8UiREeoyHpGcpRRJSXztJP4alRQjgQ0hyu4Uz9vZGiSGX5zGSE9Egtepn4n9dL9ODCSymPE004nj80SBjUAmZVwJBKgjWbGIKwpCYrxCMkEdamsJIpwV388jJp16puvVq/qZUbl3kdRXAMTsAZcME5aIBr0AQtgMEjeAav4M16sl6sd+tjPlqw8p1D8AfW5w8zZpUS</latexit> 
+
+qe
+
+0
+
+State History 
+
+<latexit sha1_base64="C0pf/kBZE3EeOa0owysMaHyA44E=">AAAB6nicbVA9TwJBEJ3DL8Qv1NJmI5hYkTsKtCTaWGKUjwQuZG+Zgw17e5fdPRNC+Ak2Fhpj6y+y89+4wBUKvmSSl/dmMjMvSATXxnW/ndzG5tb2Tn63sLd/cHhUPD5p6ThVDJssFrHqBFSj4BKbhhuBnUQhjQKB7WB8O/fbT6g0j+WjmSToR3QoecgZNVZ6KLvlfrHkVtwFyDrxMlKCDI1+8as3iFkaoTRMUK27npsYf0qV4UzgrNBLNSaUjekQu5ZKGqH2p4tTZ+TCKgMSxsqWNGSh/p6Y0kjrSRTYzoiakV715uJ/Xjc14bU/5TJJDUq2XBSmgpiYzP8mA66QGTGxhDLF7a2EjaiizNh0CjYEb/XlddKqVrxapXZfLdVvsjjycAbncAkeXEEd7qABTWAwhGd4hTdHOC/Ou/OxbM052cwp/IHz+QMzfI0Z</latexit> 
+
+0 <latexit sha1_base64="GmuHv4UTSyfRfGP7k4ccd/krGnY=">AAACD3icbVC7TsMwFHXKq5RXgJHFogUxVUmHwljxkBiLRB9SE0WO47RWnQe2g1RF+QMWfoWFAYRYWdn4G5yQAVquZPno3Ht1zzluzKiQhvGlVZaWV1bXquu1jc2t7R19d68vooRj0sMRi/jQRYIwGpKepJKRYcwJClxGBu70Iu8P7gkXNApv5SwmdoDGIfUpRlJRjn7csAIkJzxIr0KcOal1SZhE0HIj5olZoL70Lssajl43mkZRcBGYJaiDsrqO/ml5EU4CEkrMkBAj04ilnSIuKWYkq1mJIDHCUzQmIwVDFBBhp4WfDB4pxoN+xNULJSzY3xspCkQuTk3m4sV8Lyf/640S6Z/ZKQ3jRBJltzjkJwzKCObhQI9ygiWbKYAwp0orxBPEEZYqwpoKwZy3vAj6rabZbrZvWvXOeRlHFRyAQ3ACTHAKOuAadEEPYPAAnsALeNUetWftTXv/Ga1o5c4++FPaxzfDM50k</latexit> 
+
+Enc !q
+
+<latexit sha1_base64="pFXO/pNPKN0VFeiQHxvDcG3PF4k=">AAACDnicbVC7TsMwFHV4lvIKMLJYtJWYqqRDYaxASIxFog+pjSLHcVqrdhJsB6mK8gUs/AoLAwixMrPxNzghA7RcyfLROffq3nO8mFGpLOvLWFldW9/YrGxVt3d29/bNg8O+jBKBSQ9HLBJDD0nCaEh6iipGhrEgiHuMDLzZZa4P7omQNApv1TwmDkeTkAYUI6Up12zUxxypqeDpVYgzNx17EfPlnOsvHfuRSu+yLKu7Zs1qWkXBZWCXoAbK6rrmpx7GCSehwgxJObKtWDkpEopiRrLqOJEkRniGJmSkYYg4kU5a2MlgQzM+DCKhX6hgwf6eSBGX+Ym6M79dLmo5+Z82SlRw7qQ0jBNFtNtiUZAwqCKYZwN9KghWbK4BwoLqWyGeIoGw0glWdQj2ouVl0G817XazfdOqdS7KOCrgGJyAU2CDM9AB16ALegCDB/AEXsCr8Wg8G2/G+0/rilHOHIE/ZXx8A+kOnU8=</latexit> 
+
+Enc ˙q
+
+<latexit sha1_base64="Yq4tLZkFG8MRP4DDvPlax3pDpM0=">AAACD3icbVC7TsMwFHV4lvIKMLJYtCCmKulQGCsQEmOR6ENqoshx3NaqEwfbQaqi/AELv8LCAEKsrGz8DU7IAC1Xsnx07r265xw/ZlQqy/oylpZXVtfWKxvVza3tnV1zb78neSIw6WLOuBj4SBJGI9JVVDEyiAVBoc9I359e5v3+PRGS8uhWzWLihmgc0RHFSGnKM0/qTojURITpVYQzL3V8zgI5C/WXOkHAVXqXZVndM2tWwyoKLgK7BDVQVsczP52A4yQkkcIMSTm0rVi5KRKKYkayqpNIEiM8RWMy1DBCIZFuWvjJ4LFmAjjiQr9IwYL9vZGiUOYa9WQuXs73cvK/3jBRo3M3pVGcKKLtFodGCYOKwzwcGFBBsGIzDRAWVGuFeIIEwkpHWNUh2POWF0Gv2bBbjdZNs9a+KOOogENwBE6BDc5AG1yDDugCDB7AE3gBr8aj8Wy8Ge8/o0tGuXMA/pTx8Q201529</latexit> 
+
+Enc ¨q
+
+<latexit sha1_base64="8S7ACJUJaM7yHsKf5/9Iz8jRVbw=">AAAB73icbVA9TwJBEJ3DL8Qv1NJmI5hYkTsKtCTaWGIiHwlcyN7eHmzY2z1390zIhT9hY6Extv4dO/+NC1yh4EsmeXlvJjPzgoQzbVz32ylsbG5t7xR3S3v7B4dH5eOTjpapIrRNJJeqF2BNORO0bZjhtJcoiuOA024wuZ373SeqNJPiwUwT6sd4JFjECDZW6lUHJJRGV4fliltzF0DrxMtJBXK0huWvQShJGlNhCMda9z03MX6GlWGE01lpkGqaYDLBI9q3VOCYaj9b3DtDF1YJUSSVLWHQQv09keFY62kc2M4Ym7Fe9ebif14/NdG1nzGRpIYKslwUpRwZiebPo5ApSgyfWoKJYvZWRMZYYWJsRCUbgrf68jrp1Gteo9a4r1eaN3kcRTiDc7gED66gCXfQgjYQ4PAMr/DmPDovzrvzsWwtOPnMKfyB8/kDa8uPlA==</latexit> 
+
+· · · <latexit sha1_base64="8G2o2ZFbq3VlhUMIZsDdYzhv1CU=">AAACGHicbVBNS8NAEN3U7/pV9eglWAQv1kREPRZF8KhgrdDUstlM2qWbbNidKCUE/BNe/CsieFDEqzf/jZvWg1ofLPv2zQz75vmJ4Bod59MqTUxOTc/MzpXnFxaXlisrq5dapopBg0kh1ZVPNQgeQwM5CrhKFNDIF9D0+8dFvXkDSnMZX+AggXZEuzEPOaNopE5lx0MuAsg8X4pADyJzZV6U5nknw0647ebX5kmxp6JMgTZyperUnCHsceJ+k2rdkXcne0+3Z53KhxdIlkYQIxNU65brJNjOqELOBORlL9WQUNanXWgZGtMIdDsbLpbbm0YJ7FAqc2K0h+rPiYxGujBtOguT+m+tEP+rtVIMD9sZj5MUIWajj8JU2CjtIiU74AoYioEhlCluvNqsRxVlaLIsmxDcvyuPk8vdmrtf2z93q/UjMsIsWScbZIu45IDUySk5Iw3CyD15JC/k1Xqwnq03633UWrK+Z9bIL1gfX+bjpS8=</latexit> 
+
+˜μres 
+
+tf →1
+
+<latexit sha1_base64="JL3qOwWxtGqbFP9BioOcBNeRxO4=">AAACFnicbVDLSsNAFJ3UV62vqks3wSK4sSQuqsuiG5cV7EOaWiaTm3bo5MHMjVBCvsKNvyKCC0Xcijv/wM9w0rrQ1gPDnDn3Xubc48aCK7SsT6OwsLi0vFJcLa2tb2xulbd3WipKJIMmi0QkOy5VIHgITeQooBNLoIEroO2OzvN6+xak4lF4heMYegEdhNznjKKW+uUjB7nwIHXcSHhqHOgrdYIky/op9v3sRj8oDmWQSlBaLFesqjWBOU/sH1KpW/519/Fr3OiXPxwvYkkAITJBleraVoy9lErkTEBWchIFMWUjOoCupiENQPXSyVqZeaAVz/QjqU+I5kT9PZHSQOWWdWduUs3WcvG/WjdB/7SX8jBOEEI2/chPhImRmWdkelwCQzHWhDLJtVeTDamkDHWSJR2CPbvyPGkdV+1atXZpV+pnZIoi2SP75JDY5ITUyQVpkCZh5I48kGfyYtwbT8ar8TZtLRg/M7vkD4z3b7z2pVc=</latexit> 
+
+˜μres 
+
+tf
+
+<latexit sha1_base64="UCO9ArEAL992qWdS84oIBOY9oS4=">AAACFnicbVC7SgNBFJ31GeMrammzGISAGHYtopAmaGMZwTwgm4TZ2ZtkcPbBzF0hLPsVNv6KjYUitmJn65c4m6TQxAPDnDn3Xubc40aCK7SsL2NpeWV1bT23kd/c2t7ZLeztN1UYSwYNFopQtl2qQPAAGshRQDuSQH1XQMu9u8rqrXuQiofBLY4j6Pp0GPABZxS11C+cOsiFB4njhsJTY19fiePHadpP8MROe/pBcST9RILSYqFola0JzEViz0ixVqra1e9yr94vfDpeyGIfAmSCKtWxrQi7CZXImYA078QKIsru6BA6mgbUB9VNJmul5rFWPHMQSn0CNCfq74mE+iqzrDszk2q+lon/1ToxDi66CQ+iGCFg048GsTAxNLOMTI9LYCjGmlAmufZqshGVlKFOMq9DsOdXXiTNs7JdKVdu7GLtkkyRI4fkiJSITc5JjVyTOmkQRh7IE3khr8aj8Wy8Ge/T1iVjNnNA/sD4+AGI4KPF</latexit> 
+
+˜μres 
+
+t+1 
+
+<latexit sha1_base64="AamEF8r2SGekZFVyYBTz4TriHfs=">AAACFnicbVDLSsNAFJ34tr6qLt0Ei1AQS+JCBTdFNy4r2Fpo0jKZ3LRDJw9mboQS8hVu/BU3LhRxK+7c+iVOWhfaemCYM+fey5x7vERwhZb1aczNLywuLa+sltbWNza3yts7LRWnkkGTxSKWbY8qEDyCJnIU0E4k0NATcOsNL4v67R1IxePoBkcJuCHtRzzgjKKWeuUjB7nwIXO8WPhqFOorc8I0z3sZHh7nXf2gOJBhJkFpsVyxatYY5iyxf0ilXj23z79q3Uav/OH4MUtDiJAJqlTHthJ0MyqRMwF5yUkVJJQNaR86mkY0BOVm47Vy80ArvhnEUp8IzbH6eyKjoSos687CpJquFeJ/tU6KwZmb8ShJESI2+ShIhYmxWWRk+lwCQzHShDLJtVeTDaikDHWSJR2CPb3yLGkd1+yT2sm1XalfkAlWyB7ZJ1Vik1NSJ1ekQZqEkXvySJ7Ji/FgPBmvxtukdc74mdklf2C8fwOKdKPG</latexit> 
+
+˜μres 
+
+t+2 
+
+<latexit sha1_base64="gvtIXUyFeWnGJpgXxup7AaquOEw=">AAACF3icbVC7SgNBFJ31GeMrammzGISAsOxaRCFN0MYygnlANgmzk0kyZGZ3mbkrhGH/wsZfsbFQxFY7W7/E2SSFJl4Y5nDOvdxzTxBzpsB1v6yV1bX1jc3cVn57Z3dvv3Bw2FBRIgmtk4hHshVgRTkLaR0YcNqKJcUi4LQZjK8zvXlPpWJReAeTmHYEHoZswAgGQ/UKjj/CoP0g4n01EebTvmJDgdO0p+HMS7vaFxhGUmhJlSELRddxp2UvA28OitVSxat8O91ar/Dp9yOSCBoC4ViptufG0NFYAiOcpnk/UTTGZIyHtG1giAVVHT29K7VPDdO3B5E0LwR7yv6e0FiozLXpzEyqRS0j/9PaCQwuO5qFcQI0JLNFg4TbENlZSHafSUqATwzARDLj1SYjLDEBE2XehOAtnrwMGueOV3bKt16xeoVmlUPH6ASVkIcuUBXdoBqqI4Ie0BN6Qa/Wo/VsvVnvs9YVaz5zhP6U9fEDR/mkKQ==</latexit> 
+
+ˆωres 
+
+t+1 
+
+<latexit sha1_base64="MS8HRhfOjjXddcsSTgT5wwcIoRM=">AAACF3icbVC7SgNBFJ2NrxhfUUubxSAIwrKbIgppgjaWEcwDskmYnUySwZndZeauEIb9Cxt/xcZCEVvtbP0SZ5MUmnhhmMM593LPPUHMmQLX/bJyK6tr6xv5zcLW9s7uXnH/oKmiRBLaIBGPZDvAinIW0gYw4LQdS4pFwGkruLvK9NY9lYpF4S1MYtoVeBSyISMYDNUvOv4Yg/aDiA/URJhP+4qNBE7TvoazctrTvsAwlkJLqgxZLLmOOy17GXhzUKqdVr3qt9Or94uf/iAiiaAhEI6V6nhuDF2NJTDCaVrwE0VjTO7wiHYMDLGgqqund6X2iWEG9jCS5oVgT9nfExoLlbk2nZlJtahl5H9aJ4HhRVezME6AhmS2aJhwGyI7C8keMEkJ8IkBmEhmvNpkjCUmYKIsmBC8xZOXQbPseBWncuOVapdoVnl0hI7RKfLQOaqha1RHDUTQA3pCL+jVerSerTfrfdaas+Yzh+hPWR8/SY2kKg==</latexit> 
+
+ˆωres 
+
+t+2 
+
+<latexit sha1_base64="5hBPtP5oIwsVznk92sKeaLsdo10=">AAACGXicbVDLSgMxFM34tr6qLt0MFsGNZUZEXRZFcFnBPqBTSybNtMFkMiR3lBIG/Ao3/oouXCjiUlf+jZm2C7VeCDmccy/33BMmnGnwvC9nanpmdm5+YbGwtLyyulZc36hrmSpCa0RyqZoh1pSzmNaAAafNRFEsQk4b4fVprjduqNJMxpcwSGhb4F7MIkYwWKpT9II+BhOEknf1QNjPBJr1BM6yjoFOtOdnVyYQGPpKGEW1pYslr+wNy50E/hiUKp68Ozt4uq12ih9BV5JU0BgIx1q3fC+BtsEKGOE0KwSppgkm17hHWxbGWFDdNsPLMnfHMl03ksq+GNwh+3PCYKFz37YzN6n/ajn5n9ZKITpuGxYnKdCYjBZFKXdBunlMbpcpSoAPLMBEMevVJX2sMAEbZsGG4P89eRLU98v+Yfnwwi9VTtCoFtAW2ka7yEdHqILOURXVEEH36BG9oFfnwXl23pz3UeuUM57ZRL/K+fwGprSlkw==</latexit> 
+
+ˆωres 
+
+tf →1
+
+<latexit sha1_base64="BXMo4BpYLPyev4ChGdbquHq9AU4=">AAACF3icbVC7TsMwFHXKq5RXgZElokJiqhKGwljBwlgk+kBNqRzXaa3aSWTfIEVW/oKFX4GBAYRYYeMP+AyctgO0XMny0Tn36p57/JgzBY7zZRWWlldW14rrpY3Nre2d8u5eS0WJJLRJIh7Jjo8V5SykTWDAaSeWFAuf07Y/vsj19h2VikXhNaQx7Qk8DFnACAZD9ctVb4RBe37EByoV5tOeYkOBs6yvoR9kt9oTGEZSaEmVIcsVp+pMyl4E7gxU6k5w0336Thv98qc3iEgiaAiEY6W6rhNDT2MJjHCalbxE0RiTMR7SroEhFlT19OSuzD4yzMAOImleCPaE/T2hsVC5a9OZm1TzWk7+p3UTCM56moVxAjQk00VBwm2I7Dwke8AkJcBTAzCRzHi1yQhLTMBEWTIhuPMnL4LWSdWtVWtXbqV+jqZVRAfoEB0jF52iOrpEDdREBN2jR/SCXq0H69l6s96nrQVrNrOP/pT18QN8D6W7</latexit> 
+
+ˆωres 
+
+tf
+
+<latexit sha1_base64="nvxfiouLrTwO5SuMQk1eYTZ0GoA=">AAACEnicbZDLSsNAFIYn9V5vUZdugkXQTUlcVJdFQVwq2FZJY5lMTnToZBJmToQS8gxufBU3Coq4deXON/AxnLYuvP0w8POdc5hz/jATXKPrvluVicmp6ZnZuer8wuLSsr2y2tZprhi0WCpSdRZSDYJLaCFHAWeZApqEAjph/2BY71yD0jyVpzjIIEjopeQxZxQN6tnbXeQigqKbULwK4+KwLHsF9uLyYoxUUqACGRls19y6O5Lz13hfptZ043P/4WNw3LPfulHK8gQkMkG19j03w6CgCjkTUFa7uYaMsj69BN9YSRPQQTE6qXQ2DYmcOFXmSXRG9PtEQROtB0loOodr6t+1Ifyv5ucY7wUFl1mOINn4ozgXDqbOMB8n4goYioExlCludnXYFVWUoUmxakLwfp/817R36l6j3jjxas19MtYsWScbZIt4ZJc0yRE5Ji3CyA25I4/kybq17q1n62XcWrG+ZtbID1mvn/Sfo0U=</latexit> 
+
+˜Ftrend 
+
+tf
+
+<latexit sha1_base64="1SjFXpUJnrNflaJeBhqG0mUL+uc=">AAACFHicbVBNS8NAEN34WetX1aOXYBEEsSQi6rEoiscKthbaWjabSbu42YTdiVJCwL/gxb/iRUERrx68+W/cfhy0+mDg8d4MM/O8WHCNjvNlTUxOTc/M5uby8wuLS8uFldWajhLFoMoiEam6RzUILqGKHAXUYwU09ARcetfHff/yBpTmkbzAXgytkHYkDzijaKR2YbuJXPiQNkOKXS9IT7OsnWI72HGzq6GowhQVSN8YhaJTcgaw/xJ3RIplJ7o72Xu+rbQLn00/YkkIEpmgWjdcJ8ZWShVyJiDLNxMNMWXXtAMNQyUNQbfSwVOZvWkU3w4iZUqiPVB/TqQ01LoXeqazf6Ye9/rif14jweCwlXIZJwiSDRcFibAxsvsJ2T5XwFD0DKFMcXOrzbpUUYYmx7wJwR1/+S+p7Zbc/dL+uVssH5EhcmSdbJAt4pIDUiZnpEKqhJF78kheyKv1YD1Zb9b7sHXCGs2skV+wPr4BGc2jHQ==</latexit> 
+
+˜Ftrend 
+
+tf →1
+
+<latexit sha1_base64="MuqML4B39wkeW2BnlS4A7G9jS5I=">AAACEnicbZBNS8NAEIY3flu/qh69BIugCCXxUAUvRUE8VrBVaNqy2Uzs0s0m7E6EEvIbvPhXvHhQxKsnb179JW4bD1p9YeHlmRl25vUTwTU6zoc1NT0zOze/sFhaWl5ZXSuvb7R0nCoGTRaLWF37VIPgEprIUcB1ooBGvoArf3A6ql/dgtI8lpc4TKAT0RvJQ84oGtQr73nIRQCZF1Hs+2F2lue9DPfdvFsgFWWoQAYGlytO1RnL/mvcb1Op7x67x5/VbqNXfveCmKURSGSCat12nQQ7GVXImYC85KUaEsoG9Abaxkoage5k45Nye8eQwA5jZZ5Ee0x/TmQ00noY+aZztKaerI3gf7V2iuFRJ+MySREkKz4KU2FjbI/ysQOugKEYGkOZ4mZXm/WpogxNiiUTgjt58l/TOqi6tWrtwq3UT0ihBbJFtskucckhqZNz0iBNwsgdeSBP5Nm6tx6tF+u1aJ2yvmc2yS9Zb1+/t6Gz</latexit> 
+
+˜Ftrend 
+
+t+1 
+
+<latexit sha1_base64="07YQyZjB/xGSzQ056xVbfr56vU0=">AAACEnicbZC7SgNBFIZnvcZ4i1raLAZBEcJuiiikCQpiGcFcIIlhdvZsMjg7u8ycFcKyz2Djq9hYKGJrZWfrkzi5FN5+GPj5zjnMOb8XC67RcT6sufmFxaXl3Ep+dW19Y7Owtd3UUaIYNFgkItX2qAbBJTSQo4B2rICGnoCWd3M2rrduQWkeySscxdAL6UDygDOKBvULh13kwoe0G1IcekF6nmX9FI/K2fUUqTBFBdI3uFB0Ss5E9l/jzkyxdlB1q5+l63q/8N71I5aEIJEJqnXHdWLspVQhZwKyfDfREFN2QwfQMVbSEHQvnZyU2fuG+HYQKfMk2hP6fSKlodaj0DOd4zX179oY/lfrJBic9FIu4wRBsulHQSJsjOxxPrbPFTAUI2MoU9zsarMhVZShSTFvQnB/n/zXNMslt1KqXLrF2imZKkd2yR45IC45JjVyQeqkQRi5Iw/kiTxb99aj9WK9TlvnrNnMDvkh6+0LwU2htA==</latexit> 
+
+˜Ftrend 
+
+t+2 
+
+<latexit sha1_base64="Akc3KZRmuJC7uSDTd+qbc5ub1Us=">AAADDHicjVLdatRAFJ7Ev7r+dKuX3oQuyhZxSUSqCEJRkL2s4LaFnTVMJieboZNMmDkRlyEP4I2v4o0XinjrA3jn2zjZjbZ2K3hgmI/znZ9vzpykksJgGP70/AsXL12+snG1d+36jZub/a1bB0bVmsOEK6n0UcIMSFHCBAVKOKo0sCKRcJgcv2j5w7egjVDla1xUMCvYvBSZ4AydK97ytmnO0NJEydQsCndZWtRN88ZShHdoNZimiS3ej55inDX3ntGCYc6ZtC9dzIOooRIyHA7HcU5VqvAUPaQoZArrtU/KuS5tvC5WfXaoFvMcdwJKeytZLZtkrtgfQaihTP9H0jiW/1R0UvY8LV2L32p6cX8QjsKlBesg6sCAdLYf93/QVPG6gBK5ZMZMo7DCmWUaBZfQ9GhtoGL8mM1h6mDJCjAzu/zMJrjrPGmQKe1OicHSezrDssK003SRrV5zlmud53HTGrMnMyvKqkYo+apRVssAVdBuRpAKDRzlwgHGtXBaA54zzTi6/WmHEJ198jo4eDiKdke7rx4N9p5349ggd8g2GZKIPCZ7ZEz2yYRw77330fvsffE/+J/8r/63VajvdTm3yV/mf/8FAAD/zg==</latexit> 
+
+ˆμres 
+
+t+1: tf = F→1 (
+
+(Hh → F( ˜μres 
+
+t+1: tf )
+
+)
+
+ˆFtrend 
+
+t+1: tf = F→1 (
+
+Hl → F( ˜Ftrend 
+
+t+1: tf )
+
+)
+
+Fig. 1. Illustration of the proposed Frequency-aware Decomposition Network (FDN). 
+
+wrench forecasting, we employ asymmetric modeling for the low- and high-frequency bands of the wrench signal. To this end, we decompose W into trend and residual over each T -step horizon, and then let our model Mθ forecast a tuple of T -step decompositions. Here, W denotes episode-level denoised wrench with a cutoff frequency f dn 
+
+c . For each prediction time 
+
+t, the ground-truth trend and residual sequences are defined using spectral decomposition as: 
+
+Wtrend 
+
+t+1: tf = FPF low (Wt+1: tf )
+
+Wres 
+
+t+1: tf = Wt+1: tf − Wtrend 
+
+t+1: tf
+
+(11) where 
+
+FPF low (·) = F−1 (Hl(f ; fc) ⊙ F (·)) (12) is a differentiable non-recursive low-pass filter where 
+
+Hl(f ; fc) = 1 /p1 + ( f /f c)2r , f ∈ [0 , f Nyq ] (13) is a real-valued low-pass amplitude response with cutoff frequency fc [26]. fNyq is the Nyquist frequency. F, F−1 are the Fast Fourier Transform (FFT) and its inverse, and ⊙ is an elementwise multiplication operator. Then, the FDN model Mθ learns to forecast wrench de-compositions given xth:t as: 
+
+{ ˆWtrend 
+
+t+1: tf , ˆWres 
+
+t+1: tf } ∼ Mθ (· | xth:t) (14) The final forecast output ˆWt+1: tf is obtained by summing the trend and residual predictions: 
+
+ˆWt+1: tf = ˆWtrend 
+
+t+1: tf + ˆWres 
+
+t+1: tf (15) To reduce boundary artifacts in Eq. 12, we apply both-sided reflection padding before FFT and center-crop the inverse transformed sequence. We set r = 8 .
+
+B. Modality-specific encoders 
+
+To reduce the model’s sensitivity to episode-dependent ini-tial positions, we redefine the input vector xt using the relative joint positions ∆q and episode-dependent initial positions qe
+
+0:
+
+xt = [∆ qt, ˙qt, ¨qt, ut, qe
+
+0] ∈ R5n (16) for a n-DoF robot, where 
+
+∆qt = qt − qe
+
+0 (17) and qe
+
+0 is the episode initial position. Given an input history xth:t ∈ R5n×L, our model com-putes a sequence representation using four modality-specific PatchTST [14] encoders Enc ∆q , Enc ˙q , Enc ¨q , and Enc u for time-varying modalities and a MLP Enc qe
+
+0 for episode-varying initial positions. For the time-varying subset xδth:t =[∆ qt, ˙qt, ¨qt, ut] ∈ R4n×L, we first enhance them in the frequency domain as described in Section III-D, then patch-embed FEF( xδth:t) to a latent dimension D with patch length 
+
+P and stride S = P using modality-specific embedding layers. Subsequently, we obtain representations {z∆q , z ˙q , z ¨q , z u} ∈ 
+
+Rn×N ×D from the embeddings using modality-specific Trans-former [27] encoders, where N = ⌊(L − P )/S ⌋ + 2 is the number of patches. For qe
+
+0, we compute D-dimensional representation zqe
+
+0 with Enc qe
+
+0 , broadcast them across patches and channels, and add it to z∆q . Then, we concatenate PREPRINT NOT PEER REVIEWED 4
+
+the representations along the channel dimension, yielding 
+
+z′ = [ z∆q + zqe 
+
+> 0
+
+, z ˙q , z ¨q , z u] ∈ R4n×N ×D . Finally, we apply a channel-mixing linear projection to z′ to map the channel dimension from 4n to the 6 wrench channels, and obtain the final representation z ∈ R6×N ×D .
+
+a) Modified reversible instance normalization: The orig-inal PatchTST applies reversible instance normalization (RevIN) [28] before patch embedding, which normalizes each input channel and denormalizes the model outputs using sample-wise statistics. This technique assumes identical input and output channels, which differs from our setting. Here, we take advantage of the RevIN by normalizing xδth:t before frequency enhancement, and applying the inverse transform to the representations {z∆q , z ˙q , z ¨q , z u}.
+
+C. Asymmetric forecasting heads 
+
+From the final representation z, the model forecasts trend 
+
+˜Wtrend and residual distribution parameters in the short-term future using separate linear heads. We first flatten the patch and latent dimensions of z:
+
+¯z = flatten N,D (z) ∈ R6×N D (18) Then, for the trend, we linearly project the flattened dimension 
+
+N D to T as: 
+
+˜Wtrend  
+
+> t+1: tf
+
+= ¯ zW trend + btrend (19) where Wtrend ∈ RN D ×T , btrend ∈ RT , and ˜Wtrend  
+
+> t+1: tf
+
+∈ R6×T .For the residual, we model it as a step- and channel-wise Gaussian distribution in the T -step horizon, and predict conditional distribution parameters as: 
+
+˜μres  
+
+> t+1: tf
+
+= ¯ zW μ + bμ
+
+ˆvres  
+
+> t+1: tf
+
+= ¯ zW v + bv
+
+(20) where Wμ, W v ∈ RN D ×T and bμ, b v ∈ RT . Outputs 
+
+˜μres  
+
+> t+1: tf
+
+, ˆvres  
+
+> t+1: tf
+
+∈ R6 × T denote predicted mean and log variances, and ˆσres  
+
+> t+1: tf
+
+= exp(ˆ vres  
+
+> t+1: tf
+
+/2) . Modeling the resid-ual as a probabilistic distribution can efficiently parameterize volatile high-frequency amplitudes with the learned distribu-tion, which is the key design of the FDN. 
+
+D. Frequency-awareness 
+
+We incorporate frequency-aware layers in FDN to enhance inputs and refine outputs in the frequency domain, as in Fig. 2. To utilize our frequency band prior obtained from spectral decomposition and denoising, we filter the model predictions 
+
+˜Wtrend  
+
+> t+1: tf
+
+and ˜μres  
+
+> t+1: tf
+
+as: 
+
+ˆWtrend  
+
+> t+1: tf
+
+= FPF low ( ˜Wtrend  
+
+> t+1: tf
+
+)ˆμres  
+
+> t+1: tf
+
+= FPF high ( ˜ μres  
+
+> t+1: tf
+
+) (21) where 
+
+FPF high (·) = F−1  Hh(f ; fc, f dn  
+
+> c
+
+) ⊙ F (·) (22) is a denoising high-pass filter and 
+
+Hh(f ; fc, f dn  
+
+> c
+
+) =  1 − Hl(f ; fc)Hl(f ; f dn  
+
+> c
+
+) (23) is a band-pass response between fc and f dn  
+
+> c
+
+(fc ≤ f dn  
+
+> c
+
+). Then, we sample the residual at each step independently across time as: 
+
+ˆWres  
+
+> t+k
+
+= ˆ μres  
+
+> t+k
+
++ ϵ ⊙ exp 
+
+ ˆvres 
+
+> t+k
+
+2
+
+
+
+∀k = 1 , · · · , T (24) to generate a residual sequence ˆWres  
+
+> t+1: tf
+
+∈ R6×T . Here, 
+
+ϵ ∼ N (0, I ) is a white noise vector in R6. We use the filtered outputs to compute the loss in Eq. 31 since the filtering operations in Eq. 21 are differentiable. Here, ˆWres  
+
+> t+1: tf
+
+can be further filtered using FPF high for sample-level refinement, but we omit this design to keep the sampling path simple. To additionally mitigate high-frequency learning by adap-tively scaling input frequency components, we apply a learn-able frequency enhancement filter to xδth:t before patch em-bedding. We define a learnable filter as: 
+
+f (X) = X ⊙ softplus( Wf ) (25) where X = F(xδth:t) ∈ C4n×(⌊L/ 2⌋+1) is a Fourier transform of xδth:t and Wf ∈ R4n×(⌊L/ 2⌋+1) is a learnable real-valued weight. The frequency enhancement is executed by a mixture-of-experts (MoE) over M learnable filters fm(·) for m =1, · · · , M with learned expert-varying weights. Here, each fm
+
+has its own filter weight Wf,m . Let a αm ∈ R denote an m-th expert weight. The weight vector α = [ α1, · · · , α M ] ∈ RM is computed as: 
+
+α = softmax e
+
+ ϕ(xδth:t) (26) 
+
+ϕ(xδth:t) =  flatten 4n,L (xδth:t)T Wp (27) 
+
+ϕ is a linear gating layer with a weight Wp ∈ R4nL ×M
+
+to produce M logits, and the softmax e denotes softmax function applied over the expert dimension. The frequency enhancement filter FEF( ·) is then defined as: 
+
+FEF( xδth:t) = 
+
+> M
+
+X
+
+> m=1
+
+αmF−1(fm(X)) (28) From an input sequence, it produces M frequency-enhanced sequences and computes a weighted sum of them in the time domain with learned softmax weights, resulting in the same dimensionality as xδth:t. We then patch-embed FEF( xδth:t) to feed each modality encoder. We use M = 32 by default. 
+
+E. Loss function 
+
+We train the trend head by minimizing the mean-squared error of ˆWtrend  
+
+> t+1: tf
+
+:
+
+Ltrend = 16T
+
+> 6
+
+X
+
+> i=1
+> T
+
+X
+
+> j=1
+
+
+
+Wtrend  
+
+> i,t +j
+
+− ˆWtrend 
+
+> i,t +j
+
+2
+
+(29) where i and t+j denote channel and time indices. The residual head is trained by minimizing the negative log-likelihood of the ground-truth residual sequence Wres  
+
+> t+1: tf
+
+:
+
+Lres = 16T
+
+> 6
+
+X
+
+> i=1
+> T
+
+X
+
+> j=1
+
+12
+
+(Wres  
+
+> i,t +j
+
+− ˆμres  
+
+> i,t +j
+
+)2
+
+exp(ˆ vres  
+
+> i,t +j
+
+) + ˆ vres 
+
+> i,t +j
+
+!
+
+(30) The total loss L is the sum of the trend and residual losses: 
+
+L = Ltrend + Lres (31) PREPRINT NOT PEER REVIEWED 5Gating 
+
+> FFT
+> IFFT
+
+Learned filter weights 
+
+> <latexit  sha1_base64="zjY4Fq7e9t2eVHAMitck+jPpMLs=">AAAB73icbVDLTgJBEOzFF+IL9ehlIph4Irsc0CPRi0dM5JHAhswOszBhdnad6TUhG37CiweN8ervePNvHB4HBSvppFLVne6uIJHCoOt+O7mNza3tnfxuYW//4PCoeHzSMnGqGW+yWMa6E1DDpVC8iQIl7ySa0yiQvB2Mb2d++4lrI2L1gJOE+xEdKhEKRtFKnXIPRcRNuV8suRV3DrJOvCUpwRKNfvGrN4hZGnGFTFJjup6boJ9RjYJJPi30UsMTysZ0yLuWKmq3+Nn83im5sMqAhLG2pZDM1d8TGY2MmUSB7YwojsyqNxP/87ophtd+JlSSIldssShMJcGYzJ4nA6E5QzmxhDIt7K2EjaimDG1EBRuCt/ryOmlVK16tUruvluo3yzjycAbncAkeXEEd7qABTWAg4Rle4c15dF6cd+dj0ZpzljOn8AfO5w9zpI+Z</latexit>
+> →
+> <latexit  sha1_base64="zjY4Fq7e9t2eVHAMitck+jPpMLs=">AAAB73icbVDLTgJBEOzFF+IL9ehlIph4Irsc0CPRi0dM5JHAhswOszBhdnad6TUhG37CiweN8ervePNvHB4HBSvppFLVne6uIJHCoOt+O7mNza3tnfxuYW//4PCoeHzSMnGqGW+yWMa6E1DDpVC8iQIl7ySa0yiQvB2Mb2d++4lrI2L1gJOE+xEdKhEKRtFKnXIPRcRNuV8suRV3DrJOvCUpwRKNfvGrN4hZGnGFTFJjup6boJ9RjYJJPi30UsMTysZ0yLuWKmq3+Nn83im5sMqAhLG2pZDM1d8TGY2MmUSB7YwojsyqNxP/87ophtd+JlSSIldssShMJcGYzJ4nA6E5QzmxhDIt7K2EjaimDG1EBRuCt/ryOmlVK16tUruvluo3yzjycAbncAkeXEEd7qABTWAg4Rle4c15dF6cd+dj0ZpzljOn8AfO5w9zpI+Z</latexit>
+> →
+> <latexit  sha1_base64="zjY4Fq7e9t2eVHAMitck+jPpMLs=">AAAB73icbVDLTgJBEOzFF+IL9ehlIph4Irsc0CPRi0dM5JHAhswOszBhdnad6TUhG37CiweN8ervePNvHB4HBSvppFLVne6uIJHCoOt+O7mNza3tnfxuYW//4PCoeHzSMnGqGW+yWMa6E1DDpVC8iQIl7ySa0yiQvB2Mb2d++4lrI2L1gJOE+xEdKhEKRtFKnXIPRcRNuV8suRV3DrJOvCUpwRKNfvGrN4hZGnGFTFJjup6boJ9RjYJJPi30UsMTysZ0yLuWKmq3+Nn83im5sMqAhLG2pZDM1d8TGY2MmUSB7YwojsyqNxP/87ophtd+JlSSIldssShMJcGYzJ4nA6E5QzmxhDIt7K2EjaimDG1EBRuCt/ryOmlVK16tUruvluo3yzjycAbncAkeXEEd7qABTWAg4Rle4c15dF6cd+dj0ZpzljOn8AfO5w9zpI+Z</latexit>
+> →
+> IFFT
+> FFT
+> IFFT
+> FFT
+> <latexit  sha1_base64="zjY4Fq7e9t2eVHAMitck+jPpMLs=">AAAB73icbVDLTgJBEOzFF+IL9ehlIph4Irsc0CPRi0dM5JHAhswOszBhdnad6TUhG37CiweN8ervePNvHB4HBSvppFLVne6uIJHCoOt+O7mNza3tnfxuYW//4PCoeHzSMnGqGW+yWMa6E1DDpVC8iQIl7ySa0yiQvB2Mb2d++4lrI2L1gJOE+xEdKhEKRtFKnXIPRcRNuV8suRV3DrJOvCUpwRKNfvGrN4hZGnGFTFJjup6boJ9RjYJJPi30UsMTysZ0yLuWKmq3+Nn83im5sMqAhLG2pZDM1d8TGY2MmUSB7YwojsyqNxP/87ophtd+JlSSIldssShMJcGYzJ4nA6E5QzmxhDIt7K2EjaimDG1EBRuCt/ryOmlVK16tUruvluo3yzjycAbncAkeXEEd7qABTWAg4Rle4c15dF6cd+dj0ZpzljOn8AfO5w9zpI+Z</latexit>
+> →
+> <latexit  sha1_base64="zjY4Fq7e9t2eVHAMitck+jPpMLs=">AAAB73icbVDLTgJBEOzFF+IL9ehlIph4Irsc0CPRi0dM5JHAhswOszBhdnad6TUhG37CiweN8ervePNvHB4HBSvppFLVne6uIJHCoOt+O7mNza3tnfxuYW//4PCoeHzSMnGqGW+yWMa6E1DDpVC8iQIl7ySa0yiQvB2Mb2d++4lrI2L1gJOE+xEdKhEKRtFKnXIPRcRNuV8suRV3DrJOvCUpwRKNfvGrN4hZGnGFTFJjup6boJ9RjYJJPi30UsMTysZ0yLuWKmq3+Nn83im5sMqAhLG2pZDM1d8TGY2MmUSB7YwojsyqNxP/87ophtd+JlSSIldssShMJcGYzJ4nA6E5QzmxhDIt7K2EjaimDG1EBRuCt/ryOmlVK16tUruvluo3yzjycAbncAkeXEEd7qABTWAg4Rle4c15dF6cd+dj0ZpzljOn8AfO5w9zpI+Z</latexit>
+> →
+
+<latexit sha1_base64="MUkrazEOHVLoIaUhQYPVskdmzU4=">AAAB7HicbVA9TwJBEJ3DL8Qv1NJmI5hYkTsKtCTaWGLiIQlcyN4yBxv29i67eyaE8BtsLDTG1h9k579xgSsUfMkkL+/NZGZemAqujet+O4WNza3tneJuaW//4PCofHzS1kmmGPosEYnqhFSj4BJ9w43ATqqQxqHAx3B8O/cfn1BpnsgHM0kxiOlQ8ogzaqzkV6M+q/bLFbfmLkDWiZeTCuRo9ctfvUHCshilYYJq3fXc1ARTqgxnAmelXqYxpWxMh9i1VNIYdTBdHDsjF1YZkChRtqQhC/X3xJTGWk/i0HbG1Iz0qjcX//O6mYmugymXaWZQsuWiKBPEJGT+ORlwhcyIiSWUKW5vJWxEFWXG5lOyIXirL6+Tdr3mNWqN+3qleZPHUYQzOIdL8OAKmnAHLfCBAYdneIU3RzovzrvzsWwtOPnMKfyB8/kD96iOJQ==</latexit> 
+
+fc
+
+Frequency Enhancement Filter 
+
+High -pass Filter 
+
+Low -pass Filter 
+
+> <latexit  sha1_base64="h+aNUI7Gw33Te3qpCkvF9GJn7eY=">AAAB6HicbZC7SgNBFIbPxltcb1FLm8UgWIVdi2gjBm0sEzAXSJYwOzmbjJmdXWZmhbDkCWwsFLHVh7G3Ed/GyaXQ6A8DH/9/DnPOCRLOlHbdLyu3tLyyupZftzc2t7Z3Crt7DRWnkmKdxjyWrYAo5ExgXTPNsZVIJFHAsRkMryZ58w6lYrG40aME/Yj0BQsZJdpYNbdbKLoldyrnL3hzKF682+fJ26dd7RY+Or2YphEKTTlRqu25ifYzIjWjHMd2J1WYEDokfWwbFCRC5WfTQcfOkXF6ThhL84R2pu7PjoxESo2iwFRGRA/UYjYx/8vaqQ7P/IyJJNUo6OyjMOWOjp3J1k6PSaSajwwQKpmZ1aEDIgnV5ja2OYK3uPJfaJyUvHKpXPOKlUuYKQ8HcAjH4MEpVOAaqlAHCgj38AhP1q31YD1bL7PSnDXv2Ydfsl6/AdyCj/0=</latexit>
+> 0
+
+<latexit sha1_base64="VVkt1ce6/PVe+0EqLh365ZlAAk4=">AAAB9XicbVC7TsNAEDyHV0h4BChpLAISVWRTBMoIGioUJPKQEhOdL+fklPPZ3K0DluX/oKEAIVo6foA/oONDoObyKCBhpJVGM7va3XFDzhRY1qeRWVhcWl7Jrubya+sbm4Wt7boKIklojQQ8kE0XK8qZoDVgwGkzlBT7LqcNd3A28htDKhULxBXEIXV83BPMYwSDlq69TtIGegfJRXyTpp1C0SpZY5jzxJ6SYmX/6+19mP+udgof7W5AIp8KIBwr1bKtEJwES2CE0zTXjhQNMRngHm1pKrBPlZOMr07NA610TS+QugSYY/X3RIJ9pWLf1Z0+hr6a9Ubif14rAu/ESZgII6CCTBZ5ETchMEcRmF0mKQEea4KJZPpWk/SxxAR0UDkdgj378jypH5Xscql8aRcrp2iCLNpFe+gQ2egYVdA5qqIaIkiie/SInoxb48F4Nl4mrRljOrOD/sB4/QEqQJdl</latexit> 
+
+fNyq 
+
+<latexit sha1_base64="MUkrazEOHVLoIaUhQYPVskdmzU4=">AAAB7HicbVA9TwJBEJ3DL8Qv1NJmI5hYkTsKtCTaWGLiIQlcyN4yBxv29i67eyaE8BtsLDTG1h9k579xgSsUfMkkL+/NZGZemAqujet+O4WNza3tneJuaW//4PCofHzS1kmmGPosEYnqhFSj4BJ9w43ATqqQxqHAx3B8O/cfn1BpnsgHM0kxiOlQ8ogzaqzkV6M+q/bLFbfmLkDWiZeTCuRo9ctfvUHCshilYYJq3fXc1ARTqgxnAmelXqYxpWxMh9i1VNIYdTBdHDsjF1YZkChRtqQhC/X3xJTGWk/i0HbG1Iz0qjcX//O6mYmugymXaWZQsuWiKBPEJGT+ORlwhcyIiSWUKW5vJWxEFWXG5lOyIXirL6+Tdr3mNWqN+3qleZPHUYQzOIdL8OAKmnAHLfCBAYdneIU3RzovzrvzsWwtOPnMKfyB8/kD96iOJQ==</latexit> 
+
+fc
+
+> <latexit  sha1_base64="h+aNUI7Gw33Te3qpCkvF9GJn7eY=">AAAB6HicbZC7SgNBFIbPxltcb1FLm8UgWIVdi2gjBm0sEzAXSJYwOzmbjJmdXWZmhbDkCWwsFLHVh7G3Ed/GyaXQ6A8DH/9/DnPOCRLOlHbdLyu3tLyyupZftzc2t7Z3Crt7DRWnkmKdxjyWrYAo5ExgXTPNsZVIJFHAsRkMryZ58w6lYrG40aME/Yj0BQsZJdpYNbdbKLoldyrnL3hzKF682+fJ26dd7RY+Or2YphEKTTlRqu25ifYzIjWjHMd2J1WYEDokfWwbFCRC5WfTQcfOkXF6ThhL84R2pu7PjoxESo2iwFRGRA/UYjYx/8vaqQ7P/IyJJNUo6OyjMOWOjp3J1k6PSaSajwwQKpmZ1aEDIgnV5ja2OYK3uPJfaJyUvHKpXPOKlUuYKQ8HcAjH4MEpVOAaqlAHCgj38AhP1q31YD1bL7PSnDXv2Ydfsl6/AdyCj/0=</latexit>
+> 0
+
+<latexit sha1_base64="VVkt1ce6/PVe+0EqLh365ZlAAk4=">AAAB9XicbVC7TsNAEDyHV0h4BChpLAISVWRTBMoIGioUJPKQEhOdL+fklPPZ3K0DluX/oKEAIVo6foA/oONDoObyKCBhpJVGM7va3XFDzhRY1qeRWVhcWl7Jrubya+sbm4Wt7boKIklojQQ8kE0XK8qZoDVgwGkzlBT7LqcNd3A28htDKhULxBXEIXV83BPMYwSDlq69TtIGegfJRXyTpp1C0SpZY5jzxJ6SYmX/6+19mP+udgof7W5AIp8KIBwr1bKtEJwES2CE0zTXjhQNMRngHm1pKrBPlZOMr07NA610TS+QugSYY/X3RIJ9pWLf1Z0+hr6a9Ubif14rAu/ESZgII6CCTBZ5ETchMEcRmF0mKQEea4KJZPpWk/SxxAR0UDkdgj378jypH5Xscql8aRcrp2iCLNpFe+gQ2egYVdA5qqIaIkiie/SInoxb48F4Nl4mrRljOrOD/sB4/QEqQJdl</latexit> 
+
+fNyq 
+
+<latexit sha1_base64="hSR7UBxfRnayKQel57oqd6jRhS8=">AAAB83icbVBNT8JAEJ3iF+IHqEcvG8EEL6TlgCZeiF44YiIfCTTNdtnChu222d2akIa/4cWDxnj1z3jz37hADwq+ZJKX92YyM8+POVPatr+t3Nb2zu5efr9wcHh0XCydnHZVlEhCOyTikez7WFHOBO1opjntx5Li0Oe050/vF37viUrFIvGoZzF1QzwWLGAEayMNKy2PV4PbwCNXFa9Utmv2EmiTOBkpQ4a2V/oajiKShFRowrFSA8eOtZtiqRnhdF4YJorGmEzxmA4MFTikyk2XN8/RpVFGKIikKaHRUv09keJQqVnom84Q64la9xbif94g0cGNmzIRJ5oKsloUJBzpCC0CQCMmKdF8ZggmkplbEZlgiYk2MRVMCM76y5ukW685jVrjoV5u3mVx5OEcLqAKDlxDE1rQhg4QiOEZXuHNSqwX6936WLXmrGzmDP7A+vwBGpyQcA==</latexit> 
+
+Hl(f ; fc)
+
+<latexit sha1_base64="77SD+oZRFf+3IPZf7Q9R4NdFoE8=">AAACB3icbVDLSsNAFJ3UV62vqEtBgq1QQUrSRRXcFN10WcE+oI1hMpm0QyeTMDMRSsjOjb/ixoUibv0Fd/6NkzYLbT1w4XDOvdx7jxtRIqRpfmuFldW19Y3iZmlre2d3T98/6Iow5gh3UEhD3nehwJQw3JFEUtyPOIaBS3HPndxkfu8Bc0FCdienEbYDOGLEJwhKJTn6caXljKv+le+gc1X3yTCAcsyDxGNpelZx9LJZM2cwlomVkzLI0Xb0r6EXojjATCIKhRhYZiTtBHJJEMVpaRgLHEE0gSM8UJTBAAs7mf2RGqdK8Qw/5KqYNGbq74kEBkJMA1d1ZleKRS8T//MGsfQv7YSwKJaYofkiP6aGDI0sFMMjHCNJp4pAxIm61UBjyCGSKrqSCsFafHmZdOs1q1Fr3NbLzes8jiI4AiegCixwAZqgBdqgAxB4BM/gFbxpT9qL9q59zFsLWj5zCP5A+/wBzc6Yqg==</latexit> 
+
+Hh(f ; fc, f dn 
+
+c ) <latexit sha1_base64="ijhvXK1Ysqw0HJ7HbdaiqES52k8=">AAAB/HicbVC7TsMwFHXKq5RXoCNLRIvEVCUdCmMFC2OR6ENqQ+Q4TmvVdiLbQYqi8CssDCDEyoew8Tc4bQZoOZKlo3Pu1T0+fkyJVLb9bVQ2Nre2d6q7tb39g8Mj8/hkIKNEINxHEY3EyIcSU8JxXxFF8SgWGDKf4qE/vyn84SMWkkT8XqUxdhmcchISBJWWPLPeDD30kE0YVDPBsoDnedMzG3bLXsBaJ05JGqBEzzO/JkGEEoa5QhRKOXbsWLkZFIogivPaJJE4hmgOp3isKYcMSzdbhM+tc60EVhgJ/biyFurvjQwyKVPm68kipFz1CvE/b5yo8MrNCI8ThTlaHgoTaqnIKpqwAiIwUjTVBCJBdFYLzaCASOm+aroEZ/XL62TQbjmdVueu3ehel3VUwSk4AxfAAZegC25BD/QBAil4Bq/gzXgyXox342M5WjHKnTr4A+PzB9PLlOc=</latexit> 
+
+f dn 
+
+c
+
+Fig. 2. Detailed visualization of frequency-aware layers. FFT and IFFT denote the Fast Fourier Transform and its inverse. (Left) A learnable frequency enhancement filter ( FEF ) layer. (Right) Low-pass and denoising high-pass filters ( FPF low , FPF high ) for imposing the frequency band prior. 
+
+F. Proprioception-to-Wrench pretraining 
+
+To further enhance generalization, we pretrain the model on RH20T [16], a large-scale open-source robot dataset contain-ing proprioception and wrench data obtained from teleoperated contact-rich manipulations. Specifically, we use the provided 
+
+q and W trajectories, and numerical differentiations of the provided q to learn proprioception-to-wrench representations without modifying the defined input, output, and loss settings. Since the dataset covers both 6- and 7-DoF robots, we set 
+
+n = 7 to construct a 35-dimensional input vector and set the 7th-joint channels ∆q7, ˙q7, ¨q7, and qe
+
+0,7 to zero in xth:t and 
+
+FEF( xδth:t) for 6-DoF samples. To avoid negative transfer from the modality gap between motor-based actuation and downstream hydraulic actuation in Section IV-A, we mask the actuation signal u with zero in both xδth:t and FEF( xδth:t),and zero out the corresponding encoder representation zu to ignore the actuation signal u while pretraining. Accordingly, parameters of the Enc u and its embedding layer are frozen. We also skip RevIN for the masked channels. We transfer the learned proprioception-to-wrench represen-tations to the downstream by initializing Enc ∆q , Enc ˙q , Enc ¨q
+
+and their embedding layers, and Enc qe
+
+0 with the pretrained parameters, while initializing the other layers from scratch. In the downstream, we first perform linear probing while freezing the pretrained parameters, and then unfreeze all parameters to fine-tune the model end-to-end. IV. E XPERIMENTS 
+
+A. Real-world hydraulic manipulation data 
+
+We conduct real-world robotic excavations using a 6-DoF KnR HYDRA-UW3 hydraulic manipulator equipped with a grinder end-effector, shown in Fig. 3. To mimic a robotic ground excavation, we teleoperate the manipulator to excavate a fixed gypsum block along the −x and −z axes, while maintaining zero translation along the y axis. The grinder rotates about the +y direction of the base frame at a desired speed of 100 RPM. During teleoperation, we actuate three intermediate joints ( q2, q 3, q 4) and keep the first ( q1) and the last two joints ( q5, q 6) fixed. J2 
+
+J3 
+
+J4 
+
+J5 
+
+J6 
+
+EE 
+
+Gypsum Block 
+
+F/T 
+
+J1 
+
+<latexit sha1_base64="4cOLEF4l1o9cihl75q81CVP9Aw0=">AAAB83icbVC7TsMwFL0pr1JeBUYWixaJqUo6FMYKFsYi0YfURJXjOq1Vx4lsB1FF/Q0WBhBi5WfY+BucNAO0HMnS0Tn36h4fP+ZMadv+tkobm1vbO+Xdyt7+weFR9fikp6JEEtolEY/kwMeKciZoVzPN6SCWFIc+p31/dpv5/UcqFYvEg57H1AvxRLCAEayN5NbdEOupH6RPi/qoWrMbdg60TpyC1KBAZ1T9cscRSUIqNOFYqaFjx9pLsdSMcLqouImiMSYzPKFDQwUOqfLSPPMCXRhljIJImic0ytXfGykOlZqHvpnMIqpVLxP/84aJDq69lIk40VSQ5aEg4UhHKCsAjZmkRPO5IZhIZrIiMsUSE21qqpgSnNUvr5Nes+G0Gq37Zq19U9RRhjM4h0tw4AracAcd6AKBGJ7hFd6sxHqx3q2P5WjJKnZO4Q+szx+9EpGB</latexit> 
+
+## x
+
+<latexit sha1_base64="h0RdXItj1/3GyOBGmDbwo76o5Go=">AAAB83icbVC7TsMwFL0pr1JeBUYWixaJqUo6FMYKFsYi0YfURJXjOq1Vx4lsB6lE/Q0WBhBi5WfY+BucNAO0HMnS0Tn36h4fP+ZMadv+tkobm1vbO+Xdyt7+weFR9fikp6JEEtolEY/kwMeKciZoVzPN6SCWFIc+p31/dpv5/UcqFYvEg57H1AvxRLCAEayN5NbdEOupH6RPi/qoWrMbdg60TpyC1KBAZ1T9cscRSUIqNOFYqaFjx9pLsdSMcLqouImiMSYzPKFDQwUOqfLSPPMCXRhljIJImic0ytXfGykOlZqHvpnMIqpVLxP/84aJDq69lIk40VSQ5aEg4UhHKCsAjZmkRPO5IZhIZrIiMsUSE21qqpgSnNUvr5Nes+G0Gq37Zq19U9RRhjM4h0tw4AracAcd6AKBGJ7hFd6sxHqx3q2P5WjJKnZO4Q+szx/AHpGD</latexit> 
+
+## z
+
+<latexit sha1_base64="ZhO5UfkYxt+aLcBF5KbdAPKfAp8=">AAAB83icjVDLSsNAFL2pr1pfVZduBlvBVUm6qC6LblxWsA9oQplMJ+3QyUyYmQgh9DfcuFDErT/jzr9x0nahouCBC4dz7uUeTphwpo3rfjiltfWNza3ydmVnd2//oHp41NMyVYR2ieRSDUKsKWeCdg0znA4SRXEcctoPZ9eF37+nSjMp7kyW0CDGE8EiRrCxkl/3Y2ymYZRn8/qoWvMa7gLob1KDFTqj6rs/liSNqTCEY62HnpuYIMfKMMLpvOKnmiaYzPCEDi0VOKY6yBeZ5+jMKmMUSWVHGLRQv17kONY6i0O7WUTUP71C/M0bpia6DHImktRQQZaPopQjI1FRABozRYnhmSWYKGazIjLFChNja6r8r4Res+G1Gq3bZq19taqjDCdwCufgwQW04QY60AUCCTzAEzw7qfPovDivy9WSs7o5hm9w3j4Bwv2RhQ==</latexit> 
+
+## y
+
+<latexit sha1_base64="4cOLEF4l1o9cihl75q81CVP9Aw0=">AAAB83icbVC7TsMwFL0pr1JeBUYWixaJqUo6FMYKFsYi0YfURJXjOq1Vx4lsB1FF/Q0WBhBi5WfY+BucNAO0HMnS0Tn36h4fP+ZMadv+tkobm1vbO+Xdyt7+weFR9fikp6JEEtolEY/kwMeKciZoVzPN6SCWFIc+p31/dpv5/UcqFYvEg57H1AvxRLCAEayN5NbdEOupH6RPi/qoWrMbdg60TpyC1KBAZ1T9cscRSUIqNOFYqaFjx9pLsdSMcLqouImiMSYzPKFDQwUOqfLSPPMCXRhljIJImic0ytXfGykOlZqHvpnMIqpVLxP/84aJDq69lIk40VSQ5aEg4UhHKCsAjZmkRPO5IZhIZrIiMsUSE21qqpgSnNUvr5Nes+G0Gq37Zq19U9RRhjM4h0tw4AracAcd6AKBGJ7hFd6sxHqx3q2P5WjJKnZO4Q+szx+9EpGB</latexit> 
+
+## x EE 
+
+Trajectory 
+
+Fig. 3. Illustration of our hydraulic manipulator and grinding excavation. (Left) Overview of our experimental setting. J1 to J6 indicate the joint numbers, and ‘EE’ denotes the end-effector. Fixed components are colored in grey, while moving components are marked in yellow. (Right) The grinder end-effector rotates about the +y axis and excavates the block by moving in 
+
+−x and −z directions. 
+
+Fig. 4 visualizes the collected trajectories. During excava-tion, we collect six joint angle trajectories q and wrench from a 6-axis F/T sensor (HBK MCS10) mounted at the wrist. We also collect the joint differential hydraulic pressure ∆p from pressure sensors installed at each joint, which we use as an actuation signal u. The joint states, pressures, and the wrench are sampled at 100 Hz. Note that the wrench measurements are used only for training and evaluating the model. We collect data over 12 episodes, as summarized in Table I. Here, N(·) denotes the number of samples in each modality. The episodes were collected in two sessions, denoted as ‘Soft’ and ‘Stiff’, each including 6 episodes. We excavate softer blocks rapidly in the ‘Soft’ session and stiffer blocks slowly 
+
+in the ‘Stiff’ session. This setting induced different wrench distributions across sessions, as reflected in the maximum force/torque magnitudes. 
+
+1) Selecting cutoff frequencies: We analyze frequency com-ponents of the wrench to determine the cutoff frequencies 
+
+fc and f dn 
+
+c . Fig. 5 shows the average energy spectrum 
+
+|F (Wt+1: tf )|2 of undecomposed, 5,000-step wrench windows PREPRINT NOT PEER REVIEWED 6                                                                                                                                                                                               
+
+> TABLE I OVERVIEW OF THE COLLECTED HYDRAULIC MANIPULATION DATA .Episode Dataset Duration In-contact Nq,∆pNWmax |f|max |m|dxdzE[vx]
+> Unit -[s] [s] --[N] [Nm] [mm] [mm] [mm/s] Soft-1 Test 289.18 214.11 28,861 28,924 fx= 122 mx= 35 158.31 11.75 -0.74 Soft-2 Test 149.34 114.15 14,909 14,937 fx= 96 my= 27 154.70 12.58 -1.36 Soft-3 Training 230.33 141.70 22,933 23,035 fx= 155 my= 47 213.84 13.79 -1.50 Soft-4 Training 152.04 108.32 15,121 15,205 fz= 116 mx= 42 160.00 12.57 -1.48 Soft-5 Training 176.63 130.39 17,618 17,663 fx= 134 my= 41 206.74 13.23 -1.59 Soft-6 Training 155.16 121.75 15,427 15,517 fx= 111 my= 31 162.21 11.01 -1.33 Stiff-1 Test 418.71 336.52 41,824 41,874 fx= 627 mz= 193 235.64 16.27 -0.70 Stiff-2 Training 445.78 375.77 44,579 44,581 fx= 239 mz= 69 140.49 13.56 -0.37 Stiff-3 Test 593.85 479.60 59,366 59,381 fx= 364 mz= 125 206.57 14.61 -0.43 Stiff-4 Training 396.82 324.99 39,682 39,685 fx= 258 mz= 78 157.16 13.36 -0.48 Stiff-5 Training 557.77 457.64 55,456 55,756 fx= 303 mz= 120 205.70 12.73 -0.45 Stiff-6 Training 383.12 331.67 38,306 38,293 fx= 260 mz= 75 156.05 13.03 -0.47 Total -3948.73 3136.60 394,082 394,851 -----
+> Fig. 4. Visualization of the collected hydraulic dataset. The upper two panels show 12 collected trajectories of ∆q4and ∆p4. The lower two panels show the decomposed fxand mytrajectories of the ‘Stiff-2’ episode with fc=1Hz and fdn
+> c= 15 Hz.
+> Fig. 5. Energy spectrum of raw wrench windows. Each channel is normalized to zero mean and unit variance before the Fourier transform.
+
+before denoising. We observe that low-frequency energy is concentrated below 1 Hz across all channels, while overall spectral energy is concentrated below 15 Hz. Accordingly, we set fc = 1 Hz and f dn  
+
+> c
+
+= 15 Hz. 
+
+B. Data processing 
+
+We postprocess the data for training. We denoise the inputs 
+
+q and ∆p with cutoff frequency f dn  
+
+> c
+
+, and estimate ˙q and 
+
+¨q from the denoised q using a causal Savitzky-Golay filter. We transform the wrench from the sensor frame to the base frame and synchronize the timestamps to those of the joint states using zero-order hold. In addition, we remove episode-wise sensor offsets in W by subtracting the temporal mean of the static-phase segment for each channel in each episode to ensure near-zero readings in non-contact phases. Then, we denoise W at the episode level before performing the window-level decomposition in Eq. 11. For the pretraining dataset, we use the same postprocessing pipeline except that we upsample q from 10 Hz to 100 Hz with linear interpolation using timestamps of W, omit sensor offset removal in W, and extract samples with a temporal stride of 10 due to the large number of samples. The postprocessed data is split at the episode level to construct training and test datasets. To account for session-dependent wrench distributions, we select two episodes from each session for the test set. From the ‘Soft’ session, we choose the longest (Soft-1) and the shortest (Soft-2) episodes to cover varying trajectory lengths. For the ‘Stiff’ session, we include Stiff-1, which exhibits outlier wrench magnitudes (627 N in fx
+
+and 193 Nm in mz, possibly reflecting the deepest penetration 
+
+dz ), and the longest episode (Stiff-3). The test set accounts for 33% of the total samples. We use the remaining eight episodes (≈ 67% ) for training. 
+
+C. Evaluation method 
+
+To evaluate the proposed FDN, we compare it against baselines from force estimation and time-series forecasting: 
+
+a) Point-to-point estimators: We implement an improved version of MINN [6], as well as RBF neural network [9], and Gaussian process regression (GPR) [10]. These models estimate Wt from the input vector x′ 
+
+> t
+
+= [ qt, ˙qt, ¨qt, ut].PREPRINT NOT PEER REVIEWED 7
+
+b) Sequence-to-point estimators: We implement LSTM [11] and CNN [12] models, which estimate Wt from the input sequence x′
+
+> th:t
+
+.
+
+c) Sequence-to-sequence forecasters: We implement LSTM encoder-decoder (LSTM-ED) [29], Transformer encoder-decoder with generative inference [27], [30], and variants of PatchTST and iTransformer [14], [31]. Since PatchTST and iTransformer were originally designed for endogenous forecasting, where the input and output channels are identical, we incorporate channel-mixing linear projection and modified RevIN described in Section III-B to support our setting. These models forecast Wt+1: tf from the input history x′
+
+> th:t
+
+. In addition, we consider PatchTST-Gaussian, which forecasts step- and channel-wise Gaussian parameters of Wt+1: tf from x′ 
+
+> th:t
+
+as in Eq. 20. In our experiments, we use L = 100 and T = 100 ,corresponding to forecasting one second into the future from one second of history. We use n = 6 for models with-out pretraining. All models are optimized with Adam [32] for 5 epochs using a batch size of 64. We normalize the training datasets to zero mean and unit standard deviation. Hyperparameters are kept as consistent as possible across models, including latent dimension D = 128 , and patch length P = 24 . For model-specific hyperparameters, we report their best-performing configurations found. We pretrain FDN on a filtered subset of 11,131 RH20T episodes with valid proprioception and wrench data. For the pretrained FDN, the input normalization statistics from RH20T are reused in the downstream. All experiments are conducted over three runs, and we report the mean values. Further implementation details are available at our GitHub. For evaluation, we assume a constant time delay tdelay 
+
+that accounts for communication, preprocessing, and inference during real deployment. Under this setting, each model is used to reconstruct the test episodes using a single prediction point from each input sample. For point estimators, the reconstructed episode is shifted backward by tdelay and compared with the unshifted ground-truth episode, corresponding to a delayed zero-order-hold estimate . For sequence forecasters, we extract the prediction at horizon t + tdelay from each forecasted sequence and use it to reconstruct the episode without shifting. The reconstructed episode is then compared directly with the time-aligned ground-truth episode, corresponding to a delay-compensated prediction .We evaluate band-specific accuracy of the reconstructed trends and residuals obtained by episode-level decomposition using FPF low with fc = 1 Hz. For the high-frequency band, we evaluate transient amplitude reconstruction by comparing the windowed root mean square (RMS) of the residual. Specif-ically, we compute the RMS of the episode residuals within sliding windows and compute the root mean squared error (RMSE) of the windowed RMS values: 
+
+wRMSE = 
+
+vuut 1
+
+N − w + 1  
+
+> N−w+1
+
+X
+
+> t=1
+
+(rt(ˆ yres ) − rt(yres )) 2
+
+(32)                                                          
+
+> TABLE II HIGH -FREQUENCY WINDOWED RMS ERRORS OF MODELS .Metric wRMSE , High-frequency Windowed RMS Error Time Delay 100 ms 1,000 ms Force/Torque Unit [N] [Nm] [N] [Nm] MINN [6] 23.645 4.801 23.717 4.816 RBF [9] 23.421 4.644 23.454 4.650 GPR [10] 24.262 4.849 24.300 4.861 LSTM [11] 17.941 3.766 18.465 3.837 CNN [12] 24.394 4.989 24.428 4.996 LSTM-ED [29] 22.554 4.574 22.508 4.550 Transformer [27] 24.019 4.887 23.958 4.870 PatchTST [14] 22.274 4.565 23.059 4.720 PatchTST-Gaussian 15.336 3.377 15.658 3.412 iTransformer [31] 21.992 4.515 23.135 4.742 FDN (Scratch) 12.912 2.593 14.355 2.903
+> FDN (Pretrained) 11.876 2.621 13.798 2.997
+
+where the window RMS function rt is defined as: 
+
+rt(x) = 
+
+vuut 1
+
+w
+
+> t+w−1
+
+X
+
+> i=t
+
+(x2 
+
+> i
+
+) (33) We set the sliding window size w = 10 , corresponding to a 0.1 s window. For the low-frequency band, we compute pointwise RMSE of the trends: 
+
+pRMSE = 
+
+vuut 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+(ytrend  
+
+> i
+
+− ˆytrend  
+
+> i
+
+)2 (34) To additionally evaluate predictions over the full frequency band, we measure the continuously ranked probability score (CRPS ), a proper scoring rule widely used for evaluating probabilistic forecasts: 
+
+CRPS = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+Z ∞−∞ 
+
+ Fi(x) − 1{x≥yi}
+
+2 dx (35) where Fi is the predicted cumulative distribution function (CDF) and 1{x≥yi} is the step CDF at observation yi. The 
+
+CRPS reduces to the mean absolute error (MAE) for deter-ministic models, since Fi(x) = 1{x≥ˆyi}.For the probabilistic models (GPR, PatchTST-Gaussian, and FDN), episode-level trends are obtained by decomposing their predictive mean. For FDN, we use ˆWtrend + ˆ μres as its predic-tive mean. In addition, FDN and PatchTST-Gaussian directly parameterize the wrench distribution, whereas GPR models posterior uncertainty. Therefore, for FDN and PatchTST-Gaussian, we replace the energy x2 
+
+> i
+
+in Eq. 33 with its expectation E[x2 
+
+> i
+
+] = μ2 
+
+> i
+
++ σ2 
+
+> i
+
+. Here, μi denotes the residual of predictive mean, and σ is the predicted standard deviation. For GPR, all metrics are computed from its predictive mean only. 
+
+D. Comparative analysis 
+
+Table II and III report high- and low-frequency band-specific metrics. Models that explicitly parameterize the wrench distribution show clear improvements in wRMSE ,PREPRINT NOT PEER REVIEWED 8                                                                                                                
+
+> TABLE III LOW -FREQUENCY POINTWISE RMSE OF MODELS .Metric pRMSE , Low-frequency Pointwise RMSE Time Delay 100 ms 1,000 ms Force/Torque Unit [N] [Nm] [N] [Nm] MINN [6] 12.230 3.612 12.274 3.623 RBF [9] 10.455 3.076 10.432 3.067 GPR [10] 9.362 2.285 9.362 2.281
+> LSTM [11] 13.040 3.289 13.189 3.300 CNN [12] 10.322 2.485 10.766 2.511 LSTM-ED [29] 11.873 3.199 11.889 3.231 Transformer [27] 10.939 2.954 11.009 3.023 PatchTST [14] 9.898 2.545 10.223 2.578 PatchTST-Gaussian 13.562 4.358 13.563 4.352 iTransformer [31] 9.994 2.587 10.326 2.612 FDN (Scratch) 9.102 3.825 9.411 3.830 FDN (Pretrained) 10.448 3.045 10.659 3.055 TABLE IV CONTINUOUSLY RANKED PROBABILITY SCORES OF MODELS .Metric CRPS
+> Time Delay 100 ms 1,000 ms Force/Torque Unit [N] [Nm] [N] [Nm] MINN [6] 12.780 3.846 12.803 3.850 RBF [9] 12.324 3.800 12.337 3.800 GPR [10] 11.855 3.461 11.884 3.469 LSTM [11] 14.410 4.278 14.643 4.317 CNN [12] 12.531 3.668 12.608 3.680 LSTM-ED [29] 13.156 4.007 13.205 4.006 Transformer [27] 12.648 3.843 12.715 3.883 PatchTST [14] 12.015 3.751 12.183 3.769 PatchTST-Gaussian 9.596 3.238 9.617 3.235 iTransformer [31] 11.968 3.778 12.101 3.773 FDN (Scratch) 8.891 3.213 8.964 3.219 FDN (Pretrained) 9.129 2.931 9.224 2.952
+
+indicating the effectiveness of distribution parameterization in the high-frequency band. In particular, FDN demonstrates the best performance in the high-frequency band, reducing 
+
+wRMSE by up to 50% relative to the baselines while main-taining competitive pRMSE in the low-frequency band. In contrast, most baselines exhibit a clear imbalance between the two band-specific metrics. They generally perform well in the low-frequency band, but their accuracy degrades substantially in the high-frequency band. PatchTST-Gaussian improves high-frequency reconstruction by parameterizing the full-band wrench distribution. However, this gain accompanies increased error in the low-frequency band, implying that distribution pa-rameterization alone is insufficient to simultaneously improve both band-specific metrics. In contrast, FDN effectively mit-igates this imbalance with decomposition-based asymmetric modeling and shows consistent competitiveness across bands. Table IV also shows that FDN achieves the lowest CRPS 
+
+overall across models and time delays, illustrating its superior full-band performance. Fig. 6 further visualizes these results using the pretrained FDN and two representative baselines, GPR and PatchTST-Gaussian. Although GPR is one of our strongest baselines, it shows limited ability to reconstruct high-frequency vibra-tions, particularly in stiff episodes where wrench magnitudes                                
+
+> TABLE V ARCHITECTURAL ABLATION RESULTS .Metric HF wRMSE LF pRMSE CRPS
+> w/o FEF 0.5090 (+3.6%) 0.5687 (+6.7%) 0.5270 (+3.0%) w/o FEF-W 0.5092 (+3.6%) 0.5719 (+7.3%) 0.5273 (+3.0%) w/o FEF-MoE 0.5070 (+3.2%) 0.5651 (+6.0%) 0.5241 (+2.4%) w/o FPF 0.4913 (-0.0%) 0.5367 (+0.7%) 0.5135 (+0.4%) w/o ModSpec 0.5426 (+10%) 0.6064 (+14%) 0.5526 (+8.0%) w/o TrdHead 0.6106 (+24%) 0.6314 ( +18% )0.5066 (-1.0%) w/o ResHead 0.7490 ( +52% )0.5367 (+0.7%) 0.6672 ( +30% )FDN 0.4915 0.5329 0.5117
+
+are larger. PatchTST-Gaussian reconstructs the high-frequency amplitudes through its learned full-band distribution. Never-theless, its distribution does not accurately capture contact transients. In contrast, FDN successfully captures local high-frequency fluctuations and peaks, and overall low-frequency trends, which highlights its strong capability for contact- and vibration-rich wrench prediction. Note that adopting a forecasting formulation does not nec-essarily improve prediction accuracy over estimator baselines. Delayed zero-order-hold estimates remain competitive with the forecasting baselines even under tdelay = 1, 000 ms. However, the formulation allows us to adopt advanced time-series backbones and model the sequential structure of wrench trajectories, which motivates decomposition-based forecasting, frequency filtering, and transfer learning in FDN. Pretraining also yields additional gains across metrics, as detailed in the following section. 
+
+E. Ablation studies 
+
+Table V shows architectural ablation results of FDN. We remove the frequency enhancement filter (w/o FEF), its expert weighting while retaining multiple filters (w/o FEF-W), its MoE design by reducing to a single unweighted filter (w/o FEF-MoE), the frequency-pass filters in Eq. 21 (w/o FPF), the modality-specific encoders by replacing them with a single shared encoder for xδth:t (w/o ModSpec), and each prediction head (w/o TrdHead and w/o ResHead). When ablating a head, we retain frequency-pass filtering to the remaining output, i.e., 
+
+˜μres or ˜Wtrend , using FPF low with fc = f dn  
+
+> c
+
+= 15 Hz. All values are reported on a normalized scale to reduce channel-wise magnitude effects. The results indicate that the residual head is the main contributor to modeling the high-frequency band. Removing it, which reduces FDN to a full-band pointwise regressor, increases wRMSE by 52%. Removing the trend head, which corresponds to parameterizing a full-band distribution as in PatchTST-Gaussian, also degrades both wRMSE and pRMSE 
+
+by around 20%, despite a slight reduction in CRPS . Consistent with the previous section, these results show that relying solely on pointwise regression or distribution parameterization over the full band is ineffective. Rather, applying asymmet-ric modeling across frequency bands facilitates the band-balanced performance as in FDN. Replacing the modality-specific encoders with a single encoder also degrades all PREPRINT NOT PEER REVIEWED 9          
+
+> Fig. 6. Test episode reconstructions with tdelay = 100 ms. We visualize the fxand my, which are representative channels in our experimental setting described in Section IV-A. The upper two rows correspond to the ‘Soft-1’ episode, and the lower rows correspond to the ‘Stiff-1’ episode. Colored areas illustrate the prediction interval defined by μ±3σ.
+
+metrics by around 10%, suggesting that the heterogeneous input modalities are better handled with separate encoders. For the frequency-aware layers, FEF provides consistent but moderate benefit, as removing it increases wRMSE by 3.6% and pRMSE by 6.7%. Removing either the expert weighting or the MoE structure from the FEF also yields a similar level of degradation, indicating that its benefit is not retained without its complete design. Meanwhile, the quantitative effect of FPF is small, causing less than 1% change across all metrics. Thus, we view it as a design for explicitly imposing our frequency-band prior derived from the ground-truth decomposition in Eq. 11, rather than a primary source of improvement. 
+
+F. Transfer learning analysis 
+
+Table VI summarizes transfer learning results of our pre-training under a fixed budget of 100K training iterations. Here, we vary the data utilization ratios from 20% to 100% of the 11,131 pretraining episodes. We also assess the effect of input formulations on transfer by comparing absolute position inputs (‘A’) with the default relative position inputs (‘R’) in Eq. 17. For the absolute position formulation, we omit the initial position encoder Enc qe 
+
+> 0
+
+.Under the relative position formulation, fine-tuning gen-erally outperforms linear probing, indicating that end-to-end adaptation is required to realize transfer gains. In particular, fine-tuning with relative positions improves the aggregated normalized-scale pRMSE and CRPS by up to 8% and 4% over training from scratch, while slightly degrading wRMSE .                                                                                              
+
+> TABLE VI TRANSFER LEARNING RESULTS ON NORMALIZED SCALE . LP REFERS TO LINEAR PROBING ,AND FT REFERS TO FINE -TUNING . A AND RDENOTE ABSOLUTE AND RELATIVE POSITION INPUTS . 0% CORRESPONDS TO TRAINING FROM SCRATCH .Pretraining Data Util. 0% 20% 40% 60% 80% 100% Num. Episodes -2,226 4,452 6,678 8,904 11,131 Effective Epochs -4.93 2.52 1.66 1.25 1.00 HF wRMSE
+> LP(A) 0.519 0.547 0.546 0.628 0.605 0.604 FT(A) 0.534 0.526 0.544 0.538 0.537 LP(R) 0.492 0.554 0.568 0.556 0.572 0.560 FT(R) 0.499 0.498 0.496 0.506 0.506 LF pRMSE
+> LP(A) 0.511 0.528 0.530 0.580 0.574 0.568 FT(A) 0.504 0.507 0.572 0.573 0.549 LP(R) 0.533 0.541 0.539 0.552 0.552 0.548 FT(R) 0.494 0.494 0.490 0.504 0.499
+> CRPS
+> LP(A) 0.510 0.508 0.507 0.542 0.540 0.535 FT(A) 0.501 0.500 0.542 0.542 0.532 LP(R) 0.512 0.512 0.511 0.519 0.518 0.516 FT(R) 0.491 0.492 0.490 0.499 0.496
+
+Although this suggests more evident transfer gain in the low-frequency band, Table II shows that transfer gain also exists in high-frequency force, where wRMSE decreases by 4 to 8%. Notably, Table III shows the clearest gain in low-frequency torque where pRMSE decreases by 21%. We analyze these results with the dataset properties sum-marized in Table VII. RH20T is strongly low-frequency dom-inant, whereas the downstream hydraulic wrench is dominated by high-frequency content. This spectral mismatch reflects the physical differences between the two settings, mainly in PREPRINT NOT PEER REVIEWED 10 
+
+TABLE VII PROPERTIES OF PRETRAINING AND DOWNSTREAM DATASETS , INCLUDING BAND ENERGY RATIOS OF THE WRENCH . ‘LF’ AND ‘HF’ INDICATE BANDS IN f ≤ 1 HZ AND f > 1 HZ, RESPECTIVELY .Datasets Pretraining (RH20T [16]) Downstream HF W Energy (%) 9.843% 84.930% 
+
+LF W Energy (%) 90.157% 15.070% Task Domain Contact-rich Manipulation Block Grinding Actuation Electric Hydraulic Actuation Signal Motor Torque Diff. Pressure End-effector Parallel Gripper Rotary Grinder Robot Embodiment 6- and 7-DoF Arms 6-DoF Arm 
+
+the task domain and actuation. Nevertheless, the two datasets are likely to retain shared structures since both measure contact-rich wrist wrenches of arm manipulators. Our transfer results imply that such structures exist between datasets in a transferable form, and are more apparent in the low-frequency domain in our case. Furthermore, the masked pretraining in Section III-F suggests that the transferred representation is unlikely to depend on the joint actuation signals or actuator torques. We thus infer that the transferred representation plausibly encodes coarse proprioception-to-wrench coupling in arm manipulators based on Eq. 5, and temporal evolution pat-terns of wrenches shared across datasets. The high-frequency dynamics of the downstream wrench appear to be more domain-specific to the hydraulic excavation setting, consistent with the band energy mismatch and the weaker transfer gain in wRMSE . Meanwhile, the absolute position formulation neither provides consistent transfer gains nor outperforms the relative position formulation, indicating that aligning episode-wise offsets in proprioception improves transferability in our setting. Across utilization ratios, we find the best transfer perfor-mance at 60% utilization under the relative position formu-lation. Since the effective number of epochs decreases as the amount of pretraining data increases under the fixed iterations, this result should be interpreted as a budget-dependent opti-mum. V. C ONCLUSIONS 
+
+In this work, a Frequency-aware Decomposition Network (FDN) was proposed for sensorless wrench forecasting on a vibration-rich hydraulic manipulator. In our robotic grind-ing excavation, the target wrench exhibited substantial high-frequency vibrations that are task-critical and difficult to predict. To address this, the proposed model combined decomposition-based probabilistic modeling, frequency-aware layers, and large-scale proprioception-to-wrench pretraining. Under a delayed estimation setting, FDN outperformed base-lines from both robotic wrench estimation and time-series forecasting, and effectively mitigated the imbalance between low- and high-frequency band accuracies evident in most base-lines. Transfer learning provided additional gain mainly in the low-frequency domain, suggesting the presence of transferable proprioception-to-wrench structure across heterogeneous robot platforms and tasks. Our results suggest that the proposed framework can be useful for wrench-based robotic applications, particularly for robots involving vibration-rich tasks, platforms, and environ-ments. Nevertheless, the present study has several limitations. First, the evaluation is limited to a single hydraulic manipula-tor and excavation setting, and broader generalization across contact objects, robot platforms, and tasks remains to be validated. Second, pretraining and transfer learning warrant deeper investigation. Further analyses of scaling behavior and representation learning strategies, as well as additional utilities such as improved inference robustness or few-shot generalization, would provide a more rigorous understanding of their effects on wrench estimation and forecasting. Lastly, investigating the use of forecasting models in real-world deployment would further clarify their practical value in delay-aware wrench estimation and predictive control settings. REFERENCES [1] G. Tholey, J. P. Desai, and A. E. Castellanos, “Force feedback plays a significant role in minimally invasive surgery: results and analysis,” 
+
+Annals of surgery , vol. 241, no. 1, pp. 102–109, 2005. [2] C. Gonz´ alez, J. E. Solanes, A. Munoz, L. Gracia, V. Girb´ es-Juan, and J. Tornero, “Advanced teleoperation and control system for industrial robots based on augmented virtuality and haptic feedback,” Journal of Manufacturing Systems , vol. 59, pp. 283–298, 2021. [3] L. Villani and J. De Schutter, “Force control,” in Springer handbook of robotics . Springer, 2016, pp. 195–220. [4] S. Stepputtis, M. Bandari, S. Schaal, and H. B. Amor, “A system for imitation learning of contact-rich bimanual manipulation policies,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2022, pp. 11 810–11 817. [5] M. Y. Cao, S. Laws, and F. R. y Baena, “Six-axis force/torque sensors for robotics applications: A review,” IEEE Sensors Journal , vol. 21, no. 24, pp. 27 238–27 251, 2021. [6] A. C. Smith, F. Mobasser, and K. Hashtrudi-Zaad, “Neural-network-based contact force observers for haptic applications,” IEEE Transac-tions on Robotics , vol. 22, no. 6, pp. 1163–1175, 2006. [7] J. Wu, J. Wang, and Z. You, “An overview of dynamic parameter iden-tification of robots,” Robotics and computer-integrated manufacturing ,vol. 26, no. 5, pp. 414–419, 2010. [8] R. E. Ellis and S. L. Ricker, “Two numerical issues in simulating constrained robot dynamics,” IEEE Transactions on Systems, Man, and Cybernetics , vol. 24, no. 1, pp. 19–27, 2002. [9] Z. Chen, F. Huang, W. Sun, J. Gu, and B. Yao, “Rbf-neural-network-based adaptive robust control for nonlinear bilateral teleoperation ma-nipulators with uncertainty and time delay,” Ieee/Asme Transactions on Mechatronics , vol. 25, no. 2, pp. 906–918, 2019. [10] A. Dong, Z. Du, and Z. Yan, “A sensorless interaction forces estimator for bilateral teleoperation system based on online sparse gaussian pro-cess regression,” Mechanism and Machine Theory , vol. 143, p. 103620, 2020. [11] S. Kruˇ zi´ c, J. Musi´ c, R. Kamnik, and V. Papi´ c, “End-effector force and joint torque estimation of a 7-dof robotic manipulator using deep learning,” Electronics , vol. 10, no. 23, p. 2963, 2021. [12] M.-Z. Pan, J.-A. Li, Z. Li, K. Liang, T.-C. Su, K. Liang, and G.-B. Bian, “A graph robot network for force observer of teleoperation systems,” 
+
+IEEE/ASME Transactions on Mechatronics , vol. 30, no. 1, pp. 530–540, 2024. [13] T. Zhou, Z. Ma, Q. Wen, X. Wang, L. Sun, and R. Jin, “Fedformer: Frequency enhanced decomposed transformer for long-term series fore-casting,” in International conference on machine learning . PMLR, 2022, pp. 27 268–27 286. [14] Y. Nie, N. H. Nguyen, P. Sinthong, and J. Kalagnanam, “A time series is worth 64 words: Long-term forecasting with transformers,” in 
+
+International Conference on Learning Representations , 2023. [15] B. Zitkovich, T. Yu, S. Xu, P. Xu, T. Xiao, F. Xia, J. Wu, P. Wohlhart, S. Welker, A. Wahid et al. , “Rt-2: Vision-language-action models transfer web knowledge to robotic control,” in Conference on Robot Learning . PMLR, 2023, pp. 2165–2183. PREPRINT NOT PEER REVIEWED 11 
+
+[16] H.-S. Fang, H. Fang, Z. Tang, J. Liu, C. Wang, J. Wang, H. Zhu, and C. Lu, “Rh20t: A comprehensive robotic dataset for learning diverse skills in one-shot,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 653–660. [17] D. Xu, L. Yin, and J. Wang, “Grinding force estimation and control of grinding robot with variable impedance control strategy,” The Interna-tional Journal of Advanced Manufacturing Technology , vol. 137, no. 3, pp. 2011–2027, 2025. [18] J. Hu, Z. Zhou, G. Xia, Y. Dai, J. Zhang, G. Yang, X. Han, J. Jiang, and Y. Liu, “Accurate milling force estimation and surgical state recognition in robot-assisted laminectomy,” Measurement , vol. 253, p. 117673, 2025. [19] Y. Dong, T. Ren, K. Hu, D. Wu, and K. Chen, “Contact force detection and control for robotic polishing based on joint torque sensors,” The International Journal of Advanced Manufacturing Technology , vol. 107, no. 5, pp. 2745–2756, 2020. [20] J. T. Jose, J. Das, and S. K. Mishra, “Dynamic improvement of hydraulic excavator using pressure feedback and gain scheduled model predictive control,” IEEE Sensors Journal , vol. 21, no. 17, pp. 18 526–18 534, 2021. [21] N. Rahaman, A. Baratin, D. Arpit, F. Draxler, M. Lin, F. Hamprecht, Y. Bengio, and A. Courville, “On the spectral bias of neural networks,” in International conference on machine learning . PMLR, 2019, pp. 5301–5310. [22] H. Lee, S. Han, H.-S. Choi, and J.-G. Kim, “cnn-dp: Composite neural network with differential propagation for impulsive nonlinear dynamics,” 
+
+Journal of Computational Physics , vol. 496, p. 112578, 2024. [23] J. Jung, J. Lee, and K. Huh, “Robust contact force estimation for robot manipulators in three-dimensional space,” Proceedings of the Institution of Mechanical Engineers, Part C: Journal of Mechanical Engineering Science , vol. 220, no. 9, pp. 1317–1327, 2006. [24] Y. Cheng, Y. Li, X. Liu, and Y. Cai, “Mechanism-based structured deep neural network for cutting force forecasting using cnc inherent monitoring signals,” IEEE/ASME Transactions on Mechatronics , vol. 27, no. 4, pp. 2235–2245, 2021. [25] C. Ni, J. Yang, and H. Ding, “Unsupervised domain adversarial adap-tive regression network for cutting force prediction at varying spindle speeds,” IEEE/ASME Transactions on Mechatronics , vol. 30, no. 1, pp. 252–263, 2024. [26] S. Butterworth et al. , “On the theory of filter amplifiers,” Wireless Engineer , vol. 7, no. 6, pp. 536–541, 1930. [27] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” Advances in neural information processing systems , vol. 30, 2017. [28] T. Kim, J. Kim, Y. Tae, C. Park, J.-H. Choi, and J. Choo, “Reversible instance normalization for accurate time-series forecasting against dis-tribution shift,” in International conference on learning representations ,2021. [29] I.-F. Kao, Y. Zhou, L.-C. Chang, and F.-J. Chang, “Exploring a long short-term memory based encoder-decoder framework for multi-step-ahead flood forecasting,” Journal of Hydrology , vol. 583, p. 124631, 2020. [30] H. Zhou, S. Zhang, J. Peng, S. Zhang, J. Li, H. Xiong, and W. Zhang, “Informer: Beyond efficient transformer for long sequence time-series forecasting,” in Proceedings of the AAAI conference on artificial intel-ligence , vol. 35, no. 12, 2021, pp. 11 106–11 115. [31] Y. Liu, T. Hu, H. Zhang, H. Wu, S. Wang, L. Ma, and M. Long, “itrans-former: Inverted transformers are effective for time series forecasting,” 
+
+arXiv preprint arXiv:2310.06625 , 2023. [32] D. P. Kingma, “Adam: A method for stochastic optimization,” arXiv preprint arXiv:1412.6980 , 2014. 
+
+Hyeonbeen Lee received the B.Eng. and M.Eng. degrees in mechanical engineering from Kyung Hee University, Seoul, South Korea, in 2022 and 2024, respectively. He is currently an incoming Ph.D. student at Virginia Tech, Blacksburg, VA, USA. His research interests include contact-rich manipulation, physics-aware machine learning, nonlinear dynam-ics, and robot learning. 
+
+Min-Jae Jung received the B.Eng. degree in me-chanical engineering from Kyung Hee University, Seoul, South Korea, in 2025, where he is currently pursuing the M.Eng. degree. His research focuses on robot manipulation using force/torque sensing and machine learning, with an emphasis on contact-rich assembly, time-series modeling, and physics-informed learning for multibody dynamics systems. 
+
+Tae-Kyeong Yeu received the B.Eng. and M.Eng. degrees in mechanical engineering from Pukyong National University, Busan, South Korea, in 1998 and 2000, respectively, and the Ph.D. degree in information systems engineering from Kumamoto University, Kumamoto, Japan, in 2003. He is cur-rently a principal researcher at Korea Research In-stitute of Ships and Ocean Engineering (KRISO), Daejeon, South Korea. His research interests include the design and control of underwater robots and cyber-physical systems (CPS). 
+
+Jong-Boo Han received the B.Eng., M.Eng., and Ph.D. degrees in mechatronics engineering from Chungnam National University, Daejeon, South Ko-rea, in 2009, 2011, and 2018, respectively. He is currently a senior researcher at Korea Research Institute of Ships and Ocean Engineering (KRISO), Daejeon, South Korea. His research interests include multibody dynamics modeling and real-time physics engines. 
+
+Daegil Park received the B.S. degree in mechani-cal engineering from Seoul National University of Science and Technology, South Korea, in 2011, and the Ph.D. degree in mechanical engineering from Pohang University of Science and Technology (POSTECH), Pohang, South Korea, in 2016. He is currently a senior researcher at Korea Research Institute of Ships and Ocean Engineering (KRISO), Daejeon, South Korea, and an Associate Professor at the University of Science and Technology (UST), Daejeon, South Korea. His research interests include underwater robots, autonomy, and control of robot-environment interactions. 
+
+Jin-Gyun Kim received the B.S. and M.S. degrees in civil and environmental engineering from Korea University, Seoul, South Korea, in 2008 and 2010, respectively, and the Ph.D. degree in ocean systems engineering from the Korea Advanced Institute of Science and Technology (KAIST), Daejeon, South Korea, in 2014. He is currently an Associate Pro-fessor and Vice Dean of the College of Engineering at Kyung Hee University, Seoul, South Korea, and a Visiting Professor at the University of Auckland, Auckland, New Zealand. His research interests in-clude modeling and simulation of dynamics, vibrations, and multiphysics.
