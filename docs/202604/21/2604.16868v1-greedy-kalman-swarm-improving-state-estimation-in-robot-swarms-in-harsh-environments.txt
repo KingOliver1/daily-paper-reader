@@ -1,0 +1,277 @@
+Title: Greedy Kalman-Swarm: Improving State Estimation in Robot Swarms in Harsh Environments
+
+URL Source: https://arxiv.org/pdf/2604.16868v1
+
+Published Time: Tue, 21 Apr 2026 00:35:31 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Greedy Kalman-Swarm: Improving State Estimation in Robot Swarms in Harsh Environments 
+
+## Phunyapa Suksomboon, Paulo Garcia 
+
+International School of Engineering, Chulalongkorn University, Bangkok, Thailand 6638134621@chula.ac.th, paulo.g@chula.ac.th 
+
+## ABSTRACT 
+
+State estimation is a fundamental requirement in robotics, where the accurate determination of a robot’s pose and velocity is essential for stable operation despite inherent process disturbances and sensor noise. Traditionally, this is achieved through Kalman filtering, which provides a statistically optimal estimate by balancing predictive models with noisy measurements. In the context of robotic swarms, the challenge shifts from individual accuracy to collective coordination, where the integration of global dynamics can significantly enhance the precision of the entire group. However, existing swarm-based estimation techniques often rely on centralized processing or heavy communication protocols to reach a global consensus, which are frequently impractical in real-world deployments. Here we show that a localized, “greedy" approach to distributed state estimation—termed “Greedy Kalman-Swarm"—allows individual robots to leverage relative inter-robot sensing for improved accuracy without requiring full data availability or global communication. We found through simulations in communication-constrained environments that robots can effectively integrate all currently available neighbor data at each iteration to refine their internal states, yet remain robust and functional even when data is missing. This results in a performance profile that strikes a balance between the low overhead of independent estimation and the high accuracy of centralized systems, specifically under harsh or dynamic environmental conditions. Our results demonstrate that global state awareness can be emergent rather than enforced, providing a scalable framework for maintaining swarm cohesion in unpredictable terrains. We anticipate that this decentralized methodology will serve as a foundation for more resilient autonomous systems, particularly in search-and-rescue or space exploration missions where reliable, high-bandwidth communication cannot be guaranteed. 
+
+## 1 Introduction 
+
+State estimation in robotics 1 is a well-established problem: given disturbances inherent to the process at hand 2 and sensor uncertainty 3, the accurate state of a robot must be determined to effect correct operation 4. Process disturbances include environmental variables that are outside the robot’s prediction horizon (e.g., environmental forces or 3rd party agents 5), typically modeled as Gaussian random variables, and sensor uncertainty is the combination of limitations in sensor accuracy/resolution with sensing noise 6, again modeled as a Gaussian random variable. The canonical solution is the deployment of state estimators, typically in the form of a Kalman Filter or its variations 7.Deployment of robotic swarms 8, rather than individual robots, is advantageous across several application domains, where cooperation and coordination between robots can effect solutions in a more pareto-efficient way than individual ones 9. In robotic swarms, opportunities for new forms of state estimation arise 10 , by leveraging global dynamics as additional sources of information to inform the corresponding filters 11 . Typically, these solutions either centralize state estimation 12 or distribute information equally across all robots, resulting in substantial communication overhead 13 .Here, we investigate a solution that strikes a balance: state estimation is done locally, but leveraging global information (i.e., relative inter-robot sensing) for improved estimation, without assumptions on data availability 14 . This approach, which we dub “Greedy Kalman-Swarm", is deployable on swarms with communication constraints, making it suitable for dynamic or hazardous environments 15 . Specifically, this paper offers the following contributions: • We formulate a distributed version of Kalman state estimation that leverages inter-robot communication to integrate relative measurements into each robot’s estimation, without the need for global consensus. • We show such estimation can be performed effectively despite full data availability: at each estimation iteration, each robot employs all data available to it at that time in a greedy manner, but is capable of progress despite data absence. • We evaluate this solution on a communication-constrained simulated swarm, with parameterizable process/sensor noise. 
+
+> arXiv:2604.16868v1 [cs.RO] 18 Apr 2026
+
+Figure 1. Conceptual framework of the Greedy Kalman-Swarm. (a) Uncorrected odometric noise leads to expanding covariance ellipses and state divergence. (b) The opportunistic detection event occurs when a peer enters the relative sensing manifold. (c) The resulting “Greedy Reset" collapses the belief state, restoring global spatial coherence. • We provide an open-source reference implementation (available here 1). 
+
+## 2 Related Work 
+
+The field of distributed state estimation has evolved significantly, moving from centralized architectures to peer-to-peer frameworks that leverage collective swarm intelligence. 
+
+2.1 Distributed and Consensus Kalman Filtering 
+
+Early foundational work by Olfati-Saber 16, 17 introduced the concept of the Distributed Kalman Filter (DKF) using embedded consensus filters. These methods allow a network of sensors or agents to reach a global agreement on the state estimate by communicating with immediate neighbors. Mahmoud and Khalid 18 provide a comprehensive bibliographic review of these techniques, noting that while consensus-based filters are robust, they often require multiple communication iterations per measurement cycle to ensure convergence, which may be prohibitive in bandwidth-constrained environments. 
+
+2.2 Diffusion and UAV Swarm Estimation 
+
+To address the latency issues in consensus models, Cattivelli and Sayed 19 proposed diffusion strategies. Unlike consensus, which requires all agents to agree on a single value, diffusion allows information to spread across the network more naturally, often resulting in faster adaptation to real-time changes. In the context of aerial robotics, D’Amato et al. 20 successfully applied consensus Kalman filtering for the joint attitude and position estimation of UAV swarms, demonstrating that inter-agent relative measurements can significantly reduce the drift inherent in individual IMU sensors. 
+
+2.3 Swarm Optimization and Alternative Approaches 
+
+Alternative interpretations of the “Kalman Swarm" have also been explored in the context of meta-heuristics. Monson and Seppi 21 utilized Kalman filter principles to govern particle motion in swarm optimization, treating the swarm’s trajectory as a state-estimation problem to avoid local minima. While these approaches focus on optimization rather than localization, they highlight the flexibility of the Kalman framework in managing the dynamics of large-scale multi-agent systems. 
+
+2.4 Gap Analysis 
+
+Current distributed state estimation methods often assume high data availability or stable network topology to maintain consensus or diffusion processes. Standard Extended Kalman Filters (EKF) rely on continuous sensor fusion but are susceptible to cumulative drift without global anchors. The proposed Greedy Kalman-Swarm addresses this gap through opportunistic correction : it treats intermittent peer contacts as high-fidelity localization anchors that immediately reset accumulated odometric 
+
+> 1https://github.com/PhunyapaSuk/Greedy-Kalman-Swarm-Improving-State-Estimation-in-Robot-Swarms-in-Harsh-Environments
+> 2/8
+
+errors, rather than waiting for global consensus. This greedy strategy allows agents to perform partial updates during isolation and full-state corrections only upon peer contact, providing resilience in communication-denied environments where traditional methods fail. 
+
+Key distinction: Unlike standard EKF (which drifts without external correction) or consensus-based methods (which require sustained connectivity), our approach exploits any peer encounter—however sparse—as a correction opportunity, preventing unbounded error growth in intermittent communication scenarios. 
+
+## 3 Problem Formulation 
+
+Mathematical description of the challenge The traditional Kalman Filter formulation is given by: 
+
+xpk = Ax ek−1 + Buk−1 + N (0, Q)
+
+zk = Hx k + N (0, R)
+
+Ppk = AP ek−1 AT + QKk = Ppk HT  HP pk HT + R−1
+
+xek = xpk + Kk (zk − Hx pk )
+
+Pek = Ppk − KkHP pk
+
+(1) where, at time k, xpk is the predicted state, given a state transition matrix A and a process input model B over an input variable uk−1; zk is the sensor measurement, given a sensor to state transformation H; Kk is the Kalman gain, computed over prediction and estimation confidence covariances Ppk and Pek ; and process and sensor covariances Q and R. At each time step, only current and local information is used to estimate state. Given a swarm of M robots, each robot may receive additional relative information about its state from N = [ 0 : M − 1]
+
+other robots, where each measurements contains its own uncertainty, as given by the sender’s estimation. The problem can thus be formulated as: how to modify Kalman formulation to incorporate these N other measurements 
+
+## 4 The Greedy Kalman-Swarm Distributed Algorithm 
+
+The proposed algorithm utilizes a dynamically adaptable “Greedy” Extended Kalman Filter (EKF) to maintain localization accuracy. To systematically evaluate the impact of inter-agent communication without the confounding variables of multi-agent collision avoidance, the swarm behavior is simulated via a single-agent proxy utilizing Pseudo-Global Localization. The execution pipeline follows a continuous predict-update-map cycle. 
+
+4.1 System Initialization and Global Alignment 
+
+To ensure a common reference frame across the simulated environment, the agent performs a one-time initial pose capture at 
+
+t = 0. The global ground-truth coordinates (x0, y0) and orientation θ0 are retrieved from the simulation supervisor and set as the origin of the agent’s internal state estimation vector x = [ x, y, θ ]T . This initialization guarantees that the internal mapping matrix perfectly aligns with the simulated environment from the first timestep. 
+
+4.2 State Prediction (Kinematic Odometry) 
+
+During the prediction phase, the agent estimates its new state based on internal wheel encoder data. The model utilizes standard differential drive kinematics to calculate linear and angular velocities, subject to mechanical irregularities and surface friction, modeled as a Gaussian distribution N (μ, σ ).The state vector x is updated via the kinematic model, and the state covariance matrix P (representing localization uncertainty) is expanded by the process noise covariance Q:
+
+Pk|k−1 = Pk−1|k−1 + Q (2) Because pure odometry accumulates error over time, this prediction step inherently causes the state estimation to drift unless corrected by external observations. 
+
+> 3/8
+
+4.3 Simulated Peer-to-Peer Communication (Pseudo-Global Localization) 
+
+To replicate the intermittent communication of a decentralized swarm, a temporal proxy is employed. In a physical swarm, agents can only correct their x and y drift when they establish line-of-sight with a peer whose position is known. In this model, the agent evaluates a communication condition, checking if a “peer” is visible (simulated as occurring every 4.0 seconds in our experiments). While real-world communication is subject to stochastic packet loss and variable transmission delays, we assume these are handled by underlying network protocols, allowing this study to focus on the localization estimation logic. When this condition is met, the algorithm retrieves the agent’s true global position, injects synthetic sensor noise 
+
+N (0, σsensor ), and treats this data as a transmitted localization packet from a nearby peer. 
+
+4.4 The “Greedy” Observation Logic 
+
+The core novelty of the algorithm is its “Greedy” update policy, which dynamically restructures the Kalman observation model based on the availability of the peer communication detailed above. This grants the system robustness against intermittent packet loss. 
+
+> 4.4.1 Partial Update (IMU-fuse)
+
+For the majority of the operational time, the agent is isolated. It relies solely on its onboard Inertial Measurement Unit (IMU) to prevent catastrophic rotational drift through IMU fusion (IMU-fuse). The observation matrix H and measurement vector zk
+
+are restricted to orientation: 
+
+H = 0 0 1 , zk = θimu + N (0, σimu ) (3) This IMU-fuse step stabilizes the topological structure of the map, ensuring walls remain orthogonal, though it allows translational ( x, y) uncertainty to grow over time. 
+
+> 4.4.2 Full-State Update (Swarm Consensus)
+
+When the 4.0 -second communication condition is satisfied, the filter “greedily” expands its observation matrix to the identity matrix I3×3. The measurement vector zk incorporates the noisy x and y coordinates received from the peer proxy. Regardless of the selected H matrix, the standard Kalman correction is applied: 
+
+Sk = HP k|k−1HT + R (4) 
+
+Kk = Pk|k−1HTS−1k (5) 
+
+xk = xk|k−1 + Kk(zk − Hx k|k−1) (6) This full update collapses the accumulated translational uncertainty, “snapping” the agent back to the correct global frame. 
+
+4.5 Environment Mapping and Confidence Thresholding 
+
+Following the state update, LiDAR range data is projected into the 2D Cartesian space. To generate a crisp, noise-resistant occupancy grid, two filtering conditions are applied: 1. Temporal Lag Suppression: Mapping is suspended if the angular velocity exceeds a safety threshold ( |vangular | >
+
+0.05 rad/s ). This prevents rotational “smearing” caused by the processing delay between the LiDAR scan and the state estimation during rapid turns. 2. Confidence Thresholding: Instead of a binary hit/miss assignment, the algorithm uses a cumulative confidence matrix. Each LiDAR point increments the target cell by a designated value until a maximum confidence is reached. A thresholding filter is then applied, extracting only the geometric features that have been repeatedly observed ( Threshold ≥ 30 ). This effectively filters out transient sensor noise and leaves only permanent environmental structures. 
+
+## 5 Experiments and Results 
+
+5.1 Simulation Framework and Setup 
+
+The Greedy Kalman-Swarm architecture was evaluated using the Webots R2025a simulation environment. The testing arena consists of a 15m × 15m maze-like environment containing static obstacles. A Pioneer 3-DX agent was deployed, each configured with a suite of sensors to mimic hardware constraints: 
+
+> 4/8
+
+• LiDAR: A simulated Hokuyo URG-04LX laser rangefinder. The sensor was constrained to an effective range of 5.6 m and a field of view (FOV) of 240 ◦.• Inertial Unit: A 3-axis IMU node providing heading ( θ ) data, utilized to mitigate the rotational drift inherent in differential-drive odometry. • Odometry: Rotary encoders integrated into the Pioneer 3-DX motor drive system. These provide incremental tick counts for both the left and right wheels, which are converted to linear displacement. To simulate real-world mechan-ical irregularities and surface friction, a stochastic slip factor is injected into the raw encoder readings, modeled as 
+
+N (1.0, σslip ).The simulation utilizes a time step of 32ms. This interval serves as the fundamental discretization for the EKF prediction and update cycles, ensuring that sensor sampling and physics integration remain synchronized across the distributed swarm. 
+
+5.2 Experimental Parameters and Noise Models 
+
+To evaluate the algorithm under realistic harsh conditions, noise was introduced into the simulation. We utilized Additive White Gaussian Noise (AWGN) to model the non-deterministic nature of physical sensors and actuators: 
+
+Table 1. Simulation, Sensor, and Communication Parameters 
+
+Parameter Symbol Value 
+
+Wheel Slip Noise (Process) σslip 0.02 IMU Angular Noise σimu 0.02 rad LiDAR Range Noise σLiDAR 0.02 m Swarm Position Noise σsensor 0.02 m Communication Interval Tsync 4.0 s Peer Detection Radius Rmask 0.55 m Angular Mapping Threshold ωthresh 0.05 rad/s Occupancy Confidence Threshold τcon f 30 
+
+5.3 Methodology 
+
+The agents were subjected to three comparative test cases to isolate the impact of the Greedy EKF and swarm communication. In all scenarios, exploration was conducted via a Stochastic Wandering logic. This reactive controller uses a noise factor and steering bias to prevent the agents from becoming trapped in parallel wall-following loops, simulating the unpredictable trajectories common in search-and-rescue or hazardous-area mapping. 1. Baseline (No Kalman): Agents utilized raw wheel encoder data for state estimation. A slip noise of 0.02 was injected to simulate real-world odometry degradation. This scenario serves as the control group to visualize uncompensated drift. 2. IMU-Fused EKF (Partial Update): A standard EKF was implemented to fuse encoder data with the onboard Inertial Unit. In this mode, the observation matrix was fixed at H = [ 0, 0, 1], providing continuous heading ( θ ) corrections. This evaluates the system’s ability to maintain rotational alignment while remaining translationally isolated. 3. Proposed (Full Greedy Kalman-Swarm): The complete architecture was deployed, utilizing the “Greedy" logic to switch between the IMU-fuse mode and a full-state (x, y, θ ) correction. Full updates were triggered upon simulated peer detection ( Tsync = 4.0s), testing the effectiveness of distributed fusion in resetting accumulated linear x and y drift. The duration of each trial was fixed at 600 seconds. This timeframe was selected specifically to allow the cumulative effects of wheel slip to manifest clearly in the generated occupancy grids, providing a rigorous test for the EKF’s correction capabilities. 
+
+5.4 Qualitative Mapping Results 
+
+The visual fidelity of the occupancy grids generated across the three test cases reveals the progressive impact of the Greedy EKF and swarm-based relocalization. Figure 2 provides a side-by-side comparison of the final mapping outputs at t = 600s.        
+
+> 5/8 (a) Ground Truth (b) Baseline (c) IMU-fuse Only (d) Greedy Swarm
+
+Figure 2. Comparative mapping results at t = 600s. (a) Illustrates the ideal environment; (b) shows catastrophic rotational drift; (c) demonstrates orientation stability with residual translational ghosting; (d) displays the proposed swarm-corrected sharp occupancy grid. 
+
+> 5.4.1 Drift Accumulation in Baseline Mapping
+
+As illustrated in Figure 2b, the baseline map demonstrates catastrophic failure due to uncompensated rotational drift. The ghosting of structural features indicate that the robot’s heading estimation diverged within the first quarter of the trial. Without a feedback loop to correct the orientation, the LiDAR projections rapidly lost spatial coherence. 
+
+> 5.4.2 Structural Alignment via IMU-fuse
+
+Integration of the EKF fused with IMU (Figure 2c) significantly stabilized the global orientation of the map. The orthogonal walls of the maze are correctly aligned with the grid axes, proving that the IMU successfully mitigated rotational drift. However, localized “ghosting” or parallel line artifacts are visible on vertical wall segments. This is a characteristic symptom of translational x and y drift, which remains uncorrected in the absence of absolute position updates. 
+
+> 5.4.3 Convergence and Sharpness in Swarm Mapping
+
+The proposed Greedy Kalman-Swarm architecture (Figure 2d) produced the highest fidelity results. By utilizing intermittent 4.0 -second full-state resets via the swarm proxy, the translational drift observed in the previous case was successfully collapsed. The walls appear as single-pixel sharp lines, and the confidence thresholding ( τcon f ≥ 30 ) effectively removed transient sensor noise. This result demonstrates that even sparse communication intervals are sufficient to maintain long-term map integrity across the swarm. 
+
+5.5 Quantitative Analysis 
+
+0 100 200 300 400 500 600 
+
+0
+
+2
+
+4
+
+6
+
+8
+
+Time (s) 
+
+> Euclidean Error (m)
+
+Comparative Localization Error Analysis 
+
+> Baseline (Odometry)
+> IMU-fused EKF
+> Proposed Greedy Swarm
+
+Figure 3. Quantitative evaluation of positional error over a 10-minute exploration trial. 
+
+> 6/8
+
+To evaluate the long-term localization stability of the three models, the Euclidean error e = p(x − ˆx)2 + ( y − ˆy)2 was recorded at a frequency of 10Hz. The resulting convergence profiles are illustrated in Fig. 3. 
+
+> 5.5.1 Error Divergence Characteristics
+
+As depicted in the error plot, the Baseline (Red) model exhibits catastrophic failure. Due to the accumulation of uncorrected process noise and wheel slip, the error fluctuates significantly, peaking at over 8.5m toward the end of the trial. The high-frequency oscillations observed after t = 250s suggest a complete loss of spatial coherence, where the robot’s internal belief state no longer aligns with the physical boundaries of the arena. The IMU-fused EKF (Blue) demonstrates improved stability in orientation; however, it remains susceptible to linear translational drift. While the heading remains accurate, the lack of an external positional reference allows the x and y error to climb steadily, reaching a final displacement of approximately 0.85m . While this is a marked improvement over the baseline, it remains insufficient for high-resolution occupancy grid mapping. 
+
+> 5.5.2 Proposed Swarm Performance
+
+As illustrated by the green profile in Fig. 3, the Proposed Greedy Swarm architecture maintains a globally bounded error throughout the 600s duration. Unlike the monotonic drift seen in the baseline, the swarm-enabled EKF utilizes opportunistic peer-to-peer exchanges to reset the accumulated covariance. This mechanism ensures that the positional error remains consistently below 0 .05m, providing the spatial stability required for high-fidelity occupancy grid mapping. The efficiency of this approach is quantified by the Error Reduction Rate ( η): 
+
+η =
+
+
+
+1 − eswarm 
+
+ebase 
+
+
+
+× 100% (7) where eswarm and ebase represent the peak Euclidean errors. Under this metric, the Greedy Swarm method achieved a 99 .4% reduction in peak error relative to the baseline. These results validate that intermittent global updates are sufficient to maintain long-term map integrity without requiring continuous high-bandwidth communication integrity, even when continuous high-bandwidth communication is unavailable. 
+
+## 6 Conclusion 
+
+This study has demonstrated that decentralized “greedy" state resets are a highly effective mechanism for suppressing the catastrophic drift inherent in low-cost autonomous mapping systems. By prioritizing high-impact peer-to-peer covariance collapses over continuous data streaming, we have validated a localization architecture that remains stable over long-duration exploration trials. The primary contribution of this work is the shift from high-bandwidth, continuous communication to an opportunistic reset logic. While standard odometric models exhibit unbounded divergence—rendering generated maps functionally useless—the proposed Greedy Swarm method maintains a globally bounded error. This ensures that the structural integrity of the occupancy grid is preserved without the need for an external global positioning system or heavy computational overhead. Future work must address the scalability of this approach, a common challenge in robotic swarms. Given the proximity-based constraints, it is unlikely communication bottlenecks will be hit, but at this time this is only a conjecture, not yet supported by empirical evidence. Furthermore, we do not yet know whether complex inter-robot interactions may give rise to instability in estimation dynamics: this must be evaluated from the dynamical systems perspective. 
+
+## References 
+
+1. Barfoot, T. D. State estimation for robotics (Cambridge University Press, 2024). 
+
+2. Chen, W.-H., Ballance, D. J., Gawthrop, P. J. & O’Reilly, J. A nonlinear disturbance observer for robotic manipulators. 
+
+IEEE Transactions on industrial Electron. 47 , 932–938 (2000). 
+
+3. Kuck, E. & Sands, T. Space robot sensor noise amelioration using trajectory shaping. Sensors 24 , 666 (2024). 
+
+4. Rotella, N., Bloesch, M., Righetti, L. & Schaal, S. State estimation for a humanoid robot. In 2014 IEEE/RSJ International Conference on Intelligent Robots and Systems , 952–958 (IEEE, 2014). 
+
+5. Lilge, S., Barfoot, T. & Burgner-Kahrs, J. State estimation for continuum multirobot systems on se (3). IEEE Transactions on Robotics 41 , 905–925 (2024). 
+
+6. Anderson, P. L., Mahoney, A. W. & Webster, R. J. Continuum reconfigurable parallel robots for surgery: Shape sensing and state estimation with uncertainty. IEEE robotics automation letters 2, 1617–1624 (2017). 
+
+> 7/8
+
+7. Chen, S.-Y. Kalman filter for robot vision: a survey. IEEE Transactions on industrial electronics 59 , 4409–4420 (2011). 
+
+8. Rubenstein, M., Cornejo, A. & Nagpal, R. Programmable self-assembly in a thousand-robot swarm. Science 345 , 795–799 (2014). 
+
+9. Khaldi, B. & Cherif, F. An overview of swarm robotics: Swarm intelligence applied to multi-robotics. Int. J. Comput. Appl. 126 , 31–37 (2015). 
+
+10. Xu, H. et al. Omni-swarm: A decentralized omnidirectional visual–inertial–uwb state estimation system for aerial swarms. 
+
+Ieee transactions on robotics 38 , 3374–3394 (2022). 
+
+11. Fan, G., Zhang, R., Cao, L. & Chen, X. Toward state estimation algorithms in cooperative positioning: A comprehensive framework design and its realization. IEEE Transactions on Intell. Transp. Syst. (2026). 
+
+12. Zhong, S. et al. Colrio: Lidar-ranging-inertial centralized state estimation for robotic swarms. In 2024 IEEE International Conference on Robotics and Automation (ICRA) , 3920–3926 (IEEE, 2024). 
+
+13. Correll, N. Parameter estimation and optimal control of swarm-robotic systems: A case study in distributed task allocation. In ICRA , 3302–3307 (2008). 
+
+14. Talamali, M. S., Saha, A., Marshall, J. A. & Reina, A. When less is more: Robot swarms adapt better to changes with constrained communication. Sci. Robotics 6, eabf1416 (2021). 
+
+15. Ali, S., Khan, Z., Din, A. & HASSAN, M. U. Investigation on communication aspects of multiple swarm networked robotics. Turkish J. Electr. Eng. Comput. Sci. 27 , 2010–2020 (2019). 
+
+16. Olfati-Saber, R. Distributed kalman filtering for sensor networks. In 2007 46th IEEE conference on decision and control ,5492–5498 (IEEE, 2007). 
+
+17. Olfati-Saber, R. Distributed kalman filter with embedded consensus filters. In Proceedings of the 44th IEEE Conference on Decision and Control , 8179–8184 (IEEE, 2005). 
+
+18. Mahmoud, M. S. & Khalid, H. M. Distributed kalman filtering: a bibliographic review. IET Control. Theory & Appl. 7,483–501 (2013). 
+
+19. Cattivelli, F. S. & Sayed, A. H. Diffusion strategies for distributed kalman filtering and smoothing. IEEE Transactions on automatic control 55 , 2069–2084 (2010). 
+
+20. D’Amato, E., Notaro, I., Mattei, M. & Tartaglione, G. Attitude and position estimation for an uav swarm using consensus kalman filtering. In 2015 IEEE Metrology for Aerospace (MetroAeroSpace) , 519–524 (IEEE, 2015). 
+
+21. Monson, C. K. & Seppi, K. D. The kalman swarm: a new approach to particle motion in swarm optimization. In Genetic and Evolutionary Computation Conference , 140–150 (Springer, 2004). 
+
+## Acknowledgements 
+
+The authors would like to thank the Robotics & AI committee at the International School of Engineering, Chulalongkorn University, for financially supporting this project.

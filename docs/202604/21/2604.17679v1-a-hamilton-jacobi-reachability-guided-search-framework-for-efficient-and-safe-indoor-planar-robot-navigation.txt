@@ -1,0 +1,768 @@
+Title: A Hamilton-Jacobi Reachability-Guided Search Framework for Efficient and Safe Indoor Planar Robot Navigation
+
+URL Source: https://arxiv.org/pdf/2604.17679v1
+
+Published Time: Tue, 21 Apr 2026 01:58:53 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+> UNDER REVIEW 1
+
+# A Hamilton-Jacobi Reachability-Guided Search Framework for Efficient and Safe Indoor Planar Robot Navigation 
+
+Hanyang Hu, Cameron Siu, Mo Chen 
+
+Abstract —Autonomous navigation requires planning to reach a goal safely and efficiently in complex and potentially dynamic environments. Graph search-based algorithms are widely adopted due to their generality and theoretical guarantees when equipped with admissible heuristics. However, the computational complex-ity of graph search grows rapidly with the dimensionality of the search space, often making real-time planning in dynamic envi-ronments intractable. In this paper, we combine offline Hamilton-Jacobi (HJ) reachability with online graph search to leverage the complementary strengths of both. Precomputed HJ value functions, used as informative heuristics and proactive safety constraints, amortize online computation of the graph search process. At the same time, graph search enables reachability-based reasoning to be incorporated into online planning, over-coming the long-standing challenge of HJ reachability requiring full knowledge of the environment. Extensive simulation stud-ies and real-world experiments demonstrate that the proposed approach consistently outperforms baseline methods in terms of planning efficiency and navigation safety, in environments with and without human presence. 
+
+Index Terms —Autonomous navigation, collision avoidance, graph search, Hamilton-Jacobi reachability. 
+
+I. I NTRODUCTION 
+
+Indoor planar robot navigation requires generating trajecto-ries that are both computationally efficient and safe in envi-ronments populated with static obstacles and moving agents. Achieving these objectives simultaneously remains challeng-ing, particularly when real-time performance and dynamic feasibility are required. A broad range of planning paradigms has been proposed to address this problem. Sampling-based methods , such as rapidly-exploring random tree (RRT) [1] and probabilistic roadmap (PRM) [2], construct collision-free paths by ran-dom exploration and are probabilistically complete [3]. Their asymptotically optimal extensions, including RRT* and PRM* [4] and fast marching tree (FMT*) [5], further improve solution quality as the number of samples increases. How-ever, these methods lack deterministic performance guaran-tees within finite time, and often require post-processing to ensure trajectory smoothness. Optimization-based methods ,including model predictive control (MPC), directly incorporate dynamics and constraints to generate smooth and dynamically feasible trajectories [6]. Their performance, however, depends heavily on initialization and may degrade in cluttered envi-ronments due to local minima. Learning-enhanced methods 
+
+leverage data-driven policies for goal reaching and obstacle           
+
+> This work has been submitted to the IEEE for possible publication. Copyright may be transferred without notice, after which this version may no longer be accessible.
+> 1Hanyang Hu, Cameron Siu, and Mo Chen are with Simon Fraser Univer-sity, Burnaby, BC V5A 1S6, Canada.
+
+avoidance [7], but their safety, interpretability, and generaliza-tion in unseen environments remain open concerns for safety-critical tasks. 
+
+Graph search-based methods provide an appealing alter-native due to their interpretability and theoretical guarantees when equipped with admissible heuristics [8]. By discretizing the state space and searching over a graph representation, algo-rithms such as A* [9] and D* [10] can guarantee optimality under suitable conditions. Nevertheless, their computational complexity grows rapidly with the dimensionality of the state space. Despite the use of anytime algorithms [11], [12], unin-formed search may expand a large number of nodes that ulti-mately correspond to unsafe or dynamically infeasible states in dynamic or safety-critical environments. Consequently, the effectiveness of search-based planning critically depends on the design of informative heuristics and predictive pruning strategies that can reduce unnecessary exploration while pre-serving safety constraints. HJ reachability is a robust optimal control method that computes the optimal control under worst-case adversarial disturbances. Solutions to Hamilton-Jacobi-Isaacs (HJI) par-tial differential equations (PDEs) yield value functions that characterize reachable tubes or minimal arrival times [13]. In particular, backward reachable tubes (BRTs) identify states that can be driven to a target or failure set within a given horizon despite bounded disturbances [14], while time-to-reach (TTR) functions quantify the minimum time required to reach the target [15]. These value functions encode useful information about dynamic feasibility and safety from the system dynamics. Despite their strong theoretical guarantees, directly deploy-ing HJ value functions for online planning remains challenging in practical robotic navigation tasks. Value functions are typically precomputed offline with respect to specific targets or environmental configurations, making them difficult to adapt to changing goals or partially unknown environments. Moreover, using BRTs purely as hard safety filters may conflict with goal-directed planners, potentially leading to deadlock or oscillatory behaviors. These observations suggest that HJ reachability is more effective as a source of principled guidance rather than as a standalone planner or safety mechanism. In this paper, we propose an HJ reachability-guided search framework for indoor planar robot navigation that integrates offline reachability analysis with online graph search. We embed precomputed HJ value functions into the search pro-cess to enhance both efficiency and safety awareness without requiring reachability recomputation during online planning, as illustrated in Fig. 1. Specifically, we precompute three HJ-reachability value functions: (1) a generall TTR function  
+
+> arXiv:2604.17679v1 [cs.RO] 20 Apr 2026 UNDER REVIEW 2Feasible Traj Goal
+> Infeasible Traj Obstacles
+> Human Direction BRT
+> TTR Heuristic Contour t (s)
+
+Offline Precomputation 
+
+# + human dynamics human -robot BRT robot dynamics  
+
+> static map static map BRT
+
+# +
+
+> robot dynamics
+
+# + 
+
+> goal at origin general TTR robot dynamics
+
+Online Navigation 
+
+Fig. 1: Overview of the proposed HJ reachability-guided search framework. In the offline stage, value functions rep-resenting a general TTR, a static-map BRT, and a human-robot BRT are computed. Online, these value functions are integrated into the graph search algorithm to improve search efficiency and guarantee safety. that characterizes dynamically informed heuristic guidance, (2) a static-map avoid value representing a BRT that en-codes collision avoidance with known static obstacles, and (3) a task-specific human-robot value representing a BRT that captures collision avoidance with a controlled human agent. During online planning, TTR replaces conventional distance-based heuristics to fasten convergence toward the goal, while the BRTs proactively prune states that will lead to static or dynamic collisions. By combining the structure of graph search with the predictive safety characterization of HJ reachability, our proposed framework amortizes the online search process, and achieves improved search efficiency and enhanced safety awareness in dynamic indoor environments. Extensive simulation studies and real-world experiments in human-populated settings validate the effectiveness of the proposed approach. The main contributions of this paper are summarized as follows: 1) We propose an HJ reachability-guided search framework that integrates precomputed reachability value functions into graph search to jointly improve planning efficiency and safety. 2) We introduce a unified integration strategy that leverages TTR for heuristic acceleration and BRTs for predictive pruning of static and dynamic hazards. 3) We demonstrate the practical effectiveness of the pro-posed framework through high-fidelity simulations and real-world experiments in environments with moving humans. II. R ELATED WORK 
+
+A. Heuristic Design and Safety-Aware Graph Search-Based Planning 
+
+Graph search-based planners, such as A* [9] and its vari-ants, rely heavily on the quality of heuristic functions to guide the search process toward the goal area [8]. When equipped with admissible heuristics, these methods provide optimality guarantees [8], while weighted and anytime extensions im-prove real-time performance by trading optimality for search efficiency [11], [16], [17]. More informative heuristics can substantially reduce unnecessary node expansions and thereby improve search efficiency. To address dynamical feasibility, kinodynamic search meth-ods and motion primitive-based planners incorporate system dynamics into the graph construction [18], [19]. These ap-proaches ensure dynamically feasible motions by constructing edges based on system dynamics, and have been successfully applied to nonholonomic systems, like Dubins Car [20]. How-ever, the associated heuristics are typically based on geometric distance metrics or simplified cost-to-go approximations that do not fully capture worst-case disturbance effects or predic-tive safety constraints. Recently, learning-based techniques have been explored to accelerate heuristic evaluation or approximate value functions for search [21]–[24]. While these methods can significantly reduce node expansions in structured environments, their performance highly depends on training data and does not generally provide formal safety guarantees. Safety-aware search strategies have also been studied, in-cluding constraint-based pruning [25]–[27] and risk-aware cost shaping [20], [28], [29]. These methods aim to reduce the ex-ploration of unsafe nodes by incorporating obstacle proximity or collision penalties into the cost function. Nevertheless, such mechanisms are often reactive and geometry-based, lacking model-based worst-case reasoning about the system dynamics. In summary, prior work has improved search efficiency through heuristic refinement, motion primitive design, or learned priors. However, few approaches integrate control-theoretic safety analysis directly into the heuristic evaluation and node expansion process. This observation motivates the incorporation of reachability-based value functions into graph search as a principled mechanism for both heuristic guidance and predictive pruning. 
+
+B. HJ Reachability-Based Control and Planning 
+
+HJ reachability provides a rigorous framework for character-izing safety guarantees under bounded disturbances [13]. The HJI equation and its viscosity solution, the HJ value function, UNDER REVIEW 3
+
+encodes safety and optimality information about the system dynamics. When the HJ value function is used as a safety filter, a controlled system may use a task-oriented control when the HJ safety value is above some threshold; once the value approaches the safety threshold, the system needs to switch to a safety control computed based on value function’s gradient [30]–[35]. HJ reachability analysis has also been explored for mo-tion planning by directly using value functions to generate trajectories or guide control policies [36], [37]. BRTs are often used as hard safety constraints to prevent the system from entering usnafe regions. However, when used purely as hard constraints, BRTs may conflict with goal-directed planning objectives, since safety filters can reject intermediate actions that are necessary for eventually reaching the goal. TTR value functions, on the other hand, can be used more directly for planning. For example, gradients of TTR can be used to synthesize dynamically feasible motions toward a goal [38]–[40]. However, such approaches typically rely on value functions computed offline for specific targets or environmental configurations, which limits their adaptability to changing goals or partially unknown environments [41]. In contrast, a general TTR value function enables map-independent guidance, allowing the same value function to remain applicable even when the environment or map changes. These observations suggest that reachability value functions are often more effective as structured guidance mechanisms than as standalone planning strategies. Despite their strong theoretical guarantees, HJ reachability value functions have rarely been embedded into graph search algorithms as structural components of heuristic evaluation or predictive pruning. Most existing approaches treat BRTs as standalone safety certificates or post hoc filters, rather than as mechanisms to shape the exploration process itself. III. P RELIMINARIES 
+
+A. Graph Search-Based Methods 
+
+Graph search-based methods model planning problems as graphs, where nodes represent system states and edges cor-respond to feasible transitions between two sequential states. These methods aim to find a path from an initial state to a goal state by systematically exploring neighboring nodes based on the predefined evaluation criteria. One representative method is the A* algorithm. A* selects the next node to expand by minimizing the sum of the accu-mulated cost from the initial node and a heuristic estimation of the remaining cost to the goal [9]. When the heuristic is admissible, i.e., the heuristic never overestimates the true cost-to-go from the current node to the goal node, A* algorithm is guaranteed to find the optimal path [42]. However, feasible solutions within strict computational time limits are often preferred over optimality in real-time applications. To address this, the Anytime Nonparametric (ANA*) algo-rithm finds one suboptimal feasible path rapidly by weighting the heuristic aggressively, then iteratively reduces it to expand the most promising node per iteration, adjusting the greediness of the search as path quality improves [11]. Unlike D Lite* [43], which is well suited for dynamic environments but does not explicitly enforce time constraints, ANA* provides a prin-cipled mechanism to trade solution optimality for computation time. This property aligns well with our problem setting, where the robot must generate a feasible path within a fixed time horizon, prioritizing real-time responsiveness over optimality in partially observable environments. 
+
+B. HJ Reachability Analysis 
+
+Given a general dynamical system subject to disturbances, 
+
+dx dt = ˙ x = f (x, u, d ) (1) where x ∈ Rn is the system state, and u and d denote the control input and disturbance, respectively. 
+
+1) Goal-reaching TTR computation: Given a target set T ⊆ 
+
+Rn, the disturbance-free TTR function is defined as: 
+
+Φ( x) = min  
+
+> u(·)
+
+{τ ≥ 0 | ξux (τ ) ∈ T } (2) where Φ( x) denotes the TTR value function, and ξux (τ )
+
+denotes the system trajectory at time τ starting from the state 
+
+x under the control u(·). Here, Φ( x) represents the minimum time required for the system to reach the target set T at the current state x under the optimal control. This value function 
+
+Φ( x) is the viscosity solution to this HJI PDE [15]: 
+
+min 
+
+> u∈U
+
+
+
+− ∂Φ( x)⊤
+
+∂x f (x, u ) − 1
+
+
+
+= 0 , x / ∈ T 
+
+Φ( x) = 0 , x ∈ T 
+
+(3) where the time to reach is zero when the agent is inside of the target set. 
+
+2) Avoid BRT computation: Given a failure set F ⊆ Rn,represented by an implicit function lF (x) such that F = {x ∈
+
+Rn | lF (x) ≤ 0}, the avoid BRT over the time horizon [−T, 0] 
+
+is a set of states from which the system is inevitably driven into F within time T . To characterize this unsafe set, we define the reachability value function: 
+
+V (x, t ) = max  
+
+> u(·)
+
+min  
+
+> d(·)
+
+min   
+
+> τ∈[t, 0]
+
+lF
+
+
+
+ξu,d x,t (τ )
+
+
+
+(4) where ξu,d x,t (τ ) denotes the system trajectory at time τ starting from state x at time t under control u(·) and disturbance d(·).The avoid BRT is then represented as the zero sublevel set of 
+
+V (x, t ):
+
+B(t) = {x ∈ Rn | V (x, t ) ≤ 0} (5) Here, the value function V (x, t ) is the viscosity solution to the following HJI PDE within time [−T, 0] [44]: 
+
+min 
+
+ ∂V ∂t + H (x, p ) , l F (x) − V (x, t )
+
+
+
+= 0 ,t ∈ [−T, 0] 
+
+(6) where the optimal Hamiltonian H is calculated as: 
+
+H(x, p ) = max  
+
+> u∈U
+
+min  
+
+> d∈D
+
+p⊤f (x, u, d )UNDER REVIEW 4
+
+with p = ∂V ∂x . As the time horizon T increases, the avoid BRT may converge to a time-invariant reachable tube. In this case, the corresponding value function is independent of time, and the avoid BRT can be denoted as B = {x ∈ Rn|V (x) ≤ 0}.For HJI PDEs (3) and (6), closed-form analytical solutions generally do not exist. Thus, we employ a Python-based toolbox, OptimizedDP [45], to compute numerical solutions. IV. S TRUCTURAL CONNECTIONS BETWEEN GRAPH 
+
+SEARCH AND HJ R EACHABILITY 
+
+In this section, we formalize the structural relationship between graph search planning and HJ reachability analysis. Trajectory planning for dynamical systems can be formu-lated as a continuous optimal control problem (OCP), where the objective is to minimize a cumulative cost subject to system dynamics and safety constraints: minimize 
+
+> u(·)
+
+Z T
+
+> 0
+
+c(x, u ) dt (7a) subject to ˙x = f (x, u ), (7b) 
+
+x ∈ X safe , (7c) 
+
+u ∈ U (7d) where c(·) is the running cost function, and x(·) and u(·)
+
+denote the state trajectory and control input, respectively, and 
+
+Xsafe is the safe constraint set. In general, solving the OCP (7) analytically is often in-tractable for systems with complex dynamics and constraints. A common approximation is therefore to discretize the con-tinuous state space and represent the planning problem as a graph-search problem. Let G = ( V, E) denote a directed graph, where each node vi ∈ V corresponds to a discrete state 
+
+xi, and each edge (vi, v j ) ∈ E represents a candidate transition from xi to xj . The associated discrete transition cost approx-imates the running cost accumulated along the corresponding local trajectory segment: ¯c(vi, v j ) ≈ R ∆t 
+
+> 0
+
+c(x(t), u (t)) dt .Then, the graph-search approximation can be written as the following minimum-cost safe path problem: minimize  
+
+> (v0,...,v K)
+> K−1
+
+X
+
+> k=0
+
+¯c(vk, v k+1 ) (8a) subject to v0 = vstart , vK ∈ V goal , (8b) 
+
+(vk, v k+1 ) ∈ E feas , k = 0 , . . . , K − 1, (8c) 
+
+vk ∈ V safe , k = 0 , . . . , K. (8d) Here, Efeas ⊆ E denotes the set of dynamically feasible transitions, and Vsafe ⊆ V denotes the set of safe nodes. Under this approximation, the objective in (8a) approximates the cumulative cost in (7a), the feasible-edge constraint in (8c) captures both the system dynamics in (7b) and the admissible control set in (7d). The safe-node constraint in (8d) corresponds to the continuous safety constraint in (7c). One correspondence arises in cost-to-go estimation. The solution to the OCP (7) is fundamentally characterized by a value function that gives the optimal remaining cost from any state to the goal. In graph search, the heuristic function plays an analogous role by estimating the remaining cost from a node to the goal. The TTR function in (2) is the value function of a minimum-time optimal control problem. Therefore, when time is a meaningful proxy for planning cost, the TTR provides a theoretically grounded heuristic for graph search, supplying global, dynamics-aware guidance for the discrete search process. Another correspondence arises in safety enforcement. The safety constraint in (7c) can be enforced in graph search by pruning unsafe nodes or transitions. A more principled pruning mechanism is obtained from the avoid BRT in (4)– (6). Since the avoid BRT characterizes the set of states from which the system is inevitably driven into the failure set, nodes whose states lie in the avoid BRT can be pruned before search expansion. In this sense, the BRT provides a dynamics-aware approximation of the continuous safety constraint in (7c), refining graph search from purely geometric collision checking to proactive safety pruning. This perspective also extends to interactive settings involv-ing other controlled agents. When safety depends not only on the robot state but also on the state of another agent, the continuous safety constraint is defined over an augmented or relative state space. The corresponding BRT then captures unsafe agent-robot interactions and can be used to prune graph nodes that would lead to collision under worst-case agent behavior. This observation foreshadows the human-robot BRT construction introduced in the next section. V. P ROBLEM FORMULATION 
+
+We consider an indoor planar robot navigation task where the robot aims to reach the goal set G ⊆ Rn while avoiding collisions with both static obstacles O ⊆ R3 and controlled moving agents, which in this work are humans. Let xrob ∈Xrob ⊆ Rn denote the robot state. The robot dynamics are given by: 
+
+dx rob 
+
+dt = ˙ xrob = r(xrob (t), u rob (t)) (9) where urob (t) constrained by the compact set Urob ⊆ Rnurob 
+
+is the control, the system r : Xrob × U rob → X rob is Lipschitz continuous to the state given the control policy urob (·).Similarly, we consider N humans in the environment. The dynamics of the i-th human are given by: 
+
+dx i
+
+> hum
+
+dt = ˙ xi 
+
+> hum
+
+= h(xi
+
+> hum
+
+(t), u i
+
+> hum
+
+(t)) , i = 1 , . . . , N (10) where xi 
+
+> hum
+
+∈ X hum ⊆ Rm denotes the state of the i-th human, 
+
+ui
+
+> hum
+
+(t) ∈ U hum ⊆ Rnuhum represents the corresponding control input. The function h : Xhum × U hum → X hum is assumed to be Lipschitz continuous in the state for admissible control policies ui
+
+> hum
+
+(·).To formally define collision avoidance, we introduce ge-ometric mapping functions ψrob : Xrob → P(R2), ψhum :
+
+Xhum → P (R2), and ψobs : O → P (R2). These mappings associate the state of the robot, humans, and static obstacles with the corresponding regions of the planar workspace R2
+
+that they physically occupy, where P denotes the power set. Under this formulation, the safe planar navigation task is defined as follows: given initial conditions xrob (0) and UNDER REVIEW 5
+
+xi
+
+> hum
+
+(0) , there exists a finite time T > 0 such that the following conditions hold: 
+
+xrob (T ) ∈ G , (11a) 
+
+ψrob (xrob (t)) ∩ ψobs (O) = ∅, ∀t ∈ [0 , T ], (11b) 
+
+ψrob (xrob (t)) ∩ ψhum (xi
+
+> hum
+
+(t)) = ∅, ∀t ∈ [0 , T ], (11c) 
+
+∀i ∈ { 1, . . . , N }. (11d) VI. HJ R EACHABILITY -G UIDED NAVIGATION 
+
+In indoor planar robot navigation, a key challenge is to generate feasible, high-quality, and safe trajectories to reach the goal in environments populated with both static obstacles and moving humans. This task requires not only accurate modeling of the robot dynamics but also efficient search and predictive safety reasoning under real-time constraints. However, as discussed in Sec. I, high-fidelity models substan-tially increase the dimensionality of the search space and can severely degrade search efficiency. Meanwhile, safety demands more than reactive collision avoidance. For static obstacles, many planners perform instantaneous collision checking only, lacking predictive capability. For moving humans, existing methods often depend on online prediction of future human motion to evaluate interaction risk [39], [46]. In contrast, we adopt a prediction-free online search process and encode both guidance and safety through precomputed HJ reacha-bility value functions. This design keeps online search pro-cess lightweight, since each node expansion involves only state transformations and table look-ups rather than repeated forecasting or online PDE computation. This offline-online decomposition amortizes the online computational cost of HJ reachability analysis while preserving its predictive power during deployment. 
+
+Algorithm 1 HJ Reachability-Guided Navigation 
+
+Offline Precomputation  
+
+> 1:
+
+Compute a general TTR Φ(¯ xrob ); 
+
+> 2:
+
+Compute the static-map BRT value function Vmap (xrob ); 
+
+> 3:
+
+Compute the human-robot BRT value function Vrel (xrel ).
+
+Online Navigation  
+
+> 4:
+
+Initialize robot state xrob , P LANNER , and C ONTROLLER . 
+
+> 5:
+
+while xrob /∈ G do  
+
+> 6:
+
+for all detected humans i ∈ I do  
+
+> 7:
+
+xi 
+
+> rel
+
+← R(θ) xi 
+
+> hum
+
+− Qx rob 
+
+ 
+
+> 8:
+
+Generate a dynamically feasible trajectory with:  
+
+> 9:
+
+Φ(¯ xrob ) as the guidance heuristic;  
+
+> 10:
+
+Bmap and Brel as pruning sets.  
+
+> 11:
+
+Execute control: xrob ← CONTROLLER (trajectory )
+
+Algorithm 1 summarizes how the three precomputed HJ value functions are integrated into the proposed navigation framework. In the offline precomputation phase (Lines 1–3), three HJ reachability value functions are precomputed and stored for online lookup. Specifically, Φ(¯ xrob ) is a general goal-centered TTR value function that provides a reusable dynamics-aware estimate of progress toward the goal. The static-map BRT value function Vmap (xrob ) captures predictive collision risk with respect to the static map. The human-robot BRT value function Vrel (xrel ) encodes predictive interaction risk in the robot-centric relative state space. In Line 4, the robot initializes its state together with the planner and low-level controller. In Lines 5–7, for each detected human, the planner computes the relative state xi 
+
+> rel
+
+by transforming the human state into the robot-centric coordinate frame. This transformation allows the same precomputed human-robot value function to be queried online for different robot poses and different human observations. In Lines 8–10, the planner expands candidate nodes using Φ(¯ xrob ) as the search heuristic while pruning nodes that violate the safety conditions induced by the static-map BRT Bmap and human-robot BRT Brel . In Line 11, the controller executes the selected control and up-dates the robot state, after which the same process is repeated until the robot reaches the goal. The detailed mathematical definitions of three HJ value functions and pruning sets are presented in Sec. VI-A, Sec. VI-B and Sec. VI-C. To make explicit how the three precomputed HJ value functions guide online planning, Algorithm 2 presents an A*-based instantiation of the HJ-guided graph-search planner. Let xrob (v) denote the robot state associated with a node 
+
+v ∈ V. For a path {v0, v 1, ..., v k} from v0 = vstart to 
+
+vk = v, the cumulative transition cost is defined as ¯C(v) = Pk−1 
+
+> j=0
+
+¯c(vj , v j+1 ). The node priority then follows the standard A* form f (v) = ¯C(v)+ h(v), where h(v) = Φ(¯ xrob (v)) . Here, for each expanded node v, the notation v+ denotes a dynamics-feasible neighboring successor of v, namely a node satisfying 
+
+(v, v +) ∈ E feas .
+
+Algorithm 2 A*-Based Example of HJ-Guided Planning 
+
+Require: Directed graph G = ( V, E), start node vstart , goal set Vgoal , detected humans {xi
+
+> hum
+
+}i∈I , heuristic h(v) = Φ(¯ xrob (v)) , pruning sets Bmap , Brel . 
+
+> 1:
+
+Initialize OPEN with vstart  
+
+> 2:
+
+Set ¯C(vstart ) ← 0 and f (vstart ) ← ¯C(vstart ) + h(vstart ) 
+
+> 3:
+
+while OPEN is not empty do  
+
+> 4:
+
+Pop v ∈ OPEN with minimum key f (v) 
+
+> 5:
+
+if v ∈ V goal then  
+
+> 6:
+
+return planned trajectory  
+
+> 7:
+
+for all v+ such that (v, v +) ∈ E feas do  
+
+> 8:
+
+if xrob (v+) ∈ B map then  
+
+> 9:
+
+continue  
+
+> 10:
+
+unsafe ← false  
+
+> 11:
+
+for all i ∈ I do  
+
+> 12:
+
+xi
+
+> rel
+
+(v+) ← R(θ(v+))  xi 
+
+> hum
+
+− Qx rob (v+) 
+
+> 13:
+
+if xi
+
+> rel
+
+(v+) ∈ B rel then  
+
+> 14:
+
+unsafe ← true ; break  
+
+> 15:
+
+if unsafe then  
+
+> 16:
+
+continue  
+
+> 17:
+
+¯C(v+) ← ¯C(v) + ¯ c(v, v +) 
+
+> 18:
+
+f (v+) ← ¯C(v+) + h(v+) 
+
+> 19:
+
+Insert or update v+ in OPEN with key f (v+) 
+
+> 20:
+
+return No feasible trajectory. Algorithm 2 shows how the precomputed HJ value functions are used during online graph search. The TTR value func-tion defines the heuristic term in the A* priority, while the UNDER REVIEW 6
+
+static-map and human-robot BRTs are used to prune unsafe successor nodes before insertion into the search frontier. This HJ-Guided framework improves search efficiency in two complementary ways. First, the TTR Φ(¯ xrob ) serves as an informed heuristic that explicitly accounts for the robot dynamics, thereby guiding the search more effectively than purely geometric distance-based heuristics. This dynamic-aware heuristic provides effective guidance during search, par-ticularly in environments with kinematic constraints. Second, the precomputed pruning conditions, Bmap and Brel , remove predictively unsafe nodes before they are unnecessarily ex-panded, which reduces wasted search effort in both obstacle-cluttered and human-populated environments. The framework also improves safety awareness in two complementary ways. For static obstacles, the planner reasons not only about instantaneous collision but also about whether a state will inevitably evolve into collision under the robot dynamics with the static-map BRT Bmap . For human interactions, the planner avoids relying on repeated online human-motion prediction and instead queries a precomputed relative-state human-robot BRT Brel , which preserves predictive safety reasoning while keeping each online node expansion lightweight. 
+
+A. General TTR as the Guidance Heuristic 
+
+The first offline precomputed value function is a general TTR Φ : ¯Xrob → R≥0, computed in obstacle-free space by solving the HJI PDE Eq. (3). Here, ¯xrob denotes the robot state expressed in a local coordinate frame with the goal placed at the origin. At runtime, the current goal is handled by transforming the robot state xrob into this goal-centered frame ¯xrob before querying Φ. This construction yields a map-independent but dynamics-aware estimate of the minimum remaining time-to-reach. We consider two kinds of TTR heuristics, namely a map-based TTR and a general goal-centered TTR. In theory, the map-based TTR is an exact heuristic for static environments, assuming perfect alignment between the real robot and its dynamical model. However, precomputing a map-based TTR is impractical when goal locations are not known prior to navigation. As a result, we instead employ a general TTR 
+
+Φ(¯ xrob ) precomputed in obstacle-free space with the goal placed at the origin. In online deployment, the robot state is transformed into the corresponding goal-centered frame before querying Φ. Unlike map-dependent value functions, this general TTR is environment-agnostic and can be reused across different environments and goal configurations without recomputation. Although this map-free TTR does not encode static obstacle information and is therefore less informed than a map-specific value function, it remains highly effective as a guidance heuristic because it preserves the dynamical structure of the system. For baseline comparison, we also include two distance-based heuristics (denoted as Dist): a map-based variant and a general variant. The Dist heuristic is computed as the Euclidean distance to the goal divided by the robot’s maximum speed. The comparative contour plots of these heuristics are visualized for two robot states in Fig. 2. The figure is organized into four columns, representing the map-based TTR, general TTR, map-based Dist, and general Map -based TTR General TTR Map -based Dist General Dist 
+
+Fig. 2: Heuristic comparisons for the robot at two orientations: map-based TTR, general TTR, map-based Dist, and general Dist heuristic. The hierarchy of values follows two rules: heuristics considering dynamics (TTR) are greater than those that do not (Dist), and map-based ones are greater than their general counterparts. Dist, respectively. The first row illustrates the heuristic con-tours for a robot located at (2 .0, 1.0) with a speed of 0.2 m/s and an upward heading. For this state, the heuristic values are 7.57 s, 5.81 s, 5.09 s, and 4.20 s separately. The second row shows the heuristics for the same position and speed, but with the robot facing in the opposite direction. This reversed orientation substantially increases the TTR values, yielding 9.06 s for the map-based TTR and 7.89 s for the general TTR, while the distance-based heuristics remain unchanged at 5.09 s and 4.20 s, respectively. Across both cases, the heuristics consistently satisfy the relation: the more informed heuristics yield greater values, with dynamics-aware (TTR) dominating distance-based (Dist) methods, and map-based versions dominating their general counterparts. This ordering is expected, as the map-based TTR is the most informed, because it provides the exact time estimation while respecting both dynamics and obstacles. The general TTR, which ignores static obstacles but takes the dynamics into consideration, pro-vides an admissible but less informed underestimation of the exact map-based TTR. Similarly, the map-based Dist heuristic, which considers obstacles but not dynamics, is more informed than the general Dist heuristic, which assumes an optimal straight line trajectory at maximum speed, disregarding both obstacles and dynamics. Among these four heuristics, the gen-eral TTR achieves a favorable balance, retaining substantially greater informativeness than distance-based heuristics while remaining more practical than the map-based TTR. Although the general TTR ignores static obstacles, potential misguidance is mitigated by the static-map BRT, which proactively prunes infeasible states during search. 
+
+B. Static-Map BRT for Feasible Set Pruning 
+
+The second offline precomputed value function is a static-map BRT defined on the robot state space Xrob . It is used to UNDER REVIEW 7
+
+identify robot states that are predictively unsafe with respect to static obstacles and should therefore be pruned during search. Given the static obstacle set O or equivalently the induced static map M, we characterize the collision failure set Fmap 
+
+using an implicit surface function lFmap (xrob ), defined as the signed distance to the static obstacles inflated by the robot radius. Thus, lFmap (xrob ) ≤ 0 indicates collision. Assuming no external disturbances, we solve the HJI PDE in Eq. (6) over the horizon [−Tmap , 0] to obtain the static-map BRT value function Vmap (xrob , t ). For a sufficiently large hori-zon Tmap , the solution converges numerically to a stationary value function, and we therefore use the shorthand Vmap (xrob ).The static-map BRT Bmap used for feasible-set pruning is defined as follows: 
+
+Bmap = {xrob |Vmap (xrob ) < ϵ map } (12) where the threshold ϵmap is typically set to zero or a small positive value to account for numerical approximation errors, model mismatch, and system delays. This construction is consistent with the least-restrictive safety filter, because intervention is triggered only when the current state enters the BRT. During online planning, any node that lies inside Bmap is removed from the feasible state space before expansion. Hence, the planner reasons not only about instantaneous collision with the map but also about whether a state is predictively unsafe under the robot dynamics within the prescribed horizon. The geometry of Bmap depends on both the robot state and the surrounding obstacles. As illustrated in Fig. 3, the volume of the BRT increases with the robot’s speed (positive z-axis direction), reflecting the reduced ability of the robot to avoid collisions at higher velocities. This pruning strategy is particularly effective for static obstacles. Since ob-stacle configurations remain unchanged over time, dangerous nodes can be identified and pruned as soon as their BRT values approach the safety threshold ϵmap , enabling proactive rather than reactive collision avoidance and maintaining safety well in advance of potential contact. 
+
+Fig. 3: Visualization of one Bmap . (Left) The 3D value function for a fixed heading angle θrob = 1 .57 rad. (Right) A 2D slice of the Bmap at vrob = 0 .75 m/s, θrob = 1 .57 rad corresponding to the plane indicated in the left plot. 
+
+C. Human-Robot BRT for Forward Invariant Pruning 
+
+The third offline value function is a human-robot BRT defined over the robot-centric relative state space Xrel . It is used to identify relative human-robot configurations that are predictively unsafe over a fixed horizon and should therefore be pruned during online planning. To enable predictive safety reasoning in dynamic environments, we formulate a pursuit-evasion differential game between the robot and a human. The relative state and dynamics are defined as: 
+
+xrel = R(θ)( xp − Qx e) = R(θ)( xhum − Qx rob ),
+
+˙xrel = g(xrel , u rob , u hum ), (13) where R(θ) is the rotation matrix aligning the human-robot relative position with the robot heading. Here, xp and xe
+
+denote the pursuer ( xhum ) and evader ( xrob ) in the game respec-tively. The operator Q maps shared state components between 
+
+xhum and xrob by either augmenting or reducing the state space of the robot. The function g denotes the resulting relative dynamics based on the relative state xrel under robot and human controls. We characterize the human-robot collision failure set Frel using an implicit surface function lFrel (xrel ),defined as the signed separation distance between the robot and the human boundaries after accounting for their respective radii. Thus, lFrel (xrel ) ≤ 0 indicates collision. By solving the HJI PDE in Eq. (6) over the horizon 
+
+[−Trel , 0] , we obtain the value function Vrel (xrel , t ). Since our online safety check is performed over a fixed prediction horizon, we use the shorthand Vrel (xrel ) := Vrel (xrel , −Trel ) for online pruning under a fixed horizon. Rather than defining safety purely through a value thresh-old, we construct Brel through a forward-invariant condition induced by the evolution of Vrel (xrel ). This condition is closely related to Control-Barrier-Function-style (CBF) safety con-straints applied to a precomputed reachability value function [30], [33], [47]. Specifically, we define: 
+
+Brel =
+
+(
+
+xrel | ∂V rel 
+
+∂t xrel 
+
+< −α(Vrel (xrel ) − ϵrel )
+
+)
+
+(14) where ∂V rel  
+
+> ∂t
+
+is the partial derivative of the value function with respect to time t. The scalar α is a positive scalar controlling the convergence rate of the value function. The parameter ϵrel 
+
+specifies a lower bound on acceptable safety margins. This condition identifies states whose safety value is decreasing too rapidly and are therefore likely to violate the desired safety margin in the near future. Since a graph search algorithm is employed, we can natu-rally use the finite difference between the neighbouring nodes and the current node to approximate the time derivative: 
+
+∂V rel 
+
+∂t xrel 
+
+≈ Vrel (xneb rel ) − Vrel (xrel )∆t (15) where ∆t denotes the time interval between the current node and the neighbouring nodes xneb rel . In our implementation, the time interval ∆t is a small value with a maximum time interval is 0.5 s, so the approximation Eq.(15) holds. The effectiveness of this Forward-Invariant (FI) pruning mechanism depends on the parameter α, which governs the conservativeness of the safety constraint. An overly small 
+
+α will result in an excessively strict strategy, which may prune unnecessary nodes or leave none at all. In converse, UNDER REVIEW 8
+
+an overly large α reduces the method to a Feasible-Set (FS) pruning method, failing to preserve the predictive tendency of the value function. Moreover, while the pursuit-evasion game formulation provides a strong theoretical safety guarantee, its adversarial assumption can lead to overly conservative behavior in practice. To balance theoretical safety guarantees with practical efficiency, we introduce an adaptive mechanism that dynamically adjusts α in response to the inferred level of collision risk. The inferred collision risk is determined by two main fac-tors: angular alignment ( aalign ) and distance alignment ( dalign ). The angular alignment aalign captures the tendency of the robot to orient itself toward the human. It is formulated as an exponential similarity measure of the angular difference between the robot heading angle θrob and the line-of-sight vector from the robot to the human θr2h :
+
+aalign = exp( −k|θrob − θr2h | ) (16) where k is a hyperparameter that scales the influence of the angular discrepancy. The distance alignment dalign models the closeness of the relative distance. It is formulated as a linearly decaying func-tion of the relative distance drel with respect to a predefined threshold dthre :
+
+dalign = max 
+
+
+
+0, 1 − drel 
+
+dthre 
+
+
+
+(17) With Eq. (16) and Eq. (17), the α is determined by: 
+
+α = αhigh − (αhigh − αlow )( w1aalign + w2dalign ) (18) where w1 and w2 are the linear weights of the two factors, 
+
+αlow and αhigh are determined by the discrete time step and neighboring nodes, with a theoretical range of α ∈ [ 0.1∆t , 1∆t ].As illustrated in Fig. 4, different heading angles or relative distance will result in different pruning results. 
+
+Fig. 4: The influence of heading angle and relative distance on neighbor pruning. Compared to the baseline (left), a closer relative distance (middle) and a different heading angle (right) each result in a distinct set of pruned nodes, which are visualized with dashed outlines and reduced opacity. We formally distinguish the proposed FI pruning method (Eq. (14)) from the conventional FS pruning strategy (defined as Brel = {xrel | Vrel (xrel ) < 0}). While the FS pruning relies on a binary check of whether a state currently resides within an unsafe set, it ignores the future evolution of safety. This static nature can lead to delayed responses, as pruning is only triggered when the robot is already in close proximity to the danger boundary. In contrast, the FI pruning evaluates the trend of safety by monitoring the time derivative of the value function. A state is declared unsafe when the value decreases faster than a prescribed exponential threshold, indicating in-evitable future safety violation. Hence, the FI pruning enables a smoother and more predictive pruning process. Formally, the FS method can be interpreted as a limiting case of the FI method where α → ∞ (relaxing the derivative constraint). Thus, FI constitutes a strictly stronger safety criterion that an-ticipates future constraint violations. This enhanced predictive safety introduces a behavioral trade-off: the strict derivative condition may force the robot to take wider detours if space permits or wait longer in confined spaces compared to the FS, which allows for more aggressive maneuvers near obstacles. Our adaptive α mechanism addresses this by bridging the gap between the predictive safety of the FI and the navigational flexibility of the FS based on real-time risk assessment. The parameters of the FI-BRT, including α, ϵrel , and ∆t, govern the conservativeness of the forward-invariant pruning strategy and are chosen based on the discretization resolution and the robot’s dynamic limits. The specific parameter values used for the FI-BRT are provided in Appendix A. Overall, the proposed FI-BRT framework enables the planner to eliminate states that are not only unsafe within the time horizon but provably destined to become unsafe, thereby introducing predictive safety reasoning into graph search. VII. S IMULATION 
+
+The robot is modeled using a four-dimensional Dubins car dynamics. Its state is defined as xrob = [ x, y, v, θ ]⊤, where 
+
+(x, y ) denotes the planar position, v the translational speed, and θ the heading angle. The robot control is defined as 
+
+urob = [ a, ω ]⊤, where a ∈ [−0.5, 0.5] m/s 2 is the longitudinal acceleration and ω ∈ [−0.5, 0.5] rad/s is the turn rate. Its dynamics are given by: 
+
+˙x = v cos θ
+
+˙y = v sin θ
+
+˙v = a
+
+˙θ = ω
+
+(19) Each human is modeled as a planar point mass with constant speed vhum . The human state is given by its planar position 
+
+xhum = [ xhum , y hum ]⊤, and its motion is parameterized by the direction angle θhum . In our simulations, we set vhum = 0 .8 m/s. Accordingly, the human dynamics are 
+
+˙xhum = vhum cos θhum ,
+
+˙yhum = vhum sin θhum . (20) We evaluated our proposed HJ reachability-guided frame-work on two graph search algorithms: A* [9] and ANA* [11]. A* guarantees optimality when an admissible heuristic is used. ANA*, an anytime variant of A*, aims to rapidly compute an initial feasible trajectory and subsequently refines the solution within the search time limitation. Following the graph-search formulation in Section IV, nodes are prioritized according to the sum of the cumulative transition costs along the current path and the heuristic estimate. The cumulative cost-to-come for a trajectory (v0, . . . , v k) is Pk−1 
+
+> j=0
+
+¯c(vj , v j+1 ).In our implementation, the transition cost is instantiated using the static costmap M (·) from Nav2 [48] as ¯c(vi, v j ) = M (vj ),UNDER REVIEW 9
+
+where M (vj ) ∈ [0 , 100] denotes the static obstacle cost associated with node vj .The simulated environment is based on a 9.6 m × 5.4 m real-world room that contains multiple static obstacles as shown in Fig. 5. For each test, we specify a goal position as well as the initial state of the robot (position and heading angle). The robot is considered to have successfully arrived at the goal when the Euclidean distance between its current posi-tion and the goal is less than 0.2 m for ANA*-based planners and 0.5 m for A*-based planners. Here we use a tighter goal tolerance for ANA* to reflect its anytime setting and shorter time budget, while a slightly looser tolerance is used for A* to ensure comparability under its larger computational burden. To ensure safety during operation, we impose a speed limit of 
+
+0.1 m/s upon reaching the goal position, preventing potential collisions in the vicinity of the goal. We evaluate performance in terms of both path quality and search efficiency. Path quality is measured by the total accumulated cost, computed only over successful trials to avoid distortions due to penalties from failed runs. Search efficiency is quantified by the number of node expansions. For A* and its variants, we enforce a 
+
+1 × 10 6 node expansion limit to bound computation time. The ANA* and its variants are evaluated slightly different: we record the number of node expansions required to first reach the goal within 0.04 s search time limit, circumventing their incremental refinement nature. All tests are classified as either successes (timely goal achievement) or timeouts, ensuring objective performance comparison under realistic computational constraints. Finally, to ensure path reliability, we conduct an additional feasibility check by interpolating the planned trajectories according to the system dynamics and verifying that the densified trajectories do not intersect with any obstacles. Obstacles Goal 
+
+Fig. 5: Simulated navigation costmap with static obstacles. Free space is shown in white; obstacles are shown in blue. First we evaluated the effectiveness of the TTR heuristic 
+
+and the BRT pruner in two cases respectively. 
+
+A. Heuristic Comparison 
+
+TTR heuristic provides more accurate time estimation than the normal distance-based heuristic and thus it can improve the efficiency of searching process in most cases. As a baseline comparison, we adopt a common heuristic (denoted as Dist): defined as the Euclidean distance to the goal divided by the maximum speed of the robot. To show the effectiveness of the heuristic, we set the state cost to 1.0 for all the nodes in this test. As for A*-based planners, we set the initial position at 
+
+(−2.6, 5.0) and the goal position at (−2.6, 8.0) . Initial heading angles are configured at 0◦ , 90 ◦ , 180 ◦ , and 270 ◦. As shown in Table I, both planners finished all four tasks. Notably, A* with TTR achieved this with significantly fewer node expansions ( 6.483 × 10 5 vs. 1.291 × 10 7) and a much shorter total search time (20.97 s vs. 414.16 s) compared to A* with Dist. In addition, we further measured the total evaluation time of each heuristic: TTR took 1.86 s (8.85% of its total time), while Dist required 15.16 s (3.66% of its total time). This indicates that the performance improvement of the TTR heuris-tic stems primarily from reducing node expansions rather than accelerating heuristic evaluations. Finally, both planners achieved identical average optimal costs (5.25), indicating that using the TTR heuristic did not compromise solution quality while substantially reducing the number of expansions. TABLE I: Comparison of Heuristics for A*.                 
+
+> Method Success Nodes Time Costs A* w/ Dist 4/4 1.291 ×10 7414.16 5.25
+> A* w/ TTR 4/4 6.483 ×10 520.97 5.25
+
+To further contextualize these results, we assessed the feasi-bility of real-time deployment. We benchmarked an industry-standard planner (Nav2 SmacPlanner [20], [48]) implemented in optimized C++ with a three-dimensional Dubins car dy-namic. Our tests indicate that such a system can process approximately 1.9 × 10 6 iterations per second. Even with this high-performance execution speed, expanding the 1.291 × 10 7
+
+nodes required by the Dist heuristic in our four-dimensional state space would theoretically consume over 6.8 seconds, which fails to meet the real-time requirements (typically < 500 
+
+ms) of the indoor navigation task. In contrast, the node count reduced by our TTR heuristic ( 6.483 × 10 5) would theoretically require only ∼ 0.34 seconds in the same C++ environment. This analysis suggests that the bottleneck lies in the algorithmic complexity (search space size) rather than implementation efficiency, highlighting the necessity of the TTR heuristic for real-time performance. TABLE II: Comparison of heuristics for ANA* on the com-mon subset of 7 tasks successfully solved by both methods.           
+
+> Method Success Nodes †Costs †
+> ANA* w/ Dist 7/12 257.0 8.06 ANA* w/ TTR 12 /12 258.6 8.20
+> †Metrics averaged over the 7 tasks solved by both planners.
+
+As for ANA*-based planners, we set a longer-distance task where the initial position is at (−2.6, 5.0) and the goal position at (−2.6, 10 .5) . To test the robustness against orientation, initial heading angles were set at 30 ◦ intervals, creating a total of 12 distinct configurations. As shown in Table II, the choice of heuristic significantly impacted the success rate: while ANA* with the Dist heuristic failed in 5 out of 12 tasks, ANA* with the TTR heuristic successfully solved all UNDER REVIEW 10 
+
+12 tasks. The failures of the Dist heuristic occurred primarily when the robot was initially misaligned with the goal. Lacking dynamics awareness, the Dist heuristic guided the robot into local minima, resulting in persistent backward movements and eventual failure to reorient. In contrast, ANA* with TTR demonstrated superior maneuverability: as illustrated in Fig. 6, it effectively guided the robot to execute a slight reversal followed by a precise reorientation toward the goal. This confirms that the TTR heuristic provides critical guidance when non-holonomic constraints are significant. To ensure a fair comparison, Table II reports metrics averaged exclusively over the common subset of 7 tasks solved by both planners. In these relatively simpler scenarios where orientation was less critical, both heuristics performed comparably: ANA* with Dist achieved almost similar node expansions (257.0 vs. 258.6) and marginally lower trajectory costs (8.06 vs. 8.20). However, the advantage of the TTR heuristic becomes evident when considering the full dataset. Across all 12 tasks—including the 5 complex cases where Dist failed, ANA* with TTR main-tained a stable average node expansion of 273.4 and an average trajectory cost of 8.61. This indicates that the TTR heuristic extends the planner’s capability to solve complex orientation tasks with only a marginal increase in computational effort compared to the baseline. 
+
+Fig. 6: Left : ANA* w/ Dist created a trajectory requiring con-tinuous backward movement (The heading angles represented by arrows are always pointing downwards). Right : ANA* w/ TTR generated a more reasonable trajectory where the robot reversed briefly and reoriented toward the goal. 
+
+B. Pruning Strategies Comparison 
+
+BRT pruner improves the search efficiency and trajectory safety by cutting off the nodes that will lead to collisions to the static obstacles. We set the initial position at (0 .0, 4.8) and a closer goal position at (0 .2, 6.0) for A*-based planners due to the limited CPU memory issue. As for ANA* planners, we set the initial position at (−0.2, 4.8) the goal position at (0 .2, 7.2) .Both goal positions and initial positions are separated by the static obstacles and there is a traversable passage, allowing the robot a theoretically feasible path to cross the obstacle. We used the normal static obstacle pruner (denoted as the OBS pruner) as the baseline. This kind of pruner will prune the nodes that lie in the static obstacles. In addition, we used Dist heuristic to eliminate the potential TTR heuristic influences. TABLE III: Comparison of Pruning Strategies for A*.                 
+
+> Method Success Nodes Time (s) Costs A* w/ OBS 4/4 1.191 ×10 7303.32 89.5
+> A* w/ BRT 4/4 1.011 ×10 7335.84 89.5
+
+As shown in Table III, both A*-based planners finished all 4 tasks within the maximum iteration limit while maintaining the same optimal average costs of 89.5. Specifically, A* with BRT pruner demonstrated superior search efficiency, reducing the average node expansions by 15.1% ( 1.011 × 10 7 vs. 
+
+1.191 × 10 7) compared to the OBS pruner baseline. Despite this improvement in node expansion, the total searching time A* with BRT pruner is longer than A* with OBS pruner (335.84 vs. 303.32). This is because BRT pruner operation itself required 41.97 s (12.5% of its total time) which is substantially more than the 4.77 s (1.57% of its total time) needed for the OBS pruner approach. This temporal analysis shows that, in our current implementation, the additional cost of evaluating the BRT pruner offsets the savings from reduced node expansions, resulting in a longer wall-clock planning time. Nevertheless, the reduction in node expansions is al-gorithmically meaningful and implementation-agnostic; it is therefore expected to translate into runtime gains in optimized implementations where reachability queries are accelerated (e.g., through efficient value-function lookup and batching). TABLE IV: Comparison of pruning strategies for ANA* on the common subset of 8 tasks successfully solved by both methods.           
+
+> Method Success Nodes †Costs †
+> ANA* w/ OBS 8/12 401.4 404.57 ANA* w/ BRT 12 /12 373.1 408.79
+> †Metrics averaged over the 8 tasks solved by both planners.
+
+Fig. 7: Left : ANA* w/ OBS pruner got too close to the obstacle to find the goal; Right : ANA* w/ BRT pruner eliminated dangerous nodes early and found the goal. As for ANA*-based planners, we compared the effects of two pruning strategies under the same long-distance setting with 12 initial groups. As shown in Table IV, ANA* equipped with the OBS pruner failed in 4 out of the 12 tasks, whereas the version with the BRT pruner successfully solved all 12. The OBS pruner failed the feasibility interpolation check because UNDER REVIEW 11 
+
+densified trajectories intersected static obstacles. To illustrate this issue, we show a task where the robot starts at (−2.5, 8.8) 
+
+with the heading angle 0.52 rad and aims to reach the goal at (−1.0, 8.7) in Fig. 7. In this case, the planner with the OBS pruner approached the obstacle too closely and failed to circumvent it within the time limit. By contrast, the BRT-based planner avoided the obstacle earlier and successfully found a feasible path. To ensure a fair quantitative comparison, Table IV reports metrics averaged exclusively over the subset of 8 tasks successfully solved by both planners. Within this common subset, ANA* with the BRT pruner expanded fewer nodes on average (373.1 vs. 401.4) while achieving similar path quality (408.79 vs. 404.57). Notably, the efficiency of the BRT pruner remains robust even when considering the full dataset. Across all 12 tasks (including the 4 tasks where the OBS failed), the BRT pruner maintained a low average node expansion of 326.8 and an average trajectory cost of 371.43. These results indicate that the BRT pruner not only guarantees higher success rates by enabling safer maneuvers but also maintains high search efficiency across both simple and complex scenarios. 
+
+C. General Static Test 
+
+We further conducted a general evaluation by randomly sampling 100 initial-goal pairs, where each pair was either separated by obstacles or at least 1.0 meters apart to ensure non-trivial navigation scenarios. In this experiment, we focus on ANA*-based planners, as their anytime property enables efficient large-scale evaluation under strict time constraints, while A*-based planners were excluded due to their signifi-cantly higher computational cost in this setting. TABLE V: Performance of ANA* with different heuristic and pruner combinations on the common subset of 70 tasks successfully solved by all configurations.                      
+
+> Heuristic Pruner Success Nodes †Costs †
+> Dist OBS 81/100 311.1 191.44 Dist BRT 85/100 299.9 188.98
+> TTR OBS 83/100 235.4 146.58
+> TTR BRT 97 /100 229.3 146.37
+> †Metrics averaged over the common subset of 70 tasks.
+
+The results comparing four ANA*-based planners are sum-marized in Table V. Evidently, the proposed combination of the TTR heuristic and the BRT pruner achieves the superior overall performance, successfully completing 97 out of 100 tasks —the highest success rate among all tested settings. To ensure a rigorous assessment of search efficiency and path quality, Table V reports metrics averaged exclusively over the common subset of 70 tasks that were successfully solved by all four combinations. A detailed analysis of this subset reveals the distinct, complementary roles of the heuristic and the pruner. The TTR heuristic , benefiting from its accurate estimation based on the dynamics, emerges as the dominant factor for improving search efficiency and path quality. For instance, when paired with the BRT pruner, replacing the Dist heuristic with TTR reduces the average node expansions by 23.5% (from 299.9 to 229.3) and lowers the trajectory cost from 188.98 to 146.37. A similar strong trend is observed with the OBS pruner: TTR improves the success rate from 81/100 to 83/100, decreases node expansions from 311.1 to 235.4, and reduces trajectory cost from 191.44 to 146.58. The BRT pruner primarily enhances robustness and suc-cess rate, particularly in complex scenarios navigating around obstacles is critical, though its contribution to path quality is more nuanced compared to the TTR heuristic due to its computational overhead. While its impact on trajectory cost is modest (e.g., maintaining comparable costs of 146.37 vs. 146.58 under the TTR heuristic), its contribution to the success rate is substantial, particularly in complex environments. Most notably, when using the TTR heuristic, upgrading from the OBS pruner to the BRT pruner boosts the success rate from 83% to 97%. A similar result is observed with the Dist heuristic: the BRT pruner improves the success rate from 81% to 85%. It is worth noting that even when considering the full set of 97 tasks solved by the proposed method (including 27 complex scenarios failed by others), the average node expansion remains efficient at 287.2 at an average cost of 180.47. In summary, these findings highlight a synergistic effect: the TTR heuristic provides a fundamental improvement in search guidance, while the BRT pruner ensures safety and feasibility. Their integration offers the most balanced trade-off, delivering high efficiency without compromising robustness. 
+
+D. Dynamic Test 
+
+The human-robot BRT pruner, implemented using the forward-invariant human-robot BRT Brel in Eq. (14) (denoted as the FI-BRT ), prunes nodes that are deemed unsafe. To demonstrate the enhancement of the safety awareness, we design two simulation tests. In these tests, the human moves with a constant 0.8 m/s speed and the human does not do any reaction to the robot. So the robot needs to generate safe trajectories to avoid the collision. We compare the proposed FI-BRT with:  
+
+> •
+
+OBS Pruner : Treats the human as a static obstacle at its instantaneous position during each planning iteration, representing a non-reachability-based baseline.  
+
+> •
+
+FS-BRT (ablation): A feasible-set pruning strategy that uses the same human-robot BRT value function Vrel 
+
+but applies a static level-set condition without enforcing forward invariance. In the first Face-to-Face scenario, the robot and a single human are initially positioned along a straight line, facing each other. Their paths are configured to overlap, with the robot’s start and end points encompassing those of the human. Both agents begin moving simultaneously. Under this configuration, the robot is required to adopt a collision avoidance strategy to bypass the human. Specifically, the robot starts at (0 .0, 12 .5) 
+
+and its goal is (0 .0, 5.2) ; while the human starts at (0 .0, 6.0) 
+
+and its goal is (0 .0, 12 .4) .In the second Zig-Zag scenario, each human starts from the position (0 .0, 6.0) and moves at a constant velocity of 0.8 m/s toward the destination at (0 .0, 12 .4) . Upon reaching the destination, a new human is immediately spawned at the 
+
+(0 .0, 6.0) , resulting in a continuous stream of humans along UNDER REVIEW 12 
+
+the same trajectory. The robot is tasked with repeatedly navi-gating through a cycle of four goals: (−0.8, 12 .0) , (0 .8, 10 .5) ,
+
+(−0.8, 9.0) , and (0 .8, 7.5) . These goals are symmetrically distributed on either side of the human path, forming the robot’s patrol route. The robot visits the goals sequentially and, upon reaching the final goal, returns to the first to repeat the cycle. TABLE VI: Comparison of Pruning Strategies for Human                  
+
+> Methods Face-to-Face Zig-Zag Success Avg. Time (s) Success Avg. Time (s)
+> FI-BRT 5/5 15.64 5/5 39.85
+> FS-BRT 0/5 Failed 5/5 31.17 OBS 0/5 Failed 1/5 30.41
+
+The performance comparison of three pruning strategies across the two test scenarios is summarized in Table VI. The results highlight a fundamental distinction between predictive safety, as enabled by FI-BRT, and reactive safety, as exhibited by FS-BRT. In the Face-to-Face scenario, the FI-BRT completed all 5 tests. As illustrated in Fig.8, the robot starts to detour when the relative distance is still approximately 3.5 m. This early response is triggered because the FI-BRT identifies an unsafe rate of change of the value function, even though the current state may still lie outside the unsafe set. In contrast, both the OBS baseline and the FS-BRT ablation failed completely (0/5). The failure of FS-BRT is particularly instructive: since it only prunes nodes strictly inside the unsafe set, it delays the evasion maneuver until the robot is close to the human. Given the robot’s kinematic constraints, this reactive response is often too late to avoid a collision in a head-on encounter. In the Zig-Zag scenario, the trade-off between safety and efficiency becomes more evident. The OBS pruner recorded the shortest average time (30.41 s) simply because it performs the least aggressive pruning, filtering out only immediate colli-sion states without considering future dynamics. However, this myopia comes at the cost of safety, resulting in a high failure rate (only 1/5 success). Both FS-BRT and FI-BRT take longer navigation times compared to OBS, as they both incorporate a prediction horizon into the safety check. Comparing the two, FS-BRT (31.17 s) is faster than FI-BRT (39.85 s). The reason lies in the nature of their constraints: FS-BRT employs a binary check based on the value function’s level set. This allows the robot to ”skim” the boundary of the unsafe set, traversing tight spaces as long as the state remains theoretically feasible within the horizon. In contrast, FI-BRT imposes a stricter condition on the rate of change of the value function. Even if a state is currently outside the unsafe set (safe in FS terms), FI-BRT may still prune it if the trajectory leads towards danger too rapidly. This effectively enforces a ”safety buffer” in the time domain, compelling the robot to take wider detours or wait longer to ensure the safety trend remains positive, leading to the increased total time. These results highlight two key insights. First, predictive safety enabled by FI-BRT is essential for avoiding head-on collisions, where reactive methods often fail. Second, enforcing forward invariance yields improved robustness at 
+
+Fig. 8: A sequence from the Face-to-Face scenario with the FI-BRT method demonstrates the robot’s successful behavior to circumvent an oncoming human, with snapshots taken at t=3.0, 5.0, and 7.0 seconds. the cost of increased travel time, revealing an explicit safety– efficiency trade-off. 
+
+E. Computational Time Efficiency Analysis 
+
+The previous sections have evaluated the effectiveness of the different heuristics and pruning strategies, measuring their performances on node expansions and trajectory costs. This section shifts the focus to their computational time efficiency. To isolate and quantify the computational time, we conduct a dedicated study outside of the navigation simulation task. We used the same dimensions of input variables and the same HJ value functions to to ensure fair and reliable comparisons. Generally speaking, the search algorithm will evaluate the heuristics of all neighboring nodes and check the feasibility of all neighboring nodes (and the trajectory segments leading to these nodes) once every time it expands the current node. Therefore, the real number of the function executions required for each task is determined by the search difficulty of the task and whether there is a search time limit. To obtain measurable and stable time intervals, each function was executed 10,000 times in a tight loop in our analysis. Table VII reports the computational time of different heuris-tics and pruners. The TTR heuristic, which processes inputs with 35 neighboring nodes and four dimensions per node, runs 3.5 times slower than the two-dimensional Dist heuristic (35 nodes, two dimensions per node). This performance difference is primarily because TTR requires converting input states from world to map coordinates, in addition to handling the two UNDER REVIEW 13 
+
+TABLE VII: Computational duration of heuristics and pruning modules. The reported BRT pruner timing applies to both static-map and human-robot BRTs.                
+
+> Component Input (num, dim) Total Duration (s) Rel. Speed TTR Heuristic (35, 4) 0.187 1.0x Dist Heuristic (35, 2) 0.053 3.5x BRT Pruner (140, 4) 0.247 1.0x OBS Pruner (140, 2) 0.076 3.3x
+
+extra dimensions per node. Similarly, the BRT pruner, which processes 140 data points—comprising neighboring nodes and the trajectory segments leading to those nodes, each with 4 dimensions—exhibits a 3.3x slowdown compared to the OBS pruner (the same 140 data points, but 2 dimensions per point) for analogous reasons. The same computational profile applies to the human-robot BRT pruner, which shares identical input dimensionality and evaluation structure with the static-map BRT pruner. Overall, four-dimensional TTR and BRT pruner provides more accurate or safe evaluation results, but also are notably more expensive than their two-dimensional counterparts. This provides another view to interpret the trade-offs between performance quality and computational expense observed in the prior results. VIII. E XPERIMENTS 
+
+To validate real-world applicability, we evaluate the perfor-mance of the proposed HJ reachability-guided search frame-work with the ANA* algorithm through a series of real-world experiments. In addition, we also conducted ablative studies comparing our method against baseline methods. Detailed video demonstrations of the experiments, including both static and dynamic scenarios, are provided in the supplementary material. 
+
+A. Experimental Setup Test Environment : We evaluated our method in both static and dynamic navigation scenarios within a 9.6 m × 5.4 m room. Static tasks involved navigation in the presence of stationary obstacles only, whereas dynamic tasks introduced humans moving around within the workspace. The position of the robot is estimated with an adaptive Monte-Carlo lo-calization method by the Nav2 package [48], and the human positions are estimated via 3D object detection features from the ZED 2 camera fixed on the top of the wall at approximately 30 Hz. For each room configuration, a static costmap is constructed using Cartographer [49], an open-source SLAM framework developed by Google, which processes data from the onboard 2D LiDAR. 
+
+Hardware Platform: We conducted real-world experiments using the Quanser QBot platform [50], a differentially driven ground robot featuring a hexagonal base with a diameter of 570 mm and a height of 227 mm. The robot is equipped with a 360-degree 2D LiDAR, an Intel RealSense D435 RGB-D camera, and onboard inertial sensors. To ensure consistency with the simulation settings described in Section VII, the robot’s acceleration, speed, and turn-rate limits were conser-vatively chosen to match those assumed in simulation. These limits reflect the physical capabilities of the platform while maintaining compatibility with the planning model. 
+
+Control Architecture: We adopt a segregated control archi-tecture in which both the online planning module and the low-level control module are executed onboard the robot on two separate NVIDIA Jetson Orin Nano computers. In our experiments, the online planner operates in a receding-horizon manner at a frequency of 12 Hz. At each iteration, the planner solves the search problem and transmits the resulting action sequence to the controller via ROS 2 communication. The robot then executes its first several commands at a higher control frequency of 25 Hz without modification. 
+
+Performance Metrics: Due to the iterative nature of the receding horizon strategy, monitoring intermediate planning metrics, such as the number of expanded nodes or the cost of individual search results, is not a meaningful measure of overall performance. Accordingly, we evaluate real-world performance using task-level outcomes, specifically the final navigation success and the total navigation time required to complete a fixed number of patrol tasks. Specifically, the robot is required to patrol among several goals continuously while avoiding both static and dynamic obstacles. A single traversal from one goal to the next is considered successful only if it is completed without collision, deadlock, or external intervention. For each tested method, we conducted three full patrol cycles (start and return the same goal is considered as a full patrol cycle) and recorded the number of successful traversals and the total time required to complete the patrol. 
+
+Offline HJ Value Functions Precomputation: All HJ value functions were precomputed offline on a desktop workstation equipped with an AMD Ryzen 9 3950X 16-core CPU. The TTR value function occupies around 1.4 GB of memory and requires about 27.7 minutes to compute. The static-map BRT has a size of 1.2 GB and is generated in about 26 minutes. The human-robot BRT is significantly more compact, occupying only 23.9 MB, and is computed in about 5 min. 
+
+B. Navigation in Static Environments 
+
+Our initial experiments evaluate robotic navigation in static environments under two distinct obstacle configurations, re-ferred to as the Long Hallway and the Dense Room as illustrated in Fig. 9. Quantitative results are summarized in Table VIII. In the Long Hallway configuration, three goal locations are specified: P1 (1.2, 5.0), P2 (2.7, -0.7), and P3
+
+(1.2, -0.7). The navigation sequence is cyclic: P1 → P2 →
+
+P3 → P1. In the Dense Room configuration, two goals are placed at P4 (1.0, 4.2) and P5 (3.0, -1.0), a total 5.6 m apart, to intentionally eliminate any direct line of sight, necessitating complex circumnavigation of static obstacles. In the Long Hallway scenario, the performance gap is primarily dictated by the choice of heuristic rather than the pruner. As shown in Table VIII, planners employing the Dist heuristic struggled significantly, achieving a low success rate of only 2/9. The inclusion of our BRT pruner yielded no improvement in success rate over the OBS pruner for the Dist heuristic, although it slightly reduced the navigation time, sug-gesting that simple Euclidean distance guidance is insufficient UNDER REVIEW 14 Obstacles Robot Goals     
+
+> Reference Traj
+> P
+> Long Hallway
+> P1
+> P3P2
+> P5
+> P4
+> Obstacles Robot Goals
+> Impassible Aisle Reference Traj
+> P
+> Dense Room
+
+Fig. 9: Layout of the two static environments: Long Hallway (left) and Dense Room (right). Dotted lines represent the reference trajectories connecting the goals ( P1-P5). Note that the aisles marked with red crosses in the Dense Room are physically impassible for the robot. for this specific arrangement. Conversely, the TTR heuristic proved highly effective, achieving a perfect 9/9 success rate with both pruners. In addition, while both TTR-based methods succeeded, the combination with the BRT pruner demonstrated improved efficiency, reducing the total navigation time to 85.9 s compared to 89.6 s with the OBS pruner. This indicates that the TTR heuristic can provide necessary global guidance for long-range navigation, and the BRT pruner can contribute to efficiency improvement. TABLE VIII: Navigation performance in static environments. For methods with partial success, the reported time corre-sponds to successful trips only.                           
+
+> Heuristic Pruner Long Hallway Dense Room Success Time (s) Success Time (s) Dist OBS 2/9 29.8 0/6 Failed Dist BRT 2/9 24.5 1/6 20.1
+> TTR OBS 9/9 89.6 0/6 Failed
+> TTR BRT 9/9 85.9 6/6 115.6
+
+As listed in Table VIII, the Dense Room scenario presented a greater challenge. All planners utilizing the basic OBS pruner failed completely, achieving a 0/6 success rate irrespec-tive of the heuristic in the Dense Room scenario. This resulted in a computation time reported as Failed, indicating no trip was completed out of the total 6 trips. The planner using the Dist heuristic and the BRT pruner achieved a marginal success rate of 1/6. Its failure during the return journey highlights a key limitation of the Dist heuristic: its inability to provide effective guidance in complex geometric scenarios, ultimately leading it to become trapped at a critical corner. The single successful one-way trip required 20.1 s of navigation time. In stark contrast, the synergistic combination of the TTR heuristic and the BRT pruner (our method) demonstrated superior efficacy. This method is the only one to achieve a 100 % success rate (6/6) completing all trial trips with a total navigation time of 115.6 s. To elucidate the reason for this performance gap, we conducted a detailed analysis of the planning process for both success and failure cases. A series of consecutive snapshots comparing the TTR heuristic with the OBS and BRT pruners are presented in Fig. 10. These snapshots reveal that the BRT pruner proactively removes nodes that would drive the robot too close to obstacles, enabling the planner to adjust the robot’s direction early and maintain a feasible corridor around the obstacle. In comparison, the OBS pruner, which lacks the predictive capability, continues to expand nodes that lead to inevitable obstructions, ultimately resulting in the robot becoming stuck in a dead end. These results underscore the critical importance of a so-phisticated heuristic-pruner pairing for reliable navigation in dense, cluttered environments. 
+
+C. Navigation in Dynamic Environments 
+
+Furthermore, we evaluated our method in a dynamic envi-ronment populated by a moving human pedestrian. Specif-ically, we defined three navigation goals for the robot: P6
+
+(0.8, 5.0), P7 (0.8, -0.7), and P8 (2.7, -0.7). The robot was tasked with executing a continuous patrol sequence: P6 →
+
+P7 → P8 → P7 → P6 as shown in Fig. 11. To simulate realistic interaction, the human agent was assigned a set of specific behavioral rules: (1) navigate between pre-set human Point of Interests (POIs); (2) avoid the robot only when it is stationary, i.e., the human does not actively yield to a moving robot and behaves as a non-cooperative dynamic obstacle; and (3) switch to an alternative POI if the current POI is occupied by the robot. We evaluated the proposed FI-BRT against a reactive baseline (OBS Pruner) and an ablated variant based on feasible-set pruning (FS-BRT), as described in Section VII-D. We recorded the total navigation time and collision counts over three full patrol cycles. The results are presented in Table IX. TABLE IX: Navigation Performance in Dynamic Environ-ments                  
+
+> Methods Completion Time (s) Collisions 1 Human 2 Humans 1 Human 2 Humans
+> FI-BRT 157.6 264.3 00
+> FS-BRT 118.2 171.3 00OBS 111.5 134.9 13
+
+In terms of safety, both the FI-BRT and FS-BRT meth-ods outperformed the OBS baseline by maintaining a zero-collision record. This behavior is consistent with the predic-tive safety reasoning enabled by BRT-based pruning, which enables both planners to reason about future interactions with dynamic obstacles over a finite or infinite horizon. In contrast, the OBS planner, lacking this predictive foresight and thus unable to stop in advance, resulted in inevitable collisions in both scenarios, despite achieving the shortest navigation times. While both BRT-based methods ensure safety, their effi-ciency differs significantly due to their distinct safety for-mulations. The FI-BRT method adopts a strictly ”far-sighted” UNDER REVIEW 15 OBS Pruner BRT Pruner (Ours) 
+
+t1 t2 t3 t4 t5 t6
+
+Fig. 10: Comparison of the OBS and BRT pruners across consecutive timesteps (from t1 to t6) in the Dense Room scenario. 
+
+Top row (OBS Pruner): Highlighted in the red box, the robot failed to prune dangerous nodes in time, causing it to plan too close to the obstacle and stall without finding a feasible trajectory within the time limit, as indicated by the red arrows (robot heading). Bottom row (Ours): Highlighted in the green box, our BRT pruner effectively identifies and eliminates dangerous nodes early, allowing the robot to successfully circumvent the obstacle shown by the green arrows. Human POIs Robot Goals   
+
+> Obstacles Reference Traj
+> P
+> P6P7
+> P8
+
+Fig. 11: Layout of the dynamic environment. Dotted lines represent the reference trajectories for the robot connecting the goals ( P6-P8). Note that humans navigate among the orange crosses, creating dynamic interference for the robot. perspective. It seeks to maintain the robot within a guaranteed safe region indefinitely. This formulation makes the planner highly conservative: the robot frequently decelerates or stops to preserve the invariant set property when facing uncertainty, leading to the longest completion time (157.6 s and 264.3 s). Conversely, the FS-BRT method focuses on the pre-defined time horizon. While still predictive, it is less restrictive than the invariant approach which reduces stopping duration, allowing for more fluent motion and reduced travel time (118.2 s and 171.3 s), albeit with a theoretically smaller safety margin than the infinite-horizon guarantee of the FI-BRT. These results further highlight the role of FS-BRT as an ablated variant that trades long-term safety guarantees for improved execution efficiency. The qualitative difference in behavior, particularly the conservative stop-and-go motion of the FI-BRT method versus the fluent navigation of the FS-BRT method, is clearly demonstrated in the supplementary video. Overall, these ex-periments confirm that reachability-based pruning provides a principled mechanism for balancing safety and efficiency in dynamic human-robot environments. IX. C ONCLUSION 
+
+In this paper, we present an HJ reachability-guided frame-work designed to enhance the efficiency and safety of graph search-based methods for planar robot navigation. By precom-puting three HJ reachability value functions, including a TTR function, a static map-based BRT, and a human-robot BRT, our method integrates rigorous heuristic and safety information into the online search process. Specifically, the TTR value function serves as a dynamics-informed heuristic to guide the search process; while the BRTs act as pruning mechanisms to effectively eliminate unsafe nodes from the search graph. Extensive evaluations in both simulation and real-world set-tings demonstrate the effectiveness of the proposed framework. In simulation, the TTR heuristic significantly improves search efficiency, while the static-map BRT enhances both safety and computational performance. The FI human-robot BRT further enables robust collision-free navigation in dynamic environ-ments, revealing a clear safety-efficiency trade-off relative to its finite-horizon counterpart. Real-world experiments confirm that the framework generalizes beyond simulation and remains effective under sensing and control constraints. A key insight of this work is the separation between offline reachability computation and online planning. By shifting the computational burden of solving HJ PDEs offline, the proposed framework enables real-time search to leverage rich dynamical and safety information without recomputing value functions online. This provides a practical pathway for UNDER REVIEW 16 
+
+integrating HJ reachability analysis—traditionally studied in optimal control—into discrete search-based planning. Despite these promising results, several limitations remain. First, the offline computation of HJ value functions is compu-tationally intensive, which may restrict scalability to higher-dimensional systems or large-scale environments. Second, the pursuit-evasion formulation used for the human-robot BRT relies on a worst-case assumption, which can occasionally result in overly conservative navigation behaviors. Future work will focus on addressing these challenges by improving the scalability of reachability computations, incorporating more expressive and adaptive human models, and extending the framework to handle increasingly complex and unstructured environments. APPENDIX 
+
+This appendix summarizes the parameter settings used for the FI-BRT pruning strategy. Unless otherwise stated, the same parameters are used consistently across simulation and real-world experiments. 
+
+A. FI-BRT Pruning Parameters 
+
+The FI-BRT pruning rule (Eq. (14)) relies on a set of parameters that regulate the conservativeness of the forward-invariant safety constraint. Table X lists the values used in all experiments. TABLE X: FI-BRT parameters used in both simulation and real-world experiments. 
+
+Parameter Value Description 
+
+∆t 0.5 Time interval between neigh-boring nodes used for finite-difference approximation. 
+
+ϵrel 0.0 Safety margin applied to the value function. 
+
+αlow 0.8 Lower bound of the invariance rate (more conservative). 
+
+αhigh 1.2 Upper bound of the invariance rate (less conservative). 
+
+k 10.0 Angular sensitivity coefficient in Eq. (16). 
+
+w1, w 2 0.5, 0.5 Weights for angular and dis-tance alignment terms. 
+
+dthre 0.5 Distance threshold in Eq. (17). 
+
+REFERENCES [1] S. LaValle, “Rapidly-exploring random trees: A new tool for path planning,” Research Report 9811 , 1998. [2] L. E. Kavraki, P. Svestka, J.-C. Latombe, and M. H. Overmars, “Prob-abilistic roadmaps for path planning in high-dimensional configuration spaces,” IEEE transactions on Robotics and Automation , vol. 12, no. 4, pp. 566–580, 1996. [3] A. Orthey, C. Chamzas, and L. E. Kavraki, “Sampling-based motion planning: A comparative review,” Annual Review of Control, Robotics, and Autonomous Systems , vol. 7, 2023. [4] S. Karaman and E. Frazzoli, “Sampling-based algorithms for optimal motion planning,” The international journal of robotics research , vol. 30, no. 7, pp. 846–894, 2011. [5] L. Janson, E. Schmerling, A. Clark, and M. Pavone, “Fast marching tree: A fast marching sampling-based method for optimal motion planning in many dimensions,” The International journal of robotics research ,vol. 34, no. 7, pp. 883–921, 2015. [6] M. Schwenzer, M. Ay, T. Bergs, and D. Abel, “Review on model predic-tive control: An engineering perspective,” The International Journal of Advanced Manufacturing Technology , vol. 117, no. 5, pp. 1327–1349, 2021. [7] K. Zhu and T. Zhang, “Deep reinforcement learning based mobile robot navigation: A review,” Tsinghua Science and Technology , vol. 26, no. 5, pp. 674–691, 2021. [8] R. E. Korf, “Recent progress in the design and analysis of admissible heuristic functions,” in International Symposium on Abstraction, Refor-mulation, and Approximation , pp. 45–55, Springer, 2000. [9] P. E. Hart, N. J. Nilsson, and B. Raphael, “A formal basis for the heuristic determination of minimum cost paths,” IEEE transactions on Systems Science and Cybernetics , vol. 4, no. 2, pp. 100–107, 1968. [10] A. Stentz, “Optimal and efficient path planning for partially-known en-vironments,” in Proceedings of the 1994 IEEE international conference on robotics and automation , pp. 3310–3317, IEEE, 1994. [11] J. Van Den Berg, R. Shah, A. Huang, and K. Goldberg, “Anytime nonparametric a,” in Proceedings of the AAAI conference on artificial intelligence , vol. 25, pp. 105–111, 2011. [12] E. A. Hansen and R. Zhou, “Anytime heuristic search,” Journal of Artificial Intelligence Research , vol. 28, pp. 267–297, 2007. [13] S. Bansal, M. Chen, S. Herbert, and C. J. Tomlin, “Hamilton-jacobi reachability: A brief overview and recent advances,” in 2017 IEEE 56th Annual Conference on Decision and Control (CDC) , pp. 2242–2253, IEEE, 2017. [14] M. Chen and C. J. Tomlin, “Hamilton–jacobi reachability: Some recent theoretical advances and applications in unmanned airspace manage-ment,” Annual Review of Control, Robotics, and Autonomous Systems ,vol. 1, no. 1, pp. 333–358, 2018. [15] I. Yang, S. Becker-Weimann, M. J. Bissell, and C. J. Tomlin, “One-shot computation of reachable sets for differential games,” in Proceedings of the 16th international conference on Hybrid systems: computation and control , pp. 183–192, 2013. [16] I. Pohl, “Heuristic search viewed as path finding in a graph,” Artificial intelligence , vol. 1, no. 3-4, pp. 193–204, 1970. [17] M. Likhachev, D. I. Ferguson, G. J. Gordon, A. Stentz, and S. Thrun, “Anytime dynamic a*: An anytime, replanning algorithm.,” in ICAPS ,vol. 5, pp. 262–271, 2005. [18] E. Plaku, L. E. Kavraki, and M. Y. Vardi, “Discrete search leading continuous exploration for kinodynamic motion planning.,” in Robotics: Science and Systems , pp. 326–333, 2007. [19] M. Pivtoraiko and A. Kelly, “Kinodynamic motion planning with state lattice motion primitives,” in 2011 IEEE/RSJ International Conference on Intelligent Robots and Systems , pp. 2172–2179, IEEE, 2011. [20] S. Macenski, M. Booker, J. Wallace, and T. Fischer, “Open-source, cost-aware kinematically feasible planning for mobile and surface robotics,” 
+
+arXiv preprint arXiv:2401.13078 , 2024. [21] N. Savinov, A. Dosovitskiy, and V. Koltun, “Semi-parametric topological memory for navigation,” arXiv preprint arXiv:1803.00653 , 2018. [22] A. Guez, T. Weber, I. Antonoglou, K. Simonyan, O. Vinyals, D. Wierstra, R. Munos, and D. Silver, “Learning to search with mctsnets,” in 
+
+International conference on machine learning , pp. 1822–1831, PMLR, 2018. [23] P. Ferber, F. Geißer, F. Trevizan, M. Helmert, and J. Hoffmann, “Neural network heuristic functions for classical planning: Bootstrapping and comparison to other methods,” in Proceedings of the International Conference on Automated Planning and Scheduling , vol. 32, pp. 583– 587, 2022. [24] R. Yonetani, T. Taniai, M. Barekatain, M. Nishimura, and A. Kanezaki, “Path planning using neural a* search,” in International conference on machine learning , pp. 12029–12039, PMLR, 2021. [25] D. Parthasarathy, G. Kontes, A. Plinge, and C. Mutschler, “C-mcts: Safe planning with monte carlo tree search,” arXiv preprint arXiv:2305.16209 , 2023. [26] A. Jamgochian, H. Buurmeijer, K. H. Wray, A. Corso, and M. J. Kochen-derfer, “Constrained hierarchical monte carlo belief-state planning,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) , pp. 2368–2374, IEEE, 2024. [27] V. Parimi and B. C. Williams, “Risk-bounded multi-agent visual nav-igation via iterative risk allocation,” arXiv preprint arXiv:2509.08157 ,2025. [28] S. Primatesta, G. Guglieri, and A. Rizzo, “A risk-aware path planning strategy for uavs in urban environments,” Journal of Intelligent & Robotic Systems , vol. 95, no. 2, pp. 629–643, 2019. [29] X. Yan, X. Zhou, and Q. Luo, “A safe heuristic path-planning method based on a search strategy,” Sensors , vol. 24, no. 1, p. 101, 2023. UNDER REVIEW 17 
+
+[30] J. Borquez, K. Chakraborty, H. Wang, and S. Bansal, “On safety and liveness filtering using hamilton-jacobi reachability analysis,” IEEE Transactions on Robotics , 2024. [31] M. Chen, S. L. Herbert, H. Hu, Y. Pu, J. F. Fisac, S. Bansal, S. Han, and C. J. Tomlin, “Fastrack: a modular framework for real-time motion planning and guaranteed safe tracking,” IEEE Transactions on Automatic Control , vol. 66, no. 12, pp. 5861–5876, 2021. [32] K.-C. Hsu, H. Hu, and J. F. Fisac, “The safety filter: A unified view of safety-critical control in autonomous systems,” Annual Review of Control, Robotics, and Autonomous Systems , vol. 7, 2023. [33] M. Lu, J. S. Gosain, L. Sang, and M. Chen, “Safe learning in the real world via adaptive shielding with hamilton-jacobi reachability,” 
+
+Proceedings of Machine Learning Research vol , vol. 283, pp. 1–14, 2025. [34] J. Seo, K. Nakamura, and A. Bajcsy, “Uncertainty-aware latent safety filters for avoiding out-of-distribution failures,” arXiv preprint arXiv:2505.00779 , 2025. [35] K. Nakamura, L. Peters, and A. Bajcsy, “Generalizing safety beyond collision-avoidance via latent-space reachability analysis,” arXiv preprint arXiv:2502.00935 , 2025. [36] I. M. Mitchell, A. M. Bayen, and C. J. Tomlin, “A time-dependent hamilton-jacobi formulation of reachable sets for continuous dynamic games,” IEEE Transactions on automatic control , vol. 50, no. 7, pp. 947– 957, 2005. [37] J. F. Fisac, M. Chen, C. J. Tomlin, and S. S. Sastry, “Reach-avoid problems with time-varying dynamics, targets and constraints,” in 
+
+Proceedings of the 18th international conference on hybrid systems: computation and control , pp. 11–20, 2015. [38] M. Chen, S. Bansal, J. F. Fisac, and C. J. Tomlin, “Robust sequential trajectory planning under disturbances and adversarial intruder,” IEEE Transactions on Control Systems Technology , vol. 27, no. 4, pp. 1566– 1582, 2018. [39] P. Agand, M. Taherahmadi, A. Lim, and M. Chen, “Human navigational intent inference with probabilistic and optimal approaches,” in 2022 In-ternational Conference on Robotics and Automation (ICRA) , pp. 8562– 8568, IEEE, 2022. [40] X. Lyu and M. Chen, “Ttr-based reward for reinforcement learning with implicit model priors. in 2020 ieee,” in RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 5484–5489, 2020. [41] C. Parkinson and M. Ceccia, “Time-optimal paths for simple cars with moving obstacles in the hamilton-jacobi formulation,” in 2022 American Control Conference (ACC) , pp. 2944–2949, IEEE, 2022. [42] S. Edelkamp and S. Schr¨ odl, Heuristic search: theory and applications .Elsevier, 2011. [43] S. Koenig and M. Likhachev, “D* lite,” in Eighteenth national confer-ence on Artificial intelligence , pp. 476–483, 2002. [44] M. G. Crandall and P.-L. Lions, “Viscosity solutions of hamilton-jacobi equations,” Transactions of the American Mathematical Society ,vol. 277, no. 1, pp. 1–42, 1983. [45] M. Bui, H. Hu, C. He, M. Lu, G. Giovanis, A. Shriraman, and M. Chen, “Optimizeddp: An efficient, user-friendly library for optimal control and dynamic programming,” 2022. [46] J. F. Fisac, A. Bajcsy, S. L. Herbert, D. Fridovich-Keil, S. Wang, C. J. Tomlin, and A. D. Dragan, “Probabilistically safe robot planning with confidence-based human predictions,” arXiv preprint arXiv:1806.00109 ,2018. [47] A. D. Ames, S. Coogan, M. Egerstedt, G. Notomista, K. Sreenath, and P. Tabuada, “Control barrier functions: Theory and applications,” in 2019 18th European control conference (ECC) , pp. 3420–3431, Ieee, 2019. [48] S. Macenski, F. Mart´ ın, R. White, and J. G. Clavero, “The marathon 2: A navigation system,” in 2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 2718–2725, IEEE, 2020. [49] W. Hess, D. Kohler, H. Rapp, and D. Andor, “Real-time loop closure in 2d lidar slam,” in 2016 IEEE international conference on robotics and automation (ICRA) , pp. 1271–1278, IEEE, 2016. [50] Quanser Inc., QBot Platform User Manual . Quanser Inc., Markham, Ontario, Canada, 2023. Available at https://docs.quanser.com/quarc/ documentation/qbot platform.html.
