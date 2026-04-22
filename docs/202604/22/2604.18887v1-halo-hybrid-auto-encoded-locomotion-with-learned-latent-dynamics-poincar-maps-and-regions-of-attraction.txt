@@ -1,0 +1,856 @@
+Title: HALO: Hybrid Auto-encoded Locomotion with Learned Latent Dynamics, Poincar\'e Maps, and Regions of Attraction
+
+URL Source: https://arxiv.org/pdf/2604.18887v1
+
+Published Time: Wed, 22 Apr 2026 00:23:12 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+> Proceedings of Machine Learning Research vol 331:1–20, 2026 8th Annual Conference on Learning for Dynamics and Control
+
+# HALO: Hybrid Auto-encoded Locomotion with Learned Latent Dynamics, Poincar´ e Maps, and Regions of Attraction 
+
+Blake Werner* BWERNER @CALTECH .EDU 
+
+Sergio Esteban* SESTEBAN @CALTECH .EDU 
+
+Massimiliano de Sa MDESA @CALTECH .EDU 
+
+Caltech, Pasadena, CA, USA 
+
+Max H. Cohen MHCOHEN 2@ NCSU .EDU 
+
+NC State University, Raleigh, NC, USA 
+
+Aaron D. Ames AMES @CALTECH .EDU 
+
+Caltech, Pasadena, CA, USA 
+
+Editors: G. Sukhatme, L. Lindemann, S. Tu, A. Wierman, N. Atanasov 
+
+Abstract 
+
+Reduced-order models are powerful for analyzing and controlling high-dimensional dynamical sys-tems. Yet constructing these models for complex hybrid systems such as legged robots remains challenging. Classical approaches rely on hand-designed template models (e.g., LIP, SLIP), which, though insightful, only approximate the underlying dynamics. In contrast, data-driven methods can extract more accurate low-dimensional representations, but it remains unclear when stability and safety properties observed in the latent space meaningfully transfer back to the full-order sys-tem. To bridge this gap, we introduce HALO (Hybrid Auto-encoded Locomotion), a framework for learning latent reduced-order models of periodic hybrid dynamics directly from trajectory data. HALO employs an autoencoder to identify a low-dimensional latent state together with a learned latent Poincar´ e map that captures step-to-step locomotion dynamics. This enables Lyapunov anal-ysis and the construction of an associated region of attraction in the latent space, both of which can be lifted back to the full-order state space through the decoder. Experiments on a simulated hopping robot and full-body humanoid locomotion demonstrate that HALO yields low-dimensional models that retain meaningful stability structure and predict full-order region-of-attraction boundaries. 
+
+Keywords: Autoencoders, Hybrid Systems, Reduced-Order Models. 
+
+1. Introduction 
+
+Reduced-order model (ROM) techniques aim to approximate high-dimensional dynamical systems with lower-dimensional representations. Such reductions enable more efficient verification, control synthesis, and planning for systems whose full-order model (FOM) dynamics may be too complex to analyze directly. Classical approaches to model reduction in control include balanced truncation and related projection-based methods Antoulas (2005); Benner et al. (2015), moment-matching for linear and nonlinear systems Astolfi (2010), and methods based on invariant manifolds Haller and Ponsioen (2016). These approaches share conceptual ties with notions of abstraction in hybrid and symbolic control Tabuada (2009); Girard and Pappas (2009), where simpler surrogate systems are constructed to preserve relevant dynamical properties of the original one. While these methods provide rigorous guarantees for structured or weakly nonlinear systems, extending them to high-dimensional robotic systems, particularly those with contact-rich dynam-ics, remains challenging. Motivated by these limitations, recent works learn ROMs from data.     
+
+> © 2026 B. Werner*, S. Esteban*, M. de Sa, M.H. Cohen & A.D. Ames.
+> arXiv:2604.18887v1 [cs.RO] 20 Apr 2026 WERNER * E STEBAN *DE SACOHEN AMES
+
+Approaches based on dynamic mode decomposition, PCA, and proper orthogonal decomposition Brunton and Kutz (2022) identify dominant low-dimensional structure in trajectories, while autoen-coders learn nonlinear embeddings that map between full-order states and latent coordinates. Acentral challenge, however, is determining when properties such as stability, safety, or invariance in the latent space faithfully transfer back to the original full-order dynamics. Recent work has begun to establish sufficient conditions and approximation guarantees in this direction Lutkus et al. (2025); Nakamura et al. (2025), though practical instantiations for hybrid locomotion remain limited. ROMs play a particularly influential role in legged robotics, where simple models such as the linear inverted pendulum (LIP) Kajita et al. (2001) and the spring-loaded inverted pendulum (SLIP) Blickhan (1989) capture the salient dynamics of center-of-mass motion Raibert (1986); Wensing and Revzen (2017). These templates are effective for control design and gait stabilization, but are inherently approximate: they do not directly arise from a systematic reduction of the FOM, and their accuracy can degrade outside of nominal operating regimes. Thus, recent work has learned reduced-order locomotion models from data Castillo et al. (2024); Chen et al. (2024a,b); Li et al. (2024); Starke et al. (2022), though questions remain regarding how to analyze their stability properties. 
+
+Overview and Contributions: In this paper, we propose HALO (Hybrid Autoencoded LOco-motion), a framework for constructing and analyzing ROMs of hybrid robotic locomotion using autoencoder-based latent representations. Our approach represents the high-dimensional hybrid dy-namics as a discrete-time system via a Poincar´ e return map Westervelt et al. (2018). We then learn an autoencoder that embeds this return map into a low-dimensional latent space, yielding a latent Poincar´ e map that captures the step-to-step evolution of the locomotion gait cycle. We first motivate this reduction in the linear setting, then extend to the nonlinear case by lever-aging the existence of low-dimensional invariant surfaces associated with periodic orbits. This perspective provides practical guidance for selecting the latent dimension and clarifies when the autoencoder can represent the orbit geometry with negligible reconstruction error. Once the latent dynamics are identified, we perform Lyapunov stability analysis directly in the latent space and subsequently lift the corresponding region of attraction to the full-order state space via the decoder. We evaluate HALO across a suite of hybrid systems. Across all systems, we show that stability properties inferred from the latent Poincar´ e dynamics predict stability in the full-order system, even when it is controlled via reinforcement learning policies. 
+
+2. Preliminaries 
+
+Notation: The Euclidean and Frobenius norms are denoted by ∥·∥ and ∥·∥ F , respectively. The restriction of a function f : A → B to a subset U ⊆ A is denoted f |U : U → B. The inclusion map of a subset U ⊆ A into A, which takes each u ∈ U to u ∈ A, is denoted ιU : U , → A.
+
+Model Reduction & Autoencoders: High-dimensional dynamical systems often have an under-lying low-dimensional structure. We formalize extracting low-dimensional structure from dynami-cal systems as follows. Consider a discrete-time dynamical system: 
+
+xk+1 = f (xk), xk ∈ Rnx , f : Rnx → Rnx . (1) We refer to xk ∈ Rnx as the full-order state , and f as the FOM. To obtain a ROM, we must compress 
+
+x to a lower-dimensional space, and f to a lower-dimensional model. Additionally, we must have a way to decompress from this reduced state back to x, motivating the use of autoencoders . 
+
+> 2HALO
+> Figure 1: Autoencoders enable learning of a reduced-order dynamics model in a latent space.
+
+The process of compression and decompression is performed by encoder and decoder maps. First, we define nz < n x to be the dimension of our ROM. An encoder E : Rnx → Rnz performs compression, and a decoder D : Rnz → Rnx performs decompression. Since Rnz represents the hidden low-dimensional structure, we refer to Rnz as the latent space , and nz as the latent dimension . We say an encoder-decoder pair (E, D) is perfect if D ◦ E(x) = x for all x ∈ Rnx , i.e, no information is lost from compression to decompression. In this spirit, to find a low-dimensional representation of f , we seek a map g : Rnz → Rnz that captures the important features of f . We refer to the map g : Rnz → Rnz as the reduced-order model . This model determines a recurrence: 
+
+zk+1 = g(zk), zk ∈ Rnz , (2) in the latent space. In a perfect world, one would seek a perfect encoder-decoder pair (E, D) for which f (x) = D ◦ g ◦ E(x), for all x ∈ Rnx . Such an encoder-dynamics pair would perfectly compress the original high-order system down to a low-dimensional latent space. For complex, real-world systems, perfect compression in this sense is unrealistic. Likewise, one cannot analytically determine optimal encoders, decoders, and ROMs. To find a “good” encoder-decoder and ROM, one practically represents each by a neural network Eϕ, Dψ, with parameters ϕ
+
+and ψ, respectively, and encodes the goals above in appropriately designed loss functions .
+
+From Discrete to Continuous with Hybrid Systems: Above, we discussed the construction of autoencoder models for discrete-time dynamical systems. In robotics, however, there are a wide class of systems that do not fall naturally into this category. Robotic systems, such as legged robots, are hybrid systems Westervelt et al. (2018) that exhibit both discrete and continuous-time behavior: 
+
+H =
+
+( ˙x = fc(x), x ∈ Rnx \ S 
+
+x+ = ∆(x−), x− ∈ S , (3) where S ⊆ Rnx is a set that triggers a discrete change in behavior. For legged robots, this change is triggered by a foot strike with the ground. Under certain conditions, one may construct a map 
+
+f : S → S , termed the Poincar´ e map that maps a state x ∈ S to the state f (x) ∈ S at which the system next intersects S; for a legged robot, f maps from the state at one foot strike to the state at the next foot strike. Thus, the Poincar´ e map induces a discrete-time system xk+1 = f (xk) capturing the step-to-step dynamics. Studying the stability of the Poincar´ e map affords insights into the behavior of the hybrid system. Details on hybrid systems and Poincar´ e maps are provided in Appendix A. 
+
+3. Insights from Linear and Nonlinear Systems 
+
+In the previous section, we discussed autoencoders, ROMs, and Poincar´ e maps. Autoencoders pro-vide a means to compute ROMs from complex, high-dimensional data; ROMs enable analyzing 
+
+> 3
+
+WERNER * E STEBAN * DE SA COHEN AMES 
+
+complex systems using simple models; Poincar´ e maps yield insight into the stability of hybrid sys-tems from simpler discrete-time models. We now bring these threads together to study the behavior of hybrid systems. We use autoencoders to learn ROMs of Poincar´ e maps and analyze their stability in the latent space to infer stability properties of the full hybrid system. We begin by studying sim-ple yet insightful motivation from linear and nonlinear dynamics, which provide templates for our learning-based approach. Then, we outline an autoencoder method for learning ROMs of Poincar´ emaps. We defer all proofs in this section to Appendix B. 
+
+Motivation from Linear Systems: To motivate the nonlinear problem, we first perform a sim-ple study for linear systems. Consider a full-order model governed by discrete-time LTI dynamics 
+
+xk+1 = Ax k, where xk ∈ Rnx . Our goal is to reduce the system to a lower-dimensional linear space. To this end, we fix a reduced dimension nz , smaller than rank( A). To perform dimen-sionality reduction, we define three matrices: the encoder matrix E ∈ Rnz ×nx , the decoder matrix 
+
+D ∈ Rnx×nz , and the latent dynamics matrix Q ∈ Rnz ×nz . How do we pick D, Q, E such that tra-jectories of the autoencoder model, ˆxk = DQ kEx 0, resemble those of the full-order model? First, we consider the problem of matching one step of the dynamics. Using the Eckart-Young theorem Calafiore and El Ghaoui (2014), we solve for the E, D, Q minimizing the worst-case one-step error. 
+
+Lemma 1 (One-Step Optimal Matching) Let A ∈ Rnx×nx and nz ∈ (0 , rank( A)] Z. Consider: 
+
+inf     
+
+> E∈Rnz ×nx ,D∈Rnx ×nz ,Q∈Rnz ×nz
+
+sup  
+
+> x0∈Rnx ,∥x0∥=1
+
+∥Ax 0 − DQEx 0∥2 . (4) 
+
+If A = UΣV ⊤ is an SVD of A, then D = Unz , Q = Σnz , E = V⊤ 
+
+> nz
+
+, where Unz , Vnz are the first nz columns of U, V and Σnz = diag( σ1, ..., σ nz ), are optimal solutions to (4) .
+
+Now, we consider the multi-step version of Lemma 1. We seek a problem with a simple, closed-form solution that provides insight into the more general autoencoder problem. Inspired by the H2
+
+model reduction problem Dullerud and Paganini (2013), we consider the optimization problem: 
+
+inf     
+
+> E∈Rnz ×nx ,D∈Rnx ×nz ,Q∈Rnz ×nz
+> ∞
+
+X
+
+> k=0
+
+Ak − DQ kE 2 
+
+> F
+
+. (5) Though this problem is not generally solvable in closed-form, there are certain special cases for which closed-form solutions exist and are informative. 
+
+Lemma 2 (Diagonal Model Reduction) Suppose A = diag( λ1, ..., λ nx ), with |λ1| ≥ ... ≥ | λnx |.Let nz ∈ (0 , rank( A)] Z. If the unstable and center subspaces of A together have dimension ≤ nz ,then (5) is feasible and an optimal solution is given by the nz -truncation: 
+
+ˆD =
+
+ Inz
+
+0(nx−nz )×nz
+
+
+
+, ˆQ = diag( λ1, ..., λ nz ), ˆE = Inz 0nz ×(nx−nz )
+
+ . (6) Lemma 2 suggests a heuristic for viewing the nonlinear dimensionality reduction problem: if a latent dimension is capable of capturing complex, unstable system behavior, and all remaining modes are stable, then the latent dimension is capable of producing a “good” reduced-order model. In what follows, we further develop this perspective in the nonlinear setting. 
+
+4HALO    
+
+> Figure 2: An attractive invariant manifold for a discrete-time system (in red) can have a lower dimensional embedding (in blue). This embedding informs a choice of latent dimension and reduced-order model.
+
+Motivation from Nonlinear Systems: To begin our nonlinear analysis, recall the manifold hy-pothesis , which posits that data points in real-world, high-dimensional data sets are often clustered around low-dimensional submanifolds Fefferman et al. (2016). Now, we apply this hypothesis, which underlies various dimensionality reduction methods, to our model reduction problem. Suppose we collect trajectory data D = {{ xk}Kk=0 : x0 ∈ X ⊆ Rn, xk+1 = f (xk)} from a variety of initial conditions x0 ∈ X ⊆ Rn. By the manifold hypothesis, suppose the trajectory data concentrates around a submanifold of Rn. Since we sample x0 from across the state space, trajectories clustering around a submanifold suggest the existence of an attractive invariant manifold 
+
+to which nearby trajectories converge. To gain insight into the nonlinear autoencoder problem, we thus present a simple study relating invariant manifolds and autoencoder reduced-order models. First, employing the classic Whitney embedding theorem (Lee, 2013, Thm. 6.19), we establish a basic relationship between the dimensionality of an invariant manifold M (for which f (M) = M)and the dimension of latent space required to fully represent M and the dynamics on it. 
+
+Lemma 3 (Model Reduction & Invariant Manifolds) Let f : Rnx → Rnx be a map defining a discrete-time system with smooth invariant manifold M ⊆ Rnx . For dim( M) = k:1. Perfect encoder-decoder pair on M: there exists a smooth encoder E : U ⊆ Rnx → Rnz
+
+and a smooth decoder D : W ⊆ Rnz → Rnx satisfying D(E(x)) = x for all x ∈ M , where 
+
+nz ≤ 2k and U, W are open neighborhoods of M and E(M) respectively, 2. Latent system: there exists a map g : Rnz → Rnz satisfying f (x) = D ◦ g ◦ E(x) ∀x ∈ M .
+
+Remark 4 Further reductions in nz are possible assuming compactness of M and analogues of (1) and (2) on open subsets of M instead of on its entirety Kvalheim and Sontag (2025). 
+
+Using E and D constructed in the proof of Lemma 3, we make the simple observation that stability of the latent dynamics on E(M) implies stability of the original system on M.
+
+Theorem 5 (Transfer of Stability on M) Consider the setting of Lemma 3 and its proof. Let 
+
+˜g : E(M) → E(M) be the restriction of g to E(M) and ˜f : M → M the restriction of f to M.Suppose z∗ ∈ E(M) is a locally asymptotically stable fixed point of ˜g. Then, x∗ = D(z∗) is a locally asymptotically stable fixed point of ˜f . Further, if z belongs to the region of attraction of z∗
+
+for ˜g, then D(z) belongs to the region of attraction of x∗ for ˜f .
+
+Remark 6 Here, stability is with respect to open subsets of E(M) and M, not Rnz and Rnx .     
+
+> 5WERNER * E STEBAN *DE SACOHEN AMES
+> Figure 3: The three systems of study, their configurations, and their impacts.
+
+Thus, stability in the latent representation of the invariant manifold translates to stability in the full-order representation of the invariant manifold. Practically—as we demonstrate below—stability on the invariant manifold can be concluded by exhibiting an asymptotic Lyapunov function for 
+
+g : Rnz → Rnz ; such a Lyapunov function automatically restricts to an asymptotic Lyapunov function on E(M), which provides the conditions for Theorem 5. To make a stronger conclusion regarding stability for the full-order dynamics f : Rnx → Rnx
+
+on a neighborhood of x∗ in Rnx , rather than stability on a neighborhood in M, one may appeal to the literature on attractive invariant manifolds Wiggins (1994). Informally, stability on the invariant manifold plus sufficiently fast convergence normal to the invariant manifold implies stability of the full system. Within the scope of this work, such convergence remains an assumption. 
+
+4. Methods 
+
+We recall that the stability of a hybrid system can be characterized by its impact-to-impact dynamics. We consider a closed-loop hybrid system with state x and feedback controller k(x), learned through reinforcement learning (RL). To study stability of this system, we extract sequences of pre-impact states, 
+
+D = {{ xk}Kk=0 : x0 ∈ X 0 ⊂ Rnx , xk+1 = f (xk)} (7) where f : Rnx → Rnx is the Poincar´ e map of the closed-loop system and each xk := x− is its state just before an impact. The configurations and pre-impact states of the systems considered here—a paddle-ball, a planar hopper, and a Unitree G1 humanoid robot—are illustrated in Figure 3. Using the dataset D, we train an autoencoder-based ROM that captures the Poincar´ e dynamics in a low-dimensional latent space. We then use the learned latent dynamics to predict trajectories and estimate regions of attraction of the FOM. The remainder of this section details each component of this pipeline 1.
+
+Reinforcement Learning Controllers: As described above, the feedback controller k(x) is an RL policy πξ(o), where the observation o is a function of the state for the paddle-ball and hopper, and a function of the state together with auxiliary variables for the humanoid. The paddle-ball policy is trained to regulate the ball at a desired height, whereas the hopper and humanoid policies are trained to maintain a constant forward velocity. We train controllers for the paddle-ball and hopper using the actor-critic PPO algorithm imple-mented in Brax Freeman et al. (2021). The learned policy directly outputs bounded torque com- 
+
+> 1. Full code is available at: github.com/sesteban951/halo-latent-locomotion .
+> 6HALO
+
+mands at 50 Hz. We train a locomotion controller for the G1 humanoid using the actor-critic PPO algorithm implemented in mjlab Zakka et al. (2026) with the rsl rl library. The learned policy outputs joint position setpoints at 50 Hz, which are tracked by joint-level PD controllers to produce motor torques. Additional implementation details are provided in Appendix C.1. 
+
+Poincar´ e Data Collection: To collect training data, we simulate the closed-loop system in Mu-JoCo MJX Todorov et al. (2012) for a fixed time horizon, using the JAX backend for the paddle-ball and hopper systems and the Warp backend for the G1. At each impact, we use MuJoCo sensor mea-surements to record the generalized position and velocity in a contact-relative frame—in the world frame for the paddle-ball, relative to the foot position for the hopper, and in a yaw-aligned foot frame for the humanoid. After pruning faulty Poincar´ e data, such as impacts with sliding contact or contact chatter, we obtain clean sequences of Poincar´ e returns. 
+
+Remark 7 In practice, impacts can be estimated without dedicated contact sensors. Kinematic methods use foot height and velocity; dynamic methods use changes in generalized velocities, ac-celerations, or momentum; force methods use joint torques and ground reaction force estimates. 
+
+Autoencoder Architecture: We parameterize the autoencoder using three networks: an encoder 
+
+that projects the FOM state onto a lower-dimensional latent state, zk = Eϕ(xk), a decoder that reconstructs the FOM state from the latent state, ˆxk = Dψ(zk), and a latent dynamics network that propagates the latent state forward via learned residual ROM dynamics, 
+
+zk+1 = gρ(zk) := zk + ¯ gρ(zk). (8) The encoder and decoder are mirrored MLPs with swish activations, sized [64 , 32 , 16] and [16 , 32 , 64] 
+
+for the hopper and paddle-ball systems, and [256 , 128 , 64] and [64 , 128 , 256] for the humanoid. The latent dynamics network is an MLP with swish activations, sized [64 , 64 , 64] for the hopper and paddle-ball systems, and [128 , 128 , 128] for the humanoid. The latent dimension nz is 2 for the paddle-ball, 4 for the hopper, and 12 for the humanoid. More details are provided in Section C.2.  
+
+> Figure 4: A visual guide of the losses.
+
+Loss Function: Using the insights from Section 3, we seek parameters ϕ, ψ, and ρ such that the en-coder Eϕ, decoder Dψ, and latent dynamics model 
+
+gρ approximate the FOM Poincar´ e map: 
+
+inf 
+
+> ϕ,ψ,ρ
+
+X 
+
+> xk∈D
+
+∥f (xk) − (Dψ ◦ gρ ◦ Eϕ)( xk)∥2 . (9) The encoder, decoder, and latent dynamics networks are trained jointly using a weighted sum of losses, each enforcing a different aspect of reconstruction accuracy and dynamical consistency. Inspired by Lutkus et al. (2025), we organize these losses into re-construction, conjugacy, prediction, whitening, and regularization terms. The loss functions are summa-rized in Table 1 and illustrated in Figure 4. The reconstruction losses Lrec ,x and Lrec ,z en-sure that the encoder-decoder pair (Eϕ, Dψ) accurately reconstructs states in both the full-order 
+
+> 7
+
+WERNER * E STEBAN * DE SA COHEN AMES 
+
+Loss Definition Purpose 
+
+Lrec ,x (ϕ, ψ) λrec ,x 
+
+> BK
+
+PB,K b,k =1 x(b) 
+
+> k
+
+− (Dψ ◦Eϕ)( x(b) 
+
+> k
+
+) 2
+
+Reconstruction 
+
+Lrec ,z (ϕ, ψ) λrec ,z 
+
+> BK
+
+PB,K b,k =1 Eϕ(x(b) 
+
+> k
+
+) − (Eϕ ◦Dψ ◦Eϕ)( x(b) 
+
+> k
+
+) 2
+
+Reconstruction 
+
+Lfwd (ϕ, ρ) λfwd 
+
+> B(K−1)
+
+PB,K −1 
+
+> b,k =1
+
+Eϕ(x(b)
+
+> k+1
+
+) − (gρ ◦Eϕ)( x(b) 
+
+> k
+
+) 2
+
+Conjugacy 
+
+Lbck (ϕ, ρ, ψ) λbck 
+
+> B(K−1)
+
+PB,K −1 
+
+> b,k =1
+
+x(b) 
+
+> k+1
+
+− (Dψ ◦gρ ◦Eϕ)( x(b) 
+
+> k
+
+) 2
+
+Conjugacy 
+
+Lpred (ϕ, ρ, ψ) λpred 
+
+> B(K−1)
+
+PB,K b=1 ,k =2 x(b) 
+
+> k
+
+−  Dψ ◦g(k−1)  
+
+> ρ
+
+◦Eϕ
+
+(x(b)1 ) 2
+
+Prediction 
+
+Liso (ϕ) λiso I − 1
+
+> BK
+
+PB,K b,k =1 
+
+ Eϕ(x(b) 
+
+> k
+
+) − μ  Eϕ(x(b) 
+
+> k
+
+) − μ⊤ 2
+
+> F
+
+Whitening 
+
+Lreg (ϕ, ρ, ψ) λreg 
+
+P 
+
+> wi∈W(ϕ,ψ,ρ)
+
+∥wi∥2 L2 Regularization 
+
+Table 1: Summary of the loss terms. W denotes trainable weights (excluding biases), and g(k−1)  
+
+> ρ
+
+denotes repeated application of gρ. In addition, B denotes the mini-batch size and K denotes the trajectory length. 
+
+and latent spaces, respectively. The forward and backward conjugacy losses, Lfwd and Lbck , en-courage the learned latent dynamics to align with the FOM Poincar´ e dynamics. The prediction loss 
+
+Lpred improves multi-step rollout accuracy, encouraging the learned ROM to capture long-horizon trajectory evolution rather than myopic one-step behavior. The whitening loss Liso helps prevent latent space collapse by encouraging the latent covariance to remain close to identity. Finally, the weight regularization loss Lreg penalizes large network weights to reduce overfitting to data. The total loss function is given by: 
+
+L = Lrec ,x + Lrec ,z + Lfwd + Lbck + Lpred + Liso + Lreg . (10) All loss terms are scaled as shown in Table 1, where all weights are set to 1.0 except for the L2 regularization term, which uses λreg = 10 −6.
+
+Training: We train autoencoders using the Adam optimizer Kingma and Ba (2014) with shuffled mini-batches of trajectory data. The model is implemented in JAX and Flax Bradbury et al. (2018); Heek et al. (2024). Before training, each state feature is normalized independently using training-set statistics aggregated over all trajectories and time steps. The dataset of trajectories is partitioned into disjoint training, validation, and test sets. More details are provided in Appendix C.2. 
+
+Latent Region of Attraction: To approximate the region of attraction (ROA) for the FOM impact-to-impact dynamics, we linearize the latent Poincar´ e map around the latent equilibrium point 2 z∗,yielding the discrete-time linear system zk+1 = gρ(zk) ≈ Q(zk − z∗) + gρ(z∗). Without loss of generality, we shift coordinates so that z∗ = 0. We then construct a discrete-time Lyapunov function 
+
+Vz(z) = z⊤Pz where P ≻ 0 satisfies the discrete-time Lyapunov equation Q⊤PQ − P + I = 0.Next, we construct an estimated ROA around the latent equilibrium and map it through the decoder to obtain an approximation of the full-order ROA. Consider the following set: 
+
+D = {z ∈ Rnz : ∆ Vz(z) ≤ 0} =
+
+n
+
+z ∈ Rnz : −z⊤z + gρ(z)⊤Pg ρ(z) − z⊤Q⊤PQz ≤ 0
+
+o
+
+. (11) 
+
+2. Linearization of gρ(z) is obtained via automatic differentiation using jax.jacfwd , giving Q = ∂gρ 
+
+> ∂z
+
+|z∗ .
+
+8HALO 
+
+This is the set of points for which the latent candidate Lyapunov function Vz does not increase under the nonlinear latent dynamics. To obtain the largest Lyapunov sublevel set contained in D, we solve: 
+
+c∗ = inf  
+
+> z∈∂D
+
+z⊤Pz (12) using a Monte Carlo sampling strategy 3. The sublevel set Ωc∗ := {z : z⊤Pz ≤ c∗} is taken as the latent ROA estimate. We then sample points in Ωc∗ , decode them through Dψ to obtain full-order states, and simulate these initial conditions under the FOM dynamics to assess if they remain stable. 
+
+5. Results 0.00       
+
+> 0.25
+> 0.50
+> ‖xk − ˆxk‖
+> Reconstruction error
+> Paddle-Ball Hopper G1 Humanoid
+> 0123456
+> k
+> −0.25
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> ‖xk − ˆxk‖
+> Forward propagation error
+
+Figure 5: Per-step normalized error of the learned ROM over 3,000 test trajectories for each system. (Top) shows single-step reconstruc-tion error, and (bottom) shows multi-step latent forward-propagation error. Solid curves denote the mean and shaded bands denote ±σ.
+
+To validate the capabilities of our autoencoder, we test both its prediction and stability estimation capa-bilities. To test the encoding and decoding accuracy of the autoencoder, we gather normalized Poincar´ edata of N full-order rollouts, each of length K for each of our systems. We send this data through the encoder followed by the decoder and calculate 
+
+ℓrec = ∥xk − Dψ ◦ Eϕ(xk)∥. (13) For each state in the trajectory, we take the mean and standard deviation of ℓrec at each Poincar´ e step k.Second, to test the accuracy of the latent dynamics, we take the initial states x0 for each of our rollouts, encode the state, perform K steps of the latent dy-namics, then decode the latent trajectory, calculating the reconstruction loss as 
+
+ℓdyn = ∥xk − Dψ ◦ g(k) 
+
+> ρ
+
+◦ Eϕ(x0)∥. (14) We also take the mean and standard deviation over the Poincar´ e steps. We observe good performance of the reconstruction and latent dynamics, im-proving over the rollout as the system stabilizes. We notice that error propagation is minimal despite the length of the rollout, which we attribute to our loss choice penalizing discrepancy in long-horizon prediction, combined with the stability of the systems. To validate our ROA estimate, we perform the procedure described in Sec. 4: we generate a Lyapunov-based ROA estimate by solving (12), sampling 2,000 points in Ωc∗ , and mapping them back to the full-order state space. For comparison, we compute an approximation of the ROA using a naive sampling-based method. Here, we grid the latent space with 4 points per dimension in nz
+
+dimensions, gridding a hypercube of side length equal to the major axis length of the Lyapunov region, decoding these points using the decoder. Next, we roll out all of these samples in parallel simulation, recording those that are stable, characterized by pz > p thresh  
+
+> z
+
+not falling below a pre-scribed threshold over the course of the 150-step trajectory. We observe that the initial conditions in     
+
+> 3. Direct optimization of c∗is challenging as ∂Dis non-convex and implicitly determined by a neural network. We thus use a simple but effective sampling-based sweep to obtain a conservative ROA estimate.
+
+9WERNER * E STEBAN * DE SA COHEN AMES 
+
+the Lyapunov-based latent ROA consistently have a near-perfect 99 .9 ± 0.1% stability rate, while points from the naive hypercube sampling method have a consistently lower stability rate, for in-stance 75 .6 ± 10 .1% on the G1. In Figures 6 and 7, we plot the stable points from each of these categories. We find that, while the Lyapunov estimate is more conservative, it is far more accurate than the naive sampling-based estimate of the ROA. In Figure 8, we demonstrate the prediction performance of the ROM relative to real-world Unitree G1 experiments.        
+
+> Figure 6: Decoded visualization of the boundary of Ωzin full-order coordinates of the G1. Plotted states correspond to the center-of-mass position relative to the stance foot.
+> Figure 7: Decoded visualization of the boundary of Ωzin full-order coordinates of the hopper. Plotted states correspond to the center-of-mass position relative to the hopper foot.
+> Figure 8: A 9-step rollout with true hardware, encoded-decoded, and latent ROM trajectories.
+
+Conclusion: In this work, we proposed a method of generating reduced-order models using au-toencoders to represent and study the stability of hybrid systems. Our technique enables accurate reconstruction of the original dynamical system from a lower-dimensional latent space, as well as estimation of the region of attraction of the original system. This method was validated on three systems of increasing complexity: a paddle-ball, a hopper, and a Unitree G1 humanoid robot. 
+
+> 10 HALO
+
+Acknowledgments 
+
+We would like to thank Paul Lutkus, Kaiyuan Wang, and Professor Steven Tu for their insights and guidance. This research is supported by the Technology Innovation Institute. 
+
+References 
+
+Aaron D Ames, Kevin Galloway, Koushil Sreenath, and Jessy W Grizzle. Rapidly exponentially stabilizing control lyapunov functions and hybrid zero dynamics. IEEE Trans. Autom. Ctrl. , 59 (4), 2014. A. C. Antoulas. Approximation of Large-Scale Dynamical Systems . SIAM, 2005. A. Astolfi. Model reduction by moment matching for linear and nonlinear systems. IEEE Transac-tions on Automatic Control , 55(10):2321–2336, 2010. P. Benner, S. Gugercin, and K. Wilcox. A survey of projection-based model reduction methods for parametric dynamical systems. SIAM Review , 2015. Reinhard Blickhan. The spring-mass model for running and hopping. Journal of biomechanics , 22 (11-12):1217–1227, 1989. James Bradbury, Roy Frostig, Peter Hawkins, Matthew James Johnson, Yash Katariya, Chris Leary, Dougal Maclaurin, George Necula, Adam Paszke, Jake VanderPlas, Skye Wanderman-Milne, and Qiao Zhang. JAX: composable transformations of Python+NumPy programs, 2018. URL 
+
+http://github.com/jax-ml/jax .S. L. Brunton and J. N. Kutz. Data-driven science and engineering: Machine learning, dynamical systems, and control . Cambridge University Press, 2022. Giuseppe C Calafiore and Laurent El Ghaoui. Optimization models . Cambridge university press, 2014. Guillermo A. Castillo, Bowen Weng, Wei Zhang, and Ayonga Hereid. Data-driven latent space representation for robust bipedal locomotion learning. In 2024 IEEE International Conference on Robotics and Automation (ICRA) , pages 1172–1178, 2024. doi: 10.1109/ICRA57147.2024.1 0610978. Yu-Ming Chen, Hien Bui, and Michael Posa. Reinforcement learning for reduced-order models of legged robots. In 2024 IEEE International Conference on Robotics and Automation (ICRA) ,pages 5801–5807, 2024a. doi: 10.1109/ICRA57147.2024.10610747. Yu-Ming Chen, Jianshu Hu, and Michael Posa. Beyond inverted pendulums: Task-optimal simple models of legged locomotion. IEEE Transactions on Robotics , 40:2582–2601, 2024b. doi: 10.1 109/TRO.2024.3386390. Geir E Dullerud and Fernando Paganini. A course in robust control theory: a convex approach ,volume 36. Springer Science & Business Media, 2013.     
+
+> 11 WERNER * E STEBAN *DE SACOHEN AMES
+
+Charles Fefferman, Sanjoy Mitter, and Hariharan Narayanan. Testing the manifold hypothesis. 
+
+Journal of the American Mathematical Society , 29(4):983–1049, 2016. C. Daniel Freeman, Erik Frey, Anton Raichuk, Sertan Girgin, Igor Mordatch, and Olivier Bachem. Brax - a differentiable physics engine for large scale rigid body simulation, 2021. URL http: //github.com/google/brax .A. Girard and G. J. Pappas. Hierarchical control system design using approximate simulation. 
+
+Automatica , 45(2):566–571, 2009. G. Haller and P. Ponsioen. Nonlinear normal modes and spectral submanifolds: existence, unique-ness and use in model reduction. Nonlinear Dynamics , 86(3):1493–1534, 2016. Jonathan Heek, Anselm Levskaya, Avital Oliver, Marvin Ritter, Bertrand Rondepierre, Andreas Steiner, and Marc van Zee. Flax: A neural network library and ecosystem for JAX, 2024. URL 
+
+http://github.com/google/flax .Shuuji Kajita, Fumio Kanehiro, Kenji Kaneko, Kazuhito Yokoi, and Hirohisa Hirukawa. The 3D linear inverted pendulum mode: A simple modeling for a biped walking pattern generation. In 
+
+Proceedings 2001 IEEE/RSJ International Conference on Intelligent Robots and Systems. Ex-panding the Societal Role of Robotics in the Next Millennium (Cat. No. 01CH37180) , volume 1, pages 239–246. IEEE, 2001. Diederik P Kingma and Jimmy Ba. Adam: A method for stochastic optimization. arXiv preprint arXiv:1412.6980 , 2014. Matthew D. Kvalheim and Eduardo D. Sontag. Autoencoding dynamics: Topological limitations and capabilities, 2025. URL https://arxiv.org/abs/2511.04807 .John M Lee. Introduction to Smooth Manifolds . Springer, 2013. Chenhao Li, Elijah Stanger-Jones, Steve Heim, and Sangbae Kim. FLD: Fourier latent dynamics for structured motion representation and learning. arXiv preprint arXiv:2402.13820 , 2024. Paul Lutkus, Kaiyuan Wang, Lars Lindemann, and Stephen Tu. Latent representations for control design with provable stability and safety guarantees. arXiv preprint arXiv:2505.23210 , 2025. K. Nakamura, L. Peters, and A. Bajcsy. Generalizing safety beyond collision-avoidance via latent-space reachability analysis. In Robotics: Science and Systems , 2025. Marc H Raibert. Legged robots that balance . MIT press, 1986. Sebastian Starke, Ian Mason, and Taku Komura. DeepPhase: periodic autoencoders for learning motion phase manifolds. ACM Trans. Graph. , 41(4), July 2022. ISSN 0730-0301. doi: 10.1145/ 3528223.3530178. URL https://doi.org/10.1145/3528223.3530178 .P. Tabuada. Verification and Control of Hybrid Systems: A Symbolic Approach . Springer, 2009. Emanuel Todorov, Tom Erez, and Yuval Tassa. Mujoco: A physics engine for model-based control. In 2012 IEEE/RSJ International Conference on Intelligent Robots and Systems , pages 5026– 5033. IEEE, 2012. doi: 10.1109/IROS.2012.6386109. 
+
+> 12 HALO
+
+P. Wensing and S. Revzen. Template models for control. Bioinspired Legged Locomotion , pages 240–266, 2017. Eric R Westervelt, Jessy W Grizzle, and Daniel E Koditschek. Hybrid zero dynamics of planar biped walkers. IEEE Transactions on Automatic Control , 48(1):42–56, 2003. Eric R Westervelt, Jessy W Grizzle, Christine Chevallereau, Jun Ho Choi, and Benjamin Morris. 
+
+Feedback control of dynamic bipedal robot locomotion . CRC press, 2018. Stephen Wiggins. Normally hyperbolic invariant manifolds in dynamical systems , volume 105. Springer Science & Business Media, 1994. Kevin Zakka, Qiayuan Liao, Brent Yi, Louis Le Lay, Koushil Sreenath, and Pieter Abbeel. mjlab: A lightweight framework for gpu-accelerated robot learning, 2026. URL https://arxiv. org/abs/2601.22074 .    
+
+> 13 WERNER * E STEBAN *DE SACOHEN AMES
+
+Appendix A. Full-Order Model Hybrid Dynamics 
+
+Legged robots that make and break contact with the environment can be modeled as nonlinear dynamical systems with impulse effects, which in this work is referred to as the full-order model .The generalized configuration for these systems is q ∈ Q ⊆ Rn with state x = ( q, ˙q) ∈ TQ ⊆ 
+
+R2n = Rnx . Using Euler-Lagrange equations, we define the continuous dynamics: 
+
+M(q)¨ q + H(q, ˙q) = Bu + J⊤ 
+
+> c
+
+(q)λ, (15) 
+
+J(q)¨ q + ˙J(q, ˙q) ˙ q = 0 (16) where M : Q → Rn×n is the positive definite mass-inertia matrix, H : Rnx → Rn contains centrifugal, Coriolis, and gravitational terms, B ∈ Rn×nu is the actuation matrix, and u ∈ U ⊆ Rnu
+
+is the control input. Additionally, J : Q → Rnc×n is the contact Jacobian of a holonomic constraint 
+
+describing contact of the robot with the environment with corresponding constraint wrench λ ∈
+
+Rnc . Furthermore, (15) and (16) can be combined to write the state-space dynamics representation: 
+
+˙x = fc(x, u) := 
+
+ ˙q
+
+−M−1(q) ˜H(q, ˙q)
+
+
+
++
+
+ 0M−1(q) ˜B(q)
+
+
+
+u, (17) where the dynamics fc : Rnx × Rnu → Rnx are continuously differentiable. Discrete jumps in hybrid systems occur when a foot or hand impacts with the environment. A 
+
+switching surface is designed to capture such events. Given a continuously differentiable function 
+
+s : Rnx → R, let S ⊂ Rnx denote the switching surface as: 
+
+S = {x ∈ Rnx | s(x) = 0 , ˙s(x) < 0}. (18) The dynamics undergo discrete transitions which are represented by: 
+
+x+ = ∆(x−) (19) where ∆ : S → Rnx is the continuously differentiable reset map , x− ∈ S denotes the pre-impact state just before impact and x+ ∈ Rnx \ S denotes the post-impact state just after impact. Combining the continuous dynamics (17) and the reset map (19), the full-order dynamics can be written as a hybrid control system: 
+
+HC =
+
+ ˙x = fc(x, u) if x ∈ Rnx \S 
+
+x+ = ∆(x−) if x− ∈ S . (20) Furthermore, given a locally Lipschitz feedback controller k : Rnx → Rnu we obtain the closed-loop hybrid system: 
+
+H =
+
+ ˙x = fc(x, k(x)) if x ∈ Rnx \S 
+
+x+ = ∆(x−) if x− ∈ S . (21) Let the flow of these dynamics be denoted by φt(x), which returns the state reached at time t under the continuous dynamics (17) when starting from state x ∈ X . To further characterize the discrete evolution of (21), define the time-to-impact function TI : ˜S → R>0 as: 
+
+TI (x) := inf {t ≥ 0 | φt(∆(x)) ∈ S} , (22) 
+
+> 14
+
+HALO 
+
+where ˜S := {x ∈ S | TI (x) ∈ (0 , ∞)}, which captures the time passed between discrete transitions. The above formulation allows for casting the hybrid system (21) as a discrete-time system via the 
+
+Poincar´ e map :
+
+xk+1 = f (xk), f (x) := φTI (x)
+
+ ∆(x), f : ˜S → S . (23) In the literature, for legged robots, the Poincar´ e map xk+1 = f (xk) is often referred to as the step-to-step dynamics of the FOM. With an abuse of notation, denote the Poincar´ e map as f : S → S with the understanding that f is a partial function (see Ames et al. (2014); Westervelt et al. (2003)). The Poincar´ e map provides a powerful tool for studying the stability of orbits of (21). The flow of (21) is said to be periodic with period T ≥ 0 if there exists a state x∗ ∈ S such that φT (∆(x∗)) = x∗.This induces a periodic orbit :
+
+O := {φt(∆(x∗)) | t ∈ [0 , T ], T = TI (x∗)}. (24) Importantly, stability of O is equivalent to that of f as shown in the following theorem. 
+
+Theorem 8 (Westervelt et al. (2018)) Let the closed loop dynamics f and reset map ∆ be contin-uously differentiable and ∆(S) ∩ S = ∅. Then, the following statements hold: 
+
+• x∗ ∈ S is a stable equilibrium point for xk+1 = f (xk) ⇐⇒ the orbit O(∆(x∗)) is stable. 
+
+• x∗ ∈ S is an asymptotically stable equilibrium point for xk+1 = f (xk) ⇐⇒ the orbit 
+
+O(∆(x∗)) is asymptotically stable. 
+
+• x∗ ∈ S is an exponentially stable equilibrium point for xk+1 = f (xk) ⇐⇒ the orbit 
+
+O(∆(x∗)) is exponentially stable. 
+
+Thus, establishing stability of the Poincar´ e map (23) certifies stability of the full hybrid system (21). 
+
+Appendix B. Proofs 
+
+In this section, we provide proofs of the theoretical results in the paper. For convenience, we restate all results below. 
+
+B.1. Proof of Lemma 1 Lemma Let A ∈ Rnx×nx and nz ∈ (0 , rank( A)] Z. Consider: 
+
+inf     
+
+> E∈Rnz ×nx ,D∈Rnx ×nz ,Q∈Rnz ×nz
+
+sup  
+
+> x0∈Rnx ,∥x0∥=1
+
+∥Ax 0 − DQEx 0∥2 . (25) 
+
+If A = UΣV ⊤ is an SVD of A, then D = Unz , Q = Σnz , E = V⊤ 
+
+> nz
+
+, where Unz , Vnz are the first nz columns of U, V and Σnz = diag( σ1, ..., σ nz ), are optimal solutions. 
+
+Proof The maximization, sup x0∈Rnx ,∥x0∥=1 ∥Ax 0 − DQEx 0∥2 (for ∥·∥ the ℓ2-norm) is simply the square of the induced matrix 2-norm, ∥A − DQE ∥22. Hence, the problem reduces to 
+
+inf  
+
+> E,D,Q
+
+∥A − DQE ∥22 . (26) 
+
+15 WERNER * E STEBAN * DE SA COHEN AMES 
+
+Since rank( DQE ) ≤ nz for every pair of D, Q, E, it follows that 
+
+inf  
+
+> E,D,Q
+
+∥A − DQE ∥22 ≥ inf 
+
+> M∈Rnx ×nx
+
+∥A − M∥22 s.t. rank( M) ≤ nz . (27) The lower bound is a well-known rank-constrained minimization (Calafiore and El Ghaoui, 2014, p. 134). For an SVD A = UΣV ⊤, the Eckart-Young theorem tells us that an optimal solution 
+
+M is the nz -truncation of the SVD, M = Unz Σnz V⊤ 
+
+> nz
+
+. Here, Unz , Vnz are the first nz columns of U, V, respectively, and Σnz = diag( σ1, ..., σ nz ). Since D = Unz , Q = Σnz , E = V⊤ 
+
+> nz
+
+are feasible for the original problem, the lower bound above implies their optimality. 
+
+B.2. Proof of Lemma 2 Lemma Suppose A = diag( λ1, ..., λ nx ), with |λ1| ≥ ... ≥ | λnx |. Let nz ∈ (0 , rank( A)] Z. If the unstable and center subspaces of A together have dimension ≤ nz , then Problem (5) is feasible and an optimal solution is given by the nz -truncation: 
+
+ˆD =
+
+ Inz
+
+0(nx−nz )×nz
+
+
+
+, ˆQ = diag( λ1, ..., λ nz ), ˆE = Inz 0nz ×(nx−nz )
+
+ . (28) 
+
+Proof We begin by considering the simpler one-step problem inf E,D,Q Ak − DQ kE 2 
+
+> F
+
+. Since 
+
+rank( DQ kE) ≤ nz , it must be that for each fixed k ≥ 0,
+
+inf  
+
+> E,D,Q
+
+Ak − DQ kE 2 
+
+> F
+
+≥ inf  
+
+> M
+
+Ak − M 2 
+
+> F
+
+, s.t. rank( M) ≤ nz . (29) Now, fix k ≥ 0. Since A is diagonal, Ak = diag( λk 
+
+> 1
+
+, ..., λ knx ). As such, any off-diagonal entry Mij 
+
+raises the Frobenius norm error. This implies that we can further reduce the problem to: 
+
+inf M Ak − M 2
+
+> F
+
+s.t. rank( M) ≤ nz
+
+!
+
+= inf M Ak − M 2
+
+> F
+
+s.t. rank( M) ≤ nz , M diag. 
+
+!
+
+(30) Since M is constrained to have rank ≤ nz , the problem amounts to choosing at most nz nonzero diagonal entries of M. Since the entries of A are ordered by decreasing magnitude an optimal M is 
+
+M = diag( λk 
+
+> 1
+
+, ..., λ knz , 0nx−nz ). Since M = ˆD ˆQk ˆE, for ˆD, ˆQ, ˆE as in the statement of the lemma, 
+
+inf  
+
+> E,D,Q
+
+Ak − DQ kE 2 
+
+> F
+
+≥ Ak − ˆD ˆQk ˆE 2 
+
+> F
+
+, ∀k ≥ 0. (31) If the unstable and center subspaces of A together have dimension ≤ nz , for each j > n z , |λj | < 1.Hence, one has 
+
+> ∞
+
+X
+
+> k=0
+
+Ak − ˆD ˆQk ˆE 2 
+
+> F
+
+=
+
+> ∞
+
+X
+
+> k=0
+> nx
+
+X 
+
+> j=nz+1
+
+|λkj |2 =
+
+> nx
+
+X 
+
+> j=nz+1
+> ∞
+
+X
+
+> k=0
+
+|λkj |2 < ∞, (32) which confirms feasibility of the proposed solution. Applying (31) for each k yields 
+
+inf 
+
+> E,D,Q
+> ∞
+
+X
+
+> k=0
+
+Ak − DQ kE 2 
+
+> F
+
+≥
+
+> ∞
+
+X
+
+> k=0
+
+Ak − ˆD ˆQk ˆE 2 
+
+> F
+
+, (33) which establishes the optimality of the proposed solution. 
+
+16 HALO 
+
+B.3. Proof of Lemma 3 Lemma Let f : Rnx → Rnx be a map defining a discrete-time system with smooth invariant manifold M ⊆ Rnx . For dim( M) = k:1. Perfect encoder-decoder pair on M: there exists a smooth encoder E : U ⊆ Rnx → Rnz
+
+and a smooth decoder D : W ⊆ Rnz → Rnx satisfying D(E(x)) = x for all x ∈ M , where 
+
+nz ≤ 2k and U, W are open neighborhoods of M and E(M) respectively, 2. Latent system: there exists a map g : Rnz → Rnz satisfying f (x) = D ◦ g ◦ E(x) ∀x ∈ M .
+
+Proof Whitney’s embedding theorem guarantees the existence of a smooth embedding E : M → 
+
+Rnz , where nz ≤ 2k. Since E is an embedding, we may restrict its codomain to obtain a diffeomor-phism ˜E : M → E(M) . Since ˜E is a diffeomorphism, it has a smooth inverse ˜D : E(M) → M ,satisfying ˜D( ˜E(x)) = ˜D(E(x)) = x for all x ∈ M .Now, we extend the (co)domains of E and ˜D. By (Lee, 2013, Lem. 5.34), there exists a neighborhood U ⊆ Rnx of M and a smooth function E : U → Rnz for which E|M = E. Since 
+
+M is embedded in Rnx , the inclusion map ιM : M ,→ Rnx taking x ∈ M to x as an element of Rnx is smooth; therefore the composition ιM ◦ ˜D : E(M) → Rnx is smooth. Applying (Lee, 2013, Lem. 5.34) to ιM ◦ ˜D, we conclude the existence of a neighborhood W ⊆ Rnz of E(M)
+
+and a map D : W → Rnx for which D|E(M) = ιM ◦ ˜D. By the extension property, it follows that 
+
+D(E(x)) = x for all x ∈ M , which establishes (1). Now, we construct the dynamical system zk+1 = g(zk), satisfying f (x) = D(g(E(x))) for all 
+
+x ∈ M . Define ˜g : E(M) → Rnz by z 7 → E ◦ f ◦ D(z). If z ∈ E(M), then D(z) ∈ M by part (1), which implies that E ◦ f ◦ D(z) ∈ E(M). So, ˜g(z) = E ◦ f ◦ D(z) and E ◦ f ◦ D(z) ∈ E(M)
+
+implies that D ◦ ˜g(z) = f ◦ D(z) for all z ∈ E(M). We conclude that D ◦ ˜g ◦ E(x) = f (x) for all 
+
+x ∈ M . Extending ˜g to Rnz (we don’t ask for regularity in Rnz \ E(M)), the result follows. 
+
+B.4. Proof of Theorem 5 Theorem Consider the setting of Lemma 3 and its proof. Let ˜g : E(M) → E(M) be the restric-tion of g to E(M) and ˜f : M → M the restriction of f to M. Suppose z∗ ∈ E(M) is a locally asymptotically stable fixed point of ˜g. Then, x∗ = D(z∗) is a locally asymptotically stable fixed point of ˜f . Further, if z belongs to the region of attraction of z∗ for ˜g, then D(z) belongs to the region of attraction of x∗ for ˜f .
+
+Proof In the proof of Lemma 3, we demonstrated that the map ˜E : M → E(M) is a diffeomor-phism with inverse ˜D : E(M) → M . Further, we showed that ˜f = ˜D ◦ ˜g ◦ ˜E. First, we note that this conjugacy implies ˜f (j) = ˜D ◦ ˜g(j) ◦ ˜E for each j ≥ 0, where (j) represents j compositions (with j = 0 being the identity map). This composition equality implies that x∗ = D(z∗) is a fixed point of ˜f . As local asymptotic stability of fixed points is preserved by diffeomorphism, we conclude local asymptotic stability. Now, we consider the domain of attraction. If z belongs to the region of attraction of z∗, then 
+
+lim j→∞ ˜g(j)(z) = z∗. From the composition rule above, ˜f (j)( ˜D(z)) = ˜D ◦ ˜g(j) ◦ ˜E ◦ ˜D(z) = ˜D ◦ ˜g(j)(z) for each j ≥ 0. Passing to the limit, lim j→∞ ˜f (j)( ˜D(z)) = ˜D(lim j→∞ ˜g(j)(z)) = ˜D(z∗) = x∗. We conclude that ˜D(z) = D(z) belongs to the region of attraction of x∗ for ˜f .    
+
+> 17 WERNER * E STEBAN *DE SACOHEN AMES
+
+Appendix C. Implementation Details 
+
+This section contains implementation details spanning the entire proposed pipeline. The full code implementation can be found here: https://github.com/sesteban951/halo-laten t-locomotion .
+
+C.1. Reinforcement Learning Parameters 
+
+For all three systems, the RL policy serves as the feedback controller used to stabilize the closed-loop dynamics and generate trajectories for subsequent ROM learning. Table 2 summarizes the controller implementation details. Additionally, because the three systems differ substantially in morphology and task structure, their observation spaces are specified separately in Tables 3–5. 
+
+Property Paddle-Ball Hopper G1 Humanoid 
+
+Framework Brax Brax mjlab Algorithm PPO PPO PPO Observation dim. 4 8 80 Action dim. 1 2 23 Action type Direct force Direct torque/force Position setpoints (PD) Policy network [32] × 4 [32] × 4 [512 , 256 , 128] 
+
+Value network [256] × 5 [256] × 5 [512 , 256 , 128] 
+
+Activation Swish Swish ELU Control frequency 50 Hz 50 Hz 50 Hz Number of envs 2048 4096 4096 Training steps 100M 60M 980 MEpisode length 10 sec. 12 sec. 20 sec.  
+
+> Table 2: RL controller implementation details.
+
+Observation Size Purpose 
+
+Ball position 1 Track ball height for interception Paddle position 1 Track paddle location Ball velocity 1 Predict incoming ball motion Paddle velocity 1 Measure paddle motion 
+
+Total 4 
+
+> Table 3: Paddle-ball RL observations.
+
+C.2. Autoencoder Parameters 
+
+We train each autoencoder using the Adam optimizer. Prior to training, the Poincar´ e section data is normalized to zero mean and unit variance per feature, ensuring that all state components contribute equally to the loss regardless of their physical units or magnitudes. The remaining hyperparameters, which vary across the three systems to account for differences in state dimension and dataset size, are summarized in Table 6. 
+
+> 18 HALO
+
+Observation Size Purpose 
+
+Body height 1 Regulate vertical posture Body orientation 2 Regulate torso orientation Leg position 1 Measure leg configuration Horizontal velocity 1 Track forward motion Vertical velocity 1 Track vertical motion Angular velocity 1 Measure body rotation rate Leg velocity 1 Measure leg motion 
+
+Total 8 
+
+> Table 4: Hopper RL observations.
+
+Observation Size Purpose 
+
+Angular velocity 3 Measure base rotational motion Projected gravity 3 Regulate body orientation w.r.t. gravity Velocity command 3 Specify desired locomotion velocity command Gait phase 2 Encode periodic gait timing Joint positions 23 Measure robot configuration Joint velocities 23 Measure joint motion Last action 23 Provide action history for smoothing 
+
+Total 80  
+
+> Table 5: G1 humanoid RL observations.
+
+We normalize each state feature independently using training-set statistics aggregated over all trajectories and time steps, yielding x = ( x − μ)/σ. This standardization reduces variation in scale across state components and improves the conditioning of the learning problem. Without this normalization, state components with larger magnitudes would dominate the loss and bias learning away from smaller-scale but still informative dynamics. During training, the autoencoder operates on these normalized state trajectories. The same feature-wise normalization is applied consistently across the training, validation, and test splits so that the encoder, decoder, and latent dynamics model all learn on a common normalized representa-tion of the FOM state. For evaluation, we reuse the same training-set statistics to scale residuals on a per-feature basis. In addition, for the plotting metric, we normalize by state dimension when com-puting the per-step RMS error across state components. This yields a normalized, dimensionless error measure that is more comparable across systems and state dimensions. 
+
+> 19
+
+WERNER * E STEBAN * DE SA COHEN AMES 
+
+Property Paddle-Ball Hopper G1 Humanoid 
+
+FOM state dim., nx 4 8 59 ROM state dim., nz 2 4 12 Encoder layers, Eϕ [64 , 32 , 16] [64 , 32 , 16] [256 , 128 , 64] 
+
+Decoder layers, Dψ [16 , 32 , 64] [16 , 32 , 64] [64 , 128 , 256] 
+
+Dynamics layers, gρ [64] × 3 [64] × 3 [128] × 3
+
+Activation Swish Swish Swish Training steps 5000 15000 30000 Learning rate 10 −3 10 −3 10 −3
+
+Trajectory length, K 6 8 8Mini-batch size, B 512 1024 512 Training Trajectories 40960 81920 108403 Testing Trajectories 8192 8192 36230 Validation fraction, % 5% 10% 17% 
+
+Table 6: Autoencoder ROM training details. The G1 state vector is 59-dimensional due to the quaternion representation of base orientation ( nq = 30 , nv = 29 ), though the underlying state space is 58-dimensional. 20

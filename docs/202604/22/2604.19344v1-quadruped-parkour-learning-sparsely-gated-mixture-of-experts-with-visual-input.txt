@@ -1,0 +1,443 @@
+Title: Quadruped Parkour Learning: Sparsely Gated Mixture of Experts with Visual Input
+
+URL Source: https://arxiv.org/pdf/2604.19344v1
+
+Published Time: Wed, 22 Apr 2026 00:58:34 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Quadruped Parkour Learning: Sparsely Gated Mixture of Experts with Visual Input 
+
+Michael Ziegltrum 1, Jianhao Jiao 1, Tianhu Peng 1, Chengxu Zhou 1, Dimitrios Kanoulas 1.
+
+Abstract — Robotic parkour provides a compelling benchmark for advancing locomotion over highly challenging terrain, includ-ing large discontinuities such as elevated steps. Recent approaches have demonstrated impressive capabilities, including dynamic climbing and jumping, but typically rely on sequential multilayer perceptron (MLP) architectures with densely activated layers. In contrast, sparsely gated mixture-of-experts (MoE) architectures have emerged in the large language model domain as an effective paradigm for improving scalability and performance by activat-ing only a subset of parameters at inference time. In this work, we investigate the application of sparsely gated MoE architectures to vision-based robotic parkour. We compare control policies based on standard MLPs and MoE architectures under a controlled setting where the number of active parameters at inference time is matched. Experimental results on a real Unitree Go2 quadruped robot demonstrate clear performance gains, with the MoE policy achieving double the number of successful trials in traversing large obstacles compared to a standard MLP baseline. We further show that achieving comparable performance with a standard MLP requires scaling its parameter count to match that of the total MoE model, resulting in a 14.3% increase in computation time. These results highlight that sparsely gated MoE architectures provide a favorable trade-off between perfor-mance and computational efficiency, enabling improved scaling of control policies for vision-based robotic parkour. An anonymized link to the codebase is https://osf.io/v2kqj/files/github?view only= 7977dee10c0a44769184498eaba72e44. 
+
+I. I NTRODUCTION 
+
+Legged robots pose enormous potential to help humanity in contexts such as search-and-rescue or planetary exploration. These applications require locomotion on challenging terrain. Parkour is a sport where participants navigate challenging environments with obstacles to climb. In contrast to walking on flat terrain, it poses significant challenges due to highly dynamic motion and interaction with the environment. It is therefore a pertinent problem to study in order to advance legged robotic locomotion. Current approaches to quadruped parkour demonstrate im-pressive results on a variety of terrain, even showing capabil-ities like bipedal locomotion or combining locomotion with advanced manipulation such as badminton [1]–[4]. Reinforce-ment learning (RL) and actor-critic methods are commonly used in these examples, but the dominant architecture choice for the actor is a sequential multilayer perceptron (MLP). In the large language model space recent advances have            
+
+> 1Robot Perception and Learning Lab, Intelligent Robotics, Department of Computer Science, University College London, Gower Street, WC1E 6BT, London, UK.
+
+{michael.ziegltrum.24, jianhao.jiao, tianhu.peng.24, chengxu.zhou, d.kanoulas }@ucl.ac.uk          
+
+> This work was supported by the UKRI Future Leaders Fellowship [MR/V025333/1] (RoboHike). For the purpose of Open Access, the author has applied a CC BY public copyright license to any Author Accepted Manuscript version arising from this submission
+
+Fig. 1: The mixture of experts works outside of laboratory conditions in environments with noisier lighting and obstacles that are dis-similar to the training obstacles including a narrow walkway. explored other architectures like the sparsely-gated mixture of experts (MoE) and have shown the benefits in scaling and performance [5]–[7]. While MoE has been explored in the parkour context, sparsity was not addressed nor the integration of vision [8]. Our goal is to take advantage of conditional compute via sparsity in the vision-based quadruped parkour space by training a sparsely-gated MoE. In this network the number of total parameters is greater than the number of pa-rameters activated at each inference, enabling efficient scaling. Our work is most closely related to Extreme Parkour [2], but we modify it in several key ways including most importantly the MoE Actor, noising observations, a depth image pipeline, and other modifications. The main contributions of this paper include:  
+
+> •
+
+A novel framework for leveraging a sparsely-gated mix-ture of experts in a parkour context.  
+
+> •
+
+Incorporation of perception via a depth camera into the framework.  
+
+> •
+
+A robust deployment on the Unitree Go2 Quadruped that includes examples of real world performance on challenging terrain like that of Fig. 1. We conduct evaluations in the real world on a challenging obstacle that is 80% of the robot’s height and test various architectures. We find benefits to the MoE by comparing it with a sequential MLP with the same number of parameters as the MoE at inference time, in which the MoE achieves double the successful trials as the MLP. Only by increasing the network size of the sequential MLP to the total number of parameters of the MoE is the robustness comparable, but this comes at the cost of increasing computation. This larger 
+
+> arXiv:2604.19344v1 [cs.RO] 21 Apr 2026
+
+sequential MLP has an inference 14.3% slower than the MoE in experiments with a batch size of 6000, showing the benefits of sparsity. Additionally, locomotion is a cyclical task, and we analyze expert weighting to find evidence of cyclical expert specialization, with noted exceptions for experts that specialize with respect to depth. The results show that our proposed architecture offers benefits in the vision-based quadruped parkour space and merits wider consideration. The rest of this paper is organized as follows: Sec. II presents a review of related work in traditional methods such as model-based control and elevation maps, model-free methods such as RL, and mixture of experts; Sec. III is the introduction of the methodology with attention to the MoE architecture; Sec.IV is the evaluation of the method on a real robot and comparison to baselines; and finally Sec.V is the conclusion with notes on drawbacks and future work. II. R ELATED WORKS 
+
+A. Traditional Methods 
+
+Traditional approaches to vision-based parkour often de-couple locomotion and perception. The locomotion module may leverage model-based techniques from early examples like Raibert’s Hopping Machine [9] that treated the system like an inverted pendulum to more recent work like Bledt et al. [10] using a floating base model to climb stairs on the Cheetah Robot [10], Hutter’s et al. [11] on Anymal leveraging a floating base model to climb tall stairs, Katz et al. [12] and a floating base model on the Mini Cheetah to perform backflips, Kim et al. [13] blending a floating base model and full-body dynamics to sprint, Belvedere et al. [14] using a floating base model to handle uneven terrain, Bjelonic et al. [15] applying floating base and whole-body control to work in the DARPA Subterranean Challenge, and Corb` eres et al. [16] and their work leveraging only whole-body models. For perception typically a separate module is implemented leveraging elevation maps like early examples of Kweon et al. [17] prototyping a mars explorer by working in spherical-polar space, Fankhauser et al. [18] using terrain maps to get footholds and then that as an input into the locomotion controller on rough terrain, and Kim et al. [19] leveraging depth camera pointclouds to construct an elevation map for obstacle avoidance and footstep planning as an input into the locomotion controller. Traditional methods are often tailored to a particular skill, making it difficult to adapt to new skills. They also require complex modeling, which may make it difficult to generalize to new terrain that was not accounted for. In contrast, our method using a model-free approach can accommodate multiple skills and terrain. 
+
+B. Learning-based Methods 
+
+Unlike traditional methods, learning-based approaches to vision-based parkour are often model-free and may separate perception and locomotion, or in recent years more likely couple them in an end-to-end approach. Rudin et al. [20] use sampled points from a terrain map as an input into a RL con-troller to climb and step, Hoeller et al. [1] leverage hierarchical RL learning a module to output maps and inputting that into a learned controller to climb and jump, Agarwal et al. [21] use an egocentric camera and end-to-end learning with a depth camera to traverse a variety of terrains, Rudin et al. [22] end-to-end learning and multi-expert distillation with RL fine tuning to enable locomotion on challenging terrains, Zhuang et al. [3] use end-to-end learning and soft dynamics constraints to jump and run, Cheng et al. [2] use end-to-end learning and a unified reward function to enable leaping and climbing. These approaches work and show impressive results on a variety of terrains, but with the exception of recurrent neural networks often used to encode depth images, the dominant approach is a sequential multilayer perceptron. Attention to network size and scaling potential has been limited and our method focuses on solving this using techniques from the large language model space, such as a mixture of experts. 
+
+C. Mixture of Experts 
+
+Mixture of experts are popular in the large language model (LLM) space and early examples like that of Jacobs et al. [23] leveraged several expert networks and a gating network to solve vowel discrimination tasks, while more current exam-ples built on this including work by Shazeer et al. [24] on sparsely gated MoEs that leverage conditional computation on a subset of experts to achieve performance benefits in machine translation. Conditional computation has been widely applied in LLMs like work of Lepikhin et al. with Gshard [6] to speed up parallel computation and show improvements in machine translation, Zhu et al. [25] with Llama-moe taking existing dense LLMs and re-training to an MoE to outperform, Du et al. [26] with GLAM lowering training costs with an MoE, and the work of Jiang et al. [7] with the Mixtral-8x7B model leveraging conditional compute to outperform on mathematics and other tasks. Until now, these methods have not been widely applied to locomotion or parkour space with the distinct exception of Huang et al. [8] who apply MoE without vision or conditional computation. Our method relies on conditional compute via a sparsely gated MoE to show performance benefits for vision-based parkour, and unlike [8] we apply this as a layer in the latent space of the actor network. III. M ETHODS 
+
+A. Learning Parkour via RL 
+
+The objective is to learn a policy π parametrized by θ
+
+to control the robot in vision-based parkour. To solve the problem, we employ reinforcement learning. The policy is used to sample an action at ∼ πθ (at|ot) where at ∈ R12 is the joint position target of each of the 12 joints of the robot, and 
+
+ot is the observation to be discussed in Sec. III-B. The policy is trained to maximize expected rewards, defined in Sec. III-D. We train purely in simulation, getting state transitions and observations from Isaac Gym [27] and a modified version of legged gym [28] with the depth pipeline. The training environment includes a series of boxes to climb, gaps to jump, and flat terrain, parkour pads to leap through, and hurdles to climb, arranged in increasing difficulty [2]. Robots start in easier levels and as they traverse a certain amount of the terrain, are promoted to more difficult obstacles [21]. Our architecture is visualized in Fig. 3. Much attention is paid to observation and dealing with privileged information (a) (b) (c) (d) 
+
+Fig. 2: The 32cm Box is show with the mixture of experts policy controlling the robot. Four key moments are identified where the robot approaches the box 2a, gets its front legs on the box 2b, stands on the box 2c, and dismounts 2d. Depth images are shown without any processing. Perception (Phase 1)   
+
+> Scandots Proprioception o𝒕
+
+proprio  
+
+> Yaw to Goal o𝒕
+> heading
+> Yaw
+> Estimate
+> ô𝒕
+> heading
+> Mass,
+> Friction,
+> Motor
+> Strengths
+> 𝒆 𝒕
+> phys
+
+Latent 
+
+> 𝑰 𝒕
+> scandots
+> Linear Vel
+> Estimat or
+
+ෝ𝒗 𝒕    
+
+> Linear
+> Layer
+> Linear
+> Layer
+> Expert 1
+> Expert 2
+> Gate
+> Out
+> Expert 3
+> Sparsely Gated MoE Actor (Phase 1)
+> Perception (Phase 2)
+> Depth Image
+> Sparsely Gated MoE
+
+Actor (Phase 2) 
+
+> Latent
+> 𝑰 𝒕
+> depth
+> Linear
+> Velocity
+> 𝒗 𝒕
+> Priv Latent
+> Estimator
+> Î𝒕
+> 𝒑𝒉𝒚𝒔
+> Expert n
+> Privileged
+
+Latent 
+
+> 𝑰 𝒕
+> phys
+
+Fig. 3: Model architecture during phase 1 and phase 2 training. Perception input is encoded with a multi-layer perceptron (MLP) during phase 1 and a general recurent unit (GRU) during phase 2. During phase 2 the depth encoder is also used to output yaw estimates. Privileged information like center of mass, friction coefficients, and motor strengths are encoded during phase 1 and estimated in phase 2 from the proprioceptive history. Linear velocity is estimated in phase 2. The actor is a mixture of experts (MoE) that has a linear layer connected to the MoE layer that blends various experts sparsely according to a gating matrix and passes the output to a final linear layer. using two phase learning in Sec. III-B. This observation flows to the MoE actor discussed in Sec. III-C, which is used in an actor-critic algorithm, specifically proximal policy optimization (PPO) [29] in phase 1. PPO’s loss is augmented with a term to encourage diversity of experts discussed in section III-C. Backpropagation is used to train the actor linear layers, various parameters of the actor’s MoE layer including the gating network, the noise matrix, and the parameters of the expert component networks, parameters of the critic network, parameters of the scan-encoder used to encode elevation maps in phase 1, and parameters of the privileged information encoder used to encode in phase 1. In the second phase the phase 1 actor is taken as the teacher and mean-squared-error loss on actions is used to train the student which is initialized from the teacher parameters, and a term for yaw loss from [2] is included. 
+
+B. Observation and Two-Phase Training 
+
+We use two-phase training [30], [31] to take advantage of privileged information to make the problem more tractable and speed up the learning. The observation therefore changes between phase 1 and phase 2 but in both phases ot is a con-catenation of 5 components based on proprioception oproprio  
+
+> t
+
+,perception operception  
+
+> t
+
+, heading oheading  
+
+> t
+
+, privileged physical infor-mation ephys  
+
+> t
+
+, and privileged robot information erobot  
+
+> t
+
+. Generally in phase 2 we replace privileged information which we have at training time (given the simulator has the ground truth) but would not have at deployment on the robot. Proprioception is the only component that remains unchanged from phase to phase. The proprioceptive input includes base angular velocity 
+
+ωt ∈ R3, base orientation that includes roll and pitch ϕt ∈ R2,forward velocity command vx target  
+
+> t
+
+∈ R1 that is padded with two zeros to length 3 for historical reasons, joint positions 
+
+qt ∈ R12 , joint velocities ˙qt ∈ R12 , past actions at−1 ∈
+
+R12 , and boolean contacts for feet ct ∈ R4. Further, to the observation for the actor of angular velocity, pitch, roll, joint positions, joint velocities, we add Gaussian noise. To the boolean foot contact observations we flip the observation with a given probability. The critic (with hidden dimensions of 512, 256, 128) receives observations free of noise. Noise parameters used are given in table I. The final component of proprioception in the observation is a rolling history of length 10 of past proproprioceptive observations oproprio 
+
+> t−1: t−10
+
+.The perceptive component of the observation operception 
+
+> t
+
+changes from phase to phase because depth images take time to render and are not the most stable to learn from [3]. In particular we use privileged information of scandots (a heightmap around the robot) [21] encoded by an MLP (with hidden dimensions of 128, 64, 32) to produce a latent 
+
+Iscandots  
+
+> t
+
+∈ R32 . The MLP is optimized at the same time as the actor in the first phase. In the second phase this is replaced by the depth image encoded by a gated recurring unit (GRU) (with hidden size 512) [32] which also takes 2 past proprioception observations as input oproprio  
+
+> t−1: t−2
+
+to produce a latent Idepth  
+
+> t
+
+∈ R32 which is optimized at the same time as the depth actor. Depth image processing is elaborated in Sec. III-E. The heading component of the observation oheading  
+
+> t
+
+∈ R2
+
+is based on the Unified Reward for Extreme Parkour [2] that lets the robot pick the heading by using oracle yaw inputs to the current goal ψgoal  
+
+> t
+
+and next goal ψnext goal  
+
+> t
+
+in phase 1 and replacing these gradually with estimated yaw targets 
+
+ˆotheading from the depth encoder in phase 2. The privileged physical information ephys  
+
+> t
+
+is based on online adaptation [33] whereby we take privileged information of the center of mass offsets eCOM  
+
+> t
+
+∈ R3, and mass offset emass  
+
+> t
+
+∈ R1, friction coefficient efriction  
+
+> t
+
+∈ R1, and motor strengths that are used to change the proportional and derivative terms in the simulated PD controller that takes joint angle goals and outputs torque 
+
+emotor  
+
+> t
+
+∈ R24 . The true physical characteristics are randomized within ranges for each environment, and the ranges are given in Table I. These are encoded in a latent vector by an MLP (with hidden dimensions of 64, 20) Iphys  
+
+> t
+
+∈ R20 that is optimized at the same time as the actor in phase 1 that enables the latent to vary at the start of training and discourages variation after 3000 steps. In phase 2 this is replaced by an estimate from an MLP ˆIphys  
+
+> t
+
+trained using supervised learning to mimic this latent that takes proprioceptive history as the input. The last observation component is the privileged robot information 
+
+erobot  
+
+> t
+
+whereby we take linear velocity of the robot in phase 1 vt ∈ R3 and replace this with an estimate ˆvt in phase 2 from an MLP trained using supervised learning to estimate linear velocity given proprioception oproprio  
+
+> t
+
+. erobot  
+
+> t
+
+is padded with zeros to length 9 for historical compatibility reasons. In total, ot ∈ R591 .
+
+C. Mixture of Experts 
+
+We use an actor network of 3 sequential layers where the middle layer is the MoE and other two layers are linear layers and ELU activation [34] is used between layers. We use layer sizes of 512, 256, 256. The output of the MoE layer is a weighted combination of the n expert outputs Ei(x) based on layer input x and the gating value G(x)i (1). The experts are simple weight matrices similar to that proposed by Cho et al. [35]. 
+
+y =
+
+> n
+
+X
+
+> i=1
+
+G(x)iEi(x) (1) The MoE layer is a sparsely-gated mixture of the top k of n
+
+experts based on work by Shazeer et al. [24] and we therefore take advantage of the conditional computation afforded by sparse gating. We review this work here to make this paper self-contained. The intermediate gate output H(x)i takes as the basis the product of the layer input x and a trainable weight matrix Wg and adds tunable noise to help balance expert utilization. Wnoise and Wg are initialized to zero at the start of learning. 
+
+H(x)i = ( x · Wg )i + N (0 , 1) · softmax (( x · Wnoise )i) (2) Top-k gating is used (3) whereby gate values not in the top-k are set to −∞ .KeepTopK (v, k )i =
+
+(
+
+vi if vi ∈ top k elements of v 
+
+−∞ otherwise (3) and therefore final gate values G(x)i are zero post the softmax which is responsible for creating sparsity (4) 
+
+G(x)i = softmax (KeepTopK (H(x)i, k )) (4) To encourage diversity of experts given MoEs can favor a limited number of experts a load balancing loss term, again from Shazeer et al. [24] is adopted into phase 1 and phase 2 losses where the importance of an expert is calculated as the sum of its weights across the batch (5) Importance (X) = X
+
+> x∈X
+
+G(x) (5) and the coefficient of variation is calculated as the standard de-viation of importances divided by the mean of importances and this is weighted with a manually tuned coefficient wImportance 
+
+to derive the additional loss term (6). We use a wImportance of 0.1, k of 4, and n of 16. 
+
+LImportance (X) = wImportance · CV (Importance (X)) 2 (6) TABLE I: Domain randomization. Distribution type, u for uniform between bounds low l and high h, g for gaussian parametrized by a mean μ and sigma σ, and b for a binomial distribution parametrized by a probability p.                                                                                                                                          
+
+> Term Type lhμσp
+> rotation g--00.025 -joint pos g--00.01 -joint vel g--01.5 -ang vel g--00.2 -foot contact b----0.05 cam x pos g--0.32 0.01 -cam y pos g---0.0175 0.0025 -cam z pos g--0.15 0.02 -cam x rot u-1 1---cam y rot u21.2 24.6 ---cam z rot u-1 1---horizontal fov u85 89 ---depth artifact b----0.001 depth artifact height g--33-depth artifact width g--33-contour artifact b----0.1 gaussian blur sigma u0.1 2.0 ---
+> vx target
+> tu0.3 0.8 ---
+> efriction
+> tu0.6 2.0 ---
+> eCOM
+> tu-0.2 0.2 ---
+> emass
+> tu0.0 3.0 ---
+> emotor
+> tu0.8 1.2 ---
+
+D. Rewards 
+
+Rewards are given in Table II. Variable definitions are provided: rt is the ground truth orientation of the robot in quaternion form, the projected gravity quaternion is gt, the timestep δt is 50HZ, f jt indicates the jth element of the robot model and its contact force, a subset of robot elements including the base, head, thigh, and calf is used for collision indices, the torque on the ith motor is τ it , the feet edge reward is taken from [2] using M a boolean function indicating if a foot position pfoot  
+
+> i
+
+is near an edge in the environment, the tracking goal vel is also from [2] and uses ˆdw = ∥probot −
+
+pgoal ∥2 where p is the position in world coordinates, the default position for each joint is wt. In training, to avoid early termination problems, we only use positive rewards by flooring rewards for a trajectory at zero. 
+
+E. Depth Image Pipeline 
+
+Another sim-to-real gap exists in the depth images rendered in simulation and the depth images available from the robot. To bridge this gap when training in phase 2 we attach the depth cameras to the robots while varying the position, angle, and field of view of the cameras within the bands given in Table I. While stepping the environment and collecting sensor data we also pre-process the images. In particular we follow the steps visualized in Fig. 4 where when deploying on the robot we skip depth contour and artifact steps. We take in images with resolution (160, 120). First, we clip images to the minimum (0.15 meters) and maximum (3 meters). Second, we find contours of the image with a threshold (1.0) on the depth gradient and set found contours to the maximum (3 meters) with a probability given in I. Third, we crop the image taking 20 pixels from the left, 5 from the TABLE II: Rewards terms used including coefficients and their applications.                                                                             
+
+> Term Coefficient Formula
+> tracking yaw 0.5 e−| ψgoal
+> t−ψt|
+> lin vel z -1.5
+> (
+> vztif walking env
+> 0.5vztotherwise ang vel xy -0.05 (ωxt)2+ ( ωyt)2
+> orientation -1.0
+> (
+> (gxt)2+ ( gyt)2if walking env
+> 0otherwise dof acc -2.5e-7 P12
+> i=0 (( ˙ qit−˙qit−1)/δt )2
+> collision -10. P
+> j∈collision bodies
+> (
+> 1.0if |fjt|2>0.10otherwise action rate -0.1 ∥at−at−1∥2
+> delta torques -1.0e-7 P12
+> i=0 (τit−τit−1)2
+> torques -1e-5 P12
+> i=0 (τit)2
+> hip pos -0.5 P
+> i∈hip index (qit−wit)2
+> dof error -0.04 P
+> i(qit−wit)2
+> feet stumble -1.0
+> (
+> 1if Σj∈feet ∥fx,y
+> j∥2>4∗ | fzj|
+> 0otherwise feet edge -1.0 P
+> ici·M[pi]
+> tracking goal vel 1.5 argmin (⟨vt,ˆdw⟩, v x target
+> t))
+
+right, 16 from the bottom, and none from the top. Fourth, we add artifacts to the image with a given probability with artifact width and height parametrized by Gaussians, probability and parameters given in Table I. Fifth, we employ Gaussian blurring with a kernel of size 3 and a sigma parametrized in Table I. Sixth, we downsample the image to the size (87, 58). Seventh, we normalize the image according to the minimum and maximum clipping and centering around 0. IV. R ESULTS 
+
+A. Hardware 
+
+We use a Unitree Go2 Robot with an Intel Realsense D435f depth camera mounted. This camera includes an IR filter that helped filter out the reflections of lights on the floor of the laboratory seen in Fig. 2. We also designed and fabricated a camera mount for the Go2 robot that is available in the public code repository. The camera’s angle of orientation around the y-axis helps determines its view and 23 degrees was chosen. It is also important for the mount to have rigid attachment to the robot to avoid camera movement relative to the robot during dynamic motion. We publish depth images at 15HZ from the robot’s onboard computer but run the policy off-board on an Nvidia RTX 2060 GPU. When deploying on the real robot we clip actions given torque limits, position goals, and current positions, mimicking the PD controller running on the robot [3]. We also kill the program if pitch, roll, joint position, or joint torque are out of pre-set boundaries. In training we simplify the collision model of the Go2 by removing hip joints from collision checking, replacing the multi-segment calf with a single segment, and ignoring the upper-head. We train on an Nvidia RTX 4090 GPU. 
+
+B. Simulation Tests 
+
+We compare the MoE to baselines that use a sequential MLP with ELU activation between layers for the actor and vary the number of parameters to test the hypothesis that MoE helps (a) A similar scene. (b) Rendered depth. (c) Clip, contour, crop. (d) Artifacts, blur.   
+
+> (e) Resize image.
+> (f) Normal-ize.
+
+Fig. 4: Depth images that are rendered start off with perfectly correct information. We degrade it in various steps to add noise that is similar to the noise seen on the real hardware, an Intel Realsense D435f Depth Camera. TABLE III: Small, Medium, and Large sequential MLP policies when deployed and tested on challenging obstacles 80% of the robot’s height multiple times under-perform the MoE severely. These policies have less than or equal to the number of parameters of the MoE at inference time. The Extra-Large Sequential MLP policy has comparable performance on the obstacle to the MoE but with more scrambling and recoveries. This policy has the total number of parameters of the MoE and underperforms in computational time tests. Ablation studies examining noise and regularized online adapatation are conducted showing both are important to success in the real world.                                                                                   
+
+> Algorithm Actor # Param Actor # Param @ Inf. # Trials 32cm Box # Success 32cm Box Avg Inf. Sec. MoE top4/16 1.6×10 60.8×10 610 10 4.2×10 −3
+> Sequential (Small) 0.2×10 60.2×10 6500.9×10 −3
+> Sequential (Medium) 0.5×10 60.5×10 6521.6×10 −3
+> Sequential (Large) 0.8×10 60.8×10 610 52.6×10 −3
+> Sequential (Extra-Large) 1.6×10 61.6×10 610 94.8×10 −3
+> Sequential (Med., w/ Noise, no ROA) 0.5×10 60.5×10 6511.6×10 −3
+> Sequential (Med., no Noise, w/ ROA) 0.5×10 60.5×10 6501.6×10 −3
+
+scale performance for a given parameter budget at inference for vision-based locomotion. The varying layer sizes of the sequential MLP actors are: 256, 128, 64 (Small); 512, 256, 128 (Medium); 512, 512, 387 (Large) which is roughly the number of parameters the MoE has at inference time; 1024, 620, 512 (Extra-Large) which is roughly the number of total parameters the MoE has. We also train one sequential MLP policy without regularized online adaptation and we train one sequential policy without noise in observations for ablation studies. We experiment in simulation to measure the computational benefits of conditional compute via sparsity by running 1000 forward passes through each policy’s actor network on an Nvidia RTX 2060 GPU, without tracking gradients, and mea-suring the time to compute the forward pass and copy the mean result into CPU memory. We use a batch dimension of 6000, similar to our training setup. We report the average time in Table III showing that the number of parameters has a big impact on time to do a forward pass and the Extra-Large sequential policy with a similar number of total parameters as the MoE has 14.3% more computational time. 
+
+C. Performance Tests 
+
+We test on a 32cm box that is 80% of the robot’s height seen in Fig. 2, a challenging obstacle. We deploy and test each policy multiple times. For policies with low robustness we test 5 times for safety reasons, for other policies we test 10 times. The number of trials is recorded as is the number of successful trials where the robot overcomes the obstacle. Table III summarizes the results. Fig. 2 shows one of the 5 runs for the MoE policy with depth and color images from the camera where the robot approaches the obstacle, hops on-top, and then dismounts. The MoE policy outperforms the Small, Medium and Large sequential policies, potentially reflecting the power of con-ditional computation and the increase in total parameters. Compared to the Extra-Large policy, the MoE policy has a similar number of successful runs but with less scrambling. To quantify the scrambling, we record across successful trials the average time in seconds between the robot making first contact with the obstacle and each of the four feet making contact with the ground on the opposite side of the obstacle. The Extra-large policy had an average time of 1.99 seconds and the MoE policy had an average time of 1.68 seconds. This largely reflects instances where the Extra-Large policy missed its first jump and retried. We also analyze expert weighting. Across the trial in Fig. 2 the expert used the least is expert index 7 which is used in just 7.7% of timesteps. Other experts have utilization from 17% to 41% of timesteps. The selected experts in Fig. 5a show strong cyclical signals in expert weights in a trial with the exception of expert index 7. Locomotion is cyclical, so this may indicate expert specialization in aspects of the locomotion cycle. The low utilization of Expert Index 7 becomes more clear with analysis in Fig. 5b which analyzes the gradient of expert weights by playing back the recorded data from the trial in Fig. 2 and running inference on observations tracking expert weights and the gradient with respect to the observation. For each expert non-zero gradients are collected across timesteps and the average absolute gradient for each component of the observation is taken across timesteps. Expert index 7 is most sensitive to the depth latent of all the experts, which 0      
+
+> 1
+> 5
+> Selected Expert Weights vs Time
+> 0
+> 1
+> 6
+> 0
+> 1
+> 7
+> 7.0 7.5 8.0 8.5 9.0 9.5 10.0
+> time from start (seconds)
+> 0
+> 1
+> 8
+> Expert Index, Average Expert Weight
+
+(a) 0.0        
+
+> 0.2
+> 5
+> Avg. Absolute Gradient of Selected Expert Weights w.r.t. Obs.
+> 0.0
+> 0.2
+> 6
+> 0.0
+> 0.2
+> 7
+> 0100 200 300 400 500 600
+> Observation Index
+> 0.0
+> 0.2
+> 8
+> Expert Index, Average Absolute Gradient
+
+(b) 
+
+Fig. 5: Selected expert weights throughout the trial in figure 2 are analyzed. Figure 5a shows strong cyclical signals for experts with indices 5, 6, and 8 which is expected given the cyclical nature of locomotion and indicates expert specialization at different points in the cycle. Expert index 8 has highly non-cyclical weighting but figure 5b analyzes the gradient of weights where by proprioception oproprio  
+
+> t
+
+is red, depth latent is orange Idepth  
+
+> t
+
+, proprioceptive history is yellow oproprio 
+
+> t−1: t−10
+
+, yaw is green ˆoheading  
+
+> t
+
+, robot latent is blue ˆIrobot  
+
+> t
+
+, physics latent is purple ˆIphys  
+
+> t
+
+and expert index 8 is more sensitive to the depth latent than other experts. Other experts favor proprioception, yaw, and privileged latent variables. may explain the lack of cyclicality in its weight given the environment is not cyclical. Other expert weights are sensitive to proprioception, yaw, and latent privileged physics. This may indicate further support for specialization in parts of the locomotion cycle. 
+
+D. Ablation Studies 
+
+We train a sequential Medium policy that does not use noise on observations in the simulation. We also train a sequential Medium policy that does not use regularized online adaptation (ROA) to estimate environmental properties like center-of-mass (COM), friction, and motor strength and also does not estimate linear velocity. The policy without ROA and linear velocity estimation but with noise shows some success in overcoming the 32cm Box obstacle, but without robustness. The policy with ROA and linear velocity estimation but without noise does not overcome the 32cm Box obstacle. This implies that noise is an important technique for domain randomization to bridge the sim-to-real gap. ROA is also found to be important as the Medium sequential policy with noise and with ROA outperformed the policy without ROA. 
+
+E. Outdoor Tests 
+
+To test the performance of the MoE policy outside labora-tory conditions we deploy the robot in a skate-park with a long box-like obstacle and in a wide space with a series of box-like obstacles that Fig. 1 shows. The robot is able to overcome both obstacles outside of laboratory conditions with sunlight and more expansive views from the depth-camera. V. C ONCLUSION 
+
+We present a mixture of experts system for vision-based parkour leveraging conditional compute to scale performance for a given parameter budget. We test the success in re-peatedly overcoming a challenging obstacle and analyze the relationship between success and the number of parameters. We find benefits by using MoE to take advantage of sparsity and conditional compute. We also show the importance of both noise and other schemes to bridge the sim-to-real gap like regularized online adaptation. However, the MoE system introduces many more hyper-parameters that need to be tuned like the number of experts, the number of top experts to filter for conditional computation, and the coefficient on the loss to encourage expert utilization. Future work may investigate the specialization of experts with different architectures that tie expert performance more explicitly to obstacles or points in the locomotion cycle and compare this to the organic specialization used in this work. VI. A CKNOWLEDGMENTS 
+
+Thanks to Chelsea Finn for her guidance in reinforcement learning and research. REFERENCES [1] D. Hoeller, N. Rudin, D. Sako, and M. Hutter, “Anymal parkour: Learning agile navigation for quadrupedal robots,” Science Robotics ,vol. 9, no. 88, p. eadi7566, 2024. [2] X. Cheng, K. Shi, A. Agarwal, and D. Pathak, “Extreme parkour with legged robots,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 11 443–11 450. [3] Z. Zhuang, Z. Fu, J. Wang, C. Atkeson, S. Schwertfeger, C. Finn, and H. Zhao, “Robot parkour learning,” arXiv preprint arXiv:2309.05665 ,2023. [4] Y. Ma, A. Cramariuc, F. Farshidian, and M. Hutter, “Learning coor-dinated badminton skills for legged manipulators,” Science robotics ,vol. 10, no. 102, p. eadu3922, 2025. [5] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” Advances in neural information processing systems , vol. 30, 2017. [6] D. Lepikhin, H. Lee, Y. Xu, D. Chen, O. Firat, Y. Huang, M. Krikun, N. Shazeer, and Z. Chen, “Gshard: Scaling giant models with conditional computation and automatic sharding,” arXiv preprint arXiv:2006.16668 ,2020. [7] A. Q. Jiang, A. Sablayrolles, A. Roux, A. Mensch, B. Savary, C. Bam-ford, D. S. Chaplot, D. d. l. Casas, E. B. Hanna, F. Bressand, et al. ,“Mixtral of experts,” arXiv preprint arXiv:2401.04088 , 2024. [8] R. Huang, S. Zhu, Y. Du, and H. Zhao, “Moe-loco: Mixture of experts for multitask locomotion,” arXiv preprint arXiv:2503.08564 , 2025. [9] M. H. Raibert, H. B. Brown Jr, and M. Chepponis, “Experiments in balance with a 3d one-legged hopping machine,” The International Journal of Robotics Research , vol. 3, no. 2, pp. 75–92, 1984. [10] G. Bledt, M. J. Powell, B. Katz, J. Di Carlo, P. M. Wensing, and S. Kim, “Mit cheetah 3: Design and control of a robust, dynamic quadruped robot,” in 2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2018, pp. 2245–2252. [11] M. Hutter, C. Gehring, D. Jud, A. Lauber, C. D. Bellicoso, V. Tsounis, J. Hwangbo, K. Bodie, P. Fankhauser, M. Bloesch, et al. , “Anymal-a highly mobile and dynamic quadrupedal robot,” in 2016 IEEE/RSJ international conference on intelligent robots and systems (IROS) .IEEE, 2016, pp. 38–44. [12] B. Katz, J. Di Carlo, and S. Kim, “Mini cheetah: A platform for pushing the limits of dynamic quadruped control,” in 2019 international conference on robotics and automation (ICRA) . IEEE, 2019, pp. 6295– 6301. [13] D. Kim, J. Di Carlo, B. Katz, G. Bledt, and S. Kim, “Highly dynamic quadruped locomotion via whole-body impulse control and model predictive control,” arXiv preprint arXiv:1909.06586 , 2019. [14] T. Belvedere, M. Ziegltrum, G. Turrisi, and V. Modugno, “Feedback-mppi: fast sampling-based mpc via rollout differentiation–adios low-level controllers,” IEEE Robotics and Automation Letters , vol. 11, no. 1, pp. 1–8, 2025. [15] M. Bjelonic, P. K. Sankar, C. D. Bellicoso, H. Vallery, and M. Hutter, “Rolling in the deep–hybrid locomotion for wheeled-legged robots using online trajectory optimization,” IEEE Robotics and Automation Letters ,vol. 5, no. 2, pp. 3626–3633, 2020. [16] T. Corb` eres, C. Mastalli, W. Merkt, J. Shim, I. Havoutis, M. Fallon, N. Mansard, T. Flayols, S. Vijayakumar, and S. Tonneau, “Perceptive locomotion through whole-body mpc and optimal region selection,” 
+
+IEEE Access , vol. 13, pp. 69 062–69 080, 2025. [17] I.-S. Kweon, M. Hebert, E. Krotkov, and T. Kanade, “Terrain mapping for a roving planetary explorer,” in IEEE International Conference on Robotics and Automation . IEEE, 1989, pp. 997–1002. [18] P. Fankhauser, M. Bjelonic, C. D. Bellicoso, T. Miki, and M. Hutter, “Robust rough-terrain locomotion with a quadrupedal robot,” in 2018 IEEE International Conference on Robotics and Automation (ICRA) .IEEE, 2018, pp. 5761–5768. [19] D. Kim, D. Carballo, J. Di Carlo, B. Katz, G. Bledt, B. Lim, and S. Kim, “Vision aided dynamic exploration of unstructured terrain with a small-scale quadruped robot,” in 2020 IEEE International Conference on Robotics and Automation (ICRA) , 2020, pp. 2464–2470. [20] N. Rudin, D. Hoeller, M. Bjelonic, and M. Hutter, “Advanced skills by learning locomotion and local navigation end-to-end,” 2022. [Online]. Available: https://arxiv.org/abs/2209.12827 [21] A. Agarwal, A. Kumar, J. Malik, and D. Pathak, “Legged locomotion in challenging terrains using egocentric vision,” in Conference on robot learning . PMLR, 2023, pp. 403–415. [22] N. Rudin, J. He, J. Aurand, and M. Hutter, “Parkour in the wild: Learning a general and extensible agile locomotion policy using multi-expert distillation and rl fine-tuning,” arXiv preprint arXiv:2505.11164 , 2025. [23] R. A. Jacobs, M. I. Jordan, S. J. Nowlan, and G. E. Hinton, “Adaptive mixtures of local experts,” Neural Computation , vol. 3, no. 1, pp. 79–87, 1991. [24] N. Shazeer, A. Mirhoseini, K. Maziarz, A. Davis, Q. Le, G. Hinton, and J. Dean, “Outrageously large neural networks: The sparsely-gated mixture-of-experts layer,” arXiv preprint arXiv:1701.06538 , 2017. [25] T. Zhu, X. Qu, D. Dong, J. Ruan, J. Tong, C. He, and Y. Cheng, “Llama-moe: Building mixture-of-experts from llama with continual pre-training,” in Proceedings of the 2024 conference on empirical methods in natural language processing , 2024, pp. 15 913–15 923. [26] N. Du, Y. Huang, A. M. Dai, S. Tong, D. Lepikhin, Y. Xu, M. Krikun, Y. Zhou, A. W. Yu, O. Firat, et al. , “Glam: Efficient scaling of language models with mixture-of-experts,” in International conference on machine learning . PMLR, 2022, pp. 5547–5569. [27] V. Makoviychuk, L. Wawrzyniak, Y. Guo, M. Lu, K. Storey, M. Macklin, D. Hoeller, N. Rudin, A. Allshire, A. Handa, et al. , “Isaac gym: High performance gpu-based physics simulation for robot learning,” arXiv preprint arXiv:2108.10470 , 2021. [28] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk in minutes using massively parallel deep reinforcement learning,” in 
+
+Conference on robot learning . PMLR, 2022, pp. 91–100. [29] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Prox-imal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 ,2017. [30] T. Miki, J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning robust perceptive locomotion for quadrupedal robots in the wild,” Science robotics , vol. 7, no. 62, p. eabk2822, 2022. [31] D. Chen, B. Zhou, V. Koltun, and P. Kr¨ ahenb¨ uhl, “Learning by cheating,” in Conference on robot learning . PMLR, 2020, pp. 66–75. [32] J. Chung, C. Gulcehre, K. Cho, and Y. Bengio, “Empirical evaluation of gated recurrent neural networks on sequence modeling,” arXiv preprint arXiv:1412.3555 , 2014. [33] A. Kumar, Z. Fu, D. Pathak, and J. Malik, “Rma: Rapid motor adaptation for legged robots,” arXiv preprint arXiv:2107.04034 , 2021. [34] D.-A. Clevert, T. Unterthiner, and S. Hochreiter, “Fast and accurate deep network learning by exponential linear units (elus),” arXiv preprint arXiv:1511.07289 , vol. 4, no. 5, p. 11, 2015. [35] K. Cho and Y. Bengio, “Exponentially increasing the capacity-to-computation ratio for conditional computation in deep learning,” arXiv preprint arXiv:1406.7362 , 2014.

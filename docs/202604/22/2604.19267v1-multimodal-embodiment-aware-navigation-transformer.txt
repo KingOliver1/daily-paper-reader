@@ -1,0 +1,399 @@
+Title: Multimodal embodiment-aware navigation transformer
+
+URL Source: https://arxiv.org/pdf/2604.19267v1
+
+Published Time: Wed, 22 Apr 2026 00:52:35 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Multimodal embodiment-aware navigation transformer 
+
+Louis Dezons ∗† , Quentin Picard ∗, R´ emi Marsal †, Franc ¸ois Goulette †, David Filliat ∗∗AMIAD Pˆ ole Recherche, Palaiseau, France 
+
+†U2IS, ENSTA, Institut Polytechnique de Paris, Palaiseau, France louis.dezons@polytechnique.edu 
+
+Abstract —Goal-conditioned navigation models for ground robots trained using supervised learning show promising zero-shot transfer, but their collision-avoidance capability nevertheless degrades under distribution shift, i.e. environmental, robot or sensor configuration changes. We propose ViLiNT, a multi-modal, attention-based policy for goal navigation, trained on heterogeneous data from multiple platforms and environments, which improves robustness with two key features. First, we fuse RGB images, 3D LiDAR point clouds, a goal embedding and a robot’s embodiment descriptor with a transformer architecture to capture complementary geometry and appearance cues. The transformer’s output is used to condition a diffusion model that generates navigable trajectories. Second, using automatically generated offline labels, we train a path clearance prediction head for scoring and ranking trajectories produced by the diffusion model. The diffusion conditioning as well as the trajectory ranking head depend on a robot’s embodiment token that allows our model to generate and select trajectories with respect to the robot’s dimensions. Across three simulated environments, ViLiNT improves Success Rate on average by 166% over equivalent state-of-the-art vision-only baseline (NoMaD). This increase in performance is confirmed through real-world deployments of a rover navigating in obstacle fields. These results highlight that combining multimodal fusion with our collision prediction mechanism leads to improved off-road navigation robustness 1.
+
+Index Terms —Off-road navigation, Local planner, imitation learning 
+
+I. I NTRODUCTION 
+
+Robust autonomous navigation in off-road environments remains challenging due to the complexity and high variability of the environment, partial observation, dynamic obstacles, and sensing degradations (e.g., dust, rain, grass). Classical pipelines (e.g., [1]) rely on handcrafted or learned traversabil-ity maps and local planners. They offer interpretability and a good capacity to detect situations when motion is impossible. However, they may struggle when the deployment config-uration (robot or sensor) changes, requiring at least sensor calibration or even new training data. End-to-end control trained by imitation (e.g., [2], [3]) has shown some robustness to the robot embodiment thanks to training on data from different robots and direct regression of controls or waypoints from onboard sensing. However, single-modality policies (typically RGB vision) may strongly degrade under environmental changes when other modalities like LiDAR may bring more robustness. These end-to-end 
+
+> 1
+
+Code link: https://github.com/LARIAD/ViLiNT Multimodal Transformer 
+
+> Generation  Clearance prediction  Selection Embodiment  LiDAR Goal  Images
+
+Fig. 1: Overall architecture of our navigation model. High-lighted blocks in red indicate our main contributions. See text for details. local planners also often lack explicit mechanisms to deal with deadlocked situations, i.e., to exit local minima where no feasible trajectory to the goal is available. Finally, these approaches offer some robustness and adaptation to different embodiments, but they do not explicitly take the robot’s dimensions into account and cannot easily be adapted to a new platform without fine tuning using data from this platform. We therefore propose ViLiNT , a multimodal local motion planning architecture based on a transformer that fuses Li-DAR, RGB images, 2D goal and embodiment data into a shared token space as shown in Fig. 1. This approach targets both navigation quality by proposing efficient goal-reaching paths and safety by predicting robot-specific safety margins. Trajectories are generated with a goal-conditioned diffusion policy [4] and fed to the clearance prediction head conditioned by the robot embodiment. At inference, the system generates multiple candidate trajectories and selects the one with the minimum predicted risk (i.e. largest clearance), which is sent to the low-level controller. If no safe trajectory is found, an alternative sampling of exploratory trajectories is used to exit these local minima. This design combines three complementary ideas: (i) mul-timodal token-level fusion to improve robustness; (ii) genera-
+
+> arXiv:2604.19267v1 [cs.RO] 21 Apr 2026
+
+tive trajectory sampling to capture multi-modality in feasible plans; and (iii) an explicit clearance predictor trained with automatically generated labels from the training datasets. Both the generator and the clearance predictor are parameterized by the robot size, the result is a motion-planner that is both expressive and selective: it can propose diverse options adapted to the robot embodiment and then reject those likely to collide, without requiring dense human labels. Our key contributions are:  
+
+> •
+
+A LiDAR–RGB tokenization and cross-modal Trans-former that integrates recent image frames, a LiDAR scan, goal coordinates, and platform description to pro-duce robot’s dynamics and scene description tokens.  
+
+> •
+
+A Navigation data augmentation based on LiDAR data that enables clearance prediction learning without requiring data from all target platforms.  
+
+> •
+
+A Cross-attention clearance head that uses per-waypoint queries (with robot-size conditioning) over Li-DAR tokens to rank diffusion-generated trajectories to select the safest one. II. R ELATED WORK 
+
+A. Perception and planning 
+
+Many state-of-the-art traversable-path generation systems comprise two main components: (i) perception–mapping pipelines that estimate a traversability/cost field from onboard sensing, and (ii) model-based planners that optimize trajecto-ries with respect to that field under kinematic/dynamic con-straints. Observation and mapping pipelines infer traversability from RGB-D/LiDAR — often fusing proprioception for self-supervision — and recent works learn off-road costmaps and visual traversability that integrate with standard navigation stacks (e.g., [5]). On the planning side, reactive local planners such as TEB [6], as well as trajectory-optimization/Model Predictive Control (MPC) methods (e.g., MPPI [7]), remain strong baselines for smooth, constraint-aware motion. While such modular stacks are effective and interpretable, their performance typically hinges on careful platform-specific pa-rameterization (e.g., dynamic limits, and sensor-specific pa-rameters). As sensing setups and robot dimensions change, these parameters often need substantial tuning, and robustness can degrade under appearance/geometry shifts despite good nominal performance. Motivated by these limitations, recent work has explored learning richer priors from data to reduce 
+
+manual cost design while keeping compatibility with classical controllers [8]. Our approach follows this trend: we encode observations, robot embodiment, and goals with a Transformer and generate trajectories via a diffusion policy, while remain-ing compatible with a robot-specific low-level controller. 
+
+B. End-to-end navigation models 
+
+Vision-only end-to-end driving systems such as DAVE-2 [9] demonstrated that imitation from raw monocular imagery can produce lane-following and steering on-road, establishing the paradigm of mapping pixels to controls without intermediate costmaps. Building on this idea, goal-conditioned policies trained on broad, heterogeneous datasets (e.g., GNM/ViNT and follow-ups [2], [3], [10]) show cross-robot/environment generalization and can output feasible trajectories, thereby reducing manual cost engineering while staying compatible with low-level controllers. However, purely visual policies degrade when observations lack salient features or contain unobserved regions due to limited field of view, which impacts collision-avoidance robustness under domain shift. LiDAR-centric approaches such as DTG [11] alleviate some visual brittleness but face sparsity and semantic ambiguity (e.g., thin obstacles). Both NoMaD [10] and DTG [11] employ diffu-sion models [4] to generate trajectories: DTG primarily uses diffusion as a distribution estimator, whereas NoMaD ranks candidate trajectories (e.g., by goal proximity) to select long-range plans—implicitly assuming generated trajectories are safe to track. We adopt diffusion for trajectory generation but pair it with an explicit clearance prediction head conditioned on multimodal tokens and embodiment, scoring candidates to improve robustness. 
+
+C. Multimodal navigation models 
+
+For multimodal sensing in off-road navigation, Bird’s-Eye-View (BEV) fusion networks trained with self-supervision predict traversability and geometry at low latency; e.g., RoadRunner [1] learns hindsight-labeled BEV traversabil-ity/elevation from camera and LiDAR. Vision-only baselines such as TerrainNet [12] produce semantic–geometric BEV maps that pair well with planners and are often combined with LiDAR in practice for robustness. Early multimodal end-to-end policies (e.g., [13]) fuse LiDAR and camera to learn direct control, demonstrating feasibility with low-cost sensors but exposing brittleness to distribution shift. Beyond BEV fusion, multimodal Transformers such as PACT [14] use modality-specific encoders (e.g., PointNet [15] for point clouds) to produce aligned tokens for sequence models that predict future states/actions. In line with these advances, we tokenize heterogeneous inputs and explicitly encode robot size and goal in the token set; unlike direct-control approaches, we produce waypoint trajectories via diffusion, preserving compatibility across platforms. 
+
+D. Collision avoidance 
+
+Several recent methods incorporate safety more explicitly. Risk-Guided Diffusion [16] biases sampling with physics-based terrain risk to steer toward safer paths, at the cost of platform-specific modeling. RL-based diffusion planning [17] integrates task constraints (goal reaching, obstacle avoidance) into diffusion training. MonoMPC [18] learns an obstacle-clearance cost from monocular images and optimizes tra-jectories with MPC using that learned cost. Complementary to these directions, we learn a clearance head that scores diffusion proposals conditioned on LiDAR, embodiment, and goal, enabling risk-aware selection without hand-tuned costs. 
+
+E. 3D point cloud features encoding 
+
+Point-cloud encoders for navigation and perception broadly fall into: (i) point-based networks that operate on sets (e.g., Fig. 2: Global model architecture. See text for details. PointNet/PointNet++), (ii) voxel-based sparse 3D convolutions that scale to large scenes while preserving local geometry (e.g., Minkowski framework [19]), (iii) projection-based en-coders that trade some vertical detail for planar efficiency (e.g., polar/cylindrical discretizations [20]) and (iV) point-transformers . Sparse 3D convs, such as MinkUNets [19], provide a good trade-off between execution time and accu-racy for downstream policy learning, however recent point-transformers [21] offer increased accuracy, while being viable for embedded tasks with optimization such as Flash-Attention. We therefore use PointTransformerV3 as the 3D encoder with a polar sector–ring tokenization described in Sect. III-A. III. M ETHOD 
+
+Fig. 2 illustrates our approach: sensor frames are encoded with DUNE [22] Vision Transformer for images, a state-of-the-art image encoder distilled from 2D and 3D visual fea-tures, and PointTransfomerV3 [21] for LiDAR data and then tokenized, augmented with type and temporal embeddings, and fused by a transformer that jointly attends to sensor tokens, a goal token and a robot’s embodiment token. A conditional diffusion model samples multiple feasible waypoint sequences toward the goal. In parallel, a lightweight head conditioned on robot’s size predicts the obstacle clearance around the trajectory for each candidate using automatically generated clearance values from the training datasets. Visual observation tokens are masked during training with a certain probability to enforce clearance prediction’s reliance on 3D data. We predict the path’s total length to the goal in a similar manner as Vint [3] predicts the time steps to go between the current robot’s position and the goal’s position to stabilize training. At inference, the system selects the trajectory with the maximum minimum distance to obstacles when some are detected nearby and the one bringing the robot the closest to the goal if not. Then, waypoints are sent to the low-level controller. 
+
+A. LiDAR point cloud encoding and tokenization 
+
+Let the instantaneous LiDAR point cloud be P = {pi =(xi, y i, z i)}Ni=1 . The set of points of size N is fed to Point-TransformerV3 [21] that returns per-point features hi ∈ Rde ,
+
+i = 1 , ..., N . We denote V = {(pi, hi)}Ni=1 the resulting set (one feature per point). We partition the horizontal plane into a polar grid with Kθ
+
+angular sectors and Kr radial rings over the region of interest (ROI) with horizontal field-of-view (FoV) θ ∈ [−ϕ, ϕ ] and range r ∈ [0 , R ], where ϕ is the half-FoV as described in Fig. 3. We define sets Bu,v that contain each point of a given sector (u, v ) and the polar grid operator B that maps 2D points 
+
+(xi, y i) to their corresponding sector: 
+
+Bu,v =  i : B(xi, y i) = ( u, v ) ,
+
+B : R2 → { 1, . . . , K θ } × { 1, . . . , K r }. (1) 
+
+GeM pooling and empty-bin handling: The tokenizer outputs a fixed-budget set of K = Kθ Kr tokens by pooling encoder features within each cell. For a cell (u, v ) with fea-tures {hi}i∈B u,v , we use Generalized-Mean (GeM) pooling, applied elementwise with learnable exponent p > 0:
+
+fu,v =
+
+ 1
+
+|B u,v |
+
+X
+
+> i∈B u,v
+
+hpi
+
+1/p 
+
+∈ Rde , (2) If Bu,v = ∅, we use a learned empty embedding e∅ ∈ Rde .
+
+Positional and range-aware descriptors: Each token is enriched with deterministic codes and simple statistics: 
+
+πθ,u = [sin ¯θu, cos ¯θu], ¯θu: cell angle , (3) 
+
+πr,v = ¯ rv /R, ¯rv : cell radius , (4) 
+
+ru,v = 1 
+
+> |B u,v |
+
+X
+
+> i∈B u,v
+
+r(xi, y i), ru,v : mean range , (5) 
+
+˜ru,v = X
+
+> i∈B u,v
+
+wir(xi, y i), ˜ru,v : soft-min center (6) Fig. 3: Illustration of our LiDAR tokenization approach: PointTransformerV3 features are aggregated in a cylindrical voxel grid using Generalized Mean Pooling to produce tokens. Empty voxel tokens are represented by a learned feature vector. with near-range emphasis via normalized weights wi ∝
+
+e−γr (xi,y i). ˜ru,v gives the token an explicit notion of ”how close is the closest obstacle” in the sector which makes it relevant for collision detection. 
+
+Final token projection: The token of dimension d for cell 
+
+(u, v ) is: 
+
+xu,v = Wf fu,v + Wπ [πθ,u ; πr,v ]+ Ws [ru,v ; ˜ ru,v ] ∈ Rd, (7) with learnable linear projections Wf : Rde → Rd, W π :
+
+R3 → Rd, W s : R2 → Rd. We index sectors by sweeping counterclockwise around the robot’s forward axis. Rings are ordered from near to far. This polar discretization balances non-uniform LiDAR densities and aligns with radial collision geometry, and relates to prior cylindrical encoders (e.g., [20]). 
+
+B. Transformer scene encoding 
+
+Given the current observation window, we form a token sequence by concatenating: (i) image-history tokens I ∈
+
+R(C+1) ×d (one per frame from t − C to t, obtained by the image encoder and linear projection), (ii) LiDAR tokens 
+
+X ∈ RK×d as described in Sect. III-A, (iii) a robot em-bodiment token xp = Ew(w) ∈ Rd, and (iv) a goal token 
+
+xg = Eg (g) ∈ Rd. Here, Ew : R2 → Rd and Eg : R2 → Rd
+
+are single-layer projection MLPs, g is the goal position in the robot’s frame and w = ( w, ℓ ) the robot’s embodiment vector with w the robot’s width and ℓ its length. The resulting sequence length is S = ( C + 1) + K + 2 . We add (a) learned type embeddings to mark modality (image/LiDAR/size/goal), and (b) learned temporal index embeddings for the image tokens. Let Y ∈ RS×d denote the sum of content, type, and positional encodings with the concatenated tokens. A Transformer encoder (L layers, width d) computes fused representations: 
+
+Z0 = Y, (8) 
+
+ZL = TF-Enc  Y; mask = M, (9) where M ∈ { 0, 1}S is a per-token mask implementing goal masking and modality dropout during training. Masking allows the transformer not to rely on a single modality for condi-tioning the diffusion process and to predict clearance when generating the output tokens. We randomly mask the goal token in training to encourage feasible planning without the explicit goal, relying on scene tokens [3], mitigating blocking failures induced by greedy pursuit of the goal. 
+
+Scene token via attention pooling: We produce a single scene descriptor s ∈ Rd by learned attention pooling over the final sequence ZL =: ( z1, . . . , zS ):
+
+αi = softmax i
+
+ a⊤zi√d
+
+
+
+, s =
+
+> S
+
+X
+
+> i=1
+
+αi zi, (10) with a learned query vector a ∈ Rd. This pooling respects M
+
+by zeroing the scores of masked tokens. 
+
+Outputs for downstream heads: Besides s, we expose the post-attention LiDAR slice from ZL, Xf ∈ RK×d.The clearance prediction head can therefore query semantics-enriched fused LiDAR tokens while the trajectory generation diffusion head uses a pooled global scene and an image dynamics descriptor as conditioning. 
+
+C. Trajectory generation 
+
+We model a conditional distribution over a sequence of 
+
+J positional and angular waypoints (position relative to the robot and robot’s cos and sin of the orientation difference) 
+
+u1: J ∈ RJ×4 given the fused context token s that summarizes observations, robot’s size and 2-D goal direction. Following action-diffusion policies [4], we train a denoiser to invert a Gaussian noising process over the waypoint sequence. The timestep-conditioned ( t) network εθ predicts the injected noise 
+
+ε given the noisy sequence and the context s:
+
+ˆε = εθ
+
+ ut, t, s, t = 1 , . . . , T (11) and we minimize Ldiff = Eu0, t, ε ε − ˆε 22. (12) The diffusion head outputs a distribution over waypoint se-quences; at test time we sample N candidates by running the reverse process for T steps (we use T = 10) .For stabilizing training we also predict an auxiliary scalar for the distance to navigate until reaching the goal dg from s
+
+and apply an MSE loss: 
+
+Laux = ˆdg (s) − dg 
+
+> 22
+
+(13) 
+
+D. Clearance prediction 
+
+We recall that Xf denotes the fixed-budget LiDAR tokens after the self-attention encoder and w = ( w, ℓ ) the robot width and length. For each candidate positional waypoint 
+
+u(:2)  
+
+> j
+
+∈ R2 (with index j = 1 . . . J ), the clearance head applies Fig. 4: Example clearance computation from Scand [23]. It is defined for each segment linking two consecutive waypoints as the shortest distance to an obstacle. a single cross-attention layer where trajectory waypoints serves as queries and the LiDAR features act as the keys and values, followed by a small MLP Ec : Rd → R with GELU activation between layers and none at the output applied to each token. 
+
+Ec outputs a per-waypoint clearance distance: 
+
+qj = Wq [u(:2)  
+
+> j
+
+∥ w], (14) 
+
+zj = Cr-Att( Q = qj , K = Xf , V = Xf ) (15) 
+
+ˆcj = Ec
+
+ [zj ∥ u(:2)  
+
+> j
+
+∥ w], (16) where d is the attention width. 
+
+Clearance labels generation: Let pm ∈ R2, m =1, . . . , M , be the LiDAR obstacle points after ROI filtering and ground removal (removing points in a bottom layer of 0.2
+
+meters). For each segment Sj = [ uj−1, uj ]j=1 ,...,J , with u0
+
+the robot’s current position, the point-to-segment distance is: 
+
+αm,j = Π [0 ,1] 
+
+ (pm − uj−1)⊤(uj − uj−1)
+
+∥uj − uj−1∥2
+
+
+
+,
+
+rm,j = uj−1 + αm,j (uj − uj−1),d(pm, S j ) = ∥pm − rm,j ∥2 .
+
+(17) where Π[0 ,1] (x) = min(1 , max(0 , x )) , and rm,j is the closet point to pm on the segment. The clearance width for each segment is then: 
+
+dj = 2 min  
+
+> m=1 ,...,M
+
+d(pm, S j ), (18) which is represented in Fig. 4. From the clearance prediction head, we normalize this distance by the robot size: 
+
+cj = dj
+
+max( w, ℓ ) (19) By keeping this clearance metric greater than one, we ensure that the robot will have a way to avoid the obstacle. 
+
+Loss: The head is trained with an asymmetric Huber Loss: 
+
+e = c − ˆc
+
+Huber( e) = 
+
+( 12 (e)2 for |e| ≤ δδ · (|e| − 12 δ), otherwise 
+
+w(e) = 
+
+(
+
+wover if e > 0,
+
+1 otherwise, 
+
+Lclear = w(e) · Huber( e)
+
+(20) which penalizes over-estimation more strongly than under-estimation. This asymmetry enforces a conservative bias: pre-dicting larger clearance (or lower collision risk) than observed is riskier for deployment, so it is weighted more heavily to reduce unsafe optimistic predictions while keeping the robustness of Huber loss to label noise and outliers. We use 
+
+δ = 1 and wover = 5 .
+
+E. Training objectives and optimization 
+
+The total objective combines diffusion, clearance prediction, and the auxiliary distance-to-goal regression from the scene token: 
+
+L = λdiff Ldiff + λclear Lclear + λaux Laux . (21) We use λdiff = 1 × 10 −4, λclear = 0 .3 and λaux = 1 − λdiff . We use goal-token masking, modality dropout (randomly masking image tokens and predicting clearance only), and robot’s size sampling to regularize the shared encoder and prevent degenerate reliance on any single cue. The image and point clouds encoders are frozen during training. 
+
+F. Inference and selection 
+
+At test time, we sample N waypoint sequences via the reverse diffusion process. For each candidate n, the clearance head yields per-step clearance {ˆcnj }Jj=1 . We first define the minimum clearance for each trajectory: 
+
+ˆcn = min  
+
+> j∈{ 1...J }
+
+ˆcnj , (22) We identify the set Bsafe of safe trajectories with a safety margin of twice the robot size: 
+
+Bsafe = {n : ˆ cn > 3} (23) If Bsafe ̸ = ∅ we use the trajectory bringing the robot the closest to the goal in Bsafe with index: 
+
+ng = arg min 
+
+> n∈B safe
+
+|| pg − wnJ || 2, (24) with pg the goal’s position and wnJ the Jth waypoint of the trajectory n in the robot’s frame. If Bsafe = ∅, we consider the trajectory maximizing the minimum clearance distance with index: 
+
+nc = arg max   
+
+> n∈{ 1...N }
+
+ˆcn. (25) If ˆcnc > 1, we use this trajectory, otherwise we regenerate trajectories by masking the goal to uncondition generation on Fig. 5: Simulated experimental environments. We sample goals uniformly in the open spaces of the environment within a distance range going from 10 to 50 meters. the 2D objective and focus on the obstacle avoidance task. This allows the robot to explore the environment for a safer path without being biased by the goal position when all the ways to the goal seem untraversable. As soon as a feasible way is found with enough confidence, i.e., ˆcnc > 1.5 the goal conditioning is unmasked to revert to the goal-reaching behavior. IV. E VALUATION 
+
+A. Experimental environment Real-world experiments: We use a Clearpath Husky equipped with a Zed2i camera and an Ouster OS1 32 channels LiDAR sensor (Fig. 6, left). The model is executed on an Nvidia AGX Orin embedded computer. The robot’s odometry used to compute the relative position of the robot to the goal is computed with Direct Lidar Inertial Odometry [24] using the Ouster’s point cloud and IMU signal. 
+
+Simulated experiments: We use Isaac-Sim [25] to create three open-field environments visible in Fig. 5, featuring dif-ferent difficulty levels with bushes, narrow passages, and clut-tered obstacles. We use the same middle-ware ROS between the sensor signals provided by the simulation and our model to better match real-world deployment conditions. We use a Clearpath Husky rover with a front RGB camera and a 32-beam Ouster 3D LiDAR similarly to our real-world platform. For each environment, we sample 100 goals uniformly over free spaces to obtain the metrics in Table II. Episodes terminate on success (goal within 0.5 m radius), collision , or a time exceeding 10 minutes without reaching the goal’s position. 
+
+Low level control: In both configurations the policy out-put’s second waypoint is tracked by a low-level Proportional velocity controller. The position waypoint as well as the angular reference are converted to linear and rotational speed commands that are sent to the robot or the simulation interface in order to be converted to wheel rotation speed commands. 
+
+B. Training Data 
+
+We aggregate a heterogeneous corpus of publicly available and custom datasets (Table I). We add data from our simulated environment (Env.1 only in Fig. 5) in order to reach reasonable performance as the distribution shift between our evaluation environment and the other datasets is high. We also add data recorded from our robotic platform, in environment without the test obstacles (Fig. 6) so that the model can learn from features corresponding to our sensor type. To match state-of-the-art standards in terms of data quantity for training [2], TABLE I: Training data summary.                          
+
+> Dataset Modalities Hours Terrain
+> RELLIS-3D [26] RGB+LiDAR 35 min Off-Road TartanDrive 2.0 [27] RGB+LiDAR 7h Off-Road SCAND [23] RGB+LiDAR 9h Sidewalks Husky Off-Road (ours) RGB+LiDAR 30 min Sidewalks Isaac-Sim (ours) RGB+LiDAR 30 min Off-Road simulation Huron RGB+2D scans 75h Sidewalks Grand-tour [28] RGB+LiDAR 6h Sidewalks + Off-road
+> Total 98h35
+
+[3], [10], we use datasets lacking LiDAR sensor data such as Huron. To integrate such datasets in the training process, we mask the LiDAR tokens and do not compute clearance predictions. Images, LiDAR point clouds, and poses from these trajectories are sampled at a period ∆t=0 .25 s . To ensure consistent learning of trajectory diffusion across datasets, we adapt the temporal spacing between waypoints on a per-dataset basis. For a dataset d with average spatial waypoint spacing 
+
+δd
+
+> wp
+
+, we define an integer rescaling factor 
+
+kd =
+
+ max  
+
+> d
+
+{δd
+
+> wp
+
+}
+
+δd
+
+> wp
+
+ . (26) The effective waypoint sampling period used for dataset d is then kd∆t, with ∆t = 0 .25 s . This discretized rescaling makes the average metric distance between consecutive waypoints more comparable across datasets, yielding a more homoge-neous trajectory distribution for diffusion training. 
+
+C. Baselines and metrics 
+
+We evaluate our model (ViLiNT) against other end-to-end and classical baselines chosen to be representative of different approach families:  
+
+> •
+
+NoMaD-FT We fine-tune the network on our data, switching the goal-image encoder to a 2D goal-position encoder following [10] that states that goal encoding can be switched without degrading navigation performances. We fine-tune the model for 20 epochs on our dataset using the hyperparameters recommended by [10].  
+
+> •
+
+NoMaD-Col We retrain NoMaD using the image output tokens to predict the clearance distance and compute the collision heuristic at inference. This version allows us to evaluate the feasibility of predicting clearance distances from image tokens only.  
+
+> •
+
+TEB-Elev As a non-learning baseline, we use the Timed-Elastic-Band local planner [6] applied to a local elevation map [29] built from the LiDAR data and thresholded to detect obstacles. The global planning is done using an A ∗
+
+algorithm.  
+
+> •
+
+ViLiNT-Image-Mask and ViLiNT-LiDAR-Mask are our models when we mask images and LiDAR, respec-tively, during inference. We use the following metrics, with Si the success of the trial (binary), ci the binary collision indicator at trial i: 
+
+> •
+
+SR: Success Rate over a sufficient number of trials allows us to correctly evaluate our policy’s performance: SR = 1
+
+> N
+
+PNi=1 SiFig. 6: Zero-shot deployment of ViLiNT (green curves) and NoMaD-FT (Red curves). We compare the capability of both solutions to prevent collision occurrences while navigating our robot towards 2D goals in environments and obstacles unknown from our training data. Goals are set to be 30 m away from the initial robot’s position.  
+
+> •
+
+CR: Collision Rate measures the average number of collisions during episodes: CR = 1
+
+> N
+
+PNi=1 ci
+
+D. Results a) Real-world: First, we validate qualitatively the capa-bility of our model to track long-range goals. To do so, we set goals more than 100 meters away from the initial position of our robot and ensured that ViLiNT was able to reach that goal avoiding obstacles of reasonable size in between (size comparable to obstacles we can see in Fig. 6). Then, to show more specifically the increased obstacle avoidance capabilities of ViLiNT we set goals 30 m behind obstacle fields and compare the behaviors of our solution and NoMaD-FT (Fig. 6). ViLiNT features a 85% SR whereas NoMaD-FT 
+
+scores a 15% SR . ViLiNT consistently outperforms image-only models at avoiding obstacles. When the image model manages not to collide with an obstacle, we observe that the robot’s path comes very close to the obstacle and that the model does not take advantage of the free space to track a safer trajectory whereas ViLiNT does. In the parking environment (Fig. 6, right), we observe the ViLiNT consistently circumvent obstacles, except when it enters an empty car spot, showing the limit of local planning. TABLE II: Combined navigation and safety metrics across simulated off-road environments. Mean over 100 runs; higher is better for SR, lower is better for CR.                                                   
+
+> Method Env. 1 Env. 2 Env. 3 SR ↑CR ↓SR ↑CR ↓SR ↑CR ↓
+> NoMaD-FT [10] 0.33 0.67 0.37 0.63 0.12 0.88 NoMaD-Col 0.20 0.80 0.38 0.62 0.19 0.81 ViLiNT-LiDAR-Mask 0.17 0.83 0.37 0.63 0.20 0.80 ViLiNT-Image-Mask 0.72 0.28 0.67 0.33 0.23 0.77
+> ViLiNT (ours) 0.79 0.21 0.61 0.39 0.76 0.24
+> TEB-Elev 0.66 0.00 0.89 0.00 1.00 0.00
+
+b) Simulation: Table II summarizes our model’s perfor-mance in comparison to our baselines. ViLiNT significantly improves navigation performance relative to unimodal policies over every test environment with a 166% increase in SR and a 62% reduction in CR compared to NoMaD-FT .Start Goal 
+
+Fig. 7: Simulated experience showing how changing the robot’s size input influences the navigation behavior. We can also see in Table II that image policies (NoMaD-FT, NoMaD-Col, ViLiNT-LiDAR-Mask) have similar results within 1% accuracy. Bringing LiDAR data (ViLiNT-Image-Mask) in the architecture grants a 100% SR increase and a 37% reduction in CR . We additionally gain 33% in SR and decrease 39% in CR when using the image sequence besides LiDAR in input (ViLiNT vs ViLiNT-Image-Mask). We note that the TEB-Elev baseline, which is configured to plan optimal paths toward the goal by maintaining a safety margin from obstacles, outperforms all learning-based meth-ods. No collisions are observed when running TEB-Elev, and on average, the SR achieves 85% over all three environments. Some runs still fail due to the conservative safety margin causing the planner to get stuck or fail to find feasible paths, in particular in Env. 1, where obstacles are closer to each other. This could be improved, but this shows that despite its superior performance, TEB indeed requires extensive parameter tuning to adapt to different robots or environments. 
+
+c) Embodiment influence: In the simple scenario illus-trated in Figure 7, we compare deployment with the nominal robot dimensions encoded in the embodiment vector and deployment with dimensions scaled by a factor of two. The goal is placed 20m ahead along the robot’s initial x-axis. For the nominal size, the selected trajectory passes through the cor-ridor formed by the red blocks, whose width is 1.5 max( w, ℓ ).When the robot dimensions are inflated, trajectories crossing this corridor are rejected by the clearance heuristic, and the robot instead bypasses the obstacle field on the right. Note that this avoidance behavior is limited by the variety of generated trajectories that always move forward, meaning that if we continue increasing the robot size, the robot will eventually get stuck because no safe trajectory will be generated. V. D ISCUSSION AND CONCLUSION 
+
+We introduced a multimodal navigation transformer that fuses RGB images, 3D LiDAR data, and platform description tokens to enable robust zero-shot navigation across ground robots of varying sizes. By combining token-level multimodal fusion, diffusion-based trajectory generation, and a robot-size-conditioned clearance prediction head, the model achieves both expressive planning (via diffusion sampling) and selective decision-making (via risk-based ranking). Experimental results in real and simulated off-road environments show improved goal-reaching efficiency and reduced collisions, despite limited training data. However, trajectory selection remains decoupled from gen-eration and relies on thresholded goal masking to escape local minima, which can be conservative and induce exploratory detours. Future work will focus on joint optimization of trajec-tory generation and clearance prediction (e.g., reinforcement learning with collision feedback), improved traversability and clearance estimation, and robot-specific local path planning strategies. REFERENCES [1] J. Frey, M. Patel, D. Atha, J. Nubert, D. Fan, A. Agha et al., “Roadrunner-learning traversability estimation for autonomous off-road driving,” IEEE Transactions on Field Robotics, vol. 1, pp. 192–212, 2024. [2] D. Shah, A. Sridhar, A. Bhorkar, N. Hirose, and S. Levine, “GNM: A general navigation model to drive any robot,” in 2023 IEEE International Conference on Robotics and Automation (ICRA), London, United Kingdom, 2023, pp. 7226–7233. [3] D. Shah, A. Sridhar, N. Dashora, K. Stachowicz, K. Black et al., “ViNT: A foundation model for visual navigation,” in Conference on Robot Learning. PMLR, 2023. [4] C. Chi, Z. Xu, S. Feng, E. Cousineau, Y. Du et al., “Diffusion policy: Visuomotor policy learning via action diffusion,” The International Journal of Robotics Research, 2023. [5] M. G. Castro, S. Triest, W. Wang, J. M. Gregory, F. Sanchez et al., “How does it feel? self-supervised costmap learning for off-road vehi-cle traversability,” in IEEE International Conference on Robotics and Automation (ICRA), 2023. [6] C. R¨ osmann, F. Hoffmann, and T. Bertram, “Timed-elastic-bands for time-optimal point-to-point nonlinear model predictive control,” in 2015 European Control Conference (ECC), 2015. [7] G. Williams, A. Aldrich, and E. A. Theodorou, “Model predictive path integral control: From theory to parallel computation,” Journal of Guidance, Control, and Dynamics, vol. 40, no. 2, pp. 344–357, 2017. [8] S. Jung, J. Lee, X. Meng, B. Boots, and A. Lambert, “V-STRONG: Visual self-supervised traversability learning for off-road navigation,” in 2024 IEEE International Conference on Robotics and Automation (ICRA), May 2024. [9] M. Bojarski, D. Del Testa, D. Dworakowski, B. Firner, B. Flepp et al., “End to end learning for self-driving cars,” 2016. [Online]. Available: https://arxiv.org/abs/1604.07316 [10] A. Sridhar, D. Shah, C. Glossop, and S. Levine, “NoMaD: Goal masked diffusion policies for navigation and exploration,” in 2024 IEEE International Conference on Robotics and Automation (ICRA). IEEE, May 2024, pp. 63–70. [11] J. Liang, A. Payandeh, D. Song, X. Xiao, and D. Manocha, “DTG: Diffusion-based trajectory generation for mapless global navigation,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS). IEEE, Oct. 2024, pp. 5340–5347. [12] X. Meng, N. Hatch, A. Lambert, A. Li, N. Wagener et al., “TerrainNet: Visual modeling of complex terrain for high-speed, off-road navigation,” in Robotics: Science and Systems, 2023. [13] Y. Pan, C. A. Cheng, K. Saigol, K. Lee, X. Yan, E. Theodorou, and B. Boots, “Agile autonomous driving using end-to-end deep imitation learning,” in Robotics: Science and Systems, 2017. [14] R. Bonatti, S. Vemprala, S. Ma, F. Frujeri, S. Chen, and A. Kapoor, “PACT: Perception-action causal transformer for autoregressive robotics pre-training,” in 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), 2022, pp. 3621–3627. [15] C. R. Qi, H. Su, K. Mo, and L. J. Guibas, “PointNet: Deep learning on point sets for 3d classification and segmentation,” in IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2017. [16] R. Thakker, A. Patnaik, V. Kurtz, J. Frey, J. Becktor et al., “Risk-guided diffusion: Toward deploying robot foundation models in space, where failure is not an option,” in RSS Workshop on Reliable Robotics: Safety and Security in the Face of Generative AI, 2025. [17] G. Lee, D. Park, J. Jeong, and K. J. Yoon, “Non-differentiable reward optimization for diffusion-based autonomous motion planning,” 2025. [Online]. Available: https://arxiv.org/abs/2507.12977 [18] B. Sharma, P. Jadhav, P. Paul, K. M. Krishna, and A. K. Singh, “Monompc: Monocular vision based navigation with learned collision model and risk-aware model predictive control,” IEEE Robotics and Automation Letters, vol. 11, no. 2, pp. 1330–1337, 2025. [19] C. Choy, J. Gwak, and S. Savarese, “4d spatio-temporal convnets: Minkowski convolutional neural networks,” in IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2019, pp. 3075– 3084. [20] Y. Zhang, Z. Zhou, P. David, X. Yue, Z. Xi et al., “PolarNet: An improved grid representation for online lidar point clouds semantic segmentation,” in IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2020, pp. 9601–9610. [21] X. Wu, L. Jiang, P. S. Wang, Z. Liu, X. Liu, Y. Qiao, W. Ouyang, T. He, and H. Zhao, “Point transformer V3: Simpler, faster, stronger,” in Advances in Neural Information Processing Systems, 2023. [22] M. B. Sarıyıldız, P. Weinzaepfel, T. Lucas, P. De Jorge, D. Larlus, and Y. Kalantidis, “DUNE: Distilling a universal encoder from hetero-geneous 2d and 3d teachers,” in IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2025, pp. 30 084–30 094. [23] H. Karnan, A. Nair, X. Xiao, G. Warnell, S. Pirk et al., “Socially compli-ant navigation dataset (SCAND): A large-scale dataset of demonstrations for social navigation,” IEEE Robotics and Automation Letters, vol. 7, no. 4, pp. 11 807–11 814, 2022. [24] K. Chen, R. Nemiroff, and B. T. Lopez, “Direct LiDAR-Inertial odome-try: Lightweight LIO with continuous-time motion correction,” in 2023 IEEE International Conference on Robotics and Automation (ICRA), London, United Kingdom, 2023, pp. 3983–3989. [25] NVIDIA, “Isaac Sim.” [Online]. Available: https://github.com/isaac-sim/IsaacSim [26] P. Jiang, P. Osteen, M. Wigness, and S. Saripalli, “RELLIS-3D dataset: Data, benchmarks and analysis,” in 2021 IEEE International Conference on Robotics and Automation (ICRA), 2021. [27] M. Sivaprakasam, P. Maheshwari, M. G. Castro, S. Triest, M. Nye et al., “TartanDrive 2.0: More modalities and better infrastructure to further self-supervised learning research in off-road driving tasks,” in IEEE International Conference on Robotics and Automation (ICRA), May 2024. [28] J. Frey, T. Tuna, F. Fu, K. Patterson, T. Xu, M. Fallon, C. Cadena, and M. Hutter, “Grandtour: A legged robotics dataset in the wild for multi-modal perception and state estimation,” 2026. [Online]. Available: https://arxiv.org/abs/2602.18164 [29] T. Miki, L. Wellhausen, R. Grandia, F. Jenelten, T. Homberger, and M. Hutter, “Elevation mapping for locomotion and navigation using GPU,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS). IEEE, 2022.
