@@ -1,0 +1,725 @@
+Title: Navigating the Clutter: Waypoint-Based Bi-Level Planning for Multi-Robot Systems
+
+URL Source: https://arxiv.org/pdf/2604.21138v1
+
+Published Time: Fri, 24 Apr 2026 00:21:01 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+Preprint. Under review. 
+
+# Navigating the Clutter: Waypoint-Based Bi-Level Planning for Multi-Robot Systems 
+
+Jiabao Ji 1∗ Yongchao Chen 2,3 Yang Zhang 4
+
+Ramana Rao Kompella 5 Chuchu Fan 2 Gaowen Liu 5 Shiyu Chang 11UC Santa Barbara 2Massachusetts Institute of Technology 3Harvard University 
+
+> 4
+
+MIT-IBM Watson AI Lab 5Cisco Research 
+
+## Abstract 
+
+Multi-robot control in cluttered environments is a challenging problem that involves complex physical constraints, including robot–robot collisions, robot–obstacle collisions, and unreachable motions. Successful planning in such settings requires joint optimization over high-level task planning and low-level motion planning, as violations of physical constraints may arise from failures at either level. However, jointly optimizing task and motion planning is difficult due to the complex parameterization of low-level motion trajectories and the ambiguity of credit assignment across the two planning levels. In this paper, we propose a hybrid multi-robot control framework that jointly optimizes task and motion planning. To enable effective parameterization of low-level planning, we introduce waypoints, a simple yet expressive representation for motion trajectories. To address the credit assignment challenge, we adopt a curriculum-based training strategy with a modified RLVR algorithm that propagates motion feasibility feedback from the motion planner to the task planner. Experiments on 
+
+BoxNet3D-OBS , a challenging multi-robot benchmark with dense obstacles and up to nine robots, show that our approach consistently improves task success over motion-agnostic and VLA-based baselines. Our code is available at https://github.com/UCSB-NLP-Chang/navigate-cluster .
+
+## 1 Introduction 
+
+Figure 1: Illustration of task–motion planning behaviors. (a,b): Task-level failures caused by infeasible action as-signments. (c,d): Motion plans show-ing failure with a fixed RRT algorithm (c) and successful execution enabled by waypoint-based navigation (d). Multi-robot systems are increasingly deployed in real-world domains such as warehouse au-tomation (Huang et al., 2022; Chen et al., 2024a; 2025), where multiple robots operate concurrently within shared workspaces. In such settings, robots must coordinate their actions while navigating complex, obstacle-rich environments, which im-poses numerous physical constraints, including kinematic feasibility, robot–obstacle collisions and inter-robot collisions. As the number of robots and obstacles increases, interactions between robots become tightly restricted, substantially increasing the difficulty of coordinated control. Successful task completion requires planning at two coupled levels. Task-level planning deter-mines long-horizon coordination and action as-signment for each robot, e.g. , deciding which robot moves an object from its start position to a target position and in what order subtasks should be executed. Motion-level planning then realizes each action assignment as continuous joint configuration trajectories that avoid 
+
+> ∗
+
+Correspondance: ¡jiabaoji@ucsb.edu¿ 
+
+1
+
+> arXiv:2604.21138v1 [cs.RO] 22 Apr 2026
+
+Preprint. Under review. collisions while adhering to kinematic constraints. Crucially, these two levels are interde-pendent: task assignments can lead to infeasible motion, and motion failures directly cause task execution to fail even when the high-level plan appears valid. This coupling becomes especially severe in cluttered environments, where frequent collisions and unreachable motions arise if it is not properly addressed. Most existing approaches address this coupling only partially. Classical methods emphasize task-level coordination, often through symbolic planning using PDDL or temporal logic for action planning, and pair it with a fixed motion planner for low-level execution (Chen et al., 2024a;b; 2025). More recently, large language models (LLMs) have been explored as task planners because of their strong reasoning ability, and reinforcement learning from verifiable reward (RLVR) has shown promise in improving LLMs’ task plan ability (Ji et al., 2025a). Despite this progress, the fundamental challenge of task–motion mismatch remains. Task-level failures occur when the high-level plan is internally infeasible, such as assigning robots to overlapping regions or unreachable positions, making success impossible regardless of the motion planner (Figure 1 (a) and (b)). Motion-level failures arise even when the task plan is valid, because a fixed or inadequate motion planner may be unable to find collision-free trajectories in cluttered environments, leading to collisions during execution (Figure 1 (c)). Together, these failure modes highlight the need for a planning approach that is jointly optimized across both task and motion levels. However, achieving such joint optimization in cluttered multi-robot settings is difficult. We identify two key challenges. First , motion-level planning is difficult to parameterize for learn-ing. Robot motion trajectories are high-dimensional and continuous, yet must satisfy hard kinematic feasibility and collision-avoidance constraints. Recent vision-language-action (VLA) models address motion generation by directly predicting dense joint configurations from environment observations, primarily in single-robot settings (Black et al.). However, these models have been reported to suffer from unstable optimization during the RL train-ing even in single-robot settings due to the high-dimensional outputs (Huang et al., 2025; Li et al., 2025; Lyu et al., 2025), making them difficult to scale to long-horizon, tightly constrained multi-robot environments. 
+
+Second , credit assignment becomes inherently ambiguous when task and motion are opti-mized jointly. Execution failures may be caused by either a task-level error, e.g. , allocating robots to mutually conflicting regions, or a local motion-level error, e.g. , colliding with an obstacle. This ambiguity makes joint RL particularly challenging, as sparse success or failure rewards must be attributed across both task- and motion-level decisions over long horizons. These challenges lead to our key research question: How can task and motion planning be jointly optimized for multi-robot control in cluttered environments? 
+
+In this paper, we propose W AY PLAN , a multi-robot control framework that comprises two LLM-based planners: a task planner and a motion planner . Both planners are jointly optimized for navigation in cluttered environments. To address the first challenge in joint optimization, we introduce waypoints , a simplified yet expressive representation of motion trajectories. As illustrated in Figure 1 (d), instead of directly predicting low-level control signals as in VLA models, the motion planner generates waypoint trajectories, i.e. the yellow stars, that guide robots around obstacles and other robots. These waypoints are then converted into executable robot pose trajectories using a classical motion planning algorithm such as Rapidly-exploring Random Trees (RRT) (Guo et al., 2024), which delegates kinematic feasibility to a reliable planner and substantially reduces the dimensionality and data requirements of motion learning. To address the second challenge, we introduce a curriculum training strategy to enable stable joint optimization of task and motion planners. We first train each planner independently using supervised fine-tuning warmup and RLVR following previous work (Ji et al., 2025a). We then perform joint RL training with a modified RLVR algorithm, where task-level rewards explicitly penalize plans that lead to downstream motion infeasibility, and the motion planner learns to solve feasible motion queries induced by coupled task planner. This design allows motion failures to propagate feedback to task planner, reducing ambiguity in credit assignment between task and motion planners during joint training. 2Preprint. Under review. 
+
+Figure 2: Task-level planning determines which robots act and their objectives at each step (top right), while motion-level planning generates obstacle-aware waypoint trajectories for execution (bottom right). To evaluate W AY PLAN framework under realistic conditions, we introduce BoxNet3D-OBS , a multi-robot benchmark that extends prior B OX NET -style environments (Chen et al., 2024a) with dense obstacles and challenging motion constraints. The benchmark includes up to nine robots operating in shared grid-based layout workspaces with randomly placed obstacles, inducing frequent interactions between task-level decisions and motion feasibility. Experiments show that W AY PLAN consistently outperforms baseline task planners. Notably, when paired with our waypoint-based motion planner, task planners with only 4B parame-ters achieve a 0.62 success rate, outperforming substantially larger LLMs such as GPT-5 that lack motion awareness. We also find that our waypoint-based motion planner outperforms VLA-style motion planner under similar data budgets. In summary, we make the following contributions: • We introduce BoxNet3D-OBS , a multi-robot benchmark with dense obstacles and robots. • We propose W AY PLAN , a hybrid LLM control framework that explicitly couples task-level decisions with motion-level feasibility. • We develop a curriculum training strategy and a modified RLVR algorithm that enable joint optimization of task and motion planners, addressing task-motion credit ambiguity. • We demonstrate that waypoint motion planning outperforms VLA motion planning under similar data budgets. 
+
+## 2 Method 
+
+2.1 WAY PLAN Overview 
+
+We consider multi-robot control task, where multiple robots must coordinate to accomplish long-horizon tasks while respecting kinematic and collision constraints. Our goal is to jointly reason over what actions robots should take at each step and how these actions can be physically executed. To this end, we propose a hierarchical bi-level planning framework composed of two coupled planners: ❶ a task planner Mθ that generates a multi-step action plan to assign movement target position and object carry status for involved robots, and ❷
+
+a motion planner Mϕ that generates obstacle-aware waypoint trajectories and connects them via a low-level control algorithm. In the following, we first introduce the bi-level hybrid planner design in Section 2.2, and then present our curriculum training strategy, along with the modified RLVR algorithm for joint training in Section 2.3. 
+
+2.2 Bi-level Task and Motion Planning 
+
+Figure 2 illustrates the planning process of W AY PLAN . Given a multi-robot task query q
+
+encoding the environment geometry, robot configurations, and the locations of objects and obstacles, W AY PLAN performs bi-level planning that integrates task-level decision making with motion-level execution. At the task level, the planner Mθ generates a finite-horizon plan s = {s1, s2, . . . , sT }, where each step st specifies a task-level action for execution step t
+
+(top-right panel in Figure 2). In particular, st identifies the subset of robots that are active at 3Preprint. Under review. 
+
+Figure 3: Synthesized traces via failure-agnostic and reflection-aware prompting (left/right). 
+
+Figure 4: Illustration of critical-path-aware obstacle placement. step t and assigns each of them an abstract command, such as a target position and an object-carrying state. For example, a task step may assign Robot 1 (1.73, 0.34, 0.17 ) True , indicating that the robot should transport an object to the target position and release it. Robots not selected in st are treated as no-op and remain stationary. This representation allows the task planner to reason over long-horizon coordination, action sequencing, and global inter-robot collision avoidance without explicitly modeling robot movement trajectory. Each task step st is then expanded at execution time by the motion planner Mϕ. For every robot i assigned an active role in st, the motion planner produces a waypoint-based plan 
+
+Wi = Mϕ(st, τi), where Wi = {wi,1 , . . . , wi,K } is a sequence of intermediate 3D coordinates in the workspace (bottom-right panels in Figure 2). The input τi captures the local perceptual state of robot i, including nearby obstacles, objects, and other robots within its reachable grid cells. Rather than predicting full joint trajectories, the motion planner operates at the level of geometric waypoints, enabling efficient collision-aware spatial reasoning while remaining agnostic to robot-specific kinematics. This abstraction significantly simplifies learning compared to VLA-based motion control. The waypoint sequences are then executed by a low-level motion controller, such as an RRT-based planner, which converts successive waypoints into continuous, kinematically feasible robot joint trajectories. Overall, this bi-level hybrid planner separates global coordination from local motion gener-ation while maintaining consistency during execution. During execution, task-level actions specify which robots act and their intended objectives, while the motion planner ensures local feasibility under geometric and collision constraints. This decoupled design provides explicit feedback signals, including task success, collisions, and execution failures at either task or motion level, which are later leveraged for learning. 
+
+2.3 Curriculum Training Strategy 
+
+Directly optimizing bi-level task and motion planners is challenging, since off-the-shelf LLMs often struggle with robotic control and long-horizon reasoning (Luo et al.; Liu & Zhang, 2025). We therefore adopt a three-stage curriculum training that progressively adapts LLMs for bi-level planning. Stage 1 performs supervised fine-tuning (SFT) warmup for both planners using planner-specific datasets, initializing basic task- and motion planning capabilities. Stage 2 separately refines these two planners via separate RLVR under planner-specific reward. Stage 3 jointly optimizes both planners using a modified RLVR algorithm to address task–motion coupling during joint training. 
+
+Stage 1: SFT warm-up In Stage 1, we initialize both the task planner and the motion planner using SFT on planner-specific data. Because the two planners produce different outputs, we design separate SFT datasets for them. For the task planner, each training example contains a ground-truth multi-step task plan and an explicit textual reasoning trace. Following prior work (Ji et al., 2025a), these traces capture long-horizon reasoning behaviors such as reachability check. We generate these data by first solving each task instance with an A* search to obtain a ground-truth plan s∗,and then prompting an LLM (GPT-5-mini) to produce a reasoning trace leading to s∗. To strengthen the reasoning, we adopt a reflection-aware construction strategy: whenever A* backtracks due to collision or reachability violations, we record the failed action, its failure reason, and the corrected alternatives. This information is added into the prompt so the 4Preprint. Under review. LLM can explain why the original decision is invalid and how the correction resolves the issue. The resulting reasoning exposes common task-level planning errors and their fixes, helping task planner to reason about errors rather than simply imitating successful plans. Figure 3 contrasts a reasoning trace between our strategy with failure-agnostic prompting of Ji et al. (2025a), illustrating that our strategy induces error reflection reasoning (marked in red). Section 3.3 provides a more detailed analysis. For the motion planner, we omit textual reasoning since it only involves local, short-horizon planning. Each training example comprises a collision-free waypoint sequence for a single robot navigating cluttered environments while satisfying geometric and kinematic con-straints. To generate these waypoints, we sample random single-robot motion instances with randomly placed obstacles, compute ground-truth waypoint sequences via a breadth-first search (BFS) over candidate waypoints, connect them using RRT, and verify its execution feasibility in simulation. 
+
+Stage 2: Separate RLVR with planner-specific rewards After SFT, we further refine each planner separately using RLVR to improve their robustness while avoiding ambiguous credit assignment. We adopt standard GSPO training for both training processes. For the task planner, it samples candidate task plans s ∼ M θ (q) given a task query q. Each plan s is evaluated using the task-level reward 
+
+rstage-2 task (s) = rsuccess (s) + rformat (s) + refficiency (s, s∗).Here, rsuccess (s) is 1 if executing s completes the task without any collision and 0 oth-erwise, rformat (s) = 0.1 encourages the required output format, and refficiency (s, s∗) = 
+
+max (0.05 (|s∗| − | s|), −0.2 ) penalizes unnecessarily long plans relative to the A*-generated reference s∗. We intentionally omit motion penalties at Stage-2, so task-level updates depend only on task-level completion and efficiency, rather than on the quality of motion planner. For the motion planner, we train Mϕ independently on a set of pre-generated motion tasks in a single-robot environment, without involving the task planner. Given a motion state 
+
+(st, τi), the motion planner samples waypoint sequences W and receives a motion-level reward rmotion (W) = rsuccess (W) + rformat (W), where rsuccess (W) is 1 if executing W moves arm to its target within a pre-set distance threshold and 0 otherwise, and rformat (W) = 0.1 enforces waypoint format. Both planners in Stage 2 are trained using GSPO with the rewards above, without any coupling between the task and motion levels. 
+
+Stage 3: Joint RLVR Stage 2 improves the task and motion planners separately, but does not ensure that task plans are matched to what the motion planner can reliably execute. Stage 3 addresses this by introducing joint RLVR , in which the task planner is optimized with a motion-aware reward, and the motion planner is trained on motion problems generated by the current task planner. At joint-training iteration k, the task planner from the previous iteration M(k−1) 
+
+> θ
+
+generates task plans s ∼ M (k−1) 
+
+> θ
+
+(q) for sampled task queries q, which are then executed with the current motion planner M(k−1) 
+
+> ϕ
+
+. The task-level reward augments the Stage 2 reward with a motion-feasibility penalty, 
+
+rstage-3 task (s) = rstage-2 task (s) + rmotion (s),where rmotion (s) = − max (0.2, 0.05 × Ninfeasible (s)) penalizes task plans that incur infeasible motion steps. Here Ninfeasible (s) denotes the number of task steps whose corresponding motion queries are certified as infeasible by invoking a motion-planning search algorithm, 
+
+i.e. , the one for motion planner SFT data generation, under environment constraints. This motion-aware penalty helps provide motion-feedback to help the task planner training. The motion planner is trained on motion movement queries induced by executing task plans from the current task planner M(k−1) 
+
+> θ
+
+. Specifically, executing a task plan s induces a set of motion queries E (s) = {(si, τi)}Ni=1, where each pair corresponds to a motion execution step for one robot. We restrict training to up to N motion queries that are certified as feasible by 5Preprint. Under review.                                                                                                                
+
+> Task Planner RRT Motion VLA Motion Waypoint Motion
+> Success ↑StepDiff. ↓Success ↑StepDiff. ↓Success ↑StepDiff. ↓
+> LLM Task Planner without Motion-awareness (Planning in F ULL PLAN mode) GPT-5-MINI 0.02 0.85 0.04 0.64 0.04 0.79 GPT-5 0.04 0.28 0.11 -0.04 0.14 0.31 GEMINI 3-F LASH 0.01 0.76 0.03 0.52 0.05 0.75 GEMINI 3-P RO 0.05 0.24 0.15 -0.11 0.19 0.12 GPT-OSS-20B 0.05 0.31 0.10 -0.01 0.13 0.25 QWEN 3-4B 0.02 1.53 0.03 1.34 0.02 1.14 QWEN 3-32B 0.04 0.48 0.08 0.26 0.06 0.43 LLM Task Planners with Motion-awareness FULL PLAN -S1 0.05 0.52 0.18 0.18 0.29 0.12 FULL PLAN -S2 0.07 0.35 0.24 -0.08 0.47 -0.28 IC-R EPLAN -S1 0.06 0.45 0.21 0.15 0.32 0.34 IC-R EPLAN -S2 0.08 0.22 0.27 -0.12 0.51 -0.12 NC-R EPLAN -S1 0.08 0.39 0.23 0.10 0.35 0.21 NC-R EPLAN -S2 0.09 0.18 0.29 0.17 0.53 -0.08 LLM Task Planners with Joint Task-Motion RLVR training FULL PLAN -S3 0.08 0.25 0.26 -0.18 0.53 -0.25
+> IC-R EPLAN -S3 0.09 0.16 0.28 -0.05 0.57 -0.14 NC-R EPLAN -S3 0.11 0.14 0.33 0.09 0.62 -0.11
+
+Table 1: Performance of different LLM task planner on BoxNet3D-OBS with various motion planners. For each task–motion planner pair, we report task-level Success and StepDiff. Inference time is reported in Appendix A.3. search algorithm but M(k−1) 
+
+> ϕ
+
+fail, thereby isolating motion planner deficiencies rather than task planner errors. The motion planner is trained using the same motion-level reward as in Stage 2 training. Because these motion queries are sampled from task plans produced by current task planner M(k−1) 
+
+> θ
+
+, the motion planner evolves together with the task planner, tightly coupling task and motion planning and improving their alignment. The algorithm table in Appendix A.2 illustrates the training process. 
+
+## 3 Experiment 
+
+In this section, we conduct empirical experiments on BoxNet3D-OBS to assess the effectiveness of our method. We first present the experiment setup in Section 3.1 and then the results in Section 3.2, followed by ablation studies in Section 3.3. Implementation details such as the data statistics and prompts are defered to Appendices A.1 and A.5. 
+
+3.1 Experiment Setup Data generation We generate BoxNet3D-OBS environments with varying map sizes, object initial and target positions, and obstacle placements. Map sizes range from 2 × 2 to 4 × 4with 1 to 6 objects, resulting in 3,400 training and 480 testing environments. Using the placement strategy described earlier, environments contain 1 to 9 robots and 1 to 8 obstacles. We consider only solvable environments, verified via a manually implemented A* search that ensures the existence of valid task- and motion-level plans. 
+
+Evaluation metric Following Ji et al. (2025a), we evaluate task-level planners along two dimensions: ❶ Success , the proportion of generated action plans that solve a task, measured as pass@1 over four trials per environment; and ❷ StepDiff. , the difference in the number of steps between successful model-generated plans and the corresponding A* solutions. We further report the actual inference time for different planners in Appendix A.3. 
+
+FullPlan and RePlan mode for Task Planner Following Ji et al. (2025a), we consider two task-planning modes. In F ULL PLAN , the planner generates a complete multi-step plan from the initial environment. In contrast, R EPLAN regenerates the remaining plan after a failure, using the updated environment state and failure feedback, e.g. , inter-robot collisions or motion failures from previous plan. In this work, we further study two R EPLAN variants. IC-R EPLAN appends the updated state and failure feedback to the LLM context, allowing the planner to reason over the full execution history. By contrast, NC-R EPLAN discards prior context and replans from scratch using the updated environment as a new task instance. Illustration of reasoning for these planners are provided in Appendix A.4. 6Preprint. Under review. 
+
+Figure 5: Error breakdown for waypoint and VLA motion planners. 0 20 40 60 80 100 120 140 160 
+
+> Train Step
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> Train Set Task Accuracy
+> RLVR objective
+> GRPO
+> GRPO (truncated IS)
+> GSPO
+
+Figure 6: Train accuracy of F ULL PLAN -S2 across RLVR objectives. GSPO is stable. 
+
+Baselines For overall evaluation, we pair each task planner with three motion planner variants: ❶ a fixed motion algorithm (RRT Motion), ❷ a VLA-objective motion planner fine-tuned via SFT (VLA Motion), and ❸ our SFT waypoint planner (Waypoint Motion). To ensure a fair comparison, both VLA motion and the Waypoint motion are fine-tuned on the same set of training instances only after Stage-1 training. We also note that Stage-3 task planner evaluation pairs with Stage-3 waypoint motion planner instead of the Stage-1 checkpoint in main table. To ensure broad LLM coverage, we evaluate both closed- and open-source models across multiple scales. Specifically, we include closed-source LLMs such as GPT-5-mini, GPT-5.2, Gemini-Flash, and Gemini3-Pro, as well as open-source Qwen3 models up to 32B parameters. To reduce API cost, we set medium reasoning effort for GPT-5-mini, GPT-5.2, and Gemini-Flash, and low for Gemini3-Pro. 
+
+Training details We initialize task- and motion-level planners from the same Qwen3-4B LLM (Yang et al., 2025), and denote models after each training stage with a suffix, e.g. , –S1 for Stage-1 SFT. In Stage-1 SFT, we train the motion planner with a learning rate of 1 × 10 −5
+
+and the task planner with 3 × 10 −6 using the AdamW optimizer (Loshchilov & Hutter, 2017). Stage-2 RLVR uses a fixed learning rate of 3 × 10 −6. We apply GRPO to the motion planner and GSPO to the task planner (with 5 × 10 −6 LR), using a batch size of 64 (group size 8) for both. We monitor validation reward every 10 steps and select the checkpoint where performance stabilizes; finally, we choose checkpoints around 200 and 160 steps for the motion and task planners, respectively. We further adopt two-step off-policy RL to improve task-planner train efficiency. Stage-3 joint RLVR training adopts the same hyperparameters as task planner Stage-2. All RL uses VeRL framework (Sheng et al., 2024) on 8 NVIDIA H100 GPUs. Additional hyperparameters and computational cost are reported in Appendix A.2. 
+
+3.2 Experiment Results Motion-aware Task Planners outperform motion-agnostic baselines We first evaluate overall performance in Table 1. We highlight the following observations: ❶ Across all three motion planners, task planners with explicit motion awareness consistently achieve higher Success than motion-agnostic LLM planners in F ULL PLAN mode, despite using fewer parameters. For example, under waypoint motion, GPT-5 and G EMINI 3-P RO achieve 0.14 and 0.19 success, respectively, whereas F ULL PLAN -S2 achieves 0.47 success. ❷ Stage-3 joint task–motion RL training further improves performance. Specifically, F ULL PLAN -S3 improves over its initial policy F ULL PLAN -S2 from 0.47 to 0.53 under waypoint motion, demonstrating the benefit of jointly optimizing task and motion planners. ❸ Although training is performed only with the waypoint motion planner, motion-aware task planners maintain best performance on other motion planners. Under VLA motion, F ULL PLAN -S3 achieves 0.26 success, outperforming baselines, whose best performance is 0.15 for GEMINI 3-P RO . These results demonstrate that explicitly incorporating motion-feasibility during training leads to substantially improved overall performance. To further understand the failures, we provide a detailed error breakdown in Appendix A.3, in addition to a task-planner generalization ability evaluation. 
+
+Replanning further improves task-level success We next examine the effect of replanning on task-level success. As shown in Table 1, replanning-based planners (IC-R EPLAN and NC-REPLAN ) consistently outperform their F ULL PLAN counterparts when paired with strong 7Preprint. Under review. motion planners. Under waypoint motion, NC-R EPLAN -S1 achieves 0.35 success, improving over F ULL PLAN -S1 by 0.06. This improvement becomes more pronounced after joint RL training: NC-R EPLAN -S3 achieves 0.62 success, exceeding F ULL PLAN -S3 by 0.09. We also highlight that new-context replanning outperforms in-context replanning. For example, under waypoint motion, NC-R EPLAN -S3 achieves 0.62 success, surpassing IC-R EPLAN by 0.05. We hypothesize this gap stems from efficient context usage, as NC-R EPLAN avoids accumulating long execution histories, which is better suited for a 4B-parameter LLM that may falls short in long-context handling. 
+
+Motion Planner matters in overall performance Table 1 highlights that the choice of motion planner has a large impact on task-level success. Across all task planners, waypoint motion consistently achieves the highest success, followed by VLA motion and then RRT motion. Even for motion-aware task planners, performance degrades noticeably when paired with weaker motion planners, highlighting the tight coupling between task planning and motion execution. For example, NC-R EPLAN -S3 achieves 0.62 success with waypoint motion, but drops to 0.33 with VLA motion and further decreases under RRT motion. These results emphasize the importance of strong motion planning. 
+
+Waypoint Motion Planner vs. VLA Motion Planner To better understand the perfor-mance gap between waypoint-based and VLA motion planners, we conduct an additional experiment that isolates motion execution from task-level reasoning. Specifically, we eval-uate single-robot motion in cluttered 2 × 2 grids containing one robot and one obstacle. Motion movements are randomly sampled, enabling a direct assessment of motion-planner. Figure 5 categorizes motion outcomes into four types: Success (the robot successfully reaches the goal position), Invalid (the planner produces an infeasible trajectory), Robot–Obstacle Collision (a collision occurs during execution), and Not at Target (the motion is feasible but fails to reach the target). The waypoint motion planner achieves a high success rate of 0.92 after Stage-2 training. In contrast, the VLA motion planner is dominated by Invalid ,which remain the primary source of error even as the training set scales from 14k to 20k trajectories. Although additional data improves VLA success from 0.61 to 0.78 and reduces invalid motions, its performance still falls short to waypoint planner. We hypothesize that this gap arises from the difficulty of learning robot kinematics and collision-aware control purely from demonstrations with a 4B LLM. Unlike waypoint-based control, which explicitly enforces feasibility constraints through motion planning algorithms, VLA motion must implicitly infer these constraints, leading to persistent infeasible trajectories. 
+
+3.3 Ablation Study                 
+
+> Joint Train Combinations Success ↑StepDiff. ↓
+> FULL PLAN -S2 + Motion -S2 0.53 -0.25 FULL PLAN -S2 + Motion -S1 0.45 -0.12 FULL PLAN -S1 + Motion -S2 0.37 -0.31
+> FULL PLAN -S1 + Motion -S1 0.35 -0.08
+
+Table 2: Task planner performance under different Stage-1/Stage-2 task and mo-tion planner pairs for joint training.             
+
+> SFT Data Strategy Reach. R-O Coll. R-R Coll. Err. Rec. Ji et al. (2025a) 7.3 3.9 4.1 3.7 Ours 13.1 7.3 8.5 6.1
+
+Table 3: Effect of prompting strategy on reasoning behavior of F ULL PLAN -S1. 
+
+Impact of Stage-2 separate RL training To un-derstand whether joint task and motion training benefits from stronger individual policy initial-ization and which component contributes most, we evaluate the effect of Stage-2 separate RL for task and motion planners prior to joint optimiza-tion. As shown in Table 2, all variants start from the same Stage-1 F ULL PLAN task planner and motion planner but differ in whether Stage-2 RL is applied to each component. Initializing both planners with separate RL achieves the high-est success rate, showing that Stage-2 RL pro-vides a substantially better starting point than directly entering joint training from SFT. More-over, Stage-2 training of the task planner has a larger impact than that of the motion planner, as pairing an RL-trained task planner with an SFT motion planner significantly outperforms the other combination in Success , while omitting Stage-2 RL for both planners yields the weakest performance. Overall, these results demonstrate that separate RL is crucial for both planner training and effective Stage-3 joint training. 8Preprint. Under review. 
+
+Impact of RL algorithm In our initial experiments, we observe that naively applying GRPO often results in unstable training dynamics. To better understand this behavior, we systematically examine how different RLVR objectives affect optimization stability during RL training. Specifically, we focus on Stage 2 F ULL PLAN RL and compare several widely used RLVR objectives: GRPO (DeepSeek-AI, 2025), GRPO with truncated importance sampling (IS) (Pang & Jin, 2025), and GSPO (Zheng et al., 2025). As shown in Figure 6, GSPO demonstrates more stable training dynamic, achieving steady improvements in training task accuracy for up to 160 training steps without sudden drop. In contrast, GRPO exhibits severe instability, with an abrupt collapse around 110 steps, while truncated-IS GRPO delays this failure to around 120 steps. These observations are consistent with prior findings on long-horizon RL training for math reasoning (Zheng et al., 2025) and underscore the critical role of RLVR objective design in stabilizing training for complex reasoning tasks. Based on these results, we adopt GSPO for both Stage 2 and Stage 3 RL training in this work. 
+
+Impact of reflection-aware SFT data generation strategy To examine how different SFT data generation strategies affect task-planner reasoning, we analyze the reasoning behaviors exhibited by the F ULL PLAN -S1 planner trained on SFT data synthesized using different prompting schemes, evaluated on a subset of the test set. As shown in Table 3, failure-aware data generation substantially increases the number of reasoning related to all four categories: reachability check (Reach.), robot–obstacle collisions check (R–O Coll.), robot–robot colli-sions check (R–R Coll.), and explicit error recovery (Err. Rec.), indicating that the planner more frequently anticipates and reflects on potential execution failures. In contrast, data generated without failure annotations elicits limited corrective reasoning. The prompts used by GPT-5-mini to identify and count these reasoning behaviors are in Appendix A.5. 
+
+## 4 Related Work 
+
+LLM-based multi-robot control system Conventional multi-robot control mainly operates in task-level planning with formalizing goals and constraints with temporal logic or PDDL and performs control via constraint solvers (Fox & Long, 2003; Emerson, 1990). Recent LLM-based works either perform control primitive selection (Guan et al., 2023; Skreta et al., 2023; Loula et al., 2025), control code generation (Chen et al., 2025; Meng et al., 2025), diffusion control (Parimi & Williams, 2025; Kim et al., 2025) or combine with classical symbolic planning tools (Chen et al., 2024a; Lin et al., 2023; Zhang et al., 2025; Wang et al., 2024). Despite their progress, the overlook of low-level motion feasibility during task planning often yield failed task execution, especially when the environments becomes more cluttered with increasing obstacles and robots. Compared to these work, we propose a motion-aware LLM-based multi-robot control system that couples high-level task planning with motion execution and achieves high overall performance in cluttered environments. 
+
+RLVR for LLM reasoning Reinforcement learning with verifiable rewards (RLVR) has recently emerged as a powerful tool for improving the reasoning capabilities of LLMs (DeepSeek-AI, 2025; Zheng et al., 2025). By leveraging verifiable signals, such as answer exact-match in math (Shao et al., 2024; Hou et al., 2025) and question answering (Xie et al., 2026; Ji et al., 2025b; Jin et al., 2025), or unit tests in code generation (Liu et al., 2025; He et al., 2025; Liu & Zhang, 2025), RLVR significantly raises the LLMs’ performance, en-abling stronger generalization to real-world tasks. Despite these successes in these domains, applying RLVR to embodied robot control remains challenging. For instance, prior work reports substantial difficulty when applying RLVR to VLA model training, due to the high dimensionality of robot joint spaces and the inherent complexity of learning robot kinemat-ics, even in single-robot control settings (Huang et al., 2025; Li et al., 2025; Lyu et al., 2025). In contrast, our work introduces a waypoint-based motion control scheme that substantially simplifies motion learning. Moreover, our modified RLVR algorithm mitigates ambiguous credit assignment between joint task planner and motion planner training. 9Preprint. Under review. 
+
+## 5 Conclusion 
+
+In this paper, we introduce W AY PLAN , a hybrid multi-robot control framework that jointly optimizes task coordination and motion feasibility in cluttered environments with complex physical constraints. By leveraging waypoint-based motion parameterization and curricu-lum training, our approach enables effective joint task–motion learning while reducing RL complexity and credit assignment challenges. Experiments on BoxNet3D-OBS show that in-corporating motion feasibility into task planning significantly outperforms motion-agnostic baselines, even surpassing larger general-purpose LLMs with a 4B model. These results highlight the importance of integrated task–motion planning for reliable multi-robot control. 
+
+## Acknowledgement 
+
+Jiabao and Shiyu acknowledge the support from National Science Foundation(NSF) Grant IIS-2338252, NSF Grant IIS-2302730, the Open Philanthropy Research Award and Cisco Research Program. 
+
+## LLM Usage Disclosure 
+
+Throughout the development of this research paper, we leveraged multiple LLMs and coding-agent CLI tools, including Cursor and Codex, to support implementation and debugging via human–agent collaboration. LLMs were also used to assist in generating visualization scripts for producing illustrative figures in the experimental analysis. In addition, we utilized advanced LLMs such as GPT-5 and Gemini for grammar checking for draft writing including this paragraph. But the final version of this paper are human-only. The core research ideas and overall direction of this work were also developed solely by the authors, without direct involvement from LLMs. 
+
+## Ethic Statement 
+
+This work advances multi-robot control by explicitly coupling task-level planning and motion-level feasibility in cluttered environments, demonstrating that jointly optimized task–motion planning can substantially improve performance over baselines. By introduc-ing waypoint-based motion control scheme and a curriculum training strategy, the proposed framework reduces motion learning complexity, avoids ambiguous credit assignment, and enables smaller models to outperform much larger general-purpose LLMs, which has pos-itive implications for practical deployment in safety-critical domains such as warehouse robot control. At the same time, this work has several limitations: it relies on classical mo-tion planners for final execution, which may struggle in highly dynamic or non-geometric constraint settings; the waypoint abstraction, while efficient, may not capture fine-grained manipulation or contact-rich behaviors; and joint training still incurs significant computa-tional cost and assumes access to reliable simulation for RLVR. Another key limitation is that the proposed methods are evaluated only in simulation environment, as real-world deployment on large-scale multi-robot experimentation are difficult and costly. As a result, any real-world application would require additional validation, safety mechanisms, and human oversight. Future work should explore extending the framework to more realistic dynamic environments and real-robot deployment. 
+
+## References 
+
+Kevin Black, Noah Brown, Danny Driess, Adnan Esmail, Michael Equi, Chelsea Finn, Niccolo Fusai, Lachy Groom, Karol Hausman, Brian Ichter, et al. π0: A vision-language-action flow model for general robot control. corr, abs/2410.24164, 2024. doi: 10.48550. 
+
+arXiv preprint ARXIV.2410.24164 .Yongchao Chen, Jacob Arkin, Charles Dawson, Yang Zhang, Nicholas Roy, and Chuchu Fan. Autotamp: Autoregressive task and motion planning with llms as translators and 10 Preprint. Under review. checkers. In 2024 IEEE International conference on robotics and automation (ICRA) , pp. 6695–6702. IEEE, 2024a. Yongchao Chen, Jacob Arkin, Yang Zhang, Nicholas Roy, and Chuchu Fan. Scalable multi-robot collaboration with large language models: Centralized or decentralized systems? In 2024 IEEE International Conference on Robotics and Automation (ICRA) , pp. 4311–4317. IEEE, 2024b. Yongchao Chen, Yilun Hao, Yang Zhang, and Chuchu Fan. Code-as-symbolic-planner: Foundation model-based robot planning via symbolic code generation. arXiv preprint arXiv: 2503.01700 , 2025. DeepSeek-AI. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv: 2501.12948 , 2025. E Allen Emerson. Temporal and modal logic. In Formal models and semantics , pp. 995–1072. Elsevier, 1990. Maria Fox and Derek Long. Pddl2. 1: An extension to pddl for expressing temporal planning domains. Journal of artificial intelligence research , 20:61–124, 2003. Lin Guan, Karthik Valmeekam, Sarath Sreedharan, and Subbarao Kambhampati. Leveraging pre-trained large language models to construct and utilize world models for model-based task planning. Advances in Neural Information Processing Systems , 36:79081–79094, 2023. Xudong Guo, Kaixuan Huang, Jiale Liu, Wenhui Fan, Natalia V ´elez, Qingyun Wu, Huazheng Wang, Thomas L Griffiths, and Mengdi Wang. Embodied llm agents learn to cooperate in organized teams. arXiv preprint arXiv:2403.12482 , 2024. Zhongmou He, Yee Man Choi, Kexun Zhang, Jiabao Ji, Junting Zhou, Dejia Xu, Ivan Bercovich, Aidan Zhang, and Lei Li. Hardtests: Synthesizing high-quality test cases for llm coding. arXiv preprint arXiv:2505.24098 , 2025. Bairu Hou, Yang Zhang, Jiabao Ji, Yujian Liu, Kaizhi Qian, Jacob Andreas, and Shiyu Chang. Thinkprune: Pruning long chain-of-thought of llms via reinforcement learning. 2025. URL https://openreview.net/forum?id=gahaeltsNo .Dongchi Huang, Zhirui Fang, Tianle Zhang, Yihang Li, Lin Zhao, and Chunhe Xia. Co-rft: Efficient fine-tuning of vision-language-action models through chunked offline reinforce-ment learning, 2025. URL https://arxiv.org/abs/2508.02219 .Wenlong Huang, Fei Xia, Ted Xiao, Harris Chan, Jacky Liang, Pete Florence, Andy Zeng, Jonathan Tompson, Igor Mordatch, Yevgen Chebotar, et al. Inner monologue: Embodied reasoning through planning with language models. arXiv preprint arXiv:2207.05608 , 2022. Jiabao Ji, Yongchao Chen, Yang Zhang, Ramana Rao Kompella, Chuchu Fan, Gaowen Liu, and Shiyu Chang. Collision-and reachability-aware multi-robot control with grounded llm planners. arXiv preprint arXiv:2505.20573 , 2025a. Jiabao Ji, Min Li, Priyanshu Kumar, Shiyu Chang, and Saloni Potdar. Deepambigqa: Am-biguous multi-hop questions for benchmarking llm answer completeness. arXiv preprint arXiv:2511.01323 , 2025b. Bowen Jin, Hansi Zeng, Zhenrui Yue, Dong Wang, Hamed Zamani, and Jiawei Han. Search-r1: Training llms to reason and leverage search engines with reinforcement learning. arXiv preprint arXiv: 2503.09516 , 2025. Amelie Minji Kim, Anqi Wu, and Ye Zhao. Hierarchical diffusion motion planning with task-conditioned uncertainty-aware priors. arXiv preprint arXiv:2509.25685 , 2025. Hengtao Li, Pengxiang Ding, Runze Suo, Yihao Wang, Zirui Ge, Dongyuan Zang, Kexian Yu, Mingyang Sun, Hongyin Zhang, Donglin Wang, and Weihua Su. Vla-rft: Vision-language-action reinforcement fine-tuning with verified rewards in world simulators, 2025. URL 
+
+https://arxiv.org/abs/2510.00406 .11 Preprint. Under review. Kevin Lin, Christopher Agia, Toki Migimatsu, Marco Pavone, and Jeannette Bohg. Text2motion: From natural language instructions to feasible plans. arXiv preprint arXiv: 2303.12153 , 2023. Jiawei Liu and Lingming Zhang. Code-r1: Reproducing r1 for code with reliable rewards. 2025. Yujian Liu, Jiabao Ji, Yang Zhang, Wenbo Guo, Tommi Jaakkola, and Shiyu Chang. Har-nessllm: Automatic testing harness generation via reinforcement learning. arXiv preprint arXiv:2511.01104 , 2025. I. Loshchilov and F. Hutter. Decoupled weight decay regularization. International Conference on Learning Representations , 2017. Jo ˜ao Loula, Benjamin LeBrun, Li Du, Ben Lipkin, Clemente Pasti, Gabriel Grand, Tianyu Liu, Yahya Emara, Marjorie Freedman, Jason Eisner, Ryan Cotterell, Vikash Mansinghka, Alexander K. Lew, Tim Vieira, and Timothy J. O’Donnell. Syntactic and semantic control of large language models via sequential monte carlo. In The Thirteenth International Conference on Learning Representations, ICLR 2025, Singapore, April 24-28, 2025 . OpenReview.net, 2025. URL https://openreview.net/forum?id=xoXn62FzD0 .Michael Luo, Sijun Tan, Roy Huang, Ameen Patel, Alpay Ariyak, Qingyang Wu, Xiaoxiang Shi, Rachel Xin, Colin Cai, Maurice Weber, Ce Zhang, Li Erran Li, Raluca Ada Popa, and Ion Stoica. Deepcoder: A fully open-source 14b coder at o3-mini level. Mingyang Lyu, Yinqian Sun, Erliang Lin, Huangrui Li, Ruolin Chen, Feifei Zhao, and Yi Zeng. Reinforcement fine-tuning of flow-matching policies for vision-language-action models, 2025. URL https://arxiv.org/abs/2510.09976 .Yue Meng, Fei Chen, Yongchao Chen, and Chuchu Fan. Audere: Automated strategy decision and realization in robot planning and control via llms. arXiv preprint arXiv: 2504.03015 , 2025. Lei Pang and Ruinan Jin. On the theory and practice of grpo: A trajectory-corrected approach with fast convergence. arXiv preprint arXiv:2508.02833 , 2025. Viraj Parimi and Brian C Williams. Diffusion-guided multi-arm motion planning. arXiv preprint arXiv:2509.08160 , 2025. Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, Y. K. Li, Y. Wu, and Daya Guo. Deepseekmath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv: 2402.03300 , 2024. Guangming Sheng, Chi Zhang, Zilingfeng Ye, Xibin Wu, Wang Zhang, Ru Zhang, Yanghua Peng, Haibin Lin, and Chuan Wu. Hybridflow: A flexible and efficient rlhf framework. 
+
+arXiv preprint arXiv: 2409.19256 , 2024. Marta Skreta, Naruki Yoshikawa, Sebastian Arellano-Rubach, Zhi Ji, Lasse Bjørn Kristensen, Kourosh Darvish, Al ´an Aspuru-Guzik, Florian Shkurti, and Animesh Garg. Errors are useful prompts: Instruction guided task programming with verifier-assisted iterative prompting. arXiv preprint arXiv:2303.14100 , 2023. Shu Wang, Muzhi Han, Ziyuan Jiao, Zeyu Zhang, Ying Nian Wu, Song-Chun Zhu, and Hangxin Liu. Llmˆ 3: Large language model-based task and motion planning with motion failure reasoning. In 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 12086–12092. IEEE, 2024. Roy Xie, Deepak Gopinath, David Qiu, Dong Lin, Haitian Sun, Saloni Potdar, and Bhuwan Dhingra. Over-searching in search-augmented large language models. arXiv preprint arXiv:2601.05503 , 2026. An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. Qwen3 technical report. arXiv preprint arXiv:2505.09388 , 2025. 12 Preprint. Under review. Xiaohan Zhang, Yan Ding, Yohei Hayamizu, Zainab Altaweel, Yifeng Zhu, Yuke Zhu, Peter Stone, Chris Paxton, and Shiqi Zhang. Llm-grop: Visually grounded robot task and motion planning with large language models. The International Journal of Robotics Research ,pp. 02783649251378196, 2025. Chujie Zheng, Shixuan Liu, Mingze Li, Xiong-Hui Chen, Bowen Yu, Chang Gao, Kai Dang, Yuqiong Liu, Rui Men, An Yang, et al. Group sequence policy optimization. arXiv preprint arXiv:2507.18071 , 2025. 
+
+## A Appendix 
+
+A.1 BoxNet3D-OBS Implementation Detail Data statistics For BoxNet3D-OBS task-data implementation, we follow the same strategy as described in the main paper for map generation, robot placement and obstacle placement. Specifically, we use MuJoCo to implement the feasibility checks such as robot arm collision and object collisions. The map size ranges from 2 × 2 to 4 × 4, with robots ranges from 1 to 9 and the object number ranges from 1 to 6. For the obstacle generation, we avoid two obstacles appearing in one grid and make sure that in any 2 × 2 sub-grid, there’s at most two obstacles appearing so that unreachable grid, where none robots can reach does not appear in the data to simulate warehouse environment. For each map configuration, we randomly generate at most 50 different environments for training data and at most 5 for the test data. Detailed data statistics are summarized in Table 4. Among these task instances in the train set, we generate SFT data for F ULL PLAN , IC-R EPLAN , and NC-R EPLAN reasoning trace with GPT-5-mini on 50% of them and leave the other 50% only appearing in RL stage following previous works (Ji et al., 2025a). For BoxNet3D-OBS motion-data implementation, we randomly generate motion movements for a 2 × 2 single-robot grid environments, which is the basic workspace for one robot in the task-level movement. Specifically, we Dataset Sample No. Avg. Step.         
+
+> BoxNet3D-OBS -train 3400 11.4
+> BoxNet3D-OBS -test 480 10.9
+> BoxNet3D-OBS -motion-train 14032 -
+> BoxNet3D-OBS -motion-test 150 -
+
+Table 4: Dataset statistics for BoxNet3D-OBS data. 
+
+Task-level A* search algorithm The task-level search used for plan generation is an A* search over full environment states. Each state snapshot caches box and arm poses and is scored by a heuristic that combines box-to-target distances with alignment and reachability bonuses/penalties. The planner maintains a min-heap open set keyed by priority (heuristic plus accumulated step cost), pops the best state, checks the goal condition (all boxes within tolerance of targets), and expands by generating parallel robot command sets. Action generation proposes feasible multi-robot command bundles by enumerating reachable picks/places, filtering for collision and kinematic constraints, and scoring step costs so promising parallel moves are explored first; failed command signatures are tracked to avoid repeating invalid combinations. Following A* search convention, our search prunes heavy search stage via g-score dominance, a coarse state signature cost bound to avoid revisiting near-duplicates, and simulation caching to skip re-evaluating the same command signature in Mujoco, which costs the most CPU time; accepted transitions are recorded so the final plan can be reconstructed by backtracking parents. 
+
+Motion-level BFS search algorithm The motion-plan frontier search used for waypoint generation is a priority-guided frontier expansion over pose nodes. The algorithm seeds a priority queue with the start node and repeatedly expands the lowest-priority path (priority is a weighted sum of joint-space distance to the target, workspace distance, and clearance 13 Preprint. Under review. penalty). On each expansion it first checks for a direct feasible edge to the target, otherwise it grows the path by exploring neighbour cells in Chebyshev-radius shells between the configured min/max radii, optionally biasing to wider shells when clearance is high. It enforces budgets on depth, total expansions, and stalled progress, and returns the first path that can directly connect to the target while satisfying the minimum chain length. 
+
+A.2 WAY PLAN Implementation Detail Pseudo code for Stage-3 joint RLVR training Algorithm 1 illustrates the modified joint RLVR training involved in Stage-3 as we described in Section 2. Starting from the initial policy after Stage-2 seperate RLVR training, Stage-3 training jointly updates the task planner and motion planner, allowing them to adapt to each other 
+
+Algorithm 1 Stage-3 RLVR Algorithm for Jointly Optimizing Task planner Mθ and Motion Planner Mϕ 
+
+> 1:
+
+Input: Stage-2 planners M(0) 
+
+> θ
+
+, M(0) 
+
+> ϕ
+
+, task set Dtask , GSPO, iterations K, group size G,cap N 
+
+> 2:
+
+for k = 1, 2, . . . , K do  
+
+> 3:
+
+Freeze rollout policies ¯Mθ ← M (k−1) 
+
+> θ
+
+, ¯Mϕ ← M (k−1) 
+
+> ϕ
+> 4:
+
+Initialize buffer B ← ∅ 
+
+> 5:
+
+Sample task query q ∼ D task  
+
+> 6:
+
+Sample plans {s(j)}Gj=1 ∼ ¯Mθ (q) 
+
+> 7:
+
+for j = 1, . . . , G do  
+
+> 8:
+
+Execute s(j) with ¯Mϕ, obtain motion steps Ej 
+
+> 9:
+
+nj ← ∑(si ,τi )∈E j I[infeasible ] 
+
+> 10:
+
+rj ← rstage-2 task (s(j)) − max (0.2, 0.05 nj) 
+
+> 11:
+
+Add up to N feasible-but-failed (si, τi) to B 
+
+> 12:
+
+end for  
+
+> 13:
+
+M(k) 
+
+> θ
+
+← GSPO (M(k−1) 
+
+> θ
+
+, {s(j), rj}Gj=1) 
+
+> 14:
+
+Sample (st, τ) ∼ B , sample {W(j)}Gj=1 ∼ ¯Mϕ(st, τ) 
+
+> 15:
+
+M(k) 
+
+> ϕ
+
+← GSPO (M(k−1) 
+
+> ϕ
+
+, {W(j), rmotion (W(j))}Gj=1) 
+
+> 16:
+
+end for Train hyper-parameters and GPU Hour In this subsection, we summarize the hyperpa-rameters used for planner training at each stage and report the corresponding H100 GPU hours in Table 5. All experiments are conducted on a single 8-H100 GPU node, along with several 96-core CPU nodes for MuJoCo simulation. For checkpoint selection, we choose the model achieving the best performance on the validation set, which consists of a 20% subset of the full BoxNet3D-OBS test dataset. For motion planner training, we use a learning rate of 1 × 10 −5 with a batch size of 256 and optimize for five epochs on the waypoint SFT dataset using the AdamW optimizer. In Stage-2 separate RLVR training, we apply on-policy GRPO with a learning rate of 3 × 10 −6
+
+and a batch size of 64 (group size 8). The same learning rate is used in Stage-3 joint training for the motion planner, where the RLVR objective is switched to GSPO, consistent with the task planner. For VLA motion planner training, we follow prior work and fine-tune the model to predict chunked robot joint configurations using a next-token cross-entropy loss. Each forward pass predicts the next 20 joint configurations, corresponding to 20 Hz control signal generation. To ensure fair comparison, the SFT dataset uses the same set of motion task instances as the waypoint motion planner training. For each task instance, we simulate the robot in MuJoCo and collect joint configurations at a 20 Hz sampling rate to construct the VLA SFT dataset. We employ the same set of hyper-parameters for VLA SFT. 14 Preprint. Under review. For task planner training, we adopt a learning rate of 2 × 10 −5 with a batch size of 64 and train for eight epochs on the task planner SFT data using AdamW. In Stage-2 separate RL training, we use GSPO with a learning rate of 5 × 10 −6 and a batch size of 64 (group size 8). This learning rate is maintained in Stage-3 joint training. To improve training efficiency, we follow prevoius work and employ a two-step off-policy RL strategy for the task planner in both Stage-2 and Stage-3, where task plan data may be generated by policies up to two steps older than the current task policy.                          
+
+> Model TRAIN STEPS H100 GPU H OURS
+> Stage-1: SFT Models Motion planner 275 4.4 FULL PLAN 325 6.8 IC-R EPLAN 540 12.4 NC-R EPLAN 404 11.2 Stage-2: Separate RLVR Motion planner 200 109.6 FULL PLAN 160 182.4 IC-R EPLAN 160 307.2 NC-R EPLAN 160 264.8 Stage-3: Joint Task-Motion RLVR FULL PLAN 80 149.6 IC-R EPLAN 80 263.2 NC-R EPLAN 80 219.2
+
+Table 5: Training computation cost across different training stages. 
+
+A.3 Additional Experiment Results Planner Inference Time Cost Latency is a critical factor for practical deployment in robot control, especially in settings where planning must be performed online. To evaluate inference-time cost, we benchmarked several planners on 50 BoxNet3D-OBS tasks, each instantiated in a 3 × 3 grid environment with two obstacles. For each task, we measured both the time required to generate a feasible plan and the total execution time to complete the task simulation in MuJoCo; together, these metrics capture the end-to-end inference cost under realistic conditions. Planner serving was performed using two GPUs, with one dedicated to the task planner and the other to the motion planner. All available optimizations were enabled for the A* search. Table 6 reports the averaged latency in seconds. We highlight the following observations. First, LLM-based planners are substantially more efficient than search-based planning, reducing total runtime from 580.3 seconds for A* to under 60 seconds across all LLM-based methods. This efficiency arises because LLM-based planning avoids repeated simulation during search and instead relies on a small number of forward model calls. Second, way-point motion planning consistently achieves lower inference latency than VLA motion planning, as it requires only a single waypoint sequence generation per robot motion, whereas VLA planning may involve multiple LLM calls to refine low-level actions. These results demonstrate that LLM-based planning, particularly when combined with waypoint motion planning, has potential real-world application for robot control. Task Planner Solution Gen. Simulation Total Search-based method A* search 248.4 331.9 580.3 VLA Motion Planner FULL PLAN -S3 22.4 3.5 25.9 IC-R EPLAN -S3 47.7 6.8 54.5 NC-R EPLAN -S3 51.2 7.3 58.5 Waypoint Motion Planner FULL PLAN -S3 20.4 3.4 23.8 IC-R EPLAN -S3 37.1 6.1 43.2 NC-R EPLAN -S3 42.4 6.7 49.1 Table 6: Inference time comparison on BoxNet3D-OBS task. We report average solution generation time, MuJoCo simulation time, and total end-to-end execution time (in seconds). 15 Preprint. Under review. 
+
+Task error breakdown To better understand the failures of different task planners, we analyze the failure modes of our task-level planner when paired with either the VLA motion planner or the waypoint-based motion planner. We categorize failures into motion-related failures and task-level failures. Motion-related failures capture errors arising during motion execution. These include execution failures, where the motion planner generates infeasible trajectories; robot–obstacle collisions, where the executed trajectory results in a collision between a robot and an obstacle; robot–robot collisions, where trajectories lead to collisions between multiple robots; and far-from-target failures, where the robot terminates execution significantly away from the intended target position. Task-level failures capture errors in high-level planning and feasibility. These include unreachable motion steps, where a planned motion step is verified as infeasible by the motion search algorithm, and task incompletion failures, where not all required objects are successfully moved to their target locations after executing all planned steps. The results are presented in Table 7, . We highlight following observations: First, when paired with the VLA motion planner, the dominant performance bottleneck is motion execu-tion failure, which accounts for the majority of task failures. This aligns with observations in the main paper, highlighting the relatively weaker robustness of the VLA motion planner even in single-robot settings, which becomes further amplified in multi-robot scenarios. Second, when using waypoint-based motion, the primary limitation shifts to unreachable motion steps, indicating that task-level motion feasibility rather than execution robustness becomes the dominant challenge. This suggests that, despite improved low-level motion reliability, long-horizon multi-robot coordination remains inherently difficult, particularly in collaborative tasks requiring precise action sequencing and inter-robot dependency management.                                              
+
+> Task Planner MOTION -LEVEL FAILURE TASK -LEVEL FAILURE
+> Execution err. Rob-obs Coll. Rob-rob Coll. Far from target Unreachable motion Far from target VLA Motion FULL PLAN -S3 0.45 0.04 0.05 0.01 0.13 0.00 IC-R EPLAN -S3 0.35 0.09 0.07 0.03 0.11 0.01 NC-R EPLAN -S3 0.31 0.08 0.09 0.02 0.15 0.02 Waypoint Motion FULL PLAN -S3 0.02 0.06 0.09 0.07 0.20 0.00 IC-R EPLAN -S3 0.02 0.08 0.08 0.05 0.18 0.01 NC-R EPLAN -S3 0.01 0.05 0.06 0.04 0.17 0.02
+
+Table 7: Task planner failure breakdown under Motion-level failures and Task-level failures. 
+
+Task planner generalization ability Following prior work (Ji et al., 2025a), we evaluate the generalization ability of task planners. We consider two generalization settings. In UNSEEN MAP , the map sizes are not observed during training, specifically 2 × 5 and 8 × 2grids . In U NSEEN LAYOUT , robot bases are no longer fully aligned with grid joints on 3 × 3and 4 × 4 grids, with some base locations removed from the standard layout. For each map size, we generate 50 test instances using the same procedural generation rules as the 
+
+BoxNet3D-OBS test set. The results are reported in Table 8, where we measure both task success rate and the step difference relative to A* searched plans. We highlight the following observations: ❶ Across both U NSEEN MAP and U NSEEN LAYOUT , RLVR models (Stage-2 and Stage-3) consistently outperform SFT models in terms of success rate and StepDiff, indicating improved generalization to unseen environment variations. This aligns with the observation in prevoius works (Ji et al., 2025a). ❷ Among all methods, NC-R EPLAN 
+
+achieves the strongest generalization performance, especially under joint RLVR training, attaining the highest success rates in both settings. This further confirms that NC-R EPLAN 
+
+is a strong planning mode for such complex reasoning task. 
+
+A.4 Planner Mode Illustration 
+
+In this section, we present example task-planner reasoning for our three different planner modes. 
+
+FULL PLAN Reasoning Trace Illustration As described in the main paper, F ULL PLAN 
+
+planning takes the initial environment observation as input and directly generates a multi-step movement plan. Each step specifies the actions of all involved robots, including their 16 Preprint. Under review.                                              
+
+> Model UNSEEN MAP UNSEEN LAYOUT
+> Success ↑StepDiff. ↓Success ↑StepDiff. ↓
+> Stage-1: SFT Models FULL PLAN 0.17 0.38 0.15 0.24 IC-R EPLAN 0.27 0.74 0.24 0.55 NC-R EPLAN 0.31 0.62 0.28 0.61 Stage-2: Isolated RLVR Models FULL PLAN 0.39 0.21 0.31 0.13 IC-R EPLAN 0.46 -0.04 0.37 0.24 NC-R EPLAN 0.47 0.05 0.43 0.08 Stage-3: Joint RLVR Models FULL PLAN 0.43 0.11 0.35 -0.03 IC-R EPLAN 0.51 0.07 0.44 0.17 NC-R EPLAN 0.55 -0.08 0.49 0.11
+
+Table 8: Task planner generalization on unseen BoxNet3D-OBS environments. target positions and box-carrying states. Table 10 below presents an example reasoning trace for the given environment. 
+
+IC-R EPLAN Reasoning Trace Illustration As described in the main paper, IC-R EPLAN 
+
+augments the planner’s input by appending the environment observation immediately preceding the last failed action, along with the corresponding failure feedback. This allows the planner to reason over the complete planning history when generating the remaining plan. Table 9 below presents an example reasoning trace. 
+
+NC-R EPLAN Reasoning Trace Illustration As described in the main paper, NC-R EPLAN 
+
+refreshes its context when an action plan fails at an intermediate step. It initializes a new context containing the environment observation before the failed action, together with the failure feedback, enabling the planner to reason over the full planning history when generating the remaining plan. Table 11 below presents an example reasoning trace. 
+
+Input :
+
+<observation >
+
+Object positions: Object 0: [0.75, 1.75, 0.08] . . . Object 1: [2.25, 1.75, 0.08] . . . Robot states: Robot 0: base=[0.25, 0.75, 0.00], arm=[0.35, 0.85, 0.10] . . . Robot 1: base=[2.75, 0.75, 0.00], arm=[2.65, 0.85, 0.10] . . . 
+
+</observation >
+
+FULL PLAN Planner Reasoning :
+
+<think >Okay, let me analyze the given environment before coming up with a multi-step movement plan . . . I will make sure the joint plan is feasible for all robots under this configuration . . . Let me finalize this plan: it coordinates robots in parallel and avoids unnecessary motion . . . 
+
+<think >
+
+[ { "Robot 0": "Move [0.75, 1.25, 0.09] True", . . . } ]
+
+A.5 Detailed Prompts 
+
+In this section, we list all the prompts involved in all experiments in this work. Specifically, we mainly list the prompt for Task Planner such as F ULL PLAN prompt and the prompt for motion planner, as well as the promtp for reasoning behavior check experiment. 
+
+Prompt for Task Planner We list the prompt for F ULL PLAN task planner in the following listing. For R EPLAN -mode, the main difference is that it involves a separate paragraph description about utilizing the error feedback, which is listed below the F ULL PLAN planner prompt. 17 Preprint. Under review. Table 9: Example reasoning trace for IC-R EPLAN planner. 
+
+Input :
+
+<observation >
+
+Object positions: Object 0: [0.75, 2.75, 0.08] . . . Object 1: [2.25, 2.75, 0.08] . . . Robot states: Robot 0: base=[0.75, 2.25, 0.00], arm=[0.85, 2.35, 0.10] . . . Robot 1: base=[2.25, 2.25, 0.00], arm=[2.15, 2.35, 0.10] . . . 
+
+</observation >
+
+IC-R EPLAN Planner Reasoning :
+
+<think >Alright, I will continue executing the current plan and only replan if the next step becomes invalid . . . 
+
+[ { "Robot 0": "Move [1.50, 2.75, 0.10] True", "Robot 1": "Move [2.25, 2.25, 0.09] False" } . . . ]
+
+<observation >
+
+Object positions: . . . Robot states: . . . Execution feedback: Previous plan: { ”Robot 0”: ”Move [1.50, 2.75, 0.10] True” . . . FAIL: collision predicted at [1.50, 2.75, 0.10] . . . 
+
+</observation ><think >Given this feedback, I need to re-analyze the environment and generate a new next step . . . Let me finalize this updated plan by first clearing the block . . . 
+
+{ "Robot 1": "Move [2.50, 2.75, 0.09] True", "Robot 0": "Move [0.75, 3.00, 0.10] True" } . . . 
+
+Table 10: Example reasoning trace for F ULL PLAN planner. 
+
+You are a central planner responsible for coordinating multiple robotic arms operating in a 3D grid-like environment. Your goal is to plan and execute efficient, collision-free movements to transport objects to their designated target positions while avoiding obstacles. 
+
+> ,→
+> ,→
+> ,→
+
+## Task Description: *Task Representation:* * Objective: Move all objects to their specified target locations safely and efficiently. ,→
+
+* Input: A detailed map state containing positions of robots, objects, targets, and obstacles. ,→
+
+* Output: A precise movement plan specifying each robot arm 's actions for moving objects. ,→
+
+*Position Representation:* * All positions (robots, objects, targets, obstacles) are given by their center coordinates, e.g., [0.55, 1.65, 0.08]. ,→
+
+* Robots have a fixed base location and an extendable arm with a limited reach range. *Reachability Rules:* * Each robot arm can only move within an axis-aligned reach box centered at its base position: ,→
+
+- Let dx = X - Base_X, dy = Y - Base_Y, dz = Z - Base_Z. - The arm may reach (X, Y, Z) only if: - -0.9 <= dx <= 0.9 - -0.9 <= dy <= 0.9 - 0.001 <= dz <= 0.8 
+
+18 Preprint. Under review. 
+
+Input :
+
+<observation >
+
+Object positions: Object 0: [0.75, 2.75, 0.08] . . . Object 1: [2.25, 2.75, 0.08] . . . Robot states: Robot 0: base=[0.75, 2.25, 0.00], arm=[0.85, 2.35, 0.10] . . . Robot 1: base=[2.25, 2.25, 0.00], arm=[2.15, 2.35, 0.10] . . . 
+
+</observation >
+
+NC-R EPLAN Planner Reasoning :
+
+<think >Alright, let’s break down the situation and plan the next step . . . Let me finalize this step to make progress efficiently . . . 
+
+{ "Robot 0": "Move [0.75, 2.50, 0.09] False", . . . 
+
+RePlan Input :
+
+<observation >
+
+Object positions: . . . Robot states: . . . Execution feedback: Previous plan: { ”Robot 0”: ”Move [0.75, 2.50, 0.09] False” . . . FAIL: Robot 0 motion infeasible . . . 
+
+</observation >
+
+NC-R EPLAN Planner Reasoning :
+
+<think >Alright, let’s analyze this again and generate a new next-step plan . . . Let me finalize this updated step by rerouting Robot 1 . . . 
+
+{ "Robot 0": "Move [0.75, 2.75, 0.10] True", . . . 
+
+Table 11: Example reasoning trace for NC-R EPLAN planner. 
+
+* If a robot needs to move an object within its range and the arm is not aligned with the object, the robot should first move its arm to the object position. By aligning, the distance between object center and arm position is less than 0.1. 
+
+> ,→
+> ,→
+
+* When you plan a move, please follow these rules: - First check that the proposed target lies within the reach box. - If it does not, adjust your plan or reject that movement. - If the arm is not yet aligned with an object it needs to move and that object lies within the reach box, plan a preliminary move to position the arm aligned with the object before carrying it. 
+
+> ,→
+> ,→
+
+*Obstacles:* * The environment may contain fixed obstacles that robot arms must avoid during movement. Obstacles are static and cannot be moved or altered. ,→
+
+* Each obstacle is defined by: - Type | one of: "box" or "pole". - Center position | [x, y, z] coordinates of the obstacle 's center. - Size parameters: - Box: size = [half_x, half_y, half_z] (half extents along each axis). - Pole: size = [radius, half_height]. - Height may also be provided as a full height; if both size and height are present, treat the obstacle as a solid volume covering that height. ,→
+
+* Collision Constraint: - The robot arm 's path, including all intermediate positions and any carried object 'sswept volume, must not intersect or pass through any part of the obstacle 'svolume. 
+
+> ,→
+> ,→
+
+*Motion Planning Feasibility:* * A separate motion planner exists to generate the detailed movement trajectories. * Your task-level plan should only propose reasonable target positions that a motion planner could feasibly connect, especially around obstacles; avoid targets that would require the arm or carried object to pass through obstacles, and sequence actions if simultaneous moves would be infeasible. 
+
+> ,→
+> ,→
+> ,→
+
+19 Preprint. Under review. 
+
+## How to Generate Your Response: Your response must **clearly indicate your thinking process** enclosed in <think> and </think> tags, followed by the generated step of the movement plan. ,→
+
+*Thinking:* * Clearly describe your analysis and decisions from a first-person perspective. * Identify potential collisions explicitly (including obstacle collisions) and explain how you avoid them. ,→
+
+* Highlight your reasoning for movement choices, considering efficiency and collision avoidance. ,→
+
+* Include explicit checks and self-questioning in your thinking process. *Movement Plan (Output):* * Your generated step of the movement plan should be in markdown format and contain a JSON array, with robot names as keys and their movement instructions as values, structured as follows: 
+
+> ,→
+> ,→
+
+``` json [{"Robot 0": "Move [x, y, z] True", "Robot 1": "Move [x, y, z] False" }, {"Robot 2": "Move [x, y, z] True" }]
+
+``` 
+
+* *[x, y, z]* represent the target coordinates of the robot arm end effector. * *True/False* indicates whether the robot moves an object (True) or simply moves its arm without carrying an object (False). ,→
+
+* One robot can only be moved once in each step, which means no repeated keys are allowed in the same step. ,→
+
+* Robots without actions in the current step should not be included. Ensure your final step completes the objective of placing all objects at their target positions, and your plan forms a valid JSON array. ,→
+
+## Collision Avoidance Rules: Your plan must strictly avoid collisions, as follows: * Robot-Robot Collision * Two robot arms cannot occupy the same position at the end of a move. * Their paths must not cross or share any point during the move; if unsure, sequence the motions instead of parallelizing. ,→
+
+* Object-Object Collision * Two objects cannot occupy the same (x, y, z) at any time. * If you move more than one object at once, they must have different drop-off points and non-crossing straight-line paths. ,→
+
+* Robot-Object Collision * An arm 's path must not sweep through any object it isn 't carrying. * Before moving, confirm the trajectory does not pass over another object 's position. * Robot-Obstacle Collision * An arm 's path and any carried object 's swept volume must not intersect obstacles. * If an obstacle blocks a direct move, plan an intermediate waypoint or a different robot/sequence. ,→
+
+## Plan Efficiency Considerations: * Each step of your plan involves simultaneous robot arm movements from their current positions to specified target positions. ,→
+
+* Each robot arm moves at a constant speed of 0.5 units/time. * The duration of each step is determined by the longest single-arm movement within that step. ,→
+
+* The total execution time is the sum of all individual step durations. 
+
+20 Preprint. Under review. 
+
+* You should aim to minimize total execution time while ensuring collision-free movements and successful object placements. ,→
+
+Given the information above, now consider the following environment: Input: {mapstate} Generate the full plan for moving these robots. *Replanning With Failure Feedback:* * You may be given failure feedback from previous failed attempts, which contains the last-step action plan that leads to any error like collision or infeasible move and the specifica reason for that failure. 
+
+> ,→
+> ,→
+
+* Use that feedback to avoid repeating the same error step and error type, and adjust the plan accordingly before producing the new plan. ,→
+
+*Failure Feedback Format (Example):* 
+
+``` text Failed attempt (last-step plan): {"Robot 0": "Move [x, y, z] True", "Robot 1": "Move [x, y, z] False" }Failure reasons: - Collision between Robot 0 and Robot 1 - Collision between Robot 0 and obstacle at (x, x) 
+
+``` 
+
+Prompt for Motion Planner We list the prompt for motion planner in the following listing. 
+
+You are a motion planner responsible for controlling a single robotic arm to move an object (or the arm alone) from a start point to a target position safely. Your task is to generate a collision-free, waypoint-based movement plan that respects reachability and obstacle constraints. 
+
+> ,→
+> ,→
+> ,→
+
+## Task Description: *Task Representation:* * Objective: Move the robot arm (and any carried object) from the given start point to the specified target position without collisions. ,→
+
+* Input: Start point, target position, and observation of the adjacent environment (objects and obstacles near the path). ,→
+
+* Output: A precise movement plan specifying the robot arm 's waypoint trajectory. *Position Representation:* * All positions (robot base, start, target, objects, obstacles) are given by their center coordinates, e.g., [0.55, 1.65, 0.08]. ,→
+
+* The robot has a fixed base location and an extendable arm with a limited reach range. *Reachability Rules:* * Each robot arm can only move within a sphere centered at its base position: - Let d = sqrt((X - Base_X)**2 + (Y - Base_Y)**2 + (Z - Base_Z)**2). - The arm may reach (X, Y, Z) only if d < 0.8. * If the robot needs to move an object within its range and the arm is not aligned with the object, the robot should first move its arm to the object position. By aligning, the distance between object center and arm position is less than 0.1. 
+
+> ,→
+> ,→
+
+* When you plan a move, please follow these rules: - First check that the proposed waypoint lies within the reach sphere. - If it does not, adjust your plan or reject that movement. - If the arm is not yet aligned with an object it needs to move and that object lies within reach, plan a preliminary waypoint to align before carrying it. ,→
+
+21 Preprint. Under review. 
+
+*Obstacles:* The environment may contain fixed obstacles that robot arms must avoid during movement. Obstacles are static and cannot be moved or altered. ,→
+
+Each obstacle is defined by: * Type - one of: * "box" - a solid rectangular prism * "pole" - a solid vertical cylinder * Center position - [x, y, z] coordinates of the obstacle 's center in the environment. * Size parameters: * Box: * length - size along the X-axis * width - size along the Y-axis * height - vertical height of the box * Pole: * radius - radius of the circular base * height - vertical height of the pole *Collision Constraint:* The robot arm 's path, including all intermediate waypoints and any carried object 'sswept volume, must not intersect or pass through any part of the obstacle 's volume. ,→
+
+For poles, this means no path point may enter the radius (plus a safety margin if needed). ,→
+
+For boxes, this means no path segment may pass through the rectangular footprint (length x width) at any height. ,→
+
+*Waypoint Trajectory Rules:* Every motion should be represented as a sequence of waypoints, not just a start and end position. Below are the detailed rules for generating these waypoints: ,→
+
+* The arm should only move to a new waypoint if that waypoint satisfies the reachability constraint (d < 0.8 from the base). ,→
+
+* Each movement step in your plan must include the full waypoint list for that movement. * You may assume the robot arm moves smoothly between waypoints, with constant speed, and each step can include multiple waypoints. ,→
+
+## How to Generate Your Response: Your response should contain the generated movement plan only. *Movement Plan (Output):* * Your generated movement plan should be in markdown format and contain a JSON object, with each entry as a dictionary indicating one step. Use a single robot key and include waypoints only: 
+
+> ,→
+> ,→
+
+``` json {"waypoints": [[x1, y1, z1], [x2, y2, z2]] }
+
+``` 
+
+Ensure your final step reaches the target position, and your plan forms a valid JSON. ## Collision Avoidance Rules: Your plan must strictly avoid collisions, as follows: * Robot-Object Collision * The arm 's path must not sweep through any object it isn 't carrying. * Before moving, confirm the trajectory does not pass over another object 's position. * Robot-Obstacle Collision * The arm 's path and any carried object 's swept volume must not intersect obstacles. * If an obstacle blocks a direct move, plan an intermediate waypoint. Given the information above, now consider the following environment: Input: {mapstate} {motion movement request} Generate the motion plan for the single robot 
+
+22 Preprint. Under review. 
+
+Prompt for Task Plan Reasoning Trace Synthesis We list the prompt for Task planner reasoning trace generation in the following listing. 
+
+You are required to **assume the role of a central planner**. Your task is to simulate the step-by-step thinking process that logically leads you to the provided ground-truth movement plan. 
+
+> ,→
+> ,→
+
+Your thinking should be presented from a **first-person perspective**, clearly demonstrating your internal reasoning process of planning, validating and adjusting to avoid collision, and planning decisions. 
+
+> ,→
+> ,→
+
+## Requirement for your generated first-person thinking: 1. **First-Person Perspective**: Write your internal thoughts as if you are personally making the decisions: ,→
+
+- Use phrases like "Let me see...", "Wait, is that correct?", "I should check collisions first...", "Can I parallel two robot movements to make the plan more efficient?" 
+
+> ,→
+> ,→
+
+- Demonstrate real-time analysis and potential hesitations or reconsiderations. 2. **Thinking Process with `<think> ` Tags**: - Enclose your entire reasoning sequence in `<think> ` ... `</think> ` tags. - Make sure you have explicit checks, e.g. collision checks, reachability, and confirmations of correctness. You can start the explicit checks with "Wait", "Hmm", "let me check", etc. 
+
+> ,→
+> ,→
+
+- Make sure to pose questions to yourself, and then answer them. Show how you arrive at each movement decision. ,→
+
+- You must include multiple explicit checks and self-questioning in your thinking process. ,→
+
+3. You should not reveal any information about the guidance here that you are synthesizing a thinking process. ,→
+
+Below is the detailed task description. You can learn the rules for the task from these descriptions. ,→
+
+## Task Description: You are a central planner responsible for coordinating multiple robotic arms operating in a 3D grid-like environment. Your goal is to plan and execute efficient, collision-free movements to transport objects to their designated target positions while avoiding obstacles. 
+
+> ,→
+> ,→
+> ,→
+
+*Task Representation:* * Objective: Move all objects to their specified target locations safely and efficiently. ,→
+
+* Input: A detailed map state containing positions of robots, objects, targets, and obstacles. ,→
+
+* Output: A precise movement plan specifying each robot arm 's actions for moving objects. ,→
+
+*Position Representation:* * All positions (robots, objects, targets, obstacles) are given by their center coordinates, e.g., [0.55, 1.65, 0.08]. ,→
+
+* Robots have a fixed base location and an extendable arm with a limited reach range. *Reachability Rules:* * Each robot arm can only move within an axis-aligned reach box centered at its base position: ,→
+
+- Let dx = X - Base_X, dy = Y - Base_Y, dz = Z - Base_Z. - The arm may reach (X, Y, Z) only if: - -0.9 <= dx <= 0.9 - -0.9 <= dy <= 0.9 - 0.001 <= dz <= 0.8 * If a robot needs to move an object within its range and the arm is not aligned with the object, the robot should first move its arm to the object position. By aligning, the distance between object center and arm position is less than 0.1. 
+
+> ,→
+> ,→
+
+23 Preprint. Under review. 
+
+* When you plan a move, please follow these rules: - First check that the proposed target lies within the reach box. - If it does not, adjust your plan or reject that movement. - If the arm is not yet aligned with an object it needs to move and that object lies within the reach box, plan a preliminary move to position the arm aligned with the object before carrying it. 
+
+> ,→
+> ,→
+
+*Obstacles:* * The environment may contain fixed obstacles that robot arms must avoid during movement. Obstacles are static and cannot be moved or altered. ,→
+
+* Each obstacle is defined by: - Type | one of: "box" or "pole". - Center position | [x, y, z] coordinates of the obstacle’s center. - Size parameters: - Box: size = [half_x, half_y, half_z] (half extents along each axis). - Pole: size = [radius, half_height]. - Height may also be provided as a full height; if both size and height are present, treat the obstacle as a solid volume covering that height. ,→
+
+* Collision Constraint: - The robot arm’s path, including all intermediate positions and any carried object’s swept volume, must not intersect or pass through any part of the obstacle’s volume. 
+
+> ,→
+> ,→
+
+## How to Generate Your Response: Your response must **clearly indicate your thinking process** enclosed in <think> and </think> tags, followed by the generated step of the movement plan. ,→
+
+*Thinking:* * Clearly describe your analysis and decisions from a first-person perspective. * Identify potential collisions explicitly (including obstacle collisions) and explain how you avoid them. ,→
+
+* Highlight your reasoning for movement choices, considering efficiency and collision avoidance. ,→
+
+*Movement Plan (Output):* * Your generated step of the movement plan should be in markdown format and contain a JSON array, with robot names as keys and their movement instructions as values, structured as follows: 
+
+> ,→
+> ,→
+
+``` json [{"Robot 0": "Move [x, y, z] True", "Robot 1": "Move [x, y, z] False" }, {"Robot 2": "Move [x, y, z] True" }]
+
+``` 
+
+* *[x, y, z]* represent the target coordinates of the robot arm end effector. * *True/False* indicates whether the robot moves an object (True) or simply moves its arm without carrying an object (False). ,→
+
+* One robot can only be moved once in each step, which means no repeated keys are allowed in the same step. ,→
+
+* Robots without actions in the current step should not be included. Ensure your final step completes the objective of placing all objects at their target positions, and your plan forms a valid JSON array. ,→
+
+## Collision Avoidance Rules: Your plan must strictly avoid collisions, as follows: * Robot-Robot Collision * Two robot arms cannot occupy the same position at the end of a move. 
+
+24 Preprint. Under review. 
+
+* Their paths must not cross or share any point during the move; if unsure, sequence the motions instead of parallelizing. ,→
+
+* Object-Object Collision * Two objects cannot occupy the same (x, y, z) at any time. * If you move more than one object at once, they must have different drop-off points and non-crossing straight-line paths. ,→
+
+* Robot-Object Collision * An arm 's path must not sweep through any object it isn 't carrying. * Before moving, confirm the trajectory does not pass over another object 's position. * Robot-Obstacle Collision * An arm 's path and any carried object’s swept volume must not intersect obstacles. * If an obstacle blocks a direct move, plan an intermediate waypoint or a different robot/sequence. ,→
+
+## Plan Efficiency Considerations: * Each step of your plan involves simultaneous robot arm movements from their current positions to specified target positions. ,→
+
+* Each robot arm moves at a constant speed of 0.5 units/time. * The duration of each step is determined by the longest single-arm movement within that step. ,→
+
+* The total execution time is the sum of all individual step durations. * You should aim to minimize total execution time while ensuring collision-free movements and successful object placements. ,→
+
+## Example Environment and Ground-Truth Plan: Below is an example scenario and its ground-truth solution: 
+
+``` text {Environment and GT plan} 
+
+``` 
+
+With the above information clearly provided, please start by explicitly presenting your first-person reasoning for the whole plan enclosed in <think></think> tags. Make sure you include explicit checks and self-questioning in your thinking process. Your reasoning should be clear and easy to follow, as if you are explaining it to someone else. Limit your thinking length within 2000 tokens. 
+
+> ,→
+> ,→
+> ,→
+> ,→
+
+Prompt for Reasoning Behavior Check We list the prompt for reasoning behavior check count in the following listing. 
+
+# Prompt for reachability check count You are given a planner response. Count the reachability checks. Point to each appearance by quoting a short phrase from the response. Return a JSON object with the total count and the list of appearances. ## Example Texts (Reachability Checks) - "Is target [1.65, 0.55, 0.08] within Robot 0 's reach box (dx, dy in [-0.9, 0.9], dz in [0.001, 0.8])?" ,→
+
+- "dx=1.05 exceeds 0.9, so Robot 2 cannot reach this target." - "The object is within the reach box; I can align the arm before carrying it." ## Output Format {"behavior": "reachability_check", "count": 2, "appearances": ["short quote 1", "short quote 2"] }# Prompt for robot-robot collision check count You are given a planner response. Review the response and count robot-robot collision checks. ,→
+
+25 Preprint. Under review. 
+
+Point to each appearance with a brief quoted phrase. Return a JSON object with the total count and the list of appearances. ## Example Texts (Robot-Robot Collision Checks) - "If Robot 0 and Robot 1 move simultaneously, their paths would intersect; I will sequence them." ,→
+
+- "Both arms would end at the same position, which is a robot-robot collision." - "Their paths may cross, so I avoid parallel moves and move one arm at a time." ## Output Format {"behavior": "robot_robot_collision_check", "count": 2, "appearances": ["short quote 1", "short quote 2"] }# Prompt for robot-obstacle collision check count You are given a planner response. Count robot-obstacle collision checks in the response. For each check, quote a short phrase that shows where it appears. Return a JSON object with the total count and the list of appearances. ## Example Texts (Robot-Obstacle Collision Checks) - "The arm 's swept volume would intersect the box obstacle at center [1.10, 0.75, 0.10], so I avoid a direct move." ,→
+
+- "A straight-line move passes through the pole volume; I choose a waypoint around it." - "The obstacle blocks the path, so I plan an intermediate target to keep clearance." ## Output Format {"behavior": "robot_obstacle_collision_check", "count": 2, "appearances": ["short quote 1", "short quote 2"] }# Prompt for error recovery check count You are given a planner response. Count the corrections of previous errors. For each correction, show where it appears with a short quote. Return a JSON object with the total count and the list of appearances. ## Example Texts (Corrections of Previous Errors) - "I previously ignored the obstacle volume; correcting that by rerouting." - "My last plan caused a robot-robot collision, so I change the sequence." - "Earlier I chose the wrong robot; I fix that based on reachability." ## Output Format {"behavior": "correction_previous_errors", "count": 2, "appearances": ["short quote 1", "short quote 2"] }
+
+26

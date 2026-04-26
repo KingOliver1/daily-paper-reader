@@ -1,0 +1,1086 @@
+Title: SLAM as a Stochastic Control Problem with Partial Information: Optimal Solutions and Rigorous Approximations
+
+URL Source: https://arxiv.org/pdf/2604.21693v1
+
+Published Time: Fri, 24 Apr 2026 00:57:40 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# SLAM as a Stochastic Control Problem with Partial Information: Optimal Solutions and Rigorous Approximations 
+
+Ilir Gusija, Fady Alajaji, and Serdar Yüksel ∗
+
+April 24, 2026 
+
+Abstract 
+
+Simultaneous localization and mapping (SLAM) is a foundational state estimation problem in robotics in which a robot accurately constructs a map of its environment while also localizing itself within this construction. We study the active SLAM problem through the lens of optimal stochastic control, thereby recasting it as a decision-making problem under partial information. After reviewing several commonly studied models, we present a general stochastic control formulation of active SLAM together with a rigorous treatment of motion, sensing, and map representation. We introduce a new exploration stage cost that encodes the geometry of the state when evaluating information-gathering actions. This formulation, constructed as a nonstandard partially observable Markov decision process (POMDP), is then analyzed to derive rigorously justified approximate solutions that are near-optimal. To enable this analysis, the associated regularity conditions are studied under general assumptions that apply to a wide range of robotics applications. For a particular case, we conduct an extensive numerical study in which standard learning algorithms are used to learn near-optimal policies. 
+
+# 1 Introduction 
+
+1.1 SLAM Literature Review 
+
+Active simultaneous localization and mapping (SLAM) is the problem of controlling a robot in an effort toward both accurately estimating its pose and constructing a map of its environment [1]. The necessity for simultaneous operations is driven by applications where pre-mapping is infeasible due to dynamic environments, resource constraints, or inaccessible locations such as underwater, underground, or extraterrestrial exploration [2]. Although most research focuses on estimation, active SLAM techniques have been shown to significantly improve exploration efficiency and reduce mapping uncertainty [1, 3]. By formulating active SLAM as a partially observable Markov decision process (POMDP), stochastic control techniques have been applied with some success. Much work has focused on the related problem of belief-space planning (BSP), which encompasses path planning under uncertainty, active localization, and exploration as special cases [4]. However, most BSP approaches rely on Gaussian belief representations and local optimization without global convergence guarantees [4 –6]. Extensions imposing belief uncertainty constraints [7] were adapted to active SLAM in [8]. 
+
+> ∗
+
+This work was supported in part by the Natural Sciences and Engineering Research Council of Canada. The authors are with the Department of Mathematics and Statistics, Queen’s University, Kingston, ON, Canada. {ilir.gusija, fa, yuksel}@queensu.ca 
+
+1
+
+> arXiv:2604.21693v1 [cs.RO] 23 Apr 2026
+
+Information-theoretic metrics have proven effective as utility functions for active SLAM, particularly 
+
+information gain [2] and variants based on Rényi entropy [9] and generalized behavioral entropy [10]. A mutual information-based metric was shown to provably steer robots toward unexplored areas [11]. Recently, rigorous approximation and learning methods for POMDPs in general state and action spaces have been developed. Saldi et al. [12] showed that quantization-based finite models yield near-optimal policies under weak continuity conditions. Subsequent work on finite memory approximations and Q-learning convergence for both schemes is surveyed in [13]. 
+
+1.2 Contributions 
+
+The technical contributions of this paper are as follows. In Section 2, we present a broad formulation of the model. In Section 3, a very general POMDP formulation for the SLAM problem is established. Notably in Section 3.1, we introduce a new belief-dependent cost. In Section 4, we study several regularity properties of active SLAM. We establish, in particular, weak continuity properties; see Theorems 1-2. We finish the section by establishing the existence of an optimal policy (see Theorem 3). In Section 5, we build on recent advances in finite model approximations for POMDPs from [12], [13, Section 4] which provide convergence guarantees for discretized belief spaces. Under appropriate continuity conditions, these finite approximations can achieve provably near-optimal performance, which we show for the active SLAM problem in Theorem 4. Finally, we provide a simulation case study to illustrate our theoretical findings in Section 6. 
+
+# 2 Preliminaries 
+
+In this section, we introduce the general components typical of active SLAM and related BSP problems, specifically covering the motion model, representation of the map, and sensor model. Let (W, d W ) be a compact Euclidean metric space representing the workspace of the robot, equipped with the Euclidean metric dW (x, y ) = ∥x − y∥ and the Lebesgue measure λ restricted to 
+
+W.
+
+2.1 Motion model 
+
+Let X be a standard Borel space (i.e., a Borel space associated with a complete separable metric space) that denotes the set of all possible poses of the robot. Let xt ∈ X denote the pose of the robot at t ≥ 0. The robot pose evolves in time according to a controlled stochastic process 
+
+xt+1 = f (xt, u t, ξ t), ξt iid 
+
+∼ μξ, (1) where ut ∈ U is the control input and ξt ∈ Rd, d > 1 represents an independent and identically distributed (iid) process noise with distribution μξ (written as ξt iid 
+
+∼ μξ). 
+
+2.2 Modelling the map 
+
+Let M be a standard Borel space representing the space of maps. The representation of the map varies across different approaches in SLAM, this formulation subsumes these various representations including occupancy maps and landmark-based maps. 
+
+Occupancy maps are represented by an occupied region m ⊆ W . We define the map space as the family of nonempty compact subsets: 
+
+Mocc := {m ⊆ W : m compact , m ̸ = ∅} .
+
+2Equipped with the Hausdorff metric dH (or other variants introduced in [14]), Mocc is a compact metric space whenever W is compact [14, 15]. 
+
+Landmark-based maps are defined as a finite collection of locations corresponding to landmarks. The map space is defined as Mℓ := Wℓ equipped with the Euclidean metric (assuming perfect data association and labelled landmarks), where ℓ > 0 represents the number of landmarks. The metric space structure of the map is critical in establishing (i) continuity properties of the dynamics and observations, (ii) continuity of the stage cost (Section 3.1), and (iii) compactness properties. Let mt denote the state of the map at time t ≥ 0. The map mt is assumed to be static, so its dynamics are simply described as 
+
+mt+1 = mt, t ≥ 0. (2) 
+
+2.3 Sensor model 
+
+Let Y be a standard Borel space that denotes the observation space. At each time step t ≥ 0, the robot receives noisy observations yt ∈ Y of the environment according to a measurement model 
+
+yt = g(xt, m t, u t−1, ζ t), ζt iid 
+
+∼ μζ , (3) where ζt ∈ Rd, d > 0. The measurement dynamics stated generally in (3) vary across sensor modalities. Following the general classification of [16, Chapter 1.2], robotic sensors can be divided into two distinct categories: proprioceptive and exteroceptive. 
+
+Proprioceptive sensors measure internal robotic state, are control-dependent, and are indepen-dent of the map: yprop  
+
+> t
+
+= gprop (xt, u t−1, v t) [16, Section 7.4.4]. Examples of proprioceptive sensors include inertial measurement units (IMU), gyroscopes, wheel encoders, and joint encoders. 
+
+Exteroceptive sensors measure the state of the external environment and, in contrast to proprioceptive sensors, are independent of the control and a function of the map: yext  
+
+> t
+
+= gext (xt, m t, ζ t)
+
+[16, Section 7.4]. Both sensor classes are subsumed by (3) with appropriate dependence structure. For the active SLAM problem, the use of exteroceptive sensors is required while proprioceptive sensors can be seen as complementary by aiding in improving the localization accuracy of the robot. 
+
+# 3 SLAM as a nonstandard POMDP 
+
+We formulate active SLAM as a nonstandard POMDP over the joint state space S = X × M, where 
+
+st = ( xt, m t) ∈ S, by describing the dynamics and observations through stochastic kernels. Let P(X) be the set of probability measures on X endowed with the weak convergence topology. The pose dynamics (1) induce a transition kernel T : X × U → P (X) defined by 
+
+P(xt+1 ∈ · | xt = x, u t = u) = μξ({ξ ∈ Rd : f (x, u, ξ ) ∈ · } ):= T ( · | x, u ). (4) The map dynamics are trivially given by the Dirac measure 
+
+P(mt+1 ∈ · | mt) := δmt ( · ) = 
+
+(
+
+1 if mt+1 = mt
+
+0 otherwise. The observation kernel O : S × U → P (Y) induced by (3) is 
+
+P(yt ∈ · | st = s, u t−1 = u) = μζ ({ζ ∈ Rd : g(s, u, ζ ) ∈ · } )
+
+3:= O( · | s, u ). (5) We define active SLAM as a nonstandard ρ-POMDP [17], described by (S, U, Y, S, O, ρ, β ), with state transition kernel, 
+
+S(Bx × Bm | (xt, m t), u t) = T (Bx | xt, u t)δmt (Bm) (6) for sets Bx ∈ B (X) and Bm ∈ B (M), where B( · ) denotes the Borel σ-algebra, ρ : P(S) × U → R is a stage cost dependent on some probability distribution, and β ∈ (0 , 1) is the discount factor. The nonstandard aspect of this formulation comes from the fact that the stage cost ρ is dependent on the belief rather than the hidden state as would be the case in a standard POMDP formulation. 
+
+3.1 Cost function 
+
+Since the hidden state st is not directly observable, decision-making conditions on the posterior probability distribution of st, commonly referred to as the belief , denoted by bt ∈ P (S):
+
+bt(·) := P(st ∈ · | y[0 ,t ], u [0 ,t −1] ) st ∈ S, (7) where B := P(S) is the belief space. The stage cost in active SLAM must balance two competing objectives: (i) exploration , rewarding actions that reduce uncertainty about the state being estimated, and (ii) control effort , penalizing energy expenditure. We address exploration first. 
+
+3.1.1 Exploration 
+
+We will first examine the mapping sub-problem for a belief bt ∈ P (M) where we equip the space 
+
+M with a metric dM. One can measure distances between probability measures on M using the Wasserstein metric, defined as 
+
+W1(μ, ν ) := inf 
+
+> ψ∈H (μ,ν )
+
+Z
+
+> M×M
+
+dM(m, m ′) ψ(dm, dm ′),
+
+where H(μ, ν ) denotes the set of couplings of μ and ν.A natural measure of estimation quality at time t is the distance from the current belief to the true map, m∗ ∈ M, namely W1(bt, δ m∗ ). Since m∗ is unknown, we assess performance by averaging this quantity over possible true maps under a prior κ ∈ P (M) with κ(Um∗ ) > 0 for every neighbourhood 
+
+Um∗ of m∗. To formalize this, let M be an M-valued random variable with law κ, representing the true map. Then 
+
+Jpa (γ, κ ) = Eγκ
+
+" ∞X
+
+> t=0
+
+βtW1
+
+ bt, δ M
+
+#
+
+, (8) where the subscript pa stands for prior averaged . The per-stage cost admits the closed form 
+
+W1
+
+ bt, δ m
+
+ =
+
+Z
+
+> M
+
+dM(m′, m ) bt(dm ′), (9) which is the expected distance from the belief to map m.The formulation (8) is not immediately amenable to dynamic programming because the one-stage term W1(bt, δ m) depends on the map argument m in addition to the current belief. We therefore define a belief-only stage cost, 
+
+˜W1(bt) : = 
+
+Z
+
+> M
+
+W1(bt, δ m) bt(dm )
+
+4=
+
+Z
+
+> M×M
+
+dM(m, m ′)bt(dm )bt(dm ′). (10) This functional is identical to the Rao quadratic entropy [18] and is also related to the notion of the potential function of a measure [19]. It is non-negative and ˜W1(bt) = 0 if and only if bt = δm for some m ∈ M. We now introduce an equivalent formulation of the objective in (8) : determine an optimal policy γ∗ ∈ Γ that minimizes the following infinite-horizon discounted cost functional with 
+
+ρ = ˜W1:
+
+Jβ (γ, b 0) := Eγb0
+
+" ∞X
+
+> t=0
+
+βtρ(bt)
+
+#
+
+. (11) 
+
+Proposition 1. For any policy γ and prior κ, with b0 = κ, the prior averaged cost (8) and infinite-horizon objective (11) with stage cost (10) are equivalent: Jpa (γ, κ ) = Jβ (γ, b 0).Proof. Recall that M is an M-valued random variable with law κ, and 
+
+bt(·) = P(M ∈ · | It)
+
+is the conditional distribution of the true map given the information It.Observe that 
+
+Eγκ[W1(bt, δ M ) | It] = 
+
+Z
+
+> M
+
+W1(bt, δ m)P(M ∈ dm | It)=
+
+Z
+
+> M
+
+W1(bt, δ m)bt(dm ) = ˜W1(bt).
+
+Then in (8) we have 
+
+Jpa (γ, κ ) = Eγκ
+
+" ∞X
+
+> t=0
+
+βtW1
+
+ bt, δ M
+
+#
+
+=
+
+> ∞
+
+X
+
+> t=0
+
+βtEγκ[W1(bt, δ M )] =
+
+> ∞
+
+X
+
+> t=0
+
+βtEγκ[Eγκ[W1(bt, δ M ) | It]] =
+
+> ∞
+
+X
+
+> t=0
+
+βtEγκ[ ˜W1(bt)] = Eγκ
+
+" ∞X
+
+> t=0
+
+βt ˜W1(bt)
+
+#
+
+= Jβ (γ, b 0).
+
+In the second equality above, we utilize the smoothing property of iterated expectations given that M
+
+is compact. The changes in the order of expectations and summations follow from Fubini’s theorem as the expressions are non-negative. 
+
+Relation to prior work. The standard exploration criterion in active SLAM is information gain [2, 9, 10], defined as the expected reduction in Shannon entropy of the belief: 
+
+rIG (bt, u t) := H(bt) − Ebt+1 |bt,u t [H(bt+1 )] .
+
+5Julian et al. [11] show that, for the active mapping problem with known pose, this reduces to maximizing mutual information between the map and the next observation. Over a finite state space, for the discounted infinite-horizon problem we see that maximizing over a stage cost of rIG is equivalent to minimizing over H(bt).
+
+˜W1 offers two advantages over Shannon entropy as an exploration cost. First, it is bounded and weakly continuous over a compact state space, satisfying the measurable selection conditions required for dynamic programming (see Assumption 3 below). The information gain equivalence above requires a finite state space, also, measurable selection conditions would be satisfied for continuous spaces as differential entropy may be unbounded from below. Second, ˜W1 inherits sensitivity to the ground metric dM, weighting uncertainty across distant hypotheses more heavily than uncertainty among nearby ones. On the other hand, Shannon entropy is permutation invariant and carries no information about distances in the underlying state space. While we have restricted our treatment of exploration to the map, the proposed cost can also be understood to encourage localization. Let bt ∈ P (X), then a one-stage cost of the form (10) with respect to the metric on X penalizes beliefs whose probability mass is spread across distant regions of the state space, thereby encouraging localization. This cost extends naturally to the SLAM setting where the belief is defined over S by choosing an appropriate product metric. 
+
+3.1.2 Additional cost criteria 
+
+Efficiency of actuation is encoded through a control penalty given by ceffort (u) = ∥u∥2. In occupancy map settings, obstacle avoidance can be encouraged via barrier-type penalties [20], although existing work only treats unbounded barrier functions which would not be compatible with this setup as this would violate measurable selection conditions (see Assumption 3 below). 
+
+3.2 Belief MDP Reformulation 
+
+Recall the belief bt (7). The belief evolves via the nonlinear filter F : B × U × Y → B,
+
+bt+1 := F(b, u, y )= P(st+1 ∈ · | bt = b, u t = u, y t+1 = y). (12) Suppose the observation kernel O is dominated by a σ-finite measure λ on Y, i.e., O(· | s, u ) ≪ λ
+
+for every (s, u ) ∈ S × U, and define the likelihood function o(s, u, y ) := dO(·| s,u ) 
+
+> dλ
+
+(y). Then, writing 
+
+s′ = ( x′, m ′) and using (6), 
+
+bt+1 (ds ′) = 
+
+R 
+
+> X
+
+o(s′, u t, y t+1 )T (dx ′ | x, u t) bt(dx, dm ′)
+
+R 
+
+> S
+
+o(˜ s, u t, y t+1 ) R 
+
+> X
+
+T (d˜x | x, u t) bt(dx, d ˜m) . (13) The POMDP reduces to a fully observable Markov decision process (MDP), often referred to as a belief MDP. It is fully defined by the 4-tuple (B, U, η, ρ ) with belief transition kernel 
+
+η( · | b, u ) = 
+
+Z
+
+> Y
+
+δF(b,u,y )( · ) G(dy | b, u ), (14) where G( · | b, u ) := P(yt+1 ∈ · | bt = b, u t = u) is the predictive observation distribution, and one-stage cost 
+
+ρ(bt, u t) = r(bt, u t) + 
+
+Z
+
+> S
+
+c(st, u t) bt(ds t), (15) 6where c : S × U → R is a state-dependent cost and r : P(S) × U → R is a belief-dependent cost encouraging exploration. We denote admissible control policies by γ = {γt}t≥0 ∈ Γ where ut = γt(y[0 ,t ], u [0 ,t −1] ) and stationary policies by γs ∈ Γs. The goal is to minimize the infinite horizon discounted cost: 
+
+˜J(b0, γ ) := lim   
+
+> T→∞
+
+Eγb0
+
+"T −1X
+
+> t=0
+
+βtρ(bt, u t)
+
+#
+
+, (16) where Eγb0 is the expectation with initial distribution s0 ∼ b0 under policy γ.
+
+# 4 Properties of Active SLAM 
+
+We begin by formalizing the Markov structure of the belief process. 
+
+Theorem 1 (Belief is a controlled Markov chain) . The belief process {bt, u t}t≥0 is a controlled Markov chain. Proof. Assume S, U, Y are standard Borel spaces. Then 
+
+P(bt+1 ∈ D | b[0 ,t ], u [0 ,t ]) = P(Fbt,Y t+1 ,u t ∈ D | b[0 ,t ], u [0 ,t ])=
+
+Z
+
+> Y
+
+P(Fbt,y t+1 ,u t ∈ D, y t+1 ∈ dy | b[0 ,t ], u [0 ,t ])=
+
+Z
+
+> Y
+
+P(Fbt,y t+1 ,u t ∈ D | yt+1 ∈ dy, b [0 ,t ], u [0 ,t ])P(yt+1 ∈ dy | b[0 ,t ], u [0 ,t ])=
+
+Z
+
+> Y
+
+1{Fbt,y,u t ∈D}P(yt+1 ∈ dy | bt, u t)=
+
+Z
+
+> Y
+
+1{Fbt,y,u t ∈D}
+
+Z 
+
+> S
+
+Z
+
+> S
+
+P(yt+1 ∈ dy, s t+1 ∈ ds ′, s t ∈ ds | bt, u t)
+
+
+
+=
+
+Z
+
+> Y
+
+1{Fbt,y,u t ∈D}
+
+Z 
+
+> S
+
+Z
+
+> S
+
+Q(dy | s′)P(st+1 ∈ ds ′, s t ∈ ds | bt, u t)
+
+
+
+=
+
+Z
+
+> Y
+
+1{Fbt,y,u t ∈D}
+
+Z 
+
+> S
+
+Z
+
+> S
+
+Q(dy | s′)S(ds ′ | s, u t)P(st ∈ ds | bt, u t)
+
+
+
+=
+
+Z
+
+> Y
+
+1{Fbt,y,u t ∈D}
+
+Z 
+
+> S
+
+Z
+
+> S
+
+Q(dy | s′)S(ds ′ | s, u t)bt(ds )
+
+
+
+=
+
+Z
+
+> Y
+
+1{Fbt,y,u t ∈D}
+
+Z 
+
+> X×M
+
+Z
+
+> X×M
+
+Q(dy | x′, m ′)T (dx ′ | x, u t)δm(dm ′)bt(dx, dm )
+
+
+
+= P(bt+1 ∈ D | bt, u t).
+
+This along with [21, Theorem C.2.1,C.2.2] establishes that under the weak convergence topology, 
+
+{bt, u t} forms a Borel controlled Markov chain. Furthermore, the belief bt is a sufficient statistic for optimal control [22], and the stage cost (15) is a function of the belief. Recall that μn → μ weakly if R h dμ n → R h dμ as n → ∞ for every bounded continuous h. The belief transition kernel η has the weak Feller property if (bn, u n) → (b, u ) implies η( · | bn, u n) →
+
+η( · | b, u ) weakly. We present the following set of assumptions. 
+
+Assumption 1 ( [23]) .
+
+71. The transition probability T ( · | x, u ) is weak Feller. 2. The observation kernel O( · | x, m, u ) is continuous in total variation. 
+
+The following assumptions provide sufficient conditions that are straightforward to check for typical robotic systems. 
+
+Assumption 2 (Sufficient conditions for Assumption 1) . A robot is equipped with a motion model 
+
+xt+1 = f (xt, u t, ξ t) as described in (1) , that is continuous in (xt, u t) and a measurement model 
+
+yt = g(xt, m t, u t) + ζt that is continuous in (xt, m t, u t) and ζt admits a continuous density with respect to some reference measure. 
+
+Remark 1 (Verification for common models) . Assumption 2 permits multiplicative or state-dependent noise, requiring only that f (x, u, ξ ) be continuous in (x, u ) for each fixed ξ. Unicycle [24] and Dubins airplane [25] models satisfy Assumption 2. When paired with a sensor whose observation dynamics 
+
+g(x, m, u ) + ζ are continuous in (x, m, u ) with continuous density for ζ, such as a range-bearing sensor with additive Gaussian noise, Assumption 2 holds. 
+
+We now have the following result, 
+
+Theorem 2 (Weak Feller property of η [26], [23]) . Provided that any one of Assumptions 1 or 2 hold, the belief transition kernel, η, of (14) is weak Feller. Proof. The hidden state is s = ( x, m ) ∈ S, with augmented transition kernel 
+
+S( · | (x, m ), u ) = T ( · | x, u ) ⊗ δm,
+
+by (6) , and observation channel O( · | x, m, u ). We verify the hypotheses of [26, Theorem 1] on 
+
+S. The observation condition is exactly Assumption 1-(2), so it remains to show S( · | (x, m ), u ) is weakly continuous in (( x, m ), u ).Let (( xn, m n), u n) → (( x, m ), u ). By Assumption 1-(1), T ( · | xn, u n) → T ( · | x, u ) weakly on 
+
+X. Since mn → m, we have δmn → δm weakly on M. By stability of weak convergence under products [27, Theorem 2.8], 
+
+S( · | (xn, m n), u n) = T ( · | xn, u n) ⊗ δmn → T ( · | x, u ) ⊗ δm = S( · | (x, m ), u )
+
+weakly on S, so S is weak Feller. Applying [26, Theorem 1] with hidden state space S yields that η
+
+is weak Feller. Throughout the rest of this work, we assume the following. 
+
+Assumption 3. The belief-MDP satisfies the following: 1. The one-stage cost function ρ : P(S) × U → R (15) is bounded and continuous. 2. The belief transition η is weak Feller. 3. P(S) and U are compact. 
+
+Remark 2 (Verification of assumptions) . Compactness of X and U must be enforced through physical constraints as done explicitly in Section 6. For Mℓ = W ¯ℓ, compactness follows since W is compact. For Mocc , the Hausdorff metric induces the myopic topology for which compactness follows from [14,15]. Compactness of S implies P(S) is compact with respect to the weak topology. Boundedness of the stage cost holds for the control penalty on compact U and for (10) since ˜W1(b) ≤ diam (S) < ∞ on compact 
+
+S, where diam (·) denotes diameter. Continuity of ˜W1 in b under weak convergence follows since 
+
+bn → b weakly implies bn ⊗ bn → b ⊗ b weakly [27, Theorem 2.8], and dS is bounded and continuous, so the claim follows by the Portmanteau theorem applied to (10) .
+
+8Up until this point we have spent our time validating the weak Feller property and the above assumptions; these now yield the following optimal policy existence result. 
+
+Theorem 3. Under Assumption 3, there exists an optimal policy. 
+
+Theorem 3 guarantees that an optimal policy exists but does not suggest how to compute one; the belief space P(S) is infinite-dimensional and the action space is uncountable. The next section develops a finite approximation that makes the problem tractable while preserving near-optimality guarantees. 
+
+# 5 Finite approximations 
+
+Since B = P(S) is infinite-dimensional and U is typically uncountable, minimizing (16) directly is intractable. Following [12] and [28], we reduce the belief MDP to a finite-state, finite-action, finite-observation MDP. 
+
+5.1 Approximation Scheme 
+
+We now detail the construction. Since U is compact, for each n ≥ 1 there exists a finite 1/n -net 
+
+Un ⊂ U. Restricting policies to Un yields vanishing suboptimality as n → ∞ [12, Theorem 2]. For quantization of Y we impose the following assumption. 
+
+Assumption 4 ( [28]) . The observation kernel admits a density O(dy | s) = o(s, y ) λ(dy ) with o
+
+continuous in y for every s ∈ S.
+
+Note that Assumption 2 directly implies this under the additive noise assumption. Partition 
+
+Y into n disjoint Borel sets {BY 
+
+> i
+
+}ni=1 with S 
+
+> i
+
+BY 
+
+> i
+
+= Y and define a finite set of representative observations Yn := {y1, . . . , y n} with yi ∈ BY 
+
+> i
+
+. The quantized observation kernel is 
+
+On(yi | s) := O(BY 
+
+> i
+
+| s), i = 1 , . . . , n. 
+
+We have that restricting policies to Yn yields vanishing suboptimality as n → ∞ [28, Theorem 5.3]. We equip S with the product metric dS(( x, m ), (x′, m ′)) = ( dX(x, x ′)p + dM(m, m ′)p)1/p for fixed 
+
+p ∈ [1 , ∞). Since P(S) is compact, it can be metrized using the Wasserstein metric W1.For each n ≥ 1, let Qn be some lattice quantizer on S such that dS(s, Qn(s)) < 1 
+
+> n
+
+for all s ∈ S.Set Sn := Qn(S) with |Sn| = mn. Since S is compact, then Sn is finite. Then, one can approximate any probability measure in P(S) with probability measures in P(Sn) := {μ ∈ P (S) : μ(Sn) = 1 }.Indeed, for any μ ∈ P (S), we have 
+
+inf  
+
+> μ′∈P (Sn)
+
+W1(μ, μ ′) ≤ inf 
+
+> Q:S→Sn
+
+Z
+
+> S
+
+dS(s, Q(s)) μ(ds )
+
+≤
+
+Z
+
+> S
+
+dS(s, Qn(s)) μ(ds ) ≤ 1
+
+n .
+
+(17) Now, we define the belief space as Bn := P(Sn). We should note that, since we are now working in 
+
+Sn, that this induces some changes to the dynamics of the state as well as the stage cost for which their quantized counterparts are now defined for i ∈ I := {1, ..., m n} as 
+
+Sn( · | sni , u ) = 
+
+Z
+
+> Bni
+
+Qn ∗ S ( · | s, u )νni (ds ) (18) 9cn(sni , u ) = 
+
+Z
+
+> Bni
+
+c(s, u )νni (ds ), (19) where Sn = {sn 
+
+> 1
+
+, . . . , s nmn }, Bni = {s ∈ S : Qn(s) = sni }, νni (·) is a weighting measure and Qn ∗ S (· | 
+
+s, u ) ∈ P (Sn) is the pushforward of (6) with respect to the quantizer, that is for i ∈ I , we have 
+
+Qn ∗ S (sni | s, u ) = S(Bni | s, u ). We define a weighting measure νni = δsni ; hence for equations (18) ,(19), we obtain for i, j ∈ I that 
+
+Sn(snj | sni , u ) = S(B(n) 
+
+> j
+
+| sni , u )
+
+cn(sni , u ) = c(sni , u ).
+
+Since the original problem is a ρ-POMDP with belief-dependent cost (15) , the quantized stage cost retains the same structure: 
+
+ρn(bt, u t) = r(bt, u t) + 
+
+Z
+
+> Sn
+
+cn(st, u t) bt(ds ), bt ∈ Bn, (20) where r is the belief-dependent component from (15) and cn is the quantized state-dependent cost from (19) . This defines a ρ-POMDP (Sn, Un, Yn, Sn, On, ρ n, β ), for which the equivalent belief- MDP n
+
+is (Bn, Un, η n, ρ n) where ηn follows the same construction as in (12) -(14) , but with Sn, Un, Yn, Sn,and On substituted in for their non-quantized counterparts. We note that Bn is a simplex in Rmn since Sn is finite with |Sn| = mn. This fact allows us to use quantization methods as seen in [29]. In fact, we can use this method to quantize Bn in a nearest neighbour manner. In order to achieve this, for each M ≥ 1 we define 
+
+B(M ) 
+
+> n
+
+:= 
+
+(
+
+(p1, . . . , p mn ) ∈ Qmn : pi = ki
+
+M ,
+
+> mn
+
+X
+
+> i=1
+
+ki = M
+
+)
+
+,
+
+where Q is the set of rational numbers and k1, . . . , k m ∈ Z+. Parameter M serves as a common denominator to all fractions, and can be used to control the density and number of points in B(M ) 
+
+> n
+
+. The algorithm that computes the nearest neighbour levels is known as Reznik’s algorithm [29, Algorithm 1]. The size of B(M ) 
+
+> n
+
+depends on the size of the quantization level |B(M ) 
+
+> n
+
+| =  M +mn−1
+
+> mn−1
+
+ [29]. We now state the following result, which characterizes the error of using the quantized belief MDP: 
+
+Proposition 2. For any μ ∈ B and μn ∈ Bn such that μn = arg min μ∗ 
+
+> n∈Bn
+
+W1(μ, μ ∗
+
+> n
+
+), we have 
+
+inf    
+
+> μ(M)
+> n∈B(M)
+> n
+
+W1(μ, μ (M ) 
+
+> n
+
+) ≤ 1
+
+n + DMa(mn − a)
+
+mn
+
+.
+
+where D := diam( S) and a = ⌊mn/2⌋.Proof. 
+
+inf    
+
+> μ(M)
+> n∈b(M)
+> n
+
+W1(μ, μ (M ) 
+
+> n
+
+) ≤ W1(μ, μ n) + inf    
+
+> μ(M)
+> n∈b(M)
+> n
+
+W1(μn, μ (M ) 
+
+> n
+
+)
+
+≤ 1
+
+n + diam( Sn) · inf    
+
+> μ(M)
+> n∈b(M)
+> n
+
+∥μn − μ(M ) 
+
+> n
+
+∥T V 
+
+= 1
+
+n + diam( Sn)2 · inf    
+
+> μ(M)
+> n∈b(M)
+> n
+
+∥μn − μ(M ) 
+
+> n
+
+∥1
+
+10 ≤ 1
+
+n + D
+
+2M max 
+
+> μn∈bn
+
+min    
+
+> μ(M)
+> n∈b(M)
+> n
+
+∥μn − μ(M ) 
+
+> n
+
+∥1
+
+≤ 1
+
+n + DMa(mn − a)
+
+mn
+
+where D := diam (Sn) = sup {dS(x, y ) : x, y ∈ S}. The second inequality is due to (17) and [30, Theorem 6.15] where for Polish Sn we have 
+
+W1(μ, μ ′) ≤ diam (Sn)∥μ − μ′∥T V .
+
+The third line uses the fact that Sn is countable to apply [31, Proposition 4.2]: 
+
+∥μ − μ′∥T V = 12 ∥μ − μ′∥1.
+
+We now define the weighting measure ν(M ), where ν(M ) 
+
+> i
+
+( · ) := δb(M )
+
+> i
+
+( · ). We can then define the quantized transition kernel and quantized stage cost for i, j ∈
+
+n
+
+1, . . . , B(M )
+
+> n
+
+o
+
+:
+
+η(M ) 
+
+> n
+
+(b(M ) 
+
+> j
+
+| b(M ) 
+
+> i
+
+, u ) := ηn(B(M ) 
+
+> j
+
+| b(M ) 
+
+> i
+
+, u )
+
+ρ(M ) 
+
+> n
+
+(b(M ) 
+
+> i
+
+, u ) := ρn(b(M ) 
+
+> i
+
+, u ).
+
+This defines the belief-MDP (M ) 
+
+> n
+
+: (B(M ) 
+
+> n
+
+, Un, η (M ) 
+
+> n
+
+, ρ (M ) 
+
+> n
+
+).
+
+Theorem 4. Suppose Assumptions 3 and 4 hold for the POMDP. Let (N n, M n)n≥1 be a sequence of quantization parameters with N n, M n → ∞ as n → ∞ . Let γn denote the policy obtained by extending the optimal policy of MDP (M n)  
+
+> Nn
+
+from B(M n)  
+
+> Nn
+
+to BN n and again to B. Then 
+
+lim 
+
+> n→∞
+
+˜J(γn, μ ) − ˜J∗(μ) = 0 .
+
+Proof. This result follows directly from [12, Theorem 2], , [12, Theorem 3] and [28, Theorem 5.3]. 
+
+# 6 Simulation results 
+
+In this section, we provide a detailed analysis of a particular setup that satisfies all of the required regularity conditions. 
+
+6.1 Model description 
+
+We instantiate the active SLAM framework of Sections 2–5 for a mobile robot equipped with a range-bearing sensor navigating an unknown environment. We represent the environment using a feature-based map M = Wℓ, where ℓ = 1 .We define the state space as X := [ −L, L ]2 ⊂ R2 for L > 0, representing the robot’s position in the workspace. Control inputs are constrained to ut ∈ U := {u ∈ R2 : ∥u∥ ≤ vmax }, where vmax > 0
+
+is the maximum speed. Both X and U are compact, satisfying Assumption 3-(3). 11 The robot position xt ∈ X evolves according to a single-integrator model with sampling period 
+
+∆t > 0:
+
+xt+1 = PX(xt + ut∆t + wt), (21) where wt iid 
+
+∼ N (0 , σ 2
+
+> w
+
+I) models process noise, and PX is a projection operation keeping the state inside X. Let eT ( · | x, u ) denote the unconstrained Gaussian law of x + u∆t + wt. This kernel is Gaussian with mean x + u∆t, hence continuous in (x, u ) in total variation. The actual transition kernel induced by (21) is its pushforward under the projection: 
+
+T ( · | x, u ) = ( PX)∗ eT ( · | x, u ).
+
+Therefore T is also continuous in total variation (hence weakly continuous), satisfying Assumptions 1-(1). Indeed, for the projection PX : R2 → X and any μ, ν ∈ P (X), for every B ∈ B (X),
+
+∥(PX)∗μ − (PX)∗ν∥TV = sup 
+
+> B∈B (X)
+
+|μ(P−1 
+
+> X
+
+(B)) − ν(P−1 
+
+> X
+
+(B)) |≤ ∥ μ − ν∥TV ,
+
+since {P−1 
+
+> X
+
+(B) : B ∈ B (X)} is a subset of the Borel sets on X. Here μ = eT ( · | x, u ), and 
+
+ν = eT ( · | x′, u ′).Drawing from [32, Section 6.6.2], we employ a model of a range-bearing sensor. To encode missed detections within our SLAM formulation, we augment this with a null observation symbol ⊥ and a continuous detection probability depending on range. Let R := [ ϵ, r max ] denote the range space with 0 < ϵ < r max specifying the minimum and maximum sensing distances, and let Θ := [ −π, π ) denote the bearing space, topologized as S1. For each landmark i, define the individual measurement space Yi := ( R × Θ) ⊔ {⊥} , equipped with the disjoint union topology. The full measurement space is Y := Y1 × · · · × Y ℓ, which is compact under the product topology. An observation at time t is yt = ( y1 
+
+> t
+
+, . . . , y ℓt ) where each yit ∈ Y i is either a range-bearing pair (rit, ϕ it) ∈ R × Θ or the null ⊥.To specify this detection mechanism, define h(z) := 3 z2 − 2z3 on [0 , 1] , and for a < b let 
+
+ηa,b (r) := 
+
+
+
+0, r ≤ a, h
+
+ r − ab − a
+
+
+
+, a < r < b, 
+
+1, r ≥ b. 
+
+Choose transition radii ϵ < r 0 < r 1 < r max and define 
+
+pdet (r) := ηϵ,r 0 (r) 1 − ηr1,r max (r).
+
+Thus pdet (r) = 0 for r ≤ ϵ and for r ≥ rmax , while pdet (r) = 1 on the central interval [r0, r 1]. This captures a physically reasonable near-field blind zone and a finite sensing horizon, with reliability tapering at both boundaries. For landmark i, write r∗,i = ∥mi − x∥ and ϕ∗,i = atan2 (mi − x). For detected landmarks, measurements are governed by the observation function g : X × M × R2 → R × Θ,
+
+g(x, m i, ζ i) = ∥mi − x∥ + ζr,i 
+
+PΘ
+
+ atan2( mi − x) + ζϕ,i !
+
+,
+
+where PΘ(ϕ) := atan2 ( sin ϕ, cos ϕ) wraps angles to Θ. The range and bearing noise are independent: 
+
+rit ∼ N [ϵ, r max ](r∗,i , σ 2 
+
+> r
+
+), ϕit ∼ N Θ(ϕ∗,i , σ 2
+
+> ϕ
+
+),
+
+12 Figure 1: Policy comparison at M = 6 , λ = 200 , σr = 0 .75 , σϕ = 0 .5 (N = 3000 paired trials). (a) Mean MSEE trajectory with 95% confidence interval. (b) Cumulative control effort. (c) Terminal MSEE distribution with q95 and CVaR 90 annotations. where N[a,b ] denotes Gaussian truncated to [a, b ], and NΘ denotes the wrapped normal on Θ. Let 
+
+oi(· | x, m i) denote the detected-observation kernel induced by this model. For r∗,i ≤ ϵ, the detected-observation kernel oi(· | x, m i) may be chosen arbitrarily, since it is multiplied by pdet (r∗,i ) = 0 and therefore does not affect the observation law. We then define the marginal observation kernel Oi : X × M × B (Yi) → [0 , 1] by 
+
+Oi(Ai | x, m i) := pdet (r∗,i ) oi(Aobs  
+
+> i
+
+| x, m i)+  1 − pdet (r∗,i )δ⊥(Ai),
+
+where Aobs  
+
+> i
+
+= Ai ∩ (R × Θ) . In particular, when r∗,i ≥ rmax or r∗,i ≤ ϵ, the observation is ⊥ almost surely. The per-landmark kernels are conditionally independent, so the full observation kernel factors as 
+
+O(A | x, m ) = 
+
+> ℓ
+
+Y
+
+> i=1
+
+Oi(Ai | x, m i), A =
+
+> ℓ
+
+Y
+
+> i=1
+
+Ai ∈ B (Y).
+
+Because r∗,i is continuous in (x, m i), pdet is continuous, and the truncated Gaussian and wrapped normal components vary continuously in total variation with their parameters, each marginal kernel 
+
+Oi(· | x, m i) is continuous in total variation. Since ℓ < ∞, the product kernel O(· | x, m ) is also continuous in total variation. Hence the simulation sensor model satisfies Assumption 1-(2), and the full simulation setup satisfies Assumption 1. The stage cost combines the belief dependent costs from Section 3.1.1 and the control penalty ∥ut∥2 from Section 3.1.2. 
+
+6.2 Comparison of exploration criteria 
+
+We test whether the choice of exploration cost (Shannon entropy H(bt) versus Rao entropy ˜W1(bt))affects mapping performance. The robot pose is treated as known, so the belief lives on the quantized space B(M ) 
+
+> n
+
+⊂ P (Mn).
+
+Setup Quantization uses n = 4 for pose, map, and observation spaces, n = 8 for actions, and 
+
+M ∈ { 5, 6} for the belief space. The stage cost is 
+
+c(bt, u t) = λ ρ (bt) + ∥ut∥2, bt ∈ B(M ) 
+
+> n
+
+, u t ∈ Un,
+
+13 where ρ is the exploration cost normalized to [0 , 1] and λ > 0 controls the exploration-effort tradeoff. Let γH and γ ˜W denote the optimal policies obtained by solving (16) with Shannon and Rao entropy respectively. Both policies are computed via value iteration on the same quantized belief space and evaluated by the mean squared estimation error (MSEE) 
+
+MSEE t := E∥m∗ − ˆmt∥2, (22) where ˆmt := Ebt [m] and m∗ ∈ Mn is the true map. For each of 12 noise settings ( σr ∈ { 0.5, 0.75 , 1, 1.25 }, σϕ ∈ { 0.3, 0.5, 0.7}), λ is swept over 
+
+{1, 2, 5, 10 , 20 , 50 , 100 , 200 , 500 , 1000 , 2000 } and selected independently for each cost. Performance is compared using the 95th percentile of terminal MSEE, 
+
+q95 (MSEE t) := inf x : P(MSEE t ≤ x) ≥ 0.95 ,
+
+and the conditional value-at-risk, 
+
+CVaR 90 (MSEE t) := EMSEE t | MSEE t ≥ q90 (MSEE t).
+
+Cumulative control effort Ptk=0 ∥uk∥2 is also tracked. Monte Carlo simulations with N = 3000 paired common-random-number trajectories and time horizon T = 20 are used to approximate the MSEE (22) and its distributional statistics, with trials balanced over all map hypotheses. 
+
+Results At M = 5 (|B(M ) 
+
+> n
+
+| = 15504 ), the two costs produce indistinguishable policies across all noise settings and λ values. At M = 6 (|B(M ) 
+
+> n
+
+| = 54264 ), differences emerge. Figure 1 shows a setting where γ ˜W converges to lower MSEE than both γH and the random baseline at comparable control effort, with a tighter terminal MSEE distribution. Figure 2 summarizes the best achievable CVaR 90 across all 12 noise settings. The results are organized primarily by bearing noise. At σϕ = 0 .3, γH performs comparably or better. At σϕ = 0 .5,
+
+γ ˜W achieves the largest gains, with CVaR 90 gaps of 7–24 units. At σϕ = 0 .7, margins tighten to 
+
+≤ 1.5 units. 
+
+γ ˜W does not uniformly dominate. γH produces lower MSEE in a majority of individual trials. However, γ ˜W achieves better tail behavior in 8 of 12 noise settings. The mean MSEE gap follows the same pattern but at smaller magnitude, as γ ˜W ’s fewer but larger wins pull the mean in its favor. 
+
+γ ˜W achieves its lower tail risk at comparable or reduced effort in 6 of 12 settings. In the remaining six, γH is more effort-efficient, and in four of those it also achieves lower CVaR 90 (Figure 3). 
+
+Discussion Bearing noise appears to mediate the tail-risk improvement that ˜W1 produces when compared to the Shannon entropy. The bearing channel carries spatial information about landmark geometry, and γ ˜W ’s gains are largest at moderate bearing noise ( σϕ = 0 .5). At low bearing noise, beliefs concentrate rapidly regardless of exploration strategy, leaving little room for geometry-awareness to help. At high bearing noise, γH recovers parity. These experiments operate at coarse quantizations ( M ≤ 6) where the belief space may not fully resolve geometric distinctions, and the results should be read as suggestive rather than conclusive. Future work will investigate approximate solution methods that are less constrained by belief space size, allowing the effect of the exploration cost on policy performance to be evaluated at higher fidelity. 14 References 
+
+[1] J. A. Placed, J. Strader, H. Carrillo, N. Atanasov, V. Indelman, L. Carlone, and J. A. Castellanos, “A survey on active simultaneous localization and mapping: State of the art and new frontiers,” 
+
+IEEE Transactions on Robotics , vol. 39, no. 3, pp. 1686–1705, 2023. [2] C. Stachniss, B. Siciliano, O. Khatib, and F. C. A. Groen, Robotic mapping and exploration ,1st ed., ser. Springer Tracts in Advanced Robotics, 55. Berlin ;: Springer Berlin Heidelberg, 2009. [3] R. Sim, “Stable exploration for bearings-only SLAM,” in Proc. IEEE International Conference on Robotics and Automation , 2005, pp. 2411–2416. [4] V. Indelman, L. Carlone, and F. Dellaert, “Planning in the continuous domain: A generalized belief space approach for autonomous navigation in unknown environments,” The International Journal of Robotics Research , vol. 34, no. 7, pp. 849–882, 2015. [5] R. Platt Jr, R. Tedrake, L. Kaelbling, and T. Lozano-Perez, “Belief space planning assuming maximum likelihood observations,” in Proc. Robotics: Science and Systems Conference , 2010. [6] J. Van Den Berg, S. Patil, and R. Alterovitz, “Motion planning under uncertainty using iterative local optimization in belief space,” The International Journal of Robotics Research , vol. 31, no. 11, pp. 1263–1278, 2012. [7] S. Rahman and S. L. Waslander, “Uncertainty-constrained differential dynamic programming in belief space for vision based robots,” IEEE Robotics and Automation Letters , vol. 6, no. 2, pp. 3112–3119, 2021. [8] S. Koga, A. Asgharivaskasi, and N. Atanasov, “Active SLAM over continuous trajectory and control: A covariance-feedback approach,” in Proc. American Control Conference (ACC) , 2022, pp. 5062–5068. [9] H. Carrillo, P. Dames, V. Kumar, and J. A. Castellanos, “Autonomous robotic exploration using a utility function based on Rényi’s general theory of entropy,” Autonomous Robots , vol. 42, no. 2, pp. 235–256, Feb. 2018. [10] A. Suresh, C. Nieto-Granda, and S. Martínez, “Robotic exploration using generalized behavioral entropy,” IEEE Robotics and Automation Letters , vol. 9, no. 9, pp. 8011–8018, 2024. [11] B. J. Julian, S. Karaman, and D. Rus, “On mutual information-based control of range sensing robots for mapping applications,” The International Journal of Robotics Research , vol. 33, no. 10, pp. 1375–1392, 2014. [Online]. Available: https://doi.org/10.1177/0278364914526288 [12] N. Saldi, S. Yüksel, and T. Linder, “Asymptotic optimality of finite model approximations for partially observed Markov decision processes with discounted cost,” IEEE Transactions on Automatic Control , vol. 65, no. 1, pp. 130–142, 2019. [13] A. D. Kara and S. Yüksel, “Partially observed optimal stochastic control: Regularity, optimality, approximations, and learning,” in Proc. IEEE 63rd Conference on Decision and Control (CDC) ,2024, pp. 6709–6721. [14] A. J. Baddeley, “Errors in binary images and an Lp version of the Hausdorff metric,” Nieuw Archief voor Wiskunde , vol. 10, pp. 157–183, 1992. 15 [15] J. M. G. Fell, “A hausdorff topology for the closed subsets of a locally compact non-hausdorff space,” Proceedings of the American Mathematical Society , vol. 13, no. 3, pp. 472–476, 1962. [Online]. Available: http://www.jstor.org/stable/2034964 [16] T. D. Barfoot, State Estimation for Robotics . Cambridge University Press, 2024. [17] M. Araya, O. Buffet, V. Thomas, and F. Charpillet, “A pomdp extension with belief-dependent rewards,” in Advances in Neural Information Processing Systems , J. Lafferty, C. Williams, J. Shawe-Taylor, R. Zemel, and A. Culotta, Eds., vol. 23. Curran Associates, Inc., 2010. [Online]. Available: https://proceedings.neurips.cc/paper_files/paper/2010/file/ 68053af2923e00204c3ca7c6a3150cf7-Paper.pdf [18] C. R. Rao, “Diversity: Its measurement, decomposition, apportionment and analysis,” Sankhy¯ a: The Indian Journal of Statistics, Series A (1961-2002) , vol. 44, no. 1, pp. 1–22, 1982. [Online]. Available: http://www.jstor.org/stable/25050293 [19] M. Beiglböck, B. Jourdain, W. Margheriti, and G. Pammer, “Approximation of martingale couplings on the line in the adapted weak topology,” Probability Theory and Related Fields , vol. 183, no. 1, pp. 359–413, 2022. [20] Z. Marvi and B. Kiumarsi, “Safe reinforcement learning: A control barrier function optimization approach,” International Journal of Robust and Nonlinear Control , vol. 31, no. 6, pp. 1923–1940, 2021. [Online]. Available: https://onlinelibrary.wiley.com/doi/abs/10.1002/rnc.5132 [21] S. Yüksel and T. Başar, On Spaces of Probability Measures . Cham: Springer Nature Switzerland, 2024, pp. 855–859. [Online]. Available: https://doi.org/10.1007/978-3-031-54071-4 [22] A. A. Yushkevich, “Reduction of a controlled Markov model with incomplete data to a problem with complete information in the case of borel state and control space,” Theory of Probability & Its Applications , vol. 21, no. 1, pp. 153–158, 1976. [23] E. A. Feinberg, P. O. Kasyanov, and M. Z. Zgurovsky, “Partially Observable Total-Cost Markov Decision Processes with Weakly Continuous Transition Probabilities,” Mathematics of Operations Research , vol. 41, no. 2, pp. 656–681, 2016. [24] T. Salzmann, B. Ivanovic, P. Chakravarty, and M. Pavone, “Trajectron++: Dynamically-feasible trajectory forecasting with heterogeneous data,” in European Conference on Computer Vision .Springer, 2020, pp. 683–700. [25] H. Chitsaz and S. M. LaValle, “Time-optimal paths for a dubins airplane,” in 2007 46th IEEE Conference on Decision and Control , 2007, pp. 2379–2384. [26] A. D. Kara, N. Saldi, and S. Yüksel, “Weak feller property of non-linear filters,” Systems & Control Letters , vol. 134, p. 104512, 2019. [27] P. Billingsley, Convergence of Probability Measures . John Wiley & Sons, Ltd, 1999. [28] A. D. Kara, E. Bayraktar, and S. Yüksel, “Near Optimal Approximations and Finite Memory Policies for POMPDs with Continuous Spaces,” Journal of Systems Science and Complexity ,vol. 38, no. 1, pp. 238–270, Feb. 2025. [29] Y. A. Reznik, “An algorithm for quantization of discrete probability distributions,” in Proc. Data Compression Conference . IEEE, 2011, pp. 333–342. 16 [30] C. Villani, Optimal transport: Old and new , ser. Grundlehren der mathematischen Wis-senschaften ; 338. Berlin: Springer, 2009. [31] D. A. Levin and Y. Peres, Markov chains and mixing times . American Mathematical Soc., 2017, vol. 107. [32] S. Thrun, W. Burgard, and D. Fox, Probabilistic Robotics . Cambridge, MA: MIT Press, 2005. 17 Figure 2: Best CVaR 90 at M = 6 , each policy tuned independently over λ. Color shows the gap 
+
+CVaR H 
+
+> 90
+
+− CVaR ˜W 
+
+> 90
+
+, positive favoring γ ˜W . γ ˜W attains lower CVaR 90 in 8 of 12 settings. 18 Figure 3: Risk-effort scatter at M = 6 . γ ˜W achieves both lower CVaR 90 and lower effort in 6 of 12 settings. 19
