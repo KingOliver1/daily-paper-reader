@@ -1,0 +1,832 @@
+Title: False Feasibility in Variable Impedance MPC for Legged Locomotion
+
+URL Source: https://arxiv.org/pdf/2604.22251v1
+
+Published Time: Mon, 27 Apr 2026 00:39:57 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+> 1
+
+# False Feasibility in Variable Impedance MPC for Legged Locomotion 
+
+Vishal Ramesh 
+
+Abstract —Variable impedance model predictive control (MPC) formulations that treat joint stiffness as an instantaneous decision variable operate on a feasible set strictly larger than the physically realizable set under first-order actuator dynamics. We identify this as a formulation error rather than a modeling approximation, formalize the distinction between the parameter-based feasible set 
+
+Fparam and the realizable set Freal , and characterize the regime of mismatch via the dimensionless parameter α = ωsT (actuator bandwidth times task timescale). For the 1D hopping monoped, we prove that below an analytical threshold αcrit derived in closed form from task physics, no admissible stiffness command realizes the parameter-based prediction. Numerical validation in 1D shows monotonic deviation growth as α decreases, with the predicted scaling holding across ten parameter combinations (log-log R2 = 0.99 ). Mechanism transfer to planar spring-loaded inverted pendulum dynamics confirms center-of-mass and stance-timing deviation as the primary consequence, with regime-dependent friction effects as a tertiary observable. A second threshold αinfeas < α crit establishes a floor below which restricting the admissible stiffness range cannot repair realizability, closing the conservative-tuning objection on structural grounds. Augmenting the prediction state with stiffness closes the mismatch by construction. 
+
+Index Terms —Variable impedance control, legged locomotion, model predictive control, feasibility analysis, hopping robots, compliant actuators. 
+
+I. I NTRODUCTION 
+
+Variable impedance actuation has become a standard ingredi-ent of legged locomotion research. Stiffness modulation during stance supports energy-efficient gaits, disturbance rejection, and safe contact, and is now embedded in a wide range of monoped, biped, and quadruped platforms [13]–[16]. Model predictive control formulations that treat stiffness or ground reaction forces as decision variables have, in turn, become a standard way to exploit this hardware capability [17]–[20], [22]–[25]. The question we address in this paper concerns not whether stiffness modulation is useful, which is established, but what set of trajectories the optimizer actually searches when stiffness is a decision variable, and whether that set coincides with the set the physical system can realize. The parameter-based formulation common in the variable impedance MPC literature treats stiffness as an instantaneous decision variable subject to pointwise bounds. The optimizer returns a stiffness trajectory, which is then issued to the hardware for execution. The hardware, however, possesses its own stiffness dynamics governed by the actuator bandwidth 
+
+ωs. A stiffness command that exceeds the achievable slew rate is not realizable, regardless of how faithfully the actuator is modeled at the low control level. This is best understood as a formulation-level error rather than a modeling approximation. The feasible set of the optimization strictly contains the feasible set of the physical system, and the optimum of the former lies outside the latter in the regime α < α crit . We refer to trajectories in this gap as falsely feasible .The variable impedance actuator literature has long ac-knowledged that stiffness has dynamics. The foundational treatments of series elastic actuators [4], passivity-based control of flexible-joint robots [5], and the subsequent variable stiffness actuator review [6] all operate in a regime that respects stiffness dynamics at the hardware and low-level control levels. The impedance control foundations [1]–[3] likewise recognize the mechanical coupling between stiffness and motion. What the existing literature has not articulated is a control formulation framework in which the feasible-set consequences of this acknowledgment are made explicit. The formulation layer inherits the parameter assumption while the hardware layer carries the dynamic one, and the resulting mismatch has remained implicit in the field. Two recent results in legged MPC treat augmented-state formulations as load-bearing in related but distinct settings. The work of [27] demonstrates that representing rigid-body orientation directly with the rotation matrix, rather than through Euler angles or quaternion projections, removes singularities that constrain achievable motions. The work of [28] incorpo-rates parallel elasticity into the MPC prediction state, enabling energy-efficient dynamic hopping. Both works instantiate the general principle that the contents of the prediction state determine what the optimizer searches over. They do not, however, characterize the class of feasible-set mismatches in variable impedance control addressed by this paper. The results are parallel instances in different settings, not precedents of the formulation-correctness framing. The practical stakes are concrete. Typical variable-impedance hardware operates with actuator bandwidth ωs in the range 10 to 100 rad/s and stance times T in the range 0.1 to 0.3 s, placing α between roughly 1 and 30. Our parameter sweep places αcrit in a comparable range. Controllers in this regime command stiffness trajectories the hardware cannot realize, and the resulting deviation grows monotonically as α
+
+decreases. Better actuator identification, lower-level tracking, and frequency-domain cost shaping do not address this. The mismatch arises from the structure of the optimization problem, and the fix requires changing what the controller’s prediction state contains. 
+
+Contributions 
+
+This paper makes three contributions. 
+
+C1. We introduce a feasible-set-correctness perspective on variable impedance MPC and identify the instantaneous-stiffness assumption as a structural mismatch between the 
+
+> arXiv:2604.22251v1 [cs.RO] 24 Apr 2026 2
+
+optimizer’s feasible set and the set realizable under finite actuator bandwidth. The parameter-based feasible set Fparam 
+
+and the physically realizable set Freal are distinguished formally, and the mismatch regime is characterized via the dimensionless quantity α = ωsT with an analytical threshold 
+
+αcrit in task-physics parameters. 
+
+C2. Proposition 1 proves non-realizability for the 1D hopping monoped. Below αcrit , no admissible stiffness command produces a realized trajectory matching the parameter-based controller’s prediction. The result is validated analytically and numerically in 1D, and mechanism transfer to planar SLIP is demonstrated without qualitative change in the primary observable. 
+
+C3. Corollary 1 establishes a second threshold αinfeas <αcrit . Below αinfeas , no restriction of the admissible stiffness range achieves realizability. The price of conservative tuning is therefore loss of operating range, not degraded cost. The paper is organized as follows. Section II formalizes the two MPC formulations and the feasible-set distinction. Section III derives the analytical threshold αcrit and proves non-realizability below it. Section IV validates the mechanism numerically in 1D. Section V establishes mechanism transfer to planar SLIP. Section VI analyzes whether conservative restric-tion of the admissible stiffness range can repair realizability. Sections VII and VIII discuss the result and its limitations. Section IX concludes. II. P ROBLEM FORMULATION 
+
+We consider a planar legged robot with a compliant leg whose stiffness can be modulated during motion. The leg is modeled as a spring of natural length l0 and time-varying stiffness k(t), with a point mass m at the hip. The stiffness is produced by a variable impedance actuator whose physical response is not instantaneous. Commanded stiffness changes propagate through the actuator at a finite rate set by the hardware bandwidth. For analytical tractability we develop the formulation on the 1D vertical monoped. During stance, denote by z(t) the leg compression and by ˙z(t) its rate. The equation of motion is 
+
+m¨z(t) = mg − k(t) z(t), (1) with boundary conditions z(0) = 0 , ˙z(0) = vtd , where vtd is the vertical touchdown velocity. Liftoff occurs at the first time 
+
+t > 0 at which z(t) returns to zero. The variable impedance actuator is modeled as a first-order linear system 
+
+dk dt = ωs
+
+ kcmd (t) − k(t), k(t), k cmd (t) ∈ [kmin , k max ],
+
+(2) where ωs is the actuator bandwidth and [kmin , k max ] is the admissible stiffness range. Equation (2) captures the essential feature that stiffness cannot change instantaneously, only at a finite rate bounded by ωs(kmax − kmin ). Higher-order actuator models are a natural extension and are discussed in Section VIII. 
+
+A. Two controller classes 
+
+We compare two model predictive control formulations that differ only in how they treat stiffness inside the optimization. Both operate within the standard receding-horizon optimiza-tion framework [29], [30] solved with real-time iteration schemes [31] that are standard in legged MPC implemen-tations [17], [21]. 
+
+Parameter-based MPC. Stiffness is treated as an instanta-neous decision variable. At each replanning step, the controller solves 
+
+min  
+
+> k(·)
+
+L(z(·), k (·)) , (3a) s.t. m¨z = mg − k(t) z, (3b) 
+
+k(t) ∈ [kmin , k max ], (3c) 
+
+z(0) = 0 , ˙z(0) = vtd , (3d) where L is a task-dependent cost functional. The output of the optimization is a stiffness trajectory kref (·), which is then issued as the command kcmd (t) = kref (t) to the actuator. Equation (2) is not inside the optimization. It is applied as a downstream realization. 
+
+Stiffness-as-state MPC. Stiffness is a state variable. The actuator dynamics (2) are included inside the optimization 
+
+min  
+
+> kcmd (·)
+
+L(z(·), k (·)) , (4a) s.t. m¨z = mg − k(t) z, (4b) 
+
+dk dt = ωs
+
+ kcmd (t) − k(t), (4c) 
+
+kcmd (t) ∈ [kmin , k max ], (4d) 
+
+z(0) = 0 , ˙z(0) = vtd , k (0) = k0. (4e) The decision variable is the command kcmd (·). The realized stiffness k(·) evolves according to the augmented dynamics. The two formulations differ in a single structural respect. Parameter-based MPC treats k as a free function subject only to pointwise bounds. Stiffness-as-state MPC constrains k to be a trajectory of the linear system (2). 
+
+B. The feasible set distinction 
+
+Let Fparam denote the set of trajectories (z(·), k (·)) admitted by the parameter-based formulation (3b)–(3d). Let Freal denote the set of trajectories (z(·), k (·)) admitted by the stiffness-as-state formulation (4b)–(4e). 
+
+Observation. Freal ⊂ F param , with strict inclusion for any finite actuator bandwidth ωs and any non-degenerate stiffness range kmin < k max .
+
+For any finite actuator bandwidth, Fparam contains trajecto-ries in which k(t) varies faster than ωs(kmax − kmin ), which cannot be produced by any admissible command under (2) .Strict inclusion is therefore universal. What varies with α is not whether the inclusion holds but whether the parameter-based optimum (the solution of (3) ) lies inside Freal . Section III establishes that in the regime α < α crit , the parameter-based optimum lies outside Freal , rendering the commanded trajectory unrealizable by the physical system. 3
+
+We refer to trajectories in Fparam \ F real as falsely feasible .A controller whose optimum is falsely feasible is not merely suboptimal. It is solving a different problem than the one the physical system presents. The consequence is not confined to a single planning step. Because MPC replans on the predicted state evolution, a persistent gap between predicted and realized trajectories biases every subsequent optimization. The controller’s internal state drifts from the physical state over time, and the resulting policy distortion is systematic rather than one-shot. The mismatch introduced by false feasibility therefore compounds in closed-loop operation rather than averaging out. 
+
+C. The characteristic dimensionless parameter 
+
+The gap between Fparam and Freal is controlled by the ratio of two timescales. The first is the actuator’s response time 
+
+1/ω s. The second is the task’s stance duration T . We define 
+
+α := ωsT. (5) The parameter α is controller-independent and depends only on hardware bandwidth and task duration. When α is large, the actuator can move through a substantial fraction of its admissible stiffness range within a stance, and Freal ≈ F param .When α is small, Freal is a proper subset of Fparam whose admissible variation in k(t) shrinks with α.Throughout the paper α serves as the primary dimensionless quantity parameterizing the false-feasibility structure. The ana-lytical threshold αcrit derived in Section III and the infeasibility floor αinfeas derived in Section VI are both expressed in task-physics parameters with no appeal to controller choice. 
+
+D. Notation summary                   
+
+> TABLE I NOTATION USED THROUGHOUT THE PAPER .Symbol Meaning
+> mPoint mass at the hip
+> gGravitational acceleration
+> l0Leg natural length
+> z(t),˙z(t)Leg compression and its rate
+> vtd Vertical touchdown velocity
+> TNominal stance duration
+> k(t)Realized stiffness
+> kcmd (t)Commanded stiffness
+> ωsActuator bandwidth
+> [kmin , k max ]Admissible stiffness range
+> Fparam Feasible set, parameter-based formulation
+> Freal Feasible set, stiffness-as-state formulation
+> αDimensionless parameter ωsTαcrit Threshold for non-realizability (Sec. III)
+> αinfeas Hard floor under range restriction (Sec. VI)
+
+III. A NALYTICAL RESULT 
+
+This section establishes that for the 1D hopping monoped, the feasible-set inclusion Freal ⊂ F param is strict below a dimensionless threshold αcrit that depends only on task-physics parameters. The argument proceeds in four steps. Step 1 fixes the minimal system and the class of parameter-based trajectories under consideration. Step 2 derives the maximum slew demand of the parameter-based reference. Step 3 compares it to the realizable slew capacity, yielding αcrit . Step 4 establishes non-realizability by contradiction. 
+
+A. Minimal system 
+
+We use the 1D vertical monoped model of Section II under (1) with first-order actuator dynamics (2) . The task is specified by (m, g, l 0, v td , T, k min , k max , ω s), where T is the nominal stance duration and all other quantities carry their definitions from Section II. For concreteness of the derivation, we fix the parameter-based cost functional as 
+
+L(z(·), k (·)) = 
+
+Z T
+
+> 0
+
+F (t)2 dt, F (t) = k(t)z(t), (6) the integrated squared ground reaction force over stance. This cost represents motor electrical losses that scale with force squared. The result extends to any cost whose minimizer under (3) has the same qualitative shape in kref (·), which includes cost of transport with thermal losses and several peak-torque objectives. The argument is structural, not cost-specific. Any optimizer that enforces near-constant force during the middle of stance necessarily produces k ∼ 1/z behavior, which in turn induces the boundary-layer slew demand analyzed below. The closed-form threshold derived here uses the squared-force cost for concreteness, but the k ∼ 1/z structure is a consequence of force regularization rather than a feature of the particular cost. More precisely, the result applies to any cost functional whose minimizer regularizes force magnitude over stance and yields a stiffness profile retaining the inverse-compression structure on a finite interval of stance, even when additional smoothness or tracking terms are present. Subject to the impulse balance R T 
+
+> 0
+
+F (t) dt = 2 mv td + mgT 
+
+required for periodic hopping, the Cauchy-Schwarz inequality yields the unconstrained minimizer F ∗(t) = Fconst , constant, with 
+
+Fconst = m 2vtd /T + g. (7) Since F = kz , the corresponding unconstrained optimal stiffness is k∞ 
+
+> ref
+
+(t) = Fconst /z pred (t), where zpred (·) is the predicted compression trajectory under the parameter-based formulation. Imposing the bound k ≤ kmax yields the constrained reference 
+
+kref (t) = min  kmax , F const /z pred (t), (8) which we refer to as the parameter-based reference. The constrained reference has three regimes in stance. There is a saturated regime kref = kmax at small compression, a force-regulated middle regime kref = Fconst /z , and a return to the saturated regime as compression decreases toward liftoff. The transitions between regimes occur at the compression value 
+
+zcrit = Fconst /k max . (9) 4
+
+B. Maximum slew demand of the reference 
+
+In the middle regime where kref × zpred = Fconst , differen-tiation gives 
+
+dk ref 
+
+dt = − Fconst ˙zpred (t)
+
+zpred (t)2 . (10) In the middle regime the dynamics reduce to m ¨zpred = mg −
+
+Fconst , a constant deceleration, under which ˙zpred decreases monotonically. The magnitude |dk ref /dt | attains its maximum at the boundaries of the middle regime, zpred = zcrit , where 
+
+| ˙zpred | is largest. Denote this entry value by v⋆ = | ˙zpred | at 
+
+zpred = zcrit . Under the approximation that deceleration over the brief initial saturated regime is small relative to vtd , we have v⋆ ≈ vtd .Substituting zpred = zcrit = Fconst /k max into (10) gives 
+
+dk ref 
+
+dt max 
+
+= Fconst vtd 
+
+z2crit 
+
+= k2max vtd 
+
+Fconst 
+
+. (11) Substituting Fconst from (7) yields 
+
+dk ref 
+
+dt max 
+
+= k2max vtd 
+
+m 2vtd /T + g . (12) The right side is expressed entirely in task-physics parameters and contains no dependence on the actuator bandwidth ωs.Under the regime 2vtd /T ≫ g (brisk hopping relative to gravitational drop), (12) simplifies to 
+
+D := k2max T
+
+2m . (13) We refer to D as the maximum slew demand of the parameter-based reference. 
+
+C. Slew capacity and demand-to-capacity ratio 
+
+Under the actuator dynamics (2) with kcmd ∈ [kmin , k max ]
+
+and k ∈ [kmin , k max ], the realized stiffness rate satisfies 
+
+dk dt = ωs |kcmd − k| ≤ ωs(kmax − kmin ). (14) The upper bound is attained when kcmd and k sit at opposite ends of the admissible range. Denote the realizable slew capacity by R = ωs(kmax − kmin ).Define the demand-to-capacity ratio 
+
+ρ(α) := DR = k2max T
+
+2m ω s(kmax − kmin ) , (15) and, using α = ωsT ,
+
+ρ(α) = Ktask 
+
+α , Ktask := k2max T 2
+
+2m(kmax − kmin ) . (16) The constant Ktask is determined entirely by task-physics parameters. The ratio ρ(α) scales inversely with α. The natural threshold at which slew demand equals slew capacity is ρ = 1 ,giving 
+
+αcrit = Ktask = k2max T 2
+
+2m(kmax − kmin ) . (17) Equation (17) expresses αcrit purely in task-physics parameters with no appeal to controller choice. 
+
+D. Non-realizability 
+
+We now establish that for α < α crit , Freal ⊂ F param is strict in the sense that the parameter-based reference trajectory lies outside Freal .
+
+Proposition 1 (False Feasibility Below αcrit ). Consider the 1D hopping monoped under (1) –(2) with cost (6) and reference (8) .Let (zpred (·), k ref (·)) be the parameter-based optimum. Then for α < α crit , there exists no admissible command kcmd (·)
+
+under (2) producing a realized compression zreal (·) equal to zpred (·) on [0 , T ]. The minimum achievable L∞ deviation 
+
+∥zpred − zreal ∥∞ is bounded below by δ(α) > 0 for α < α crit ,with empirical evidence in Section IV indicating that δ(α)
+
+increases as α decreases. 
+
+Proposition 1 establishes that the parameter-based optimiza-tion problem admits solutions that violate the realizability constraints imposed by the actuator dynamics, and therefore formalizes the feasible-set mismatch introduced in Section II. 
+
+Proof sketch: Suppose for contradiction that some admissible kcmd (·) produces zreal (t) = zpred (t) on (0 , T ).Then ˙zreal = ˙zpred and ¨zreal = ¨zpred on (0 , T ). From the equation of motion m¨z = mg − kz and the assumed equality 
+
+zreal = zpred , we obtain kreal (t)zreal (t) = kref (t)zpred (t), so 
+
+kreal (t) = kref (t) wherever z > 0, which holds on the open interval (0 , T ).Consequently dk real /dt = dk ref /dt on (0 , T ). Applying the actuator dynamics (2) yields 
+
+ωs
+
+ kcmd (t) − kref (t) = dk ref 
+
+dt ,
+
+which, solving for kcmd , gives the required command 
+
+kcmd (t) = kref (t) + 1
+
+ωs
+
+dk ref 
+
+dt . (18) Admissibility requires kcmd (t) ∈ [kmin , k max ] for all t ∈
+
+(0 , T ).Evaluate (18) at the entry to the middle regime, zpred = zcrit ,where kref = kmax and dk ref /dt attains its extremum with magnitude D given by (13) . The correction term has magnitude 
+
+D/ω s. Using (16) and (17), 
+
+Dωs
+
+= Ktask (kmax − kmin )
+
+α = αcrit (kmax − kmin )
+
+α . (19) For α < α crit , D/ω s > k max − kmin . At the middle-regime entry, where kref is at the upper endpoint kmax and the correction term is negative, kcmd = kmax − D/ω s. Substituting the bound from (19), 
+
+kcmd < k max − (kmax − kmin ) = kmin ,
+
+which violates admissibility. An analogous argument at the middle-regime exit, where the correction is positive and kref 
+
+is again at kmax , gives kcmd > k max .The required command is therefore inadmissible at at least one point in (0 , T ) whenever α < α crit . Because the magnitude 
+
+|dk ref /dt | remains within a bounded neighborhood of its peak D across a finite-measure window around each regime transition, the violation is not confined to an isolated instant. The required kcmd (t) exits [kmin , k max ] over a neighborhood 5
+
+of positive measure, and no admissible command trajectory can satisfy (2) and the dynamics simultaneously over the full stance interval. Hence no admissible kcmd (·) produces zreal = zpred 
+
+on [0 , T ], establishing the first claim. For the lower bound, note that saturation of kcmd at kmin or 
+
+kmax during the boundary episodes induces a gap between kref 
+
+and the realized k. The integral of this gap over the saturation window propagates through (1) into a compression error. A quantitative bound δ(α) > 0 follows from integrating the propagated error. The dependence is monotone in the saturation gap D/ω s−(kmax −kmin ) = ( kmax −kmin )( αcrit /α −1) , which is positive for α < α crit and grows as α decreases. A complete bound on δ(α) is deferred to Section VIII. 
+
+Corollary 1. There exists a second threshold αinfeas < α crit ,defined and characterized in Section VI, such that for α < αinfeas , non-realizability persists under any restriction of the admissible stiffness range [kmin , k max ] to a subinterval 
+
+[k′
+
+> min
+
+, k ′
+
+> max
+
+] with k′ 
+
+> min
+
+≥ kmin and k′ 
+
+> max
+
+≤ kmax .
+
+We state Corollary 1 here for completeness. Its proof sits naturally with the analysis of Section VI and is given there. 
+
+E. Remarks on the proposition 
+
+Proposition 1 is stated as non-realizability, not as an optimality or performance claim. The parameter-based optimum 
+
+(zpred , k ref ) satisfies all constraints of the parameter-based formulation (3) . The issue is that these constraints admit trajectories the physical system cannot produce. Freal is a strict subset of Fparam whenever α < α crit , and the parameter-based optimum falls outside Freal .Two features of αcrit deserve emphasis. First, αcrit is expressed in task-physics parameters only, namely (m, T, k max , k min ). It contains no reference to con-troller choice beyond the class of cost functions whose minimizer under (3) matches the shape (8) . Different cost functions within this class yield the same αcrit scaling. This is why α serves as the controller-independent organizing parameter. Second, the proposition does not claim a sharp phase transition at α = αcrit . The result is existence of a regime 
+
+α < α crit in which Freal ⊂ F param is strict and the parameter-based optimum is non-realizable. The quantitative behavior of 
+
+δ(α) near αcrit is sigmoidal rather than discontinuous, a point we return to empirically in Section IV. The analytical threshold (17) evaluates numerically for our reference parameters ( m = 1 kg, T = 0 .3 s, kmax = 500 N/m, 
+
+kmin = 50 N/m) to αcrit = 25 . The empirical transition in Section IV is centered in the vicinity of this value, consistent with the leading-order derivation above. IV. E MPIRICAL VALIDATION IN 1D This section validates Proposition 1 numerically. We sweep 
+
+α across three decades on the 1D hopping monoped, measur-ing the trajectory deviation between predicted and realized compression for the parameter-based formulation (3) and for the stiffness-as-state formulation (4) . The data establish three claims. First, the parameter-based formulation exhibits monotone trajectory deviation growth as α decreases, consistent with the non-realizability result of Proposition 1. Second, the stiffness-as-state formulation eliminates the deviation to numerical precision, confirming that including the actuator dynamics inside the prediction closes the feasible-set mismatch by construction. Third, the empirical transition center agrees with the analytical αcrit derived in Section III within the accuracy of the leading-order expression. 
+
+A. Sweep setup 
+
+Simulations integrate the 1D dynamics (1) under the true augmented system (2) using an adaptive Runge-Kutta method with relative tolerance 10 −9 and a maximum step of 5×10 −4 s. The stance interval is bounded by an event detection on com-pression returning to zero. Parameters are fixed at m = 1 kg, 
+
+g = 9 .81 m/s 2, kmax = 500 N/m, kmin = 50 N/m, and nominal stance duration T = 0 .3 s. The touchdown velocity is drawn from a three-point ensemble {1.5, 2.0, 2.5} m/s to average over initial-condition sensitivity. For each α in a logarithmic grid spanning [0 .1, 316] , the actuator bandwidth ωs = α/T is set accordingly, and both controllers are simulated. The parameter-based controller computes the reference 
+
+kref (z) = min( kmax , F const /z ) as in Section III and issues 
+
+kcmd (t) = kref (z(t)) to the actuator. The stiffness-as-state con-troller uses the augmented dynamics (2) as its prediction model, so that the predicted compression trajectory (zpred , k pred ) coin-cides by construction with the realized trajectory (zreal , k real )
+
+for the same commanded sequence. Both controllers operate on the same physical plant governed by (1) and (2). 
+
+B. Metrics 
+
+We report two quantities. 
+
+Primary metric. Normalized L∞ trajectory deviation 
+
+Dα := ∥zpred − zreal ∥∞
+
+zpred max 
+
+, (20) where zpred max is the peak compression over the predicted stance. 
+
+Dα directly measures the quantity bounded below by δ(α) in Proposition 1. 
+
+Secondary metric. Normalized liftoff-time deviation 
+
+∆Tα := |Tpred − Treal |
+
+Tpred 
+
+, (21) where Tpred and Treal denote the stance durations under prediction and realization respectively. This secondary quantity diagnoses the operational consequence of trajectory deviation. 
+
+C. Results 
+
+Figure 1 shows the primary and secondary metrics against 
+
+α on logarithmic abscissa. 
+
+Parameter-based formulation. Dα exhibits a monotonic trend as α decreases across the sweep range, growing from a few percent at high α to near unity at low α. The growth is sigmoidal, with the transition centered in the vicinity of αcrit 
+
+and spanning approximately one decade of α. The secondary metric ∆Tα follows the same qualitative shape, rising from approximately 1 percent at high α to over 50 percent at low α.6            
+
+> Fig. 1. 1D sweep across αfor both controllers. Left. Normalized L∞
+> trajectory deviation Dα. Parameter-based (red) exhibits a monotonic trend as
+> αdecreases, consistent with Proposition 1. The shaded band shows ensemble spread across three touchdown velocities. Stiffness-as-state (blue) is zero to numerical precision across the full sweep. Right. Liftoff-time deviation, showing the same qualitative contrast. The dotted vertical line marks αcrit =25 . The empirical transition is centered in its vicinity.
+
+Stiffness-as-state formulation. Dα is zero to numerical precision across the entire α range, for all touchdown velocities in the ensemble. The secondary metric ∆Tα is likewise zero. Prediction and realization coincide to numerical precision, since the stiffness-as-state prediction model matches the true augmented dynamics (2). 
+
+D. Agreement with the analytical threshold 
+
+The analytical threshold (17) evaluates to αcrit = 25 for the present parameters. The empirical transition center is consis-tent with the analytical threshold αcrit , within the accuracy expected from the leading-order derivation of Section III-B (which approximates v⋆ ≈ vtd and uses the simplification 
+
+2vtd /T ≫ g). The low-deviation regime extends to α on the order of 10 2,above which Dα approaches zero. This offset is consistent with the sigmoidal roll-off characteristic of first-order actuator dynamics. The analytical derivation predicts the scale at which non-realizability becomes active. It does not predict a sharp cutoff. Proposition 1 establishes existence of a regime α < α crit 
+
+in which the parameter-based optimum is unrealizable. The empirical data show that deviation grows progressively as α
+
+decreases through αcrit and rises to saturation across the decade below. The sigmoidal shape is the physically honest signature of the mechanism. First-order actuator dynamics produce smooth amplitude and phase attenuation of the commanded signal, not discontinuous failure. We do not interpret the transition as a phase transition but as a characteristic false-feasibility regime centered at αcrit .
+
+E. Robustness across the initial-condition ensemble 
+
+The three-point ensemble in vtd produces narrow dispersion around the reported Dα and ∆Tα curves. The ensemble standard deviation remains bounded across the sweep and does not alter the monotonic trend or the characteristic transition behavior. The monotone growth of Dα and the zero realization of the stiffness-as-state formulation are preserved uniformly across the ensemble. The mechanism is not an artifact of a particular touchdown condition.                  
+
+> Fig. 2. Empirical 50 percent crossing α50 versus predicted αcrit from (17) across ten parameter combinations. Log-log fit yields R2= 0 .986 with a consistent proportionality α50 ≈0.67 αcrit . Points lie systematically below the diagonal because αcrit marks the onset of infeasibility, while α50 measures a performance threshold reached after deviation accumulates.
+
+F. Robustness of the analytical threshold across task parame-ters 
+
+The nominal sweep confirms (17) at a single point in parameter space. A stronger check is whether the scaling holds across variations in the task-physics inputs (m, T, k min , k max ).We sweep ten parameter combinations spanning 0.5 ≤ m ≤
+
+2.0 kg, 0.20 ≤ T ≤ 0.40 s, 50 ≤ kmin ≤ 100 N/m, and 
+
+300 ≤ kmax ≤ 800 N/m, giving predicted αcrit values ranging from 9.5 to 53 . For each combination we locate the empirical 50 percent deviation crossing α50 and compare to the αcrit 
+
+predicted by (17). Figure 2 shows the result. The points cluster tightly around a line of slope one in log-log with proportionality constant 0.67 ,and the log-log coefficient of determination is R2 = 0 .986 .The consistency of this ratio across a more than 5× range in αcrit establishes that the scaling law (17) is not specific to the nominal parameter choice. The sub-unity prefactor reflects a physical distinction between two thresholds. The non-realizability threshold αcrit proved in Section III bounds the onset of the infeasible regime from above. The 50 percent performance crossing α50 falls slightly inside that regime, where deviation has grown to half its maximum. 
+
+G. Summary 
+
+The 1D sweep confirms Proposition 1 empirically. The parameter-based formulation exhibits non-realizability that grows monotonically with decreasing α, centered near the analytical αcrit . The stiffness-as-state formulation removes the deviation by construction. Section V extends these findings to planar SLIP and confirms that the mechanism transfers to a richer setting without qualitative change. 7
+
+V. M ECHANISM TRANSFER IN PLANAR SLIP Section IV established the false-feasibility mechanism in the symmetric 1D monoped. This section tests whether the mechanism persists in a richer setting with distinct failure channels, specifically the planar Spring-Loaded Inverted Pen-dulum (SLIP) with forward hopping and a compression spring acting along the leg axis [8]–[12]. The purpose is to establish that the mechanism is not an artifact of the 1D geometry, and to identify which observable consequences appear generically versus which are regime-dependent. 
+
+A. Planar SLIP setup 
+
+The system is a point mass m at position (x, y ) above the ground, connected to a fixed foot contact point (xfoot , y foot =0) during stance by a compliant leg of natural length l0 and time-varying stiffness k(t) governed by (2) . Let L(t) denote the instantaneous leg length, computed from mass and foot positions, and let c(t) := l0 −L(t) denote leg compression. The unit vector from foot to mass is (ux, u y ). The stance dynamics are 
+
+m¨x = k(t) c(t) ux, (22a) 
+
+m¨y = k(t) c(t) uy − mg, (22b) valid when c > 0. Liftoff occurs at the first time t > 0 at which c returns to zero. Touchdown conditions are specified by the forward velocity 
+
+vforward , touchdown angle from vertical αtd , and vertical de-scent velocity vtd  
+
+> y
+
+. The foot is placed at xfoot = x0 +l0 sin( αtd )
+
+ahead of the mass, so that at touchdown the leg axis makes angle αtd with the vertical. We fix the following parameters across the sweep. Mass m = 1 kg, gravity g = 9 .81 m/s 2,leg length l0 = 0 .5 m, stiffness range kmax = 4000 N/m and 
+
+kmin = 500 N/m, friction coefficient μ = 0 .7, forward velocity 
+
+vforward = 1 .0 m/s, and vertical descent vtd  
+
+> y
+
+= −p2g h drop 
+
+with hdrop = 0.05 m. The nominal stance duration is 
+
+T ≈ 0.15 s, used to define α = ωsT .
+
+B. Reference stiffness 
+
+We use a reference schedule that mirrors the 1D form. With 
+
+F 2D const = 2 .5 mg chosen to yield physiologically plausible peak ground reaction force during hopping, the reference is 
+
+kref (c) = min  kmax , F 2D const /c , (23) saturated below the compression z2D crit = F 2D const /k max . This schedule does not represent the optimal solution of a 2D task-space cost, which would require a periodic-gait boundary-value problem. The purpose is to preserve the slew-demand structure of the 1D case so that mechanism transfer can be tested cleanly. Mechanism tests with a globally optimal reference are deferred to future work. 
+
+C. Observables 
+
+Primary observable. Normalized 2D trajectory mismatch of the center of mass, 
+
+D2D := max t ∥rpred (t) − rreal (t)∥
+
+cpred max 
+
+, (24) where r = ( x, y ) is the CoM position and cpred max is the peak compression under prediction. 
+
+Secondary observable. Normalized liftoff time deviation 
+
+|Tpred − Treal |/T pred .
+
+Tertiary observable. Maximum friction ratio during realized stance, 
+
+η := max    
+
+> {t:Fv(t)>0.1mg }
+
+|Fh(t)|
+
+Fv (t) , (25) evaluated only where the vertical ground reaction force exceeds 10 percent of body weight. This threshold prevents numerical division-by-near-zero artifacts at the edges of stance. 
+
+D. Mechanism transfer 
+
+We sweep α across three decades at two touchdown angles, 
+
+αtd = 15 ◦ and 20 ◦, and perform a single spot check at αtd =30 ◦ at two low-α values (0.5 and 1.0) to probe the aggressive-geometry regime. Figure 3 shows the three observables against α.
+
+Primary observable. At both 15 ◦ and 20 ◦, D2D exhibits a monotonic trend as α decreases, growing from approximately 3 percent at α = 316 to approximately 190 percent at 
+
+α = 0.3. The curves at the two touchdown angles are nearly superimposed, indicating that the primary mechanism is geometry-robust in this regime. The 30 ◦ spot checks at α = 0 .5
+
+and α = 1 .0 return D2D values of 186 percent and 179 percent respectively, falling on the same curve. 
+
+Secondary observable. Normalized liftoff time deviation rises from near zero at high α to 66 percent at low α, with the same sigmoidal shape as the primary observable. At low α,realized stance durations are substantially shorter than predicted, consistent with the mechanism of Section III manifesting as stance desynchronization in the richer 2D setting. The primary and secondary observables together constitute the generic consequence of the false-feasibility mechanism in planar SLIP. The mechanism manifests as CoM-path and stance-timing mismatch relative to prediction. 
+
+E. Friction margin is regime-dependent 
+
+The tertiary observable behaves qualitatively differently. Across the sweep, the maximum friction ratio η stays essentially constant with α. At αtd = 15 ◦, η ≈ 0.27 across the entire sweep range. At αtd = 20 ◦, η ≈ 0.36 . At αtd = 30 ◦, η ≈ 0.58 .These values are approximately tan( αtd ), reflecting ageometric rather than dynamic origin. In the present setup, the foot is fixed during stance while the CoM moves for-ward, so the leg angle measured from vertical is largest at touchdown and decreases as stance progresses. The ratio 
+
+|Fh|/F v = | tan( leg angle )| is therefore maximized at touch-down, primarily determined by geometry rather than stiffness magnitude. Stiffness lag affects trajectory magnitude and timing but does not make the leg rotate beyond its touchdown angle. Two consequences follow. First, the false-feasibility mech-anism does not generically produce friction cone violations in planar SLIP with a radial compression spring at moderate touchdown angles. Second, friction margin erosion becomes ob-servable only when the touchdown angle approaches arctan( μ),at which point any geometric perturbation pushes through the 8                      
+
+> Fig. 3. Planar SLIP sweep showing mechanism transfer from 1D. Left. Primary D2D normalized CoM mismatch. Center. Secondary stance-timing deviation. Both exhibit a monotonic trend as αdecreases, with 15 ◦(red) and 20 ◦(orange) curves nearly superposed, indicating the primary mechanism is angle-insensitive in this range. Right. Tertiary friction ratio |Fh|/F v, essentially flat in αand sitting near tan( θTD )for each touchdown angle. The dashed red line marks the friction cone at μ= 0 .7. The 30 ◦spot check (stars on all three panels) confirms transfer into the aggressive-geometry regime.
+
+cone. This is a regime condition on the gait, not a universal consequence of the mechanism. We therefore frame friction cone exit as a regime-dependent tertiary consequence of the mechanism, not a generic failure mode. Section II states this hierarchy explicitly. 
+
+F. Agreement with the 1D scale 
+
+The 2D primary observable transitions centered in the range α ≈ 10 to 20 , coinciding with the 1D scale from Section IV within the span of the sigmoidal roll-off. The absolute magnitudes of D2D at low α exceed the corresponding 1D values, reflecting the richer failure surface in 2D where trajectory error accumulates in both spatial dimensions. The qualitative shape and the scale of onset match between the 1D and 2D settings. Mechanism transfer is therefore established at the level of shape, onset scale, and primary observable. The paper does not claim threshold transfer, only mechanism transfer, as committed in Section II. 
+
+G. Summary 
+
+Planar SLIP simulations confirm that the false-feasibility mechanism persists in a 2D setting. The generic consequence is CoM-path and stance-timing mismatch, with friction mar-gin erosion appearing only in aggressive geometric regimes. Section VI addresses whether conservative tuning can repair the parameter-based formulation, and establishes the structural limit of that tuning strategy. The preceding results establish that parameter-based formu-lations can produce unrealizable trajectories. A natural question is whether this can be avoided through conservative tuning of the admissible stiffness range. Section VI shows that such conservative restriction fails on structural grounds. VI. F EASIBILITY VERSUS REACH 
+
+A natural objection to Proposition 1 is that the parameter-based formulation can be made safe by conservative tuning. The idea is to restrict the admissible stiffness range [kmin , k max ]
+
+to a subinterval [k′
+
+> min
+
+, k ′
+
+> max
+
+] until the slew demand fits within the realizable capacity. This section addresses whether false feasibility can be eliminated through such restriction. We derive the minimum conservatism required for realizability as a function of α, show that the required restriction grows as α decreases, and establish a hard threshold αinfeas below which no restriction within [kmin , k max ] achieves realizability. 
+
+A. The conservative parameter-based formulation 
+
+Consider the parameter-based MPC (3) with the admissible stiffness range replaced by a subinterval [k′
+
+> min
+
+, k ′
+
+> max
+
+] with 
+
+k′ 
+
+> min
+
+≥ kmin and k′ 
+
+> max
+
+≤ kmax . The corresponding reference schedule becomes 
+
+k′ 
+
+> ref
+
+(c) = min  k′
+
+> max
+
+, F const /c , (26) saturated at k′ 
+
+> max
+
+rather than kmax . Under this reference, the maximum slew demand of Section III-B becomes 
+
+D′(k′
+
+> max
+
+) = (k′
+
+> max
+
+)2 T
+
+2m , (27) obtained from (13) by substituting k′ 
+
+> max
+
+for kmax . The real-izable slew capacity under the admissible range [k′
+
+> min
+
+, k ′
+
+> max
+
+]
+
+is 
+
+R′(k′
+
+> min
+
+, k ′
+
+> max
+
+) = ωs(k′ 
+
+> max
+
+− k′
+
+> min
+
+). (28) Realizability of the conservative reference requires D′ ≤ R′,which is the condition for the argument of Proposition 1 to fail to produce a contradiction. 
+
+B. Minimum required restriction 
+
+We characterize the least-conservative restriction that guar-antees realizability. Fix k′ 
+
+> min
+
+= kmin and search for the largest 
+
+k′ 
+
+> max
+
+such that D′ ≤ R′. Equating the two quantities yields 
+
+(k′
+
+> max
+
+)2 vtd 
+
+Fconst 
+
+= ωs(k′ 
+
+> max
+
+− kmin ), (29) a quadratic in k′
+
+> max
+
+. Setting A := ωsFconst /v td , the admissi-bility boundary is 
+
+(k′
+
+> max
+
+)2 − A k ′ 
+
+> max
+
++ A k min = 0 , (30) 9
+
+with discriminant A2 − 4Ak min . Real solutions require A ≥
+
+4kmin , equivalently 
+
+ωs ≥ 4kmin vtd 
+
+Fconst 
+
+, (31) which, in terms of α = ωsT , becomes 
+
+α ≥ αinfeas := 4kmin vtd TFconst 
+
+. (32) For α ≥ αinfeas , the admissible boundary yields the larger root 
+
+k′
+
+> max
+
+(α) = A
+
+2
+
+
+
+1 + 
+
+r
+
+1 − 4kmin 
+
+A
+
+
+
+, (33) truncated at kmax . For α < α infeas , no real k′ 
+
+> max
+
+solves (29) .No choice of the upper bound of the admissible range makes the conservative reference realizable. 
+
+Proof of Corollary 1. The same argument applies for any reduction of the admissible range through both k′ 
+
+> min
+
+and k′
+
+> max
+
+.The realizability condition D′(k′
+
+> max
+
+) ≤ ωs(k′ 
+
+> max
+
+− k′
+
+> min
+
+) is harder to satisfy when k′ 
+
+> min
+
+is raised above kmin , since R′
+
+decreases while D′ is unchanged for fixed k′
+
+> max
+
+. Hence if no real solution exists for k′ 
+
+> min
+
+= kmin , no real solution exists for any k′ 
+
+> min
+
+> k min either. For α < α infeas , therefore, non-realizability persists under any restriction of [kmin , k max ] to a subinterval. ■
+
+C. Numerical values for the reference parameters 
+
+With m = 1 kg, T = 0.3 s, kmax = 500 N/m, 
+
+kmin = 50 N/m, and vtd = 2 m/s, the thresholds evaluate to αcrit = 25 from (17) and αinfeas ≈ 5.19 from (32) . The ratio αcrit /α infeas ≈ 4.8 characterizes the span of α values over which conservatism is required but possible. Figure 4 shows three panels that together characterize the conservative-tuning analysis. 
+
+D. Panel A. The conservatism curve 
+
+Panel A of Figure 4 plots the normalized admissible stiffness excursion ∆k′(α)/∆k, where ∆k′ = k′
+
+> max
+
+(α) − kmin and 
+
+∆k = kmax − kmin . The curve has three regimes. 
+
+No-restriction regime ( α ≥ αcrit ). No restriction is required. 
+
+∆k′(α) = ∆ k, the full admissible range remains available, and the conservative parameter-based formulation reduces to the unrestricted formulation. 
+
+Conservative-tuning regime ( αinfeas ≤ α < α crit ). The required restriction exhibits a monotonic trend as α decreases. The curve descends from 1.0 at αcrit to approximately 0.16 at 
+
+αinfeas .
+
+Infeasible regime ( α < αinfeas ). No admissible range restriction achieves realizability. The conservative parameter-based formulation does not exist in this regime. 
+
+E. Panel B. Conditional cost comparison 
+
+Panel B plots the realized cost J = R T 
+
+> 0
+
+F (t)2 dt , normalized by the ideal cost Jideal = F 2const T , for three controllers. The first is parameter-based unrestricted. The second is parameter-based conservative at the minimum-restriction value k′
+
+> max
+
+(α).The third is stiffness-as-state. In the regime α > α infeas where the conservative controller is feasible, the three realized costs sit within approximately 10 percent of each other. No controller dominates the others uniformly across α. Within the feasible envelope, the cost penalty of conservative tuning is modest and comparable to the penalty of the stiffness-as-state controller implemented via a pre-compensation strategy that saturates at low α.The conclusion from Panel B is negative in a specific sense. Conservative tuning is not worse than stiffness-as-state on cost in the overlap regime. Cost is not the axis on which conservative tuning fails. 
+
+F. Panel C. The reach argument 
+
+Panel C plots the operational α range of each controller as horizontal bars. 
+
+Stiffness-as-state covers the full tested α range. By construc-tion, the augmented dynamics are included in the prediction, and realizability is not in question. 
+
+Parameter-based, conservative is feasible only for α ≥
+
+αinfeas . Below this threshold, no restriction within [kmin , k max ]
+
+produces a realizable reference. The bar terminates at αinfeas .
+
+Parameter-based, unrestricted is guaranteed to be real-izable for α ≥ αcrit . In the conservative-tuning regime, the unrestricted formulation commands references that the actuator cannot track, as established in Proposition 1. Panel C makes the structural claim visual. Restricting the admissible stiffness range preserves realizability only at the cost of reach, and the feasible set collapses entirely below 
+
+αinfeas .
+
+G. Summary of the conservative-tuning analysis 
+
+Three statements summarize the analysis. First, for αinfeas ≤ α < αcrit , conservative tuning is necessary and available. The required restriction grows as 
+
+α decreases and approaches full collapse of the admissible range as α approaches αinfeas .Second, within the feasible envelope, cost differences be-tween conservative parameter-based control and stiffness-as-state control are modest and not uniformly favorable to either formulation. Performance is not the issue. Third, for α < α infeas , no restriction of [kmin , k max ] to a subinterval produces a realizable parameter-based controller. Conservative tuning is subject to a hard analytical floor. The stiffness-as-state formulation therefore differs from any conservatively-tuned parameter-based formulation not on cost but on reach. It operates in a regime of α where no parameter-based formulation, however tuned, produces a realizable controller. VII. D ISCUSSION 
+
+A. Model accuracy versus formulation correctness 
+
+This is a correctness result, not a modeling improvement. Most of the variable impedance literature treats actuator dynamics as an approximation problem. The questions there are how accurately the controller represents the real hardware and how closely the realized response can be made to match 10                          
+
+> Fig. 4. Conservative tuning and structural reach. (A) Conservatism curve ∆k′(α)/∆kwith three shaded regimes. The infeasible regime is α < α infeas ,the conservative-tuning regime is αinfeas ≤α < α crit , and no restriction is needed for α≥αcrit . The curve saturates at unity for α≥αcrit , indicating conservative tuning is unnecessary there. (B) Conditional cost J/J ideal for unrestricted parameter-based (orange), conservative parameter-based (red), and stiffness-as-state (blue). In the overlap regime all three sit within approximately 10 percent of one another. (C) Reach as horizontal bars. Stiffness-as-state covers the full range. Conservative parameter-based terminates at αinfeas . Unrestricted parameter-based is guaranteed only for α≥αcrit . Restricting the admissible stiffness range preserves realizability at the cost of reach, not cost.
+
+the commanded signal. Those questions have known answers and mature techniques. What this paper identifies is a distinct question that the approximation framing does not pose. Does the optimization over which the controller reasons search the correct feasible set? These are independent axes. A controller can have an accurate actuator model at the low level and still be structurally wrong at the formulation level if the MPC optimizes over a set that is not the realizable set. The distinction matters because the two axes demand differ-ent fixes. Modeling inaccuracy is closed by better identification, compensation, or low-level control. Formulation incorrectness is closed by augmenting the prediction state, as (4) does with respect to (3) . No amount of modeling accuracy at the actuator level repairs a controller whose optimization searches over Fparam rather than Freal . Increasing model fidelity within the parameter-based formulation does not resolve this issue, because the mismatch arises from the structure of the optimization problem rather than the accuracy of the dynamics model. 
+
+B. Why this has not been articulated 
+
+The variable impedance actuator literature has treated stiff-ness dynamics extensively at the hardware and low-level control levels. Series elastic actuators [4], passivity-based control of flexible-joint robots [5], and the subsequent variable stiffness actuator review [6] all acknowledge that stiffness changes at finite rates. Tank-based approaches [7] enforce passivity under time-varying stiffness at the tracking level. Frequency-aware MPC formulations [20] shape the cost in the frequency domain to respect actuator bandwidth. What has been absent is the transfer of this observation into the MPC formulation layer as a feasible-set constraint. Stiffness bandwidth has been treated as a hardware constraint to be respected by the low-level tracker, or as a frequency-domain cost-shaping target, but not as a state-level constraint that redefines the optimization’s feasible set. The result is a gap between the formulation literature, which treats stiffness as a parameter, and the hardware literature, which treats stiffness as a dynamic variable with its own bandwidth. Both communities are internally consistent. Neither community has articulated the feasible-set mismatch that arises when the formulation layer inherits the parameter assumption while the hardware layer inherits the dynamic one. The frequency-aware cost-shaping approach deserves spe-cific comparison because it targets the same underlying phenomenon through a different formulation axis. Frequency-aware MPC [20] penalizes high-frequency components of the control trajectory within a cost functional whose feasible set remains unchanged from the unshaped formulation. This is different in kind from the feasible-set correction introduced here. Cost-shaping biases solutions within a fixed admissible set. Augmenting the prediction state with stiffness (Section II) rede-fines the admissible set itself. The two are complementary rather than substitutable. A frequency-shaped cost can be combined with the stiffness-as-state formulation without conflict, since one regulates command regularity while the other enforces realizability. Frequency-domain penalties on the parameter-based formulation do not, in general, eliminate Freal ⊂ F param 
+
+strictness or move the parameter-based optimum inside Freal 
+
+when α < α crit . The false-feasibility gap is structural, not spectral. 
+
+C. Relation to parallel augmented-state MPC results 
+
+Two recent results in legged MPC have exploited augmented-state formulations for distinct purposes. The work of [27] demonstrates that representing orientation directly with the rotation matrix, rather than through Euler angles or quaternion projections, removes singularities that constrain achievable motions. The work of [28] incorporates parallel elasticity into the MPC prediction state, yielding energy efficiency gains in a monoped hopping task. Both results share the pattern that including in the prediction state a quantity previously treated 11 
+
+as instantaneous or projected-out enables behaviors that the unaugmented formulation cannot reach. Our result is complementary. We do not demonstrate that an augmented-state controller performs better on a specific task. Instead, we identify the analytical regime in which the unaugmented formulation solves a different problem than the physical system presents. The two results are compatible but logically independent. Our framework suggests that other augmented-state formulations in the MPC literature may be addressing feasible-set correctness problems, whether or not they articulate them as such, and that the underlying mechanism admits analytical characterization case by case. 
+
+D. Implications for multi-limb systems 
+
+The dimensionless parameter α = ωsT is defined at the task-timescale level and does not depend on the robot’s kinematic complexity. For multi-limb systems with multiple variable impedance actuators, each joint has its own bandwidth ωs
+
+and the relevant task timescale T may vary across gaits. The analysis of Section III applies joint by joint, yielding a per-joint 
+
+αcrit . A multi-limb controller that aggregates across joints can be falsely feasible in different joints under different gait regimes. The scaling of the mechanism to multi-limb platforms is a future work direction. The single-joint analysis presented here is the building block. Multi-limb interactions, gait transitions, and whole-body coordination are left for subsequent treatment. 
+
+E. Beyond variable impedance 
+
+The feasible-set-correctness framing generalizes beyond stiff-ness. Any MPC that treats a state variable as an instantaneous decision variable inherits the same class of mismatch. Actuator torque bandwidth, variable damping, gear ratio modulation, and series elastic pretension are candidate domains where the same mechanism operates with different underlying dynamics. The analytical structure is not specific to stiffness. It comprises a threshold from task-physics parameters, non-realizability below threshold, and a structural feasibility floor from range restriction. Related concerns arise in trajectory optimization through contact [26], where complementarity constraints shape a feasible set whose correctness is orthogonal to model accuracy. The stiffness case is the clearest instance because the dynamics (2) are first-order linear and admit closed-form threshold derivation. Extensions to higher-order or nonlinear actuator models are tractable but not pursued here. VIII. L IMITATIONS 
+
+The result established in this paper is structural rather than universal. We identify the following limitations explicitly. 
+
+Lower bound on δ(α) is sketched. Proposition 1 establishes non-realizability below αcrit and identifies a positive lower bound δ(α) on the minimum achievable L∞ deviation. The proof sketch in Section III-D establishes the existence of the bound through the saturation gap mechanism but does not pro-vide a quantitative closed form. A complete derivation of δ(α),including explicit parameter dependence and monotonicity, is deferred to future work. The empirical evidence in Section IV indicates that δ(α) increases as α decreases, but this behavior is not analytically proven here. 
+
+Primary analysis is one-dimensional. Proposition 1 and the analytical αcrit are derived on the 1D vertical monoped. Section V demonstrates that the mechanism transfers to planar SLIP at the level of shape and onset scale, but the threshold itself is not rederived in 2D. Extension to full planar and three-dimensional systems, including multi-link structures and humanoid configurations, is future work. 
+
+Single actuator dynamics model. The actuator is modeled as first-order linear with bandwidth ωs and saturation at 
+
+[kmin , k max ]. Real variable impedance actuators exhibit higher-order dynamics, nonlinear stiffness-preload coupling, and deflection-dependent response characteristics. Any actuator model with bounded stiffness rate induces a finite slew capacity. Higher-order or nonlinear dynamics can only reduce achievable slew locally relative to the first-order idealization, which tightens the infeasibility condition rather than eliminating it. The specific analytical value (17) is derived under the first-order assumption and will shift quantitatively under richer actuator models, but the qualitative regime of non-realizability persists and is, if anything, reached at larger α than predicted here. 
+
+Cost function class. The derivation in Section III assumes an integrated squared ground reaction force objective. The result extends qualitatively to cost functionals whose minimizer under (3) yields a stiffness reference with the same saturation-and-force-regulation structure as (8) , including certain cost-of-transport and peak-torque formulations. A general characteri-zation of the cost function class for which Proposition 1 holds is not provided here. 
+
+No hardware validation. All results are derived analytically or in simulation. Planar SLIP simulations in Section V use a standard template that is a widely accepted proxy for legged locomotion but is not a physical experiment. Hardware validation on a variable impedance platform is a natural next step and is reserved for follow-on work. 
+
+Optimality of the conservative baseline. Section VI com-putes the minimum-conservatism parameter-based controller. This is the least-restrictive safe parameter-based formulation. The cost comparison in Panel B uses a specific stiffness-as-state implementation based on pre-compensation, which saturates at low α and does not exploit the full capability of an MPC that re-optimizes the command sequence under the augmented dynamics. The reach argument of Panel C is insensitive to this implementation choice. The cost comparison is. 
+
+Reinforcement learning controllers are not compared. 
+
+End-to-end learned controllers [32]–[34] may implicitly dis-cover the feasible-set structure and behave correctly in the regime α < α crit . Characterizing the relationship between learned policies and the feasible-set correctness framing is beyond the scope of this paper. IX. C ONCLUSION 
+
+Parameter-based variable impedance MPC operates on a feasible set strictly containing the physically realizable set. This is a formulation error, not a modeling approximation. For the 1D hopping monoped, Proposition 1 shows that 12 
+
+below αcrit = k2max T 2/[2 m(kmax −kmin )] the parameter-based optimum is not realizable by any admissible stiffness command under first-order actuator dynamics. Numerical sweeps confirm the threshold in 1D and track the predicted scaling across ten parameter combinations. Mechanism transfer to planar SLIP holds at the level of shape and onset scale. Corollary 1 supplies a hard floor αinfeas < α crit below which no restriction of the admissible stiffness range achieves realizability, closing the conservative-tuning objection on structural grounds. Augment-ing the prediction state with stiffness eliminates the mismatch by construction. The correctness perspective extends beyond the variable impedance setting. Any optimization that treats a bandwidth-limited physical variable as instantaneous admits the same class of feasible-set mismatch. Stiffness is the cleanest instance because the actuator dynamics are first-order linear and the threshold is available in closed form. Torque bandwidth, variable damping, and other dynamic decision variables are accessible to the same analysis. REFERENCES [1] N. Hogan, “Impedance control: An approach to manipulation: Part I— Theory,” ASME J. Dynamic Systems, Measurement, and Control , vol. 107, no. 1, pp. 1–7, Mar. 1985. [2] N. Hogan, “Impedance control: An approach to manipulation: Part II— Implementation,” ASME J. Dynamic Systems, Measurement, and Control ,vol. 107, no. 1, pp. 8–16, Mar. 1985. [3] N. Hogan, “Impedance control: An approach to manipulation: Part III— Applications,” ASME J. Dynamic Systems, Measurement, and Control ,vol. 107, no. 1, pp. 17–24, Mar. 1985. [4] G. A. Pratt and M. M. Williamson, “Series elastic actuators,” in Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS) , Pittsburgh, PA, USA, Aug. 1995, vol. 1, pp. 399–406. [5] A. Albu-Schäffer, C. Ott, and G. Hirzinger, “A unified passivity-based control framework for position, torque and impedance control of flexible joint robots,” Int. J. Robot. Res. , vol. 26, no. 1, pp. 23–39, Jan. 2007. [6] B. Vanderborght, A. Albu-Schäffer, A. Bicchi, E. Burdet, D. G. Caldwell, R. Carloni, et al. , “Variable impedance actuators: A review,” Robot. Auton. Syst. , vol. 61, no. 12, pp. 1601–1614, Dec. 2013. [7] F. Ferraguti, C. Secchi, and C. Fantuzzi, “A tank-based approach to impedance control with variable stiffness,” in Proc. IEEE Int. Conf. Robot. Autom. (ICRA) , Karlsruhe, Germany, May 2013, pp. 4948–4953. [8] M. H. Raibert, Legged Robots That Balance . Cambridge, MA, USA: MIT Press, 1986. [9] R. Blickhan, “The spring-mass model for running and hopping,” J. Biomech. , vol. 22, no. 11-12, pp. 1217–1227, 1989. [10] R. J. Full and D. E. Koditschek, “Templates and anchors: Neuromechan-ical hypotheses of legged locomotion on land,” J. Exp. Biol. , vol. 202, no. 23, pp. 3325–3332, Dec. 1999. [11] P. Holmes, R. J. Full, D. Koditschek, and J. Guckenheimer, “The dynamics of legged locomotion: Models, analyses, and challenges,” SIAM Rev. ,vol. 48, no. 2, pp. 207–304, 2006. [12] H. Geyer, A. Seyfarth, and R. Blickhan, “Compliant leg behaviour explains basic dynamics of walking and running,” Proc. Royal Soc. B: Biol. Sci. , vol. 273, no. 1603, pp. 2861–2867, Nov. 2006. [13] S. Seok, A. Wang, M. Y. Chuah, D. J. Hyun, J. Lee, D. M. Otten, J. H. Lang, and S. Kim, “Design principles for energy-efficient legged locomotion and implementation on the MIT Cheetah robot,” IEEE/ASME Trans. Mechatronics , vol. 20, no. 3, pp. 1117–1129, Jun. 2015. [14] M. Hutter, C. Gehring, D. Jud, A. Lauber, C. D. Bellicoso, V. Tsounis, J. Hwangbo, K. Bodie, P. Fankhauser, M. Bloesch, R. Diethelm, S. Bachmann, A. Melzer, and M. Höpflinger, “ANYmal—A highly mobile and dynamic quadrupedal robot,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. (IROS) , Daejeon, Korea, Oct. 2016, pp. 38–44. [15] P. M. Wensing, A. Wang, S. Seok, D. Otten, J. Lang, and S. Kim, “Proprioceptive actuator design in the MIT Cheetah: Impact mitigation and high-bandwidth physical interaction for dynamic legged robots,” 
+
+IEEE Trans. Robot. , vol. 33, no. 3, pp. 509–522, Jun. 2017. [16] B. Katz, J. Di Carlo, and S. Kim, “Mini Cheetah: A platform for pushing the limits of dynamic quadruped control,” in Proc. IEEE Int. Conf. Robot. Autom. (ICRA) , Montreal, Canada, May 2019, pp. 6295–6301. [17] J. Di Carlo, P. M. Wensing, B. Katz, G. Bledt, and S. Kim, “Dynamic locomotion in the MIT Cheetah 3 through convex model-predictive control,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. (IROS) , Madrid, Spain, Oct. 2018, pp. 1–9. [18] G. Bledt, M. J. Powell, B. Katz, J. Di Carlo, P. M. Wensing, and S. Kim, “MIT Cheetah 3: Design and control of a robust, dynamic quadruped robot,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. (IROS) , Madrid, Spain, Oct. 2018, pp. 2245–2252. [19] M. Neunert, M. Stäuble, M. Giftthaler, C. D. Bellicoso, J. Carius, C. Gehring, M. Hutter, and J. Buchli, “Whole-body nonlinear model predictive control through contacts for quadrupeds,” IEEE Robot. Autom. Lett. , vol. 3, no. 3, pp. 1458–1465, Jul. 2018. [20] R. Grandia, F. Farshidian, A. Dosovitskiy, R. Ranftl, and M. Hutter, “Frequency-aware model predictive control,” IEEE Robot. Autom. Lett. ,vol. 4, no. 2, pp. 1517–1524, Apr. 2019. [21] R. Grandia, F. Farshidian, R. Ranftl, and M. Hutter, “Feedback MPC for torque-controlled legged robots,” in Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. (IROS) , Macau, China, Nov. 2019, pp. 4730–4737. [22] R. Grandia, F. Jenelten, S. Yang, F. Farshidian, and M. Hutter, “Perceptive locomotion through nonlinear model-predictive control,” IEEE Trans. Robot. , vol. 39, no. 5, pp. 3402–3421, Oct. 2023. [23] J.-P. Sleiman, F. Farshidian, M. V. Minniti, and M. Hutter, “A unified MPC framework for whole-body dynamic locomotion and manipulation,” 
+
+IEEE Robot. Autom. Lett. , vol. 6, no. 3, pp. 4688–4695, Jul. 2021. [24] F. Jenelten, R. Grandia, F. Farshidian, and M. Hutter, “TAMOLS: Terrain-aware motion optimization for legged systems,” IEEE Trans. Robot. ,vol. 38, no. 6, pp. 3395–3413, Dec. 2022. [25] C. Mastalli, W. Merkt, G. Xin, J. Shim, M. Mistry, I. Havoutis, and S. Vijayakumar, “Agile maneuvers in legged robots: A predictive control approach,” arXiv preprint arXiv:2203.07554 , 2022. [26] M. Posa, C. Cantu, and R. Tedrake, “A direct method for trajectory optimization of rigid bodies through contact,” Int. J. Robot. Res. , vol. 33, no. 1, pp. 69–81, Jan. 2014. [27] Y. Ding, A. Pandala, C. Li, Y.-H. Shin, and H.-W. Park, “Representation-free model predictive control for dynamic motions in quadrupeds,” IEEE Trans. Robot. , vol. 37, no. 4, pp. 1154–1171, Aug. 2021. [28] Y. Zhuang, Y. Wang, and Y. Ding, “Kinodynamic model predictive control for energy efficient locomotion of legged robots with parallel elasticity,” in Proc. IEEE Int. Conf. Robot. Autom. (ICRA) , Atlanta, GA, USA, May 2025, pp. 12365–12371. [29] D. Q. Mayne, J. B. Rawlings, C. V. Rao, and P. O. M. Scokaert, “Con-strained model predictive control: Stability and optimality,” Automatica ,vol. 36, no. 6, pp. 789–814, Jun. 2000. [30] J. B. Rawlings, D. Q. Mayne, and M. M. Diehl, Model Predictive Control: Theory, Computation, and Design , 2nd ed. Madison, WI, USA: Nob Hill Publishing, 2017. [31] M. Diehl, H. G. Bock, and J. P. Schlöder, “A real-time iteration scheme for nonlinear optimization in optimal feedback control,” SIAM J. Control Optim. , vol. 43, no. 5, pp. 1714–1736, 2005. [32] J. Hwangbo, J. Lee, A. Dosovitskiy, D. Bellicoso, V. Tsounis, V. Koltun, and M. Hutter, “Learning agile and dynamic motor skills for legged robots,” Sci. Robot. , vol. 4, no. 26, eaau5872, Jan. 2019. [33] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning quadrupedal locomotion over challenging terrain,” Sci. Robot. , vol. 5, no. 47, eabc5986, Oct. 2020. [34] T. Miki, J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning robust perceptive locomotion for quadrupedal robots in the wild,” Sci. Robot. , vol. 7, no. 62, eabk2822, Jan. 2022.
