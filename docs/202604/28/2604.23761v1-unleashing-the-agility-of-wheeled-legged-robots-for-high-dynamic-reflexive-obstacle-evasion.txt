@@ -1,0 +1,480 @@
+Title: Unleashing the Agility of Wheeled-Legged Robots for High-Dynamic Reflexive Obstacle Evasion
+
+URL Source: https://arxiv.org/pdf/2604.23761v1
+
+Published Time: Tue, 28 Apr 2026 01:07:42 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Unleashing the Agility of Wheeled-Legged Robots for High-Dynamic Reflexive Obstacle Evasion 
+
+Yongen Zhao 1,3, Zihao Xu 2, Wenzhi Lu 1, Zhen Chu 4 and Ce Hao 2,3
+
+Abstract — Wheeled-legged robots combine the energy effi-ciency of wheeled locomotion with the terrain adaptability of legged systems, making them promising platforms for agile mobility in complex and dynamic environments. However, enabling high-dynamic reflexive evasion against fast-moving obstacles remains challenging due to the hybrid morphology, mode coupling, and non-holonomic constraints of such platforms. In this work, we propose AWARE ( Adaptive Wheeled-Legged Avoidance and Reflexive Evasion ), a hierarchical reinforcement learning framework for high-dynamic obstacle avoidance in wheeled-legged robots. The proposed system naturally exhibits diverse emergent gaits and evasive behaviors, including forward lunge and lateral dodge, thereby leveraging the robot’s hybrid morphology to enhance agility under highly dynamic threats. Extensive experiments in Isaac Lab simulation and real-world deployment on the M20 platform across diverse dynamic scenarios demonstrate that AWARE achieves robust and agile obstacle avoidance while revealing behaviorally distinct evasive strategies. These results highlight both the practical effectiveness of AWARE and the intrinsic reflexive agility of wheeled-legged robots. 
+
+I. I NTRODUCTION 
+
+The integration of wheeled efficiency with legged versatility has established wheeled-legged robots [1]–[5] as highly capa-ble platforms for navigating complex, unstructured environ-ments. By seamlessly transitioning between rapid rolling and agile stepping, these hybrid systems offer superior mobility over traditional purely wheeled or bipedal/quadrupedal robots [6]. Consequently, they are increasingly deployed in real-world applications ranging from industrial inspection to urban delivery [1], [7]. Despite these significant advancements, deploying wheeled-legged robots in increasingly dense and unpredictable human-centric environments requires the ability to safely and rapidly evade fast-moving dynamic obstacles. However, achieving high-dynamic obstacle avoidance for wheeled-legged robots remains fundamentally challenging due to profound morphological and dynamical discrepancies. This unique embodiment introduces a novel challenge: how to achieve agile and safe dynamic obstacle avoidance at extremely high velocities while adhering to restrictive non-holonomic constraints. Traditional optimization-based meth-ods, such as Model Predictive Control (MPC), are well-suited for wheeled-legged robots [8]–[11] and quadrupedal robots [12]–[16] but often incur prohibitive computational costs when handling the high-dimensional, whole-body kinematics 
+
+> 1School of Mechanical Engineering, Tianjin University, Tianjin, China
+> 2School of Computing, National University of Singapore, Singapore
+> 3Beijing Zhongguancun Academy, Beijing, China
+> 4DeepRobotics, Hangzhou, China
+
+required for agile evasion. Existing research on agile navi-gation and locomotion has predominantly focused on purely quadrupedal [17]–[22], UAVs [14], [23], mobile manipulators [13], [24] domains. In particular, REBot [17] formulates a reflexive evasion problem for legged systems, but does not account for the unique hybrid dynamics and high-speed rolling behavior of wheeled-legged robots. To investigate the agility potential and behavioral char-acteristics of wheeled-legged robots in reflexive evasion tasks, we propose the Adaptive Wheeled-Legged Avoidance and Reflexive Evasion (AWARE) framework (Fig. 1), a hierarchical reinforcement learning architecture for high-dynamic obstacle avoidance. The key idea is to decouple the problem into a high-level evasive policy and a low-level dual-mode locomotion controller, where the high-level policy dynamically routes velocity commands to one of two specialized pre-trained experts: a low-speed omnidirectional network for navigation avoidance and a high-dynamic agile network for reflexive evasion. We further analyze the emergent gait modes and evasion modes under different obstacle conditions. Extensive evaluations in Isaac Lab simulation show that AWARE naturally elicits diverse agile behaviors, including forward lunge and lateral dodge. In real-world deployment on the M20 wheeled-legged robot, box throwing, stick poking, and foot kicks are used to emulate highly dynamic obstacle interactions. The results further validate the robustness and practical viability of the proposed framework for diverse high-dynamic obstacle scenarios. The core contributions of this paper are summarized as follows:  
+
+> •
+
+We formulate the problem of high-dynamic reflexive evasion for wheeled-legged robots and propose AWARE ,a hierarchical reinforcement learning framework that decouples threat-aware decision making from dual-mode locomotion execution.  
+
+> •
+
+We show that the proposed framework mitigates mode confusion and elicits diverse emergent evasive behaviors, including distinct gait modes and adaptive transitions between navigation avoidance and reflexive evasion.  
+
+> •
+
+We validate the proposed approach in Isaac Lab simu-lation and on the physical M20 platform under diverse dynamic obstacle scenarios, demonstrating robust real-time performance and practical deployment capability. II. R ELATED WORKS 
+
+Dynamic Obstacle Avoidance in Robotics. Dynamic obstacle avoidance remains a fundamental challenge across di-
+
+> arXiv:2604.23761v1 [cs.RO] 26 Apr 2026
+
+Foot Kicks  Stick Poking 
+
+Box Throwing 
+
+Stick Poking 
+
+Box Throwing 
+
+Stick Poking 
+
+# (a)  (b)  (c) 
+
+# (d)  (e)  (f) Fig. 1. AWARE: Adaptive Wheeled-Legged Avoidance and Reflexive Evasion. AWARE enables wheeled-legged robots to execute agile obstacle avoidance in both single-mode reflexive evasion (a, c, d, e) and continuous mixed-mode scenarios (b, f), with seamless transitions between smooth navigation avoidance and reflexive evasion maneuvers. The figure presents representative real-world results under three dynamic obstacle interactions—stick poking (a, c, f), human kicking (b), and box throwing (d, e)—demonstrating the robustness and agility of the proposed framework across diverse threat conditions. 
+
+verse robotic embodiments. For conventional Ackermann and differential-drive vehicles, evasion is typically constrained to planar non-holonomic trajectories [12], [25], [26]. Unmanned Aerial Vehicles (UAVs) rely on rapid 3D spatial replanning [14], [23], mobile manipulators require complex whole-body kinematic coordination [13], [24], while quadrupedal robots achieve agile evasion through discrete foothold adaptations. Methodologically, tackling dynamic threats relies heavily on two primary paradigms. Traditional optimization-based methods, such as Nonlinear Model Predictive Control (NMPC) [12]–[16], compute optimal collision-free trajectories but suf-fer from severe computational overhead in high-dimensional state spaces. To overcome these latency bottlenecks, modern approaches increasingly adopt end-to-end Deep Reinforce-ment Learning (DRL), yielding high-frequency, reactive policies capable of executing agile locomotion [17]–[21], navigation [27], [28] or multiple maneuvers [17], [22] for obstacles avoiding task in real time. 
+
+Locomotion and Navigation for Wheeled-Legged Robots. 
+
+Wheeled-legged robots synthesize the energy efficiency of rolling with the versatile terrain negotiation of stepping. Recent advancements have successfully deployed both op-timization method (e.g. QP, NMPC) [8]–[11] and DRL [6], [7] to achieve robust locomotion and terrain adaptation on hybrid platforms. However, the majority of existing wheeled-legged research concentrates on traversing static, unstructured environments or navigating around slow-moving obstacles. The specific challenge of executing highly dynamic, reflexive obstacle avoidance during high-speed continuous motion remains largely underexplored in the wheeled-legged domain. Consequently, existing navigation frameworks designed for wheeled-legged systems in singular or discrete locomotion modes struggle to manage the critical transition between efficient high-speed rolling and explosive evasive maneuvers. To bridge this gap, this paper proposes a high-dynamic evasive maneuver framework that fully exploits the diverse kinematic expressiveness of wheeled-legged robotic systems, enabling rapid threat evasion under limited reaction times.                                    
+
+> TABLE I SYSTEM INPUTS FOR OBSTACLE AVOIDANCE
+> Category Notation Description Robot State
+> pr∈R3Base position
+> Rr∈SO(3) Base orientation
+> ωr∈R3Base angular velocity
+> q,˙q∈RnjJoint positions and velocities
+> Obstacle Information
+> pi∈R3Position of i-th obstacle
+> vi∈R3Velocity of i-th obstacle
+> ri∈RRadius of i-th obstacle
+> δsafe ∈RPredefined safety margin
+> Control Output u(t)Joint and wheels commands
+
+III. P RELIMINARIES 
+
+To simplify collision detection and enhance computational efficiency, we model obstacles Oi in the dynamic environment using a spherical approximation. The core of safe avoidance lies in finding a control law π, subject to dynamic constraints, that ensures the robot’s collision bounding box B(q) and the set of all obstacles O satisfy the safety invariant set condition: 
+
+min i dist  B(q), Oi
+
+ ≥ δsafe , where δsafe is a predefined safety margin. The obstacle avoidance task is formally defined as an optimal control problem under time-varying constraints. At each time step, the system receives observations from both the robot and the environment, as summarized in Table I. The goal is to find an optimal control policy π∗ that generates whole-body control commands u(t) (wheel velocities and joint torques) such that the robot’s physical bounding box 
+
+B(q) remains disjoint from the spatial regions occupied by all dynamic obstacles S 
+
+> i
+
+Bo,i (t) throughout the motion from initial state to goal. To quantitatively evaluate the effectiveness of a single avoidance trial, a trial is deemed a Success if and only if the robot simultaneously satisfies the following core conditions:  
+
+> •
+
+Collision-free Safety : No part of the robot body comes into contact with any obstacle throughout the entire time horizon [0 , T ]. 
+
+> •
+
+Dynamic Stability : During high-maneuver actions (such Stage 2: High -Level Curriculum Learning 
+
+(b)  Decoupled Two -Stage Training Paradigm 
+
+> Weights Frozen
+> High -Level
+> Evasion policy
+
+Stage 1: Pre -training Low -Level Experts    
+
+> Train
+> 𝝅 𝒍𝒐𝒘
+> Random
+> 𝑉 𝑐𝑚𝑑
+> Generated Train
+> 𝝅 𝒉𝒊𝒈𝒉
+> Extreme
+> 𝑉 𝑐𝑚𝑑
+> Generated
+> 𝝅 𝒍𝒐𝒘 𝝅 𝒉𝒊𝒈𝒉
+> Evasion
+> Curriculum
+> Learning Reward Designs
+> Task Success Margin
+> Feasibility Penalty
+> Energy & Smoothness
+
+(c) Real -Robot Deployment 
+
+> High -Level Evasive Policy (25Hz)
+> RAR
+
+(a)  Hierarchical Dual -Mode Architecture           
+
+> Low -Level Dual -Mode Controller ( 50 Hz)
+> Low -Speed
+> Omnidirectiona l
+> Expert 𝝅 𝒍𝒐𝒘
+> High -Dynamic
+> Agile
+> Expert 𝝅 𝒉𝒊𝒈𝒉
+> Mode Router Vector
+> [𝑚 𝑙𝑜𝑤 ,𝑚 ℎ𝑖𝑔ℎ ]⊤
+> Joints & Wheels Cmds
+> Command Buffer
+> 𝑉 𝑐𝑚𝑑
+> 𝑡 −4:𝑡
+> Evasion Command
+> 𝑉 𝑐𝑚𝑑
+> 𝑡
+> Proprioception Exteroception
+> 𝝅 𝒉𝒊𝒈𝒉 𝝅 𝒍𝒐𝒘
+> Simulation
+> Navigation
+> Avoidance
+> Reflexive
+> Evasion Fig. 2. Overview of the AWARE framework. (a) Hierarchical Architecture: A high-level policy generates evasion commands that are executed by specialized low-level experts for either smooth navigation or high-dynamic reflexive evasion. (b) Two-Stage Training: A decoupled pipeline sequentially trains the low-level experts and the high-level policy to optimize overall evasion performance and efficiency. (c) Real-Robot Deployment: We deploy our system on the M20 robot platform under diverse high-dynamic obstacle scenarios.
+
+as dashing or jumping), the robot does not experience rollover or loss of control. The framework proposed in this paper aims to intelligently decide and generate corresponding control commands u(t)
+
+based on the real-time sensed obstacle state si = [ pi, vi, r i]⊤,achieving a precise avoidance response. IV. M ETHOD 
+
+In this section, we introduce our Adaptive Wheeled-legged Avoidance and Reflexive Evasion (AWARE) framework in subsection IV-A and the two-stage training paradigm adopted in subsection IV-B (Fig. 2). 
+
+A. Hierarchical Adaptive Avoidance Architecture 
+
+The AWARE framework decouples the problem into two distinct modules: a High-Level Evasive Policy that implicitly plans avoidance maneuvers, and a Low-Level Dual-Mode Locomotion Controller that executes specialized evasion skills. The AWARE framework is activated based on the relative obstacle state [17]. Specifically, when the relative obstacle velocity or relative distance satisfies a predefined threat condition, 
+
+αt = I(∥vrel ,t ∥ > v th ∨ ∥ prel ,t ∥ < d th ) , (1) the system triggers the evasive policy and generates an appropriate sequence of avoidance actions. 
+
+High-Level Evasive Policy. The upper-level network functions as an intelligent maneuver planner and mode selector. To explicitly quantify the threat level of dynamic obstacles, we introduce the Relative Approaching Rate (RAR), denoted as κ , as a crucial guiding feature, defined as the negative time derivative of the relative distance: 
+
+κ = − ddt |prel | = − p⊤
+
+> rel
+
+vrel 
+
+|prel | . (2) 
+
+The upper-level policy takes the computed RAR value κ,the real-time relative position of the obstacle prel , and the robot’s current proprioceptive state xt as its observation. The policy implicitly plans evasive maneuvers by outputting a desired velocity command vcmd ∈ R3 at each time step. It also explicitly selects the optimal evasion mode, dictating the activation of the subsequent low-level expert networks. From the last hidden layer of the upper-level neural network, we branch out a discrete mode selector implemented via a Gumbel-Softmax distribution to generate a one-hot vector 
+
+m = [ mlow , m high ]⊤ ∈ { 0, 1}2.
+
+Low-Level Dual-Mode Locomotion Controller. The lower-level module acts as the physical executor, translating the commands into joint positions and wheel velocities. The observation space of this lower-level policy is constructed by concatenating the current velocity command vt
+
+> cmd
+
+, the historical commands from the previous four time steps 
+
+vt−4: t−1 
+
+> cmd
+
+, and the robot’s real-time proprioceptive state xt.Unlike existing frameworks that often employ teacher-student architectures [6], [20] or Mixture-of-Experts (MoE) [29], [30] to expand policy expressiveness, we construct the low-level controller using two specialized expert networks [27] to support reflexive evasion under high-threat scenarios. The final whole-body action command at is deterministically routed by the one-hot vector m outputted from the high-level policy: 
+
+at = mlow · πlow (vt−4: t 
+
+> cmd
+
+, xt) + mhigh · πhigh (vt−4: t 
+
+> cmd
+
+, xt), (3) 
+
+Low-Speed Omnidirectional Network ( πlow ) is dedicated to precise tracking of vcmd in less urgent scenarios. High-Dynamic Agile Network ( πhigh ) is triggered by high κ values, specializes in aggressive forward and lateral acceleration locomotion. 
+
+B. Two-Stage Training and Curriculum Learning 
+
+We adopt a decoupled two-stage training paradigm and employ the Proximal Policy Optimization (PPO) algorithm [31] during training. The training stage is based on the NVIDIA Isaac Lab [32] simulator. 
+
+Pre-training the Low-Level Dual-Mode Controller. To establish robust velocity tracking capabilities in the first stage, the two expert networks πlow and πhigh are trained independently to master their respective operational domains. The primary objective to train Low-Speed Omnidirectional Expert ( πlow ) is precise omnidirectional command tracking. We randomly sample velocity commands within a low-speed navigation range ( vx, v y ). Through training, the policy learns to adaptively adjust its gait, naturally emerging rolling, stepping, and hybrid gait modes (Fig. 3). High-Dynamic Agile Expert ( πhigh ) is trained for extreme evasive maneuvers, focusing on high-acceleration startups in both rolling and stepping gaits (Fig. 3). To ensure capability to brake safely after a high-speed rolling sprint, we explicitly introduce the historical command sequence vt−4: t 
+
+> cmd
+
+. If the sequence indicates a sudden deceleration intent, the network learns to proactively adjust the base pitch and modulate wheel damping to achieve stable and rapid braking. 𝑎 𝑦  (𝑚 /𝑠 2)               
+
+> 𝑎 𝑥 (𝑚 /𝑠 2)
+> Training -data Distribution in Acceleration
+> Expert 1
+> Expert 1
+> Policy Region
+> Expert 2
+> Policy Region
+> Expert 2
+> Acceleration
+> Distribution
+> Overlap
+> Fig. 3. The training acceleration distribution for two experts. Expert 1:
+> Low-Speed Omnidirectional Network ( ∥a∥ ≤ 1.5m/s2) , Expert 2: High-Dynamic Agile Network ( ∥ax∥ ∈ [1 .0,5.5] m/s 2,∥ay∥ ∈ [1 .0,3.0] m/s 2).
+
+High-Level Avoidance Policy with Curriculum Learning. 
+
+We progressively increase the flight speed of the dynamic obstacles based on the evasion success rate. We formulate the reward function based on two primary principles: maximizing task success and ensuring physical feasibility. The total reward 
+
+rt is a weighted sum of the following components: 
+
+Task Success and Safety Margin. We prioritize the ulti-mate evasion outcome over dense spatial tracking constraints (Sec. III). The policy is rewarded for successful evasion                                                               
+
+> TABLE II DOMAIN RANDOMIZATION FOR SIM -TO -R EAL TRANSFER
+> Parameter Range Unit Obstacle Randomization
+> obstacle distance ( dobs )[3 .0,5.0] mstill /non-central obstacle propor-tion
+> 0.05 -
+> Base Initialization
+> initial position ( z)[0 ,0.25] minitial pose ( θ,ϕ)[−0.3,0.3] rad initial angular velocity ( ˙ϕ,˙θ,˙ψ)[−0.5,0.5] rad /s
+> Actuation Randomization
+> actuator gains factor (kstiff )[0 .7,1.3] N·m/rad
+> actuator gains factor (kdamp )[0 .7,1.3] N·m·s/rad
+> external disturbance (fext , τ ext )[−10 ,10] N,N·m
+> Body Parameter Randomization
+> COM position ( pcom )[−0.03 ,0.03] mrigid body inertia ( Irb )[0 .5,1.5] kg ·m2
+> base mass ( ∆m)[−1,3] kg limb mass ( m)[0 .7,1.3] kg friction coefficient ( μ)[0 .3,0.8] -
+
+with a guaranteed safety margin, while collisions are strictly penalized. Beyond the safety-margin-based task objective, we intentionally include a proportion of static or near-static obstacles, as well as non-centrally moving obstacles with no effective collision threat, to regularize the policy against false-positive evasion. For these non-threatening scenarios, an explicit penalty is imposed whenever the system produces an avoidance response. Let dmin be the minimum distance to the obstacle during an episode, and dsafe be the defined safety threshold:                     
+
+> rtask =
+> 
+> Rsucc ,if dmin > d safe and ξ= 1 (Success)
+> Rfail ,if dmin ≤0(Collision)
+> −λfp ∥vcmd ∥2,if ξ= 0 and avoidance is triggered
+> 0,otherwise
+> ,(4)
+
+where Rsucc > 0 and Rfail < 0, λfp > 0 is the false-positive penalty weight, and ξ ∈ { 0, 1} is a threat indicator, ξ =
+
+I
+
+
+
+κ > κ th ∧ dpred min < d safe 
+
+
+
+, ξ = 1 denotes a genuinely threatening obstacle that requires an evasive maneuver, while 
+
+ξ = 0 denotes a non-threatening obstacle. 
+
+Dynamic Feasibility and Efficiency Regularization. 
+
+To ensure the high-level commands vcmd respect the non-holonomic constraints of the wheeled-legged morphology and maintain smooth, energy-efficient operations, we introduce a composite regularization term. First, if the frozen low-level controller fails to track the command, the command is deemed physically invalid, penalized by a tracking error term rtrack = −ktrack ∥vcmd −vreal ∥2. Second, to prevent erratic mode switching and ensure trajectory smoothness, we penalize velocity jumps via rsmooth = −ksmooth ∥vt 
+
+> cmd
+
+− vt−1 
+
+> cmd
+
+∥2. Finally, we encourage energy efficiency, renergy = −kpower 
+
+Pnj 
+
+> i=1
+
+|τi ·
+
+˙qi|, where τi and ˙qi are the joint torques and velocities. 
+
+C. Real-World Deployment 
+
+We deploy the proposed AWARE framework on the M20 wheeled-legged robot platform for real-world evaluation. To facilitate sim-to-real transfer, we apply structured domain randomization during training to improve robustness against (a) 
+
+(b) 
+
+(c) 
+
+(d) 
+
+(e) 
+
+(f) Fig. 4. Visualization of the dual-mode high-dynamic obstacle avoidance system. Reflexive Evasion Mode (a–d): Triggered by high-speed obstacles (red ball) from varying directions, the system emerges extreme maneuvers, specifically lateral jumping within the stepping mode (a, b) and forward leaping within the rolling mode (c, d). Navigation Avoidance Mode (e–f): Under lower threat levels (silver ball), the robot executes smooth and continuous avoidance utilizing stepping and hybrid gaits. 
+
+modeling discrepancies in robot dynamics, body parameters, actuation, and obstacle conditions, as summarized in Table II. In addition to static or near-static obstacle settings, we further include non-central moving obstacles with varying approach directions and speeds, such that the deployed system must continuously infer threat severity and select appropriate avoidance behaviors. During real-world deployment, a motion-capture system is used to provide real-time position and velocity measurements for both the robot and the dynamic obstacle. To emulate dynamic obstacles, we consider three representative types of dynamic obstacles, namely a thrown box, a rod with a box attached at its endpoint, and direct human foot kicking. V. S IMULATION EXPERIMENTS 
+
+This section aims to evaluate the agility and efficiency of the proposed AWARE framework in dynamic evasion tasks. In particular, we investigate the behavioral modes elicited by the robot’s hybrid morphology, analyze how the framework responds to obstacles with different approach patterns, and assess its extreme evasion capability under highly dynamic threats. 
+
+A. Simulation Settings 
+
+Task Setup. The simulation experiments are conducted within the IsaacLab framework [32]. To evaluate the system’s dynamic avoidance capabilities, we design an omnidirectional projectile-dodging scenario. Specifically, a spherical obstacle is dynamically spawned at a random radial distance d0 ∈
+
+[3 .0, 5.0] m from the robot’s center of mass, flying horizontally towards the robot. The approach angle is uniformly sampled from (0 ◦, 360 ◦). Furthermore, we set different initial veloc-ities for the obstacle to test the robot’s reactions under an available reaction time of tr ∈ [0 .0, 3.5] s.
+
+Metrics. We define the following key metrics: Avoidance Success Rate ( ASR ), which is the ratio of successful trials to the total number of experiments, ASR = Nsuccess /N total .Avoidance Maneuver Distance ( AMD ) is used to measure the spatial efficiency of the evasion maneuver, defined as the Euclidean distance between the base’s initial and final positions, AMD = |pfinal base − pinit base |.
+
+Baselines. We selected two representative baseline algo-rithms for comparative experiments: REBot [17] proposes a reflexive evasion framework that handles fast-moving threats across various approach angles. The Relaxed Barrier Function MPC ( RB-MPC ) [16] enables legged robots to anticipate future collisions and automatically execute complex, dynamic avoidance maneuvers. 
+
+B. Main Experimental Results 
+
+As illustrated in Fig. 4, without imposing dense heuris-tic action constraints, the system is driven purely by the high-level obstacle avoidance objective. Depending on the perceived threat level, the policy autonomously selects the optimal reaction velocity. Specifically, for navigation-level avoidance, the robot seamlessly transitions among stepping, rolling, and hybrid gaits to maintain smooth and energy-efficient trajectories. Under highly dynamic reflexive evasion, the system exhibits extreme maneuvers such as lateral jumping (Fig. 4(a)(b)) and aggressive forward leaping (Fig. 4(c)(d)). Notably, during high-speed rolling maneuvers, it learns to autonomously lock the wheel motors upon generating sharp deceleration commands, instantly transitioning to a high-friction state to ensure rapid, safe, and dynamically stable braking. (a) Avoidance Success Rate (ASR) ↑ (b) Avoidance Maneuver Distance (AMD) ↓  
+
+> AWARE
+> REBot
+> RB -MPC
+> ASR (%)
+> AMD (m)  Extreme Evasion
+> Maneuver
+> Discrepancy
+> React Time / s React Time / s
+> Fig. 5. Performance comparison of the proposed method and baseline methods for high-dynamic obstacle avoidance: AWARE, REBot, and RB-MPC.
+
+The experimental results (Fig. 5) demonstrate that the proposed method achieves superior performance in high-dynamic obstacle avoidance tasks, outperforming all baseline approaches in terms of ASR and AMD, particularly under rapidly approaching obstacles. RB-MPC exhibits limitations in high-dynamic scenarios: its performance degrades due to Obstacle Attacking Angle / ° 
+
+> React Time / 𝑠 React Time / 𝑠
+
+(c) Policy -level Mode Selection (b) Kinematic -level Gait Segmentation (a) t -SNE Visualization of 
+
+Gait Modes 
+
+> Obstacle Attacking Angle / °
+
+Task 
+
+Failure 
+
+Reflexive 
+
+Evasion  Navigation Avoidance 
+
+Rolling Mode 
+
+Hybrid Mode 
+
+Stepping Mode       
+
+> Rolling Mode Hybrid Mode Stepping Mode Task Failure Reflexive Evasion Navigation Avoidance
+> Hybrid Stepping
+> Lateral Dodge
+> Forward Lunge
+> Rolling
+
+Fig. 6. (a) t-SNE visualization of kinematic features for five gait modes. Convex hulls delineate the region occupied by each mode. The low-speed modes form a compact cluster, with Hybrid bridging Stepping and Rolling, while the high-speed modes are distinctly separated, validating the mode categorization. Quantitative analysis of the emergent avoidance behaviors under varying reaction times and approach angles. (b) Kinematic-level gait Segmentation, showing the distribution of Stepping, Rolling, and Hybrid gaits. (c) Policy-level mode selection, illustrating the transition between Navigation Avoidance and Reflexive Evasion. 
+
+fast-changing environments and model mismatches, which hinder timely responses to rapidly approaching disturbances. Similarly, REBot fails to achieve stable obstacle avoidance on the wheeled-legged platform, as it does not adequately account for the unique dynamics of the wheeled-legged system, resulting in substantially lower success rates. 
+
+TABLE III ASR AND AMD STATISTICS ACROSS DIFFERENT REACTION TIME INTERVALS 
+
+React Time (s) ASR AMD 
+
+0–1 0.294 ± 0.315 0.751 ± 0.246 
+
+1–2 0.931 ± 0.058 0.626 ± 0.129 
+
+2–3 0.973 ± 0.027 0.580 ± 0.041 
+
+> a
+
+ASR: Avoidance Success Rate. 
+
+> b
+
+AMD: Avoidance Maneuver Distance. 
+
+C. Ablation Studies 65%    
+
+> 34%
+> 46%
+> 6%
+> 59% 0. 75 m
+> 1.10 m
+> 0.95 m
+> 0.13 m
+> 0.85 m
+> (a) Avoidance Success Rate Comparison (b) Avoidance Maneuver Distance
+> ASR (%)
+> AMD (m)
+
+Fig. 7. Ablation studies on the AWARE framework. (a) Avoidance Success Rate (ASR). (b) Avoidance Maneuver Distance (AMD) to the obstacle. 
+
+We compare the proposed full pipeline against four degraded variants: 1) w/o Curriculum : training the high-level policy directly in environments with fully randomized obstacle speeds; 2) w/o Dual-Mode : replacing the lower-level expert networks with a single unified velocity tracking network; 3) 
+
+w/o Task Reward : removing the explicit task success and safety margin formulation; and 4) w/o Feasibility Reward :omitting the dynamic feasibility and efficiency regularizations. System performance is measured primarily via the Avoidance 
+
+TABLE IV QUANTITATIVE COMPARISON OF START -UP DYNAMICS BETWEEN ROLLING AND STEPPING MODES .
+
+Metric Rolling Stepping Start-up Metrics 
+
+TEA a (m/s2) 4.13 2.78 TNA b 3.678 1.251 
+
+Transient Mechanical Power 
+
+Wheel power ( N·m/s) 485.92 235.14 Hip– X power ( N·m/s) 6.83 84.84 Hip– Y power ( N·m/s) 50.93 37.24 Knee power ( N·m/s) 31.13 44.26  
+
+> a
+
+TEA: Transient Escape Acceleration.  
+
+> b
+
+TNA: Torque-Normalized Acceleration. 
+
+Success Rate (ASR) (Fig. 7(a)) and the Avoidance Maneuver Distance (AMD) (Fig. 7(b)) to the obstacle. The ablation results indicate that each component plays an indispensable role in the overall framework. The w/o Dual-Mode variant suffers from severe mode confusion, which significantly degrades agility and often leads to balance failures under extreme threat conditions. The w/o Curriculum variant exhibits slower convergence and a notable decline in overall performance. Eliminating the primary task objective ( w/o Task Reward ) deprives the policy of an explicit evasion incentive, resulting in a catastrophic drop in ASR. In contrast, removing the feasibility regularization (w/o Feasibility Reward ) allows the high-level network to generate physically infeasible velocity commands; although this variant occasionally avoids obstacles, it frequently causes tracking failures in the low-level controller. 
+
+D. Extreme Dynamic Evasion and Gait Modes 
+
+To further evaluate the explosive mobility of the proposed system in reflexive evasion mode, we conduct an extreme start-up test under two reaction-time settings, namely 0.42 s and 
+
+0.57 s , corresponding to the evasive responses along the x- and 
+
+y-directions, respectively. To quantitatively characterize the agility and actuation-normalized performance of the evasive motion, we adopt Transient Escape Acceleration (TEA) ,
+
+TEA = 1∆tstart 
+
+Z tdetect +∆ tstart 
+
+> tdetect
+
+a(t) dt, (5) and Torque-Normalized Acceleration (TNA) ,
+
+TNA = ¯atransient 
+
+(¯ τtransient /¯τidle ) , (6) 
+
+where ¯τtransient and ¯τidle denote the average actuator torque effort during the start-up phase and the quasi-static standing phase, respectively. Specifically, TEA measures the explo-siveness of the evasive response by computing the average acceleration over the start-up interval ∆tstart , while TNA quantifies the achieved acceleration of the evasive response rel-ative to actuator torque effort normalized by the idle standing state. In addition, we compare the transient mechanical power distribution between rolling-based and stepping-based evasive start-up strategies. The results, summarized in Table IV, show that the rolling mode achieves substantially higher TEA and TNA than the stepping mode, indicating superior transient acceleration capability and better torque-normalized acceleration performance during evasive start-up. Moreover, the mechanical power distribution reveals that rolling start-up relies more strongly on wheel actuation and hip– Y motion, whereas stepping start-up places greater demand on the hip– 
+
+X and knee joints. These results support the effectiveness of rolling-based reflexive evasion for achieving rapid and efficient escape behaviors under extreme dynamic conditions. 
+
+We visualize the learned kinematic feature space using t-SNE to verify that AWARE induces multiple behaviorally dis-tinct locomotion and evasive modes. As shown in Fig. 6(a), the embedding is generated from motion capture data collected from five representative modes: Stepping, Rolling, Hybrid, Forward Lunge, and Lateral Dodge. The resulting distribution exhibits clear separability across modes. In particular, the three low-speed modes (Stepping, Rolling, and Hybrid) form a compact cluster, with Hybrid positioned naturally between Stepping and Rolling, highlighting its transitional property. By contrast, the two high-speed evasive modes, Forward Lunge and Lateral Dodge, are clearly isolated from the low-speed cluster and from each other, confirming that they correspond to distinct regions of the learned kinematic feature space. 
+
+We systematically evaluate the system’s behavioral responses by introducing a two-level categorization scheme .First, at the kinematic level, we cluster the naturally emerged locomotion behaviors into three distinct gait categories (Fig. 6(b)): Stepping , Rolling , and Hybrid . Second, at the policy execution level, we classify the system’s operational states into two primary modes based on the high-level policy’s selection of the low-level experts: Navigation Avoidance and 
+
+Reflexive Evasion (Fig. 6(c)). We examine how the robot adaptively transitions between these modes and gaits under varying available reaction times and diverse obstacle approach angles. VI. R EAL -R OBOT DEMONSTRATION 
+
+We validate the proposed framework in real-world ex-periments on the M20 platform, where a motion-capture system is employed to provide accurate measurements of the robot and obstacle positions and velocities for state estimation and evaluation (Fig. 8). To assess the system under highly dynamic disturbances, we design three representative interaction settings: box throwing, human kicking, and stick poking. These disturbances are introduced from multiple directions, including the front, left, right, and diagonal directions, in order to evaluate the robustness of the learned policy under diverse impact conditions. The experimental results demonstrate that the system can autonomously select an appropriate evasion mode according to the direction and speed of the incoming obstacle, and subsequently generate the corresponding evasive action. After the evasive maneuver is completed, the policy produces a recovery command that guides the robot back to a stable stand-ing posture. In reflexive evasion experiments, the AWARE system achieves an average avoidance success rate (ASR) of 59% and an avoidance maneuver distance (AMD) of 
+
+1.1 m . It is worth noting that the real-world performance is also constrained by the hardware limitations of the M20 platform, which prevent the proposed system from being fully activated during deployment. Moreover, the remaining sim-to-real gap introduces additional degradation in execution fidelity, thereby contributing to the lower ASR observed in real-world experiments. We further test the framework in continuous mixed-evasion scenarios (Fig. 8(c)(d)) that integrate reflexive evasion with navigation-aware avoidance. In these experiments, the robot consistently executes proper avoidance behaviors according to obstacle speed, indicating effective mode switching and robust reactive capability in dynamic environments. VII. C ONCLUSION 
+
+In this paper, we presented AWARE, a hierarchical re-inforcement learning framework designed to enhance the high-dynamic obstacle avoidance capability of wheeled-legged robots. Extensive evaluations demonstrate that our approach not only achieves superior evasion success rates under critically short reaction times but also elicits diverse hybrid gaits, such as forward lunge and lateral dodge, thereby better exploiting the agility of wheeled-legged morphology for reflexive evasion. REFERENCES [1] Q. Zhou, S. Yang, X. Jiang, D. Zhang, W. Chi, K. Chen, S. Zhang, J. Li, J. Zhang, R. Wang et al. , “Max: A wheeled-legged quadruped robot for multimodal agile locomotion,” IEEE Transactions on Automation Science and Engineering , vol. 21, no. 4, pp. 7562–7582, 2023. [2] M. Schwarz, T. Rodehutskors, M. Schreiber, and S. Behnke, “Hybrid driving-stepping locomotion with the wheeled-legged robot momaro,” in 2016 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2016, pp. 5589–5595. [3] S. Wang, L. Cui, J. Zhang, J. Lai, D. Zhang, K. Chen, Y. Zheng, Z. Zhang, and Z.-P. Jiang, “Balance control of a novel wheel-legged robot: Design and experiments,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2021, pp. 6782–6788. [4] V. Klemm, A. Morra, C. Salzmann, F. Tschopp, K. Bodie, L. Gulich, N. Küng, D. Mannhart, C. Pfister, M. Vierneisel et al. , “Ascento: A two-wheeled jumping robot,” in 2019 International conference on robotics and automation (ICRA) . IEEE, 2019, pp. 7515–7521. [5] N. Kashiri, L. Baccelliere, L. Muratore, A. Laurenzi, Z. Ren, E. M. Hoffman, M. Kamedula, G. F. Rigano, J. Malzahn, S. Cordasco et al. ,“Centauro: A hybrid locomotion and high power resilient manipulation platform,” IEEE Robotics and Automation Letters , vol. 4, no. 2, pp. 1595–1602, 2019. (c) 
+
+(d) 
+
+(a) 
+
+(b) Fig. 8. Real-robot experiments for high-dynamic obstacle avoidance. (a) Reflexive evasion of a y-direction obstacle using a rolling gait. (b) Reflexive evasion of an x-direction obstacle using a stepping gait. (c-d) Continuous mixed-mode evasion for obstacles with varying speeds, initiating with navigation avoidance and transitioning to reflexive evasion. Red represents the reflexive evasion phase, blue represents the navigation avoidance phase, and green represents the standing recovery phase. [6] J. Lee, M. Bjelonic, A. Reske, L. Wellhausen, T. Miki, and M. Hutter, “Learning robust autonomous navigation and locomotion for wheeled-legged robots,” Science Robotics , vol. 9, no. 89, p. eadi9641, 2024. [7] J. Sun, H. Ji, Z. Qu, C. Wang, and M. Zhang, “Atros: Learning energy-efficient agile locomotion for wheeled-legged robots,” arXiv preprint arXiv:2510.09980 , 2025. [8] M. Bjelonic, P. K. Sankar, C. D. Bellicoso, H. Vallery, and M. Hutter, “Rolling in the deep–hybrid locomotion for wheeled-legged robots using online trajectory optimization,” IEEE Robotics and Automation Letters , vol. 5, no. 2, pp. 3626–3633, 2020. [9] M. Hosseini, D. Rodriguez, and S. Behnke, “Dynamic hybrid locomo-tion and jumping for wheeled-legged quadrupeds,” in 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) .IEEE, 2023, pp. 793–799. [10] M. Bjelonic, C. D. Bellicoso, Y. de Viragh, D. Sako, F. D. Tresoldi, F. Jenelten, and M. Hutter, “Keep rollin’—whole-body motion control and planning for wheeled quadrupedal robots,” IEEE Robotics and Automation Letters , vol. 4, no. 2, pp. 2116–2123, 2019. [11] J. Li, J. Ma, and Q. Nguyen, “Balancing control and pose optimization for wheel-legged robots navigating high obstacles,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) .IEEE, 2022, pp. 8835–8841. [12] B. A. H. Vicente, P. A. Trodden, and S. R. Anderson, “Fast tube model predictive control for driverless cars using linear data-driven models,” 
+
+IEEE Transactions on Control Systems Technology , vol. 31, no. 3, pp. 1395–1410, 2022. [13] J.-R. Chiu, J.-P. Sleiman, M. Mittal, F. Farshidian, and M. Hutter, “A collision-free mpc for whole-body dynamic locomotion and manipu-lation,” in 2022 international conference on robotics and automation (ICRA) . IEEE, 2022, pp. 4686–4693. [14] Z. Xu, H. Jin, X. Han, H. Shen, and K. Shimada, “Intent prediction-driven model predictive control for uav planning and navigation in dynamic environments,” IEEE Robotics and Automation Letters , 2025. [15] R. Grandia, F. Jenelten, S. Yang, F. Farshidian, and M. Hutter, “Perceptive locomotion through nonlinear model-predictive control,” 
+
+IEEE Transactions on Robotics , vol. 39, no. 5, pp. 3402–3421, 2023. [16] M. Gaertner, M. Bjelonic, F. Farshidian, and M. Hutter, “Collision-free mpc for legged robots in static and dynamic scenes,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2021, pp. 8266–8272. [17] Z. Xu, C. Hao, C. Wang, K. Sima, F. Shi, and J. S. Dong, “Rebot: Reflexive evasion robot for instantaneous dynamic obstacle avoidance,” 
+
+arXiv preprint arXiv:2508.06229 , 2025. [18] T. He, C. Zhang, W. Xiao, G. He, C. Liu, and G. Shi, “Agile but safe: Learning collision-free high-speed legged locomotion,” arXiv preprint arXiv:2401.17583 , 2024. [19] C. Zhang, N. Rudin, D. Hoeller, and M. Hutter, “Learning agile loco-motion on risky terrains,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2024, pp. 11 864– 11 871. [20] T. Miki, J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning robust perceptive locomotion for quadrupedal robots in the wild,” Science robotics , vol. 7, no. 62, p. eabk2822, 2022. [21] J. Hwangbo, J. Lee, A. Dosovitskiy, D. Bellicoso, V. Tsounis, V. Koltun, and M. Hutter, “Learning agile and dynamic motor skills for legged robots,” Science Robotics , vol. 4, no. 26, p. eaau5872, 2019. [22] N. Rudin, D. Hoeller, M. Bjelonic, and M. Hutter, “Advanced skills by learning locomotion and local navigation end-to-end,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2022, pp. 2497–2503. [23] X. Zhou, Z. Wang, H. Ye, C. Xu, and F. Gao, “Ego-planner: An esdf-free gradient-based local planner for quadrotors,” IEEE Robotics and Automation Letters , vol. 6, no. 2, pp. 478–485, 2020. [24] B. Burgess-Limerick, J. Haviland, C. Lehnert, and P. Corke, “Reactive base control for on-the-move mobile manipulation in dynamic envi-ronments,” IEEE Robotics and Automation Letters , vol. 9, no. 3, pp. 2048–2055, 2024. [25] Z. Zhang and G.-H. Yang, “Dynamic obstacle avoidance for car-like mobile robots based on neurodynamic optimization with control barrier functions,” Neurocomputing , p. 131252, 2025. [26] C.-H. Shih, C.-J. Lin, and J.-Y. Jhang, “Ackerman unmanned mobile vehicle based on heterogeneous sensor in navigation control application,” 
+
+Sensors , vol. 23, no. 9, p. 4558, 2023. [27] D. Hoeller, N. Rudin, D. Sako, and M. Hutter, “Anymal parkour: Learning agile navigation for quadrupedal robots,” Science Robotics ,vol. 9, no. 88, p. eadi7566, 2024. [28] J.-L. Holgado-Alvarez, A. Reddi, and C. D’Eramo, “Dynamic obstacle avoidance with bounded rationality adversarial reinforcement learning,” 
+
+arXiv preprint arXiv:2503.11467 , 2025. [29] R. Huang, S. Zhu, Y. Du, and H. Zhao, “Moe-loco: Mixture of experts for multitask locomotion,” in 2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2025, pp. 14 218– 14 225. [30] Z. Chen, M. Ji, X. Cheng, X. Peng, X. B. Peng, and X. Wang, “Gmt: General motion tracking for humanoid whole-body control,” arXiv preprint arXiv:2506.14770 , 2025. [31] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Prox-imal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 ,2017. [32] M. Mittal, P. Roth, J. Tigue, A. Richard, O. Zhang, P. Du, A. Serrano-Munoz, X. Yao, R. Zurbrügg, N. Rudin et al. , “Isaac lab: A gpu-accelerated simulation framework for multi-modal robot learning,” 
+
+arXiv preprint arXiv:2511.04831 , 2025.

@@ -1,0 +1,626 @@
+Title: Cooperative Informative Sensing for Monitoring Dynamic Indoor Environments via Multi-Agent Reinforcement Learning
+
+URL Source: https://arxiv.org/pdf/2604.23179v1
+
+Published Time: Tue, 28 Apr 2026 00:27:47 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Cooperative Informative Sensing for Monitoring Dynamic Indoor Environments via Multi-Agent Reinforcement Learning 
+
+Kanghoon Lee ⋆, Matthew M. Sato ⋆, Jinnyeong Yang, Seungro Lee, Sujin Lee, Jiachen Li, Kuk-Jin Yoon, Jinkyoo Park, Kincho H. Law, Yoonjin Yoon †
+
+Abstract — Monitoring human activity in indoor environ-ments is important for applications such as facility man-agement, safety assessment, and space utilization analysis. While mobile robot teams offer the potential to actively improve observation quality, existing multi-robot monitoring and active perception approaches typically rely on coverage or visitation based objectives that are weakly aligned with the accuracy requirements of human-centric monitoring tasks. In this work, we formulate cooperative active observation as a decentralized control problem in which multiple robots adjust their motion to directly optimize monitoring accuracy under partial observability. We propose a learning-based framework for cooperative policies from decentralized observations using multi-agent reinforcement learning (MARL), supported by an architecture that handles variable numbers of humans and temporal dependencies. Simulation results across diverse indoor environments and monitoring tasks show that the proposed approach consistently outperforms classical coverage, persis-tent monitoring, and learning-free multi-robot baselines, while remaining robust to changes in the number of observed humans. 
+
+I. I NTRODUCTION 
+
+Understanding how humans utilize indoor spaces is im-portant for facility managers, developers, and engineers, enabling better building reconfiguration and informing the design of new buildings to improve efficiency and user experience [1]. Accurate observations of human presence, movement, and interactions are essential for stakeholders, providing the data to estimate occupancy and activity patterns within the space. While many indoor environments already feature sensing infrastructure such as fixed cameras, indoor geometry (walls and corridors) imposes strong constraints on observation, leading to frequent occlusions. Because human motion is dynamic and complex [2], continuous observation from fixed viewpoints is challenging, resulting in sparse and fragmented observations that leave large portions of the environment unobserved for prolonged intervals. As a result, human-centric monitoring tasks that require accurate 
+
+> ⋆
+
+Both authors contributed equally to this research. 
+
+> †
+
+Corresponding author. K. Lee, J. Yang, S. Lee, K. Yoon, J. Park, and Y. Yoon are with the Korea Advanced Institute of Science and Technology (KAIST), Daejeon, Republic of Korea. {leehoon, jinnyeong6118, roy.seungro.lee, kjyoon, jinkyoo.park, yoonjin}@kaist.ac.kr .M. Sato and K. Law are with Stanford University, Stanford, CA, USA. 
+
+{satomm, law}@stanford.edu .S. Lee is with the University of California, Berkeley, Berkeley, CA, USA. 
+
+sujin.lee@berkeley.edu .J. Li is with the University of California, Riverside (UCR), CA, USA. 
+
+jiachen.li@ucr.edu .Human  Persistent 
+
+> Monitorin g
+> Zone Occupancy
+> Monitoring
+> Human Flow
+> Monitorin g
+
+Fig. 1. Illustration of cooperative active observation for human-centric monitoring in indoor environments. Red/gray dots denote visible/non-visible human agents, whose observability is limited by indoor occlusions and the robots restricted fields of view (FoV). Mobile robots actively control their motion to acquire observations within their FoV (shaded blue regions), supporting human persistent monitoring at the individual, zone, and inter-zone levels under partial observability. 
+
+and continuous observations cannot be adequately addressed by static sensing systems or a single mobile robot. To address sensing limitations, a variety of approaches have been studied in active perception [3], informative path planning [4], multi-robot coverage [5], and persistent moni-toring [6]. Classical informative path planning methods typ-ically optimize trajectories to maximize information gain or coverage, often assuming static or slowly varying processes. Similarly, multi-robot coverage and persistent monitoring strategies emphasize uniform or frequent visitation over time, without explicitly accounting for the distribution of human behaviors. While effective for tasks such as environmental mapping or long-term surveillance, these approaches are less suited for monitoring dynamic human environments, where the relevance of observations evolves over time. Moreover, existing methods generally emphasize visitation or observability metrics, rather than directly optimizing for the accuracy of downstream human-centric estimates derived from partial observations, which is the focus of this work. In this work, we reframe active observation in indoor en-vironments from traditional coverage or visitation objectives to a multi-agent decision-making framework using multiple mobile robots. Specifically, robots must determine where and when to observe to reduce uncertainty in task-relevant quantities derived from latent human dynamics, such as human-centric monitoring at the individual, zone, and inter-zone levels as shown in Figure 1. We use cooperative sensing 
+
+> arXiv:2604.23179v1 [cs.RO] 25 Apr 2026
+
+to improve the accuracy of downstream human activity esti-mates under partial observability. This formulation naturally captures the coupling between sensing actions and estimation quality, providing a unified framework for diverse human-centric monitoring tasks. To address the challenges of partial observability and dynamic human motion, we develop a learning-based frame-work for cooperative monitoring with multiple mobile robots. Since the problem involves decentralized observations and motion control, with success measured by the accuracy of human-centric monitoring, we adopt a multi-agent rein-forcement learning (MARL) approach to learn cooperative policies in a closed-loop manner. Our policy architecture specifically supports variable-sized human observations and temporal dependencies, allowing robust operation regardless of the number of humans present. We evaluate the proposed approach through simulation studies and demonstrate con-sistent performance improvements over classical coverage, persistent monitoring, and learning-free multi-robot navigat-ing approaches across a diverse set of monitoring tasks. In summary, the main contributions are as follows:  
+
+> •
+
+We formalize a cooperative informative sensing problem under partial observability that supports multiple monitor-ing tasks in dynamic indoor environments.  
+
+> •
+
+We propose a learning-based multi-robot monitoring framework with a network architecture that effectively handles partial and variable-sized human observations, while enabling scalable inter-robot coordination.  
+
+> •
+
+We validate the proposed approach by demonstrating improved performance over diverse multi-robot sensing methods across multiple monitoring tasks. II. R ELATED WORKS 
+
+A. Active Observation and Information Gathering 
+
+Active observation studies how an agent selects sensing actions such as viewpoints or trajectories to improve the quality of acquired information [3]. Classical robotics ap-proaches include frontier-based exploration that move robots toward the boundary between known and unknown space [7], and information-theoretic planning methods that maximize expected information gain [4]. In multi-robot settings, these principles have been extended to coordinated sensing and team-level information gathering under practical constraints such as limited communication or resources [8], [9]. Re-cently, deep RL and MARL have been applied to active ob-servation for viewpoint control in target tracking [10], adap-tive multi-agent tracking in dynamic environments [11], and cooperative coverage and exploration [5]. In our work, we address the cooperative sensing problem for dynamic indoor monitoring with multiple robots. Our approach optimizes auxiliary monitoring objectives derived from a shared belief state, enables transfer across monitoring tasks, and supports integration with existing fixed sensing infrastructure. 
+
+B. Multi-Robot Navigation and Coverage 
+
+Multi-robot navigation and coverage have been studied under a variety of task objectives that emphasize coordinated motion and spatial coverage. One line of work studies multi-robot coverage path planning (MCPP), which coordinates robot paths to guarantee complete coverage of the environ-ment while optimizing a makespan [12]. Some extensions add objectives such as regional priorities [13] or turn min-imization [14]. Persistent monitoring (PM) moves beyond single-pass coverage, designing periodic trajectories to en-sure bounded revisit times or sustained observation frequency over space [6], [15]. Other task settings include search-and-rescue, which emphasizes efficient search over large or uncertain regions [16], perimeter defense or surveillance with spatiotemporal guarding responsibilities [17], [18], and encirclement tasks that focus on coordinated positioning around a target [19]. Exploration methods instead focus on frontier expansion in the observed workspace [5]. While these approaches address diverse navigation objectives, they largely optimize coverage or task execution metrics. In con-trast, our work focuses on cooperative informative sensing, explicitly optimizing robot motion to improve human-centric monitoring accuracy under partial observability. III. P ROBLEM FORMULATION 
+
+We formulate the multi-robot cooperative informative sensing problem as a Decentralized Partially Observable Markov Decision Process (Dec-POMDP, [20]). The objective is to learn cooperative sensing policies for a team of robots to accurately predict key measures associated with dynamic human agents in an indoor environment, such as occupancy or flow patterns. Each robot agent is equipped with a2D LiDAR sensor for obstacle detection, including indoor structures, and a front-facing camera for human detection. The process is defined by the tuple ⟨I , S, O, A, R, T , γ ⟩.
+
+1) Agent: I denotes the set of n decision-making robot agents, written as I ≡ IR = {1, . . . , n }. The environ-ment also contains m non-controllable human agents IH =
+
+{1, . . . , m }, who follow their own distinct paths. 
+
+2) State: A state st ∈ S represents the complete configu-ration at timestep t, including the indoor environment layout and all agent states. The indoor layout Ω ⊂ R2 represents the static and collision-free workspace. The kinematic state for each agent i ∈ I R ∪ I H consists of its pose (pit, θ it) and linear speed vit ∈ [0 , v i
+
+> max
+
+]. Here, pit ∈ Ω is the x-y position and θit ∈ [0 , 2π) is the orientation. The state for each robot agent additionally includes the measurement received by the 2D LiDAR sensor for that robot, dit ∈ RL, which is a vector of distances representing the L LiDAR beams. Therefore, the overall global state is defined as: 
+
+st = (Ω , {(pit, θ it, v it, d it)}i∈I R , {(pjt , θ jt , v jt )}j∈I H ). (1) 
+
+3) Observation: O = ×i∈I R Oi is the set of joint ob-servations of all robot agents. Each robot agent i ∈ I R
+
+receives a local observation oit ∈ O i, which includes the precise pose of agent i, the agent’s LiDAR measurements, and noisy measurements of currently visible human agents. Visibility of human j ∈ I H from robot i ∈ I R within the layout Ω is determined by the visibility function: 
+
+fvis (pit, θ it, p jt , Ω) ∈ { 0, 1}. (2) (a) (b) (c) Fig. 2. An illustration of environment. (a) A generated map showing the room and corridor structure, as well as distinct colored zones. (b) Synthetically generated human trajectories by a random hierarchical planner, avoiding the shaded buffer region to ensure safe paths. (c) An example of the simulation with robots and humans; the shaded blue regions represent the visible field of view (FoV) for each robot, as computed by the visibility function fvis .
+
+The visibility function returns 1 if human j is visible to robot i, accounting for sensor constraints and environmental occlusions based on the robot pose (pit, θ it) and human position pjt . Let IiH,t be the set of indices of humans visible to robot i at time t:
+
+IiH,t = {j ∈ I H | fvis (pit, θ it, p jt , Ω) = 1 }. (3) Then, the local observation oit is defined as follows: 
+
+oit = (Ω , {(pit, θ it, v it, d it)}i∈I R , {(˜ pjt , ˜θjt , ˜vjt )}j∈I iH,t ), (4) where (˜ pjt , ˜θjt , ˜vjt ) is the noisy measurement of the true pose 
+
+(pjt , θ jt ) and velocity vjt of visible human j, assumed drawn from a sensor noise model, e.g., N (( pjt , θ jt ), Σsensor ).
+
+4) Action: A = ×i∈I R Ai is the set of joint actions of all robot agents. The individual action ait ∈ A i for robot i
+
+controls its desired linear speed vcmd ∈ { 0.0, 1.0, 2.0} m/s and steering command δcmd ∈ {− π 
+
+> 8
+
+, 0.0, + π 
+
+> 8
+
+} rad/s. The selected action serves as input to the low-level controller. 
+
+5) Reward: Across tasks, we maintain a persistent team belief bt over human-related latent variables, which is up-dated using newly acquired observations at time t. Each task defines a deterministic estimator Φ( ·) that maps the current belief to a task-level measure mt = Φ( bt). Active improvement is quantified as the change in this measure after the belief update as follows: 
+
+rt = ∥mt − mt−1∥1. (5) This reward encourages behaviors that actively refine task-relevant estimates through informative observations, rather than optimizing a static state-based objective. As a concrete example, in the human persistent monitoring task, Φ is the identity mapping so that mt corresponds to the persistent belief state. Then, the reward becomes the total belief up-date magnitude. During training, the environment internally accesses ground-truth human states to update bt, while the policy receives only local observations. 
+
+6) Transition: Function T : S × A → P (S) determines the probability distribution over the next state st+1 given the current state st and joint action at. The transition model operates with a discrete time interval ∆t. Human agents 
+
+j ∈ I H follow their predefined distinct paths, determined by an external process independent of robot actions at. For each robot agent i ∈ I R, its state is updated based on its current state (pit, θ it, v it) and the selected action ait = ( vi
+
+> cmd
+
+, δ i
+
+> cmd
+
+).The low-level controller updates the actual linear speed towards the command vi
+
+> cmd
+
+, resulting in vit+1 . The position and orientation are updated deterministically based on the current state and steering command δi 
+
+> cmd
+
+as follows: 
+
+
+
+θit+1 = θit + δi 
+
+> cmd
+
+· ∆t, pi,x t+1 = pi,x t + vit cos( θit) · ∆t, pi,y t+1 = pi,y t + vit sin( θit) · ∆t, 
+
+(6) where pit = ( pi,x t , p i,y t ). The overall next state st+1 combines the static layout Ω and the updated states of all agents. The objective is to find an optimal joint policy π∗ =
+
+{π∗ 
+
+> i
+
+}i∈I R that maximizes the expected discounted cumula-tive reward, where γ ∈ [0 , 1) denotes the discount factor: 
+
+π∗ = argmax 
+
+> π
+
+E
+
+[ ∞∑
+
+> t=0
+
+γtrt
+
+]
+
+. (7) IV. L EARNING COOPERATIVE SENSING POLICIES 
+
+This section describes the proposed MARL framework for the problem formulated in Section III. We first present the overall network architecture used in our actor-critic formulation, including the set-based observation encoding, dual-stage recurrent interaction memory, decision making, and value estimation modules, as shown in Figure 3. We then detail the training procedure based on multi-agent proximal policy optimization (MAPPO, [21]), outlining the optimization of the shared policy and centralized critic. 
+
+A. Set-Based Observation Encoding 
+
+Each robot i ∈ IR receives a local observation oit at every timestep t, as defined in Eq. (4), consisting of its ego state (pit, θ it, v it, d it) and a variable-sized set of visible human states {(˜ pjt , ˜θjt , ˜vjt )}j∈I iH,t . Due to the varying number and ordering of visible humans across time and robots, human observations are modeled as an unordered set and encoded using a permutation-invariant architecture [22]. The ego state is embedded by an ego multilayer perceptron (MLP) into 
+
+hi 
+
+> rob ,t
+
+∈ Rd, and each human state is embedded by a shared MLP into token features of the same dimension. The tokens are then stacked into Hi 
+
+> hum ,t
+
+∈ RN it ×d with N it = |I iH,t |+1 ,where the additional learnable dummy token ensures a valid output even when no human is observed. We aggregate human tokens via cross-attention using a multi-head attention (MHA ) network with the ego embedding as the query and the human tokens as keys and values, resulting in a context Dual -Stage Recurrent Interaction Memory (Sec. IV.B) Set -based  Observation  Encoding (Sec. IV.A)            
+
+> Ego -Agent State:
+> (𝑝 𝑡
+> 𝑖 ,𝜃 𝑡
+> 𝑖 ,𝑣 𝑡
+> 𝑖 ,𝑑 𝑡
+> 𝑖 )
+> …
+> Human State:
+> (෤𝑝 𝑡
+> 1,෨𝜃 𝑡
+> 1,෤𝑣 𝑡
+> 1)
+> Dummy Token
+> MLP  MLP
+> Multi -Head
+> Attention
+> Human State:
+> (෤𝑝 𝑡
+> 𝑚 ,෨𝜃 𝑡
+> 𝑚 ,෤𝑣 𝑡
+> 𝑚 )
+> MLP
+> MLP
+> Attention
+> Pooling MLP
+> Value Estimation (Sec. IV.C)
+> Decision Making ( Sec. IV.C)
+
+𝑉 𝑡 
+
+𝑣 𝑡 
+
+> 𝑖
+
+𝛿 𝑡              
+
+> 𝑖
+> Robot 𝑖
+> Ego
+> GRU
+> Interaction
+> GRU
+> ℎego ,𝑡 −1
+> 𝑖 ℎint ,𝑡 −1
+> 𝑖
+> Multi -Head
+> Attention
+> ℎego ,𝑡
+> 𝑖
+> 𝐻 ego ,𝑡
+> ℎego ,𝑡
+> −𝑖
+> =[ℎego ,𝑡
+> 1,…,ℎego ,𝑡
+> 𝑛 ]
+> ⓒconcatenate ⓢstack
+> ⓢ
+> ⓒ
+> 𝑐 𝑒𝑔𝑜 ,𝑡
+> 𝑖
+> ℎint ,𝑡
+> 𝑖
+> ⓢ
+> ℎint ,𝑡
+> −𝑖
+> 𝐻 𝑖𝑛𝑡 ,𝑡
+> ∀𝑖 ∈𝐼 𝑅
+> ⓒ
+> 𝐻 hum ,𝑡
+> 𝑖
+> ℎrob ,𝑡
+> 𝑖
+> 𝑐 hum ,𝑡
+> 𝑖
+
+Fig. 3. Architecture of the proposed network. (Left) Set-based observation encoding produces per-robot features via permutation-invariant attention. (Middle) A dual-stage recurrent interaction memory combines an ego GRU with attention-based inter-robot communication. (Right) The resulting features are used for per-robot decision making and centralized value estimation. The architecture is illustrated from the perspective of a robot i.
+
+vector ci 
+
+> hum ,t
+
+∈ Rd as follows: 
+
+ci 
+
+> hum ,t
+
+= MHA (hi
+
+> rob ,t
+
+, H i
+
+> hum ,t
+
+, H i
+
+> hum ,t
+
+) . (8) This design preserves permutation invariance and supports variable-sized sets via attention masking, without requir-ing persistent human identities or explicit tracking across timesteps. The concatenated representation hi 
+
+> rob ,t
+
+∥ ci 
+
+> hum ,t
+
+is then passed to the recurrent memory module. 
+
+B. Dual-Stage Recurrent Interaction Memory 
+
+To capture temporal dependencies while enabling inter-robot coordination, we maintain a dual-stage recurrent mem-ory composed of two gated recurrent unit (GRU) compo-nents: an ego GRU ( GRU ego ) followed by an interaction GRU ( GRU int ). The ego GRU updates a private state from the concatenated per-robot representation as follows: 
+
+hi 
+
+> ego ,t
+
+= GRU ego 
+
+(hi
+
+> ego ,t −1
+
+, h i 
+
+> rob ,t
+
+∥ ci
+
+> hum ,t
+
+) . (9) Robots then exchange information by attending over the collection of ego hidden states. Let Hego ,t =[h1ego ,t ; . . . ; hn
+
+> ego ,t
+
+] ∈ Rn×d denote the stacked ego states. For each robot i, we compute a coordination context vector via multi-head attention with hi 
+
+> ego ,t
+
+as the query and the stacked ego states as keys and values: 
+
+ci 
+
+> ego ,t
+
+= MHA (hi
+
+> ego ,t
+
+, H ego ,t , H ego ,t 
+
+) . (10) Finally, the interaction GRU integrates this coordination signal over time to form an interaction-aware memory: 
+
+hi 
+
+> int ,t
+
+= GRU int 
+
+(hi
+
+> int ,t −1
+
+, h i 
+
+> ego ,t
+
+∥ ci
+
+> ego ,t
+
+) . (11) This factorization preserves a robot-specific temporal state while incorporating coordination information through at-tention, enabling scalable multi-robot interaction without requiring explicit pairwise tracking or fixed ordering. 
+
+C. Decision Making and Value Estimation 
+
+The interaction-aware representation hi 
+
+> int ,t
+
+is used for per-robot decision making, while value estimation is per-formed in a centralized manner. The policy maps hi
+
+> int ,t
+
+to independent categorical distributions over the linear and angular velocity action sets defined in Section III. For a centralized value estimation, the interaction states are stacked as Hint ,t = [ h1int ,t ; . . . ; hn
+
+> int ,t
+
+] ∈ Rn×d, and a learnable query vector qV ∈ Rd attends to this set via multi-head attention to obtain a pooled global representation: 
+
+zt = MHA( qV , H int ,t , H int ,t ) , (12) which is subsequently mapped through an MLP to produce a scalar value estimate Vt.
+
+D. Multi-Agent Reinforcement Learning 
+
+We train the proposed architecture using MAPPO [21] under centralized training with a shared policy πθ across all robots and a separately parameterized centralized critic 
+
+Vϕ. While each robot executes actions based on its own interaction-aware representation, value estimation is per-formed centrally during training. Policy updates follow the clipped PPO objective with generalized advantage estimation (GAE) for variance reduction. Let ˆAit denote the advantage estimate for robot i and rit(θ) = πθ (ait|oit)  
+
+> πθold (ait|oit)
+
+the probability ratio. The objective function is defined as follows: 
+
+L(θ, ϕ ) = Et
+
+[
+
+min (rit(θ) ˆAit, clip( rit(θ), 1 − ϵ, 1 + ϵ) ˆAit
+
+)
+
+− cv LV (ϕ) + ceH(πθ )
+
+]
+
+.
+
+(13) where LV (ϕ) is the value regression loss and H(πθ ) de-notes an entropy regularizer. To stabilize centralized value estimation, the critic is trained with access to ground-truth human states. Visibility indicators are augmented as one-hot encodings, and all humans are assumed observable when computing value targets. This augmentation is used only during training and does not affect execution, where each robot relies solely on its local observation. V. E XPERIMENTS 
+
+A. Experimental Setup 
+
+To evaluate cooperative informative sensing policies, we develop a simplified 2D simulation environment. We gener-ate indoor environments with room and corridor structures [23], avoiding unrealistic cave-like topologies. We sequen-tially carve randomly sized, overlapping rooms and connect their centroids with corridors to ensure the entire map Ω is connected. Physically overlapping rooms are grouped into distinct zones as shown in Figure 2a. These environments are then populated with synthetic human paths generated using a hierarchical model. A high-level planner selects goal 3 4 5        
+
+> Number of Robots
+> 0
+> 10
+> 20
+> 30
+> Avg. Tracking Error (↓)
+> Human Tracking
+> 345
+> Number of Robots
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> Avg. Occupancy Error (↓)  Zone Occupancy
+> 345
+> Number of Robots
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> Avg. Flow Error (↓)
+> Human Flow
+> FC WS MCPP PM MARL (Ours)
+
+Fig. 4. Cooperative informative sensing performance comparison. Average errors in human tracking (left), zone occupancy (middle), and human flow (right) monitoring tasks across different numbers of robots (35). Lower is better. Error bars indicate standard deviation. TABLE I EXPERIMENTAL SETUP AND IMPLEMENTATION DETAILS                                             
+
+> Environment & Sensing
+> Map / #Rooms / #Zones 80 ×40 m / 12 / 7 Time step / horizon ∆t= 1 s, T= 500
+> #Humans / #Robots M= 20 ,N= 5
+> Observation noise σp= 0 .2m, σθ= 0 .1rad Action space v∈ { 0,1,2}m/s (max 2.0)
+> ω∈ {− π/ 8,0, π/ 8}rad/s Tracking sensor range 10 m, FoV 90 ◦,occlusion via ray sampling ( K= 5 )LiDAR range 10 m, FoV 360 ◦, 16 rays
+> Network Architecture & MAPPO Training
+> Network hidden dim 64 Learning rate 3×10 −4(Actor / Critic) MAPPO / Optimization clip 0.2, max grad norm 0.5, value coef 0.5 Discount / GAE γ= 0 .99 ,λ= 0 .95
+> Entropy regularization 0.01 (linear speed), 0.001 (rotation) Rollout / Updates 250 parallel environments, 1000 steps per update, 20 minibatches, 20 epochs, 50 chunk length 50M timesteps
+
+destinations via a Markov chain [24] across the rooms and samples realistic dwell times from a log-normal distribution [25]. A low-level executor then generates plausible, collision-free motion by following an A ∗ path [26] with a pure pursuit controller, as shown in Figure 2b. Robot partial observa-tions are implemented via ray sampling, which approximates occlusions by checking K parallel points to avoid slow sequential ray-tracing. An example of the whole environment is shown in Figure 2c. The complete experimental configura-tion, including environment parameters and MARL training hyperparameters, is summarized in Table I. 
+
+B. Description of Monitoring Tasks and Baselines 
+
+We evaluate our methods on three indoor monitoring tasks that capture complementary aspects of indoor human activity. Each task emphasizes a different sensing granularity: tracking individual humans, estimating zone-level occupancy, and capturing flow between zones. As defined in Section III, the team maintains a belief and derives a task-level estimate 
+
+mt under partial observability. The magnitude of belief updates defines the training reward, and the task-specific estimators are specified below. Let Z denote the number of semantic zones presented in Figure 2a.  
+
+> •
+
+Human Persistent Monitoring : We maintain a persistent per-human position belief ˆpjt ∈ R2 for each human j. If any robot observes human j at time t, ˆpjt is updated to the current position and otherwise remains unchanged. The task-level estimate is mt = [ˆ p1 
+
+> t
+
+; . . . ; ˆ pMt ]. 
+
+> •
+
+Zone Occupancy Monitoring : We maintain zone-level occupancy estimates derived from the persistent position belief ˆpjt . Each estimate is mapped to a zone, and the task-level estimate mt ∈ RZ is defined as the zone-wise occupancy count vector, mt[z] = ∑Mj=1 I[ˆ pjt ∈ zone z]. 
+
+> •
+
+Human Flow Monitoring : We maintain a per-human zone-transition belief (ˆ zj, prev  
+
+> t
+
+, ˆzj, cur  
+
+> t
+
+, ˆτ jt ), updated only when an observed human changes zones. Upon a tran-sition, we record the previous and current zones and the transition time. The task-level estimate mt ∈ RZ×Z is the directed flow count over all zone pairs, defined as 
+
+mt[z1, z 2] = ∑Mj=1 I[ˆ zj, prev  
+
+> t
+
+= z1 ∧ ˆzj, cur  
+
+> t
+
+= z2].For all tasks, the per-step reward component is clipped to a fixed range to prevent extreme updates and stabilize training. We compare our MARL-based active observation policy with baseline planners, covering both classical and learning-free approaches to evaluate the impact of learned coordina-tion on information gathering efficiency.  
+
+> •
+
+FC (Fixed Cameras) uses static sensors placed to cover the largest visible zones without overlap, serving as a reference for non-mobile sensing performance. Sensors are placed sequentially using a greedy algorithm to maximize the area not yet covered by previously placed static sensors.  
+
+> •
+
+WS (Waypoint Sampling) imitates human high-level plan-ning by randomly selecting goal points within and across rooms and navigating between them sequentially, resulting in spatially diverse and natural exploration behavior.  
+
+> •
+
+MCPP (Multi-Robot Coverage Path Planning) uses aspanning tree coverage strategy [12] to achieve efficient coverage of the environment. The tree is partitioned among robots, with path endpoints connected to form closed loops that are repeatedly traversed while minimizing makespan.  
+
+> •
+
+PM (Persistent Monitoring) uses the solution of a linear program to control robot velocities along closed paths, guaranteeing a minimum bounded frequency that a space is observed by the robots [6]. 
+
+C. Cooperative Informative Sensing Performance 
+
+We evaluate the proposed cooperative informative sensing algorithm by comparing it with baseline methods across the three monitoring tasks described in Section V-B. To assess performance under different sensing resources, we vary the number of robots from 3 to 5 while keeping the environment and human dynamics fixed. The proposed MARL policy is trained with five robots and evaluated in a zero-shot manner Default Sparse Crowded Long Dwell Skewed   
+
+> Evaluation Scenarios
+> 7.5
+> 10.0
+> 12.5
+> 15.0
+> 17.5
+> 20.0
+> Avg. Tracking Error (↓)  FC
+> WS
+> MCPP
+> PM
+> MARL (Ours) Fig. 5. Evaluation under OOD scenarios. Average tracking error across the default setting and four OOD variants involving changes in population size and human movement distributions (OOD cases shown in red).
+
+for different team sizes (e.g., n = 3 , 4), and the same trained model is used for all subsequent experiments. Figure 4 shows the comparative performance across methods and team sizes, with results averaged over 250 scenarios. Overall, the proposed MARL policy achieves the lowest average error across all tasks and evaluated team sizes, in-cluding zero-shot settings. As the number of robots increases, the errors generally decrease for all methods and the per-formance gaps across algorithms become smaller, indicating that additional sensing resources reduce overall difficulty. A notable observation is that FC exhibits substantially larger standard deviations in human tracking and zone occupancy, suggesting that its mean performance is more sensitive to scenario variations. PM exhibits a non-monotonic trend in human flow estimation, where the error slightly increases from 2.16 at n = 3 to 2.18 at n = 4 , indicating that addi-tional robots do not always lead to improved coordination. 
+
+D. Robustness under Out-of-Distribution (OOD) Scenario 
+
+We evaluate if the proposed MARL policy maintains strong monitoring performance under distribution shifts that were not observed during training. To this end, we construct four OOD scenarios that perturb either the number of humans or their behavioral dynamics while keeping the sensing and environment configurations unchanged. Specifically, we vary the human population from the default 20 to 10 (Sparse) and 30 (Crowded), increase dwell times to induce more persistent stationary behavior (Long Dwell), and amplify the transition probability toward a spatially isolated right-side zone (zone 3 in Figure 2a) by 2 times (Skewed). As shown in Figure 5, most methods show only minor variations under Sparse, Crowded, and Long Dwell, indicating that moderate shifts in population size or dwell-time persis-tence do not significantly affect monitoring performance. In contrast, performance decreases under the Skewed scenario for all methods. It suggests that visitation concentrated in spatially isolated regions is more difficult to monitor. FC shows the largest drop, suggesting limited adaptability when such regions become more frequently used. In comparison, our MARL policy achieves the lowest tracking error across all scenarios, including Skewed, demonstrating consistent performance under distribution shifts. 
+
+E. Scalability and Marginal Utility Analysis 
+
+To evaluate scalability and the benefit of additional robots, we vary the number of robots from 1 to 10 while keeping the 1 2 3 4 5 6 7 8 9 10                       
+
+> Number of Robots
+> 0
+> 20
+> 40
+> 60
+> Avg. Tracking Error (↓)
+> Performance Curve
+> 678910
+> 2.5
+> 5.0
+> 7.5
+> 2345678910
+> Number of Robots
+> 0
+> 10
+> 20
+> 30
+> Performance Gain
+> Marginal Utility
+> 678910
+> 0
+> 2
+> FC WS MCPP PM MARL (Ours)
+> Fig. 6. Scalability and marginal utility analysis. Tracking error (left) and marginal performance gain (right) with increasing number of robots.
+
+environment and human dynamics fixed. Figure 6 shows the average tracking error (left) and the marginal utility (right) as the number of robots increases. We define the marginal utility at team size n as the reduction in tracking error when increasing the number of robots from n − 1 to n as follows: 
+
+∆( n) = E(n − 1) − E(n), (14) where E(n) denotes the average tracking error with n robots. Overall, performance improves as more robots are deployed, indicating that additional sensing resources enhance spatial coverage, while the marginal utility quickly saturates as the team size grows. In this map configuration, the marginal gain becomes small beyond approximately 5 robots, showing diminishing returns as coverage redundancy increases. FC achieves the lowest tracking error at larger team sizes (e.g., 
+
+n ≥ 8), reflecting the advantage of globally optimized fixed placements that minimize overlap. In contrast, mobile sensing approaches exhibit less consistent scaling behavior, suggesting that coordination overhead limits the effective utilization of larger teams. Notably, PM shows a slight performance degradation at n = 8 , indicating instability at higher team sizes. The MARL policy maintains consistently strong performance across all team sizes without significant degradation, demonstrating robust scalability. 
+
+F. Cooperation with Existing Sensing Systems 
+
+We study cooperation with an existing fixed sensing system by integrating fixed cameras with MARL-controlled mobile robots under a fixed sensing budget. Concretely, we consider several hybrid integration scenarios with a total budget of five sensors, ranging from fixed-only ( F 5+ M 0)to mobile-only ( F 0+ M 5), including mixed configurations such as F 2+ M 3 and F 1+ M 4. We trained a MARL policy for each configuration. Figure 7 summarizes the results, where the leftmost bar corresponds to FC ( F 5+ M 0) and the rightmost bar corresponds to MARL ( F 0+ M 5). The results show that hybrid integration can outperform both fixed-only and mobile-only sensing. In particular, mixed configurations such as F 2+ M 3 and F 1+ M 4 achieve lower tracking error than using only fixed cameras or only mo-bile robots. Importantly, F 1+ M 4 performs comparably to 
+
+F 0+ M 5 while incurring lower operational cost, since fixed infrastructure is typically cheaper to operate than an addi-tional mobile robot. This behavior is further illustrated in Figure 8, where the observed-region heatmaps differ between 
+
+F 0+ M 5 and F 1+ M 4. In the hybrid setting, mobile robots F5+M0                
+
+> (FC)
+> F4+M1 F3+M2 F2+M3 F1+M4 F0+M5
+> (MARL)
+> Integration Scenario
+> 6
+> 7
+> 8
+> 9
+> 10
+> 11
+> Avg. Tracking Error (↓) Fig. 7. Cooperation with an existing sensing system. Average tracking error under hybrid integration of fixed cameras (F) and mobile robots controlled by MARL policy (M) with a total budget of five sensors. Horizontal lines indicate standalone baselines. Mobile Robot (MARL)
+> Fixed Camera (FC)
+> Fig. 8. Visibility heatmap under hybrid integration. Observed-region heatmaps for the mobile-only setting (F0+M5, top) and the hybrid setting (F1+M4, bottom). Red denotes regions observed by MARL-controlled mobile robots, and blue denotes the fixed camera FoV.
+
+avoid regions already covered by the fixed camera and allo-cate their trajectories to complementary areas, showing adap-tive coverage distribution. However, as the number of fixed cameras further increases, performance begins to degrade. When fixed sensors dominate the sensing budget, mobile robots have limited opportunity to contribute additional cov-erage, reducing the benefit of adaptive coordination. These results suggest that an appropriate balance between fixed and mobile sensing is necessary to maximize information gain, since learning an effective cooperative strategy is more difficult with a large number of robots. 
+
+G. Impact of Fixed Camera Placement in the Hybrid Setting 
+
+To understand where to install a single FC in the hybrid setting (F1+M4), we evaluate seven feasible camera place-ments in the same indoor layout as shown in Figure 9 and compare their tracking performance in Table II. Overall, placements located in outer regions (1, 3, and 7) of the map achieve the best mean performance. These placements cover areas that would otherwise require explicit robot visits. It reduces unnecessary traversal and allows the robots to concentrate on monitoring the remaining parts of the envi-1       
+
+> 2
+> 3
+> 4
+> 5
+> 6
+> 7
+> Fig. 9. Fixed camera placement candidates (F1+M4). We consider seven feasible camera placement IDs (1-7) in the same indoor layout. Each shaded region indicates the fixed camera FoV under that placement. TABLE II TRACKING ERROR ACROSS CAMERA POSITION ID
+
+Position Index 1 2 3 4 5 6 7
+
+Mean 6.72 7.79 6.83 7.33 8.46 7.57 6.76 Std 4.38 5.13 4.25 4.89 5.83 5.02 3.80 
+
+ronment. However, Placement 6 does not provide comparable improvement despite being away from the center, as it covers only a single traffic room, as shown in Figure 2a. In contrast, Placement 7 remains highly effective by covering a room at the end of a long corridor that is costly for robots to reach. Placement 7 also reduces the standard deviation, indicating improved robustness by consistently observing a frequently traversed yet hard-to-reach area. On the other hand, central placements (2, 4, and 5) perform worse, as robots inevitably traverse the central region, making the FC largely redundant. These results highlight that effective FC deployment should consider the indoor layout topology and robot traversal characteristics. In particular, placement plays a critical role in improving monitoring performance under a constrained sensing budget. 
+
+H. Reward Analysis 
+
+To evaluate whether the proposed reward aligns with actual monitoring performance, we analyze the correlation between episode reward and tracking error under a fixed scenario while varying robot behaviors. For WS, behavioral diversity is introduced by sampling different human-following trajec-tories, and for MARL, multiple runs are conducted with dif-ferent random seeds and stochastic policies. In contrast, FC, MCPP, and PM are deterministic and therefore correspond to single points in Figure 10. We observe a clear negative correlation between reward and tracking error ( R = −0.653 ), with even stronger correlations for occupancy ( R = −0.80 )and flow ( R = −0.89 ). Although the reward is not a per-fect surrogate for the evaluation metric, the strong negative correlations indicate that increasing reward is consistently associated with improved monitoring performance. VI. C ONCLUSIONS AND DISCUSSIONS 
+
+In this paper, we present a MARL-based cooperative in-formative sensing framework for dynamic indoor monitoring. Our approach optimizes observation accuracy across diverse human-centric tasks and highlights the importance of cost-effective hybrid integration with existing fixed infrastructure. In particular, FC placement must consider indoor layout 0.50 0.55 0.60 0.65 0.70  
+
+> Average Episode Reward (↑)
+> 6
+> 8
+> 10
+> 12
+> 14
+> Avg. Tracking Error (↓)
+> R= −0.653
+> FC
+> WS
+> MCPP
+> PM
+> MARL (Ours)
+
+Fig. 10. Correlation between reward and tracking error. Each point represents a different robot behavior evaluated in the same scenario. The dashed line denotes linear regression and the shaded region indicates the 95% confidence interval. 
+
+topology, as redundant coverage can reduce monitoring gains. While we evaluate in a 2D simulation to enable large-scale statistical validation, our architecture processes low-dimensional semantic states which guarantees that the cooperative policy remains structurally invariant when in-tegrating real-world perception pipelines such as RGB-D object tracking. Future work will focus on deploying this modular framework in high-fidelity 3D simulators and real-world environments. We also aim to incorporate richer se-mantic information and complex human-centric constraints. In addition, we plan to leverage the reasoning capabilities of Large Language Models (LLMs) or Vision-Language Models (VLMs) to enhance agent explainability and generalizability. ACKNOWLEDGEMENT 
+
+This research was supported by Center for Advanced Ur-ban Systems (CAUS) of Korea Advanced Institute of Science and Technology (KAIST) funded by GS E&C. This work was also supported by the National Research Foundation of Korea (NRF) grant funded by the Korea government (MSIT) (No.RS-2025-00517342). This material is based upon work supported by the National Science Foundation (NSF) Grad-uate Research Fellowship Program under Grant No. DGE-2146755. This research is also partially supported by the Stanfords Center for Sustainable Development and Global Competitiveness (SDGC). REFERENCES [1] M. A. Hassanain, “Analysis of factors influencing office workplace planning and design in corporate facilities,” Journal of Building Appraisal , vol. 6, no. 4, pp. 183–197, 2010. [2] A. Rudenko, L. Palmieri, M. Herman, K. M. Kitani, D. M. Gavrila, and K. O. Arras, “Human motion trajectory prediction: A survey,” 
+
+The International Journal of Robotics Research , vol. 39, no. 8, pp. 895–935, 2020. [3] R. Bajcsy, “Active perception,” Proceedings of the IEEE , vol. 76, no. 8, pp. 966–1005, 1988. [4] F. Bourgault, A. A. Makarenko, S. B. Williams, B. Grocholsky, and H. F. Durrant-Whyte, “Information based adaptive robotic explo-ration,” in IEEE/RSJ International Conference on Intelligent Robots and Systems , IEEE, vol. 1, 2002, pp. 540–545. [5] J. Chiun, S. Zhang, Y. Wang, Y. Cao, and G. Sartoretti, “Marvel: Multi-agent reinforcement learning for constrained field-of-view multi-robot exploration in large-scale environments,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) , IEEE, 2025, pp. 11 392–11 398. [6] S. L. Smith, M. Schwager, and D. Rus, “Persistent robotic tasks: Monitoring and sweeping in changing environments,” IEEE Trans-actions on Robotics , vol. 28, no. 2, pp. 410–426, 2011. [7] B. Yamauchi, “A frontier-based approach for autonomous ex-ploration,” in Proceedings 1997 IEEE International Sympo-sium on Computational Intelligence in Robotics and Automation CIRA’97.’Towards New Computational Principles for Robotics and Automation’ , IEEE, 1997, pp. 146–151. [8] M. Lauri, E. Heinänen, and S. Frintrop, “Multi-robot active in-formation gathering with periodic communication,” in 2017 IEEE International Conference on Robotics and Automation (ICRA) , IEEE, 2017, pp. 851–856. [9] S. Choudhury, N. Gruver, and M. J. Kochenderfer, “Adaptive infor-mative path planning with multimodal sensing,” in Proceedings of the International Conference on Automated Planning and Scheduling ,vol. 30, 2020, pp. 57–65. [10] H. Jeong, H. Hassani, M. Morari, D. D. Lee, and G. J. Pappas, “Deep reinforcement learning for active target tracking,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) ,IEEE, 2021, pp. 1825–1831. [11] J. Rückin, L. Jin, and M. Popovi, “Adaptive informative path plan-ning using deep reinforcement learning for uav-based active sens-ing,” in 2022 International Conference on Robotics and Automation (ICRA) , IEEE, 2022, pp. 4473–4479. [12] J. Tang, C. Sun, and X. Zhang, “Mstc*: Multi-robot coverage path planning under physical constrain,” in 2021 IEEE Interna-tional Conference on Robotics and Automation (ICRA) , IEEE, 2021, pp. 2518–2524. [13] K. Lee, H. Kim, J. Li, and J. Park, “Priority-aware multi-robot coverage path planning,” IEEE Robotics and Automation Letters ,vol. 11, no. 3, pp. 3534–3541, 2026. [14] I. Vandermeulen, R. GroSS, and A. Kolling, “Turn-minimizing multirobot coverage,” in 2019 International Conference on Robotics and Automation (ICRA) , IEEE, 2019, pp. 1014–1020. [15] X. Lan and M. Schwager, “Planning periodic persistent monitoring trajectories for sensing robots in gaussian random fields,” in 2013 IEEE International Conference on Robotics and Automation (ICRA) ,IEEE, 2013, pp. 2415–2420. [16] J. Wu, L. Cheng, S. Chu, and Y. Song, “An autonomous coverage path planning algorithm for maritime search and rescue of persons-in-water based on deep reinforcement learning,” Ocean Engineering ,vol. 291, p. 116 403, 2024. [17] H. Kim, K. Lee, J. Park, J. Li, and J. Park, “Human implicit preference-based policy fine-tuning for multi-agent reinforcement learning in usv swarm,” in 2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2025, pp. 18 653–18 659. [18] S. Velhal, S. Sundaram, and N. Sundararajan, “A decentralized mul-tirobot spatiotemporal multitask assignment approach for perimeter defense,” IEEE Transactions on Robotics , vol. 38, no. 5, pp. 3085– 3096, 2022. [19] F. Gou, H. Du, C. Zhao, and Y. Cai, “A policy-guided reinforce-ment learning method for encirclement control in multiobstacle environment,” IEEE Transactions on Neural Networks and Learning Systems , 2025. [20] D. S. Bernstein, R. Givan, N. Immerman, and S. Zilberstein, “The complexity of decentralized control of markov decision processes,” 
+
+Mathematics of Operations Research , vol. 27, no. 4, pp. 819–840, 2002. [21] C. Yu, A. Velu, E. Vinitsky, J. Gao, Y. Wang, A. Bayen, and Y. Wu, “The surprising effectiveness of ppo in cooperative multi-agent games,” Advances in Neural Information Processing Systems , vol. 35, pp. 24 611–24 624, 2022. [22] J. Lee, Y. Lee, J. Kim, A. Kosiorek, S. Choi, and Y. W. Teh, “Set transformer: A framework for attention-based permutation-invariant neural networks,” in Proceedings of the 36th International Conference on Machine Learning , 2019, pp. 3744–3753. [23] P. Merrell, E. Schkufza, and V. Koltun, “Computer-generated res-idential building layouts,” in ACM SIGGRAPH Asia 2010 papers ,2010, pp. 1–12. [24] C. Song, Z. Qu, N. Blumm, and A.-L. Barabási, “Limits of pre-dictability in human mobility,” Science , vol. 327, no. 5968, pp. 1018– 1021, 2010. [25] D. Ashbrook and T. Starner, “Using gps to learn significant locations and predict movement across multiple users,” Personal and Ubiqui-tous Computing , vol. 7, no. 5, pp. 275–286, 2003. [26] P. E. Hart, N. J. Nilsson, and B. Raphael, “A formal basis for the heuristic determination of minimum cost paths,” IEEE Transactions on Systems Science and Cybernetics , vol. 4, no. 2, pp. 100–107, 1968.

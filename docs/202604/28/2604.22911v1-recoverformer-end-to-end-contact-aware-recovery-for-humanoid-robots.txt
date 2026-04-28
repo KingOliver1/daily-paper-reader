@@ -1,0 +1,413 @@
+Title: RecoverFormer: End-to-End Contact-Aware Recovery for Humanoid Robots
+
+URL Source: https://arxiv.org/pdf/2604.22911v1
+
+Published Time: Tue, 28 Apr 2026 00:06:13 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# RecoverFormer: End-to-End Contact-Aware Recovery for Humanoid Robots 
+
+Zihui Liu 
+
+Stanford University 
+
+zl90@alumni.stanford.edu 
+
+Abstract —Humanoid robots operating in unstructured envi-ronments must recover from unexpected disturbances—a capa-bility that remains challenging for end-to-end control policies. We present R ECOVER FORMER , a fully end-to-end humanoid recov-ery policy that learns when and how to switch among recovery behaviors—including compensatory stepping, hand-environment contact, and center-of-mass reshaping—while maintaining robust performance under model mismatch. The architecture combines a causal transformer over a 50-step observation history with two novel heads: a latent recovery mode that enables smooth transitions among distinct recovery strategies, and a contact af-fordance head that predicts which environmental surfaces (walls, railings, table edges) are beneficial for stabilization. We evaluate RECOVER FORMER on the Unitree G1 humanoid in MuJoCo. Trained only on open floor, R ECOVER FORMER transfers zero-shot to walled environments, achieving 100 % recovery success across 100–300 N pushes and across wall distances from 0.25 –
+
+1.4 m. Under zero-shot dynamics mismatch, R ECOVER FORMER 
+
+reaches 75 .5% at +25% mass, 89% under 30 ms latency, 91 .5% at low friction, and 99% under compound friction +latency +mass perturbation. The learned latent modes specialize across force regimes without mode-level supervision, validated by t-SNE analysis of 300 episodes. Taken together, these results show that a single end-to-end policy can deliver multi-modal, contact-aware humanoid recovery that generalizes across perturbation magnitude, contact geometry, and dynamics shift. 
+
+Index Terms —Humanoid robots, fall recovery, contact-aware control, end-to-end learning, reinforcement learning 
+
+I. I NTRODUCTION 
+
+Humanoid robots are increasingly deployed in unstruc-tured human environments where unexpected perturbations— collisions, slippery surfaces, payload shifts—can destabilize the robot and cause falls. Unlike wheeled or quadruped plat-forms, humanoid robots have a narrow support polygon and high center of mass, making balance recovery a safety-critical capability [1]. 
+
+The recovery problem. When a humanoid is pushed be-yond its balance limits, effective recovery requires choosing among qualitatively different strategies: taking a compensatory step, bracing against a nearby surface, or rapidly lowering the center of mass. Humans perform this selection seamlessly, exploiting environmental affordances—a wall to lean on, a railing to grasp—in a fraction of a second. Current humanoid systems lack this integrated capability. 
+
+Why this is hard. Classical humanoid recovery has his-torically relied on capture-point stepping [2] and on real-RecoverFormer 
+
+## F
+
+> 180 N
+> balance
+> recovery
+> end-to-end transformer policy, 50 Hz
+
+Fig. 1: RECOVER FORMER maintains balance through a lateral push on the Unitree G1. Mid-recovery snapshot 
+
+160 ms after a 180 N torso impulse. The transformer policy converts a 50 -step history of proprioception and contact-region distances into 29 -DoF joint targets at 50 Hz. time multi-contact planning that synthesizes hand braces against known surfaces [3]. Recent learning-based protective controllers [4] retain a fixed posture vocabulary, and uni-fied multi-contact fall mitigation methods [5] still depend on offline contact databases. End-to-end fall recovery via residual learning [6], the unified recovery framework of Xu et al. [7], and the broader literature on robust self-balancing for low-DoF wheeled platforms [8] illustrate the diversity of strategies but do not jointly reason about environmental con-tact opportunities. Modern learned stand-up policies [9] and HoST [10] focus on getting up after a fall; complementarily, online dynamics calibration developed for autonomous driv-ing [11] suggests that history-based identification can adapt control to deployment-time mismatch, but none of these unify proactive recovery with contact-aware decision-making. Mean-while, whole-body humanoid control has achieved remarkable 
+
+> arXiv:2604.22911v1 [cs.RO] 24 Apr 2026
+
+progress in locomotion [12], [13], expressive motion [14], [15], sequential contact [16], and language-conditioned con-trol [17], [18], but these are designed for nominal operation. 
+
+Our approach. We propose R ECOVER FORMER , an end-to-end learned policy that unifies balance recovery with contact-aware decision-making. Our key insight is that recovery is 
+
+multi-modal : the robot must choose among qualitatively dif-ferent strategies depending on the perturbation and available environmental supports. Rather than hard-coding this choice, we learn a latent recovery mode zt that segments the re-covery behavior space while preserving end-to-end differen-tiability. We augment this with a contact affordance head 
+
+that scores candidate contact regions, enabling the policy to decide whether and where to brace. A core design choice is a causal transformer over a 50-step observation history, which we show enables implicit system identification under unseen friction, latency, and mass perturbations—handling the reality gap without any online parameter updates. 
+
+Contributions. (1) We formulate humanoid recovery as a multi-modal end-to-end learning problem and propose R E-
+
+> COVER
+
+FORMER , a transformer-based architecture combining latent recovery mode prediction, contact affordance estima-tion, and a causal-history encoder. (2) We introduce a latent recovery mode mechanism with entropy and utilization reg-ularizers that discovers interpretable recovery modes purely from reward, with no mode-level supervision. (3) We design a contact affordance head that predicts the stabilization value of candidate surfaces, yielding zero-shot generalization from open-floor training to walled environments. (4) We demon-strate that the 50-step causal-history encoder enables implicit system identification, sustaining ≥ 75% recovery under unseen mass, latency, and compound dynamics mismatch. II. R ELATED WORK 
+
+Humanoid fall/push recovery. Classical fall-recovery con-trollers rely on model-based planning with simplified dy-namics and precomputed contact databases [1], [5], [3], and capture-point stepping [2]—requiring known geometry and restricting generalization. Recent learning-based work, includ-ing SafeFall [4], FRASA [6], Xu et al. [7], He et al. [9], and HoST [10], trains end-to-end policies for protective or stand-up behaviors, but none explicitly predict or exploit environmental contact opportunities during recovery. 
+
+End-to-end and contact-aware whole-body control. 
+
+Causal transformer policies for humanoid locomotion [12], [13], expressive motion [14], [15], unified control [19], se-quential contacts [16], and language-conditioned control [17], [18], [20], [21], [22] target nominal operation, not the extreme-perturbation regime. Contact affordance has been studied primarily in manipulation [23], [24], [25], [26]; we instead predict contact value for recovery . VLA models [27], [28], [29], [30] are complementary: R ECOVER FORMER could serve as a recovery module within such a stack. 
+
+Adaptation via observation history. RMA [31] showed that proprioceptive history enables online adaptation of legged policies to changing dynamics; WorMI [32], TARC [33], and ASAP [21] extend this with world-model composition, learned action durations, and delta action models, while structured-memory architectures from the broader sequential decision-making literature [34] explore alternative representations of past context. In R ECOVER FORMER , the causal transformer over 50 steps plays the same role implicitly—we show in Sec. V-C that this is sufficient for recovery under friction, latency, and mass mismatch without any explicit adaptation module or online parameter updates. III. P ROBLEM FORMULATION 
+
+We formulate humanoid recovery as a partially observed Markov decision process M = ( S, A, O, P, R, γ ). The un-derlying state st ∈ S contains the robot’s full kinematic and dynamic configuration together with contact-geometry parameters. At each timestep t the robot receives a partial observation ot ∈ O ⊆ R106 containing proprioceptive state (joint positions qt ∈ R29 , velocities ˙qt ∈ R29 , projected gravity gt ∈ R3, torso angular and linear velocity ωt, v t ∈ R3,previous action), binary foot contact indicators ft ∈ { 0, 1}2,and environmental perception dt ∈ RKc (distances from each hand to Kc = 8 candidate contact regions). The policy maintains a causal history buffer 
+
+ht = ( ot−H+1 , o t−H+2 , . . . , o t), H = 50 , (1) and outputs target joint positions at ∈ R29 that are tracked by a joint-level PD controller at 50 Hz ( τi = kp(qref  
+
+> i
+
+− qi) −
+
+kd ˙qi). The transition st+1 ∼ P (· | st, a t) includes sparse push events: at a uniformly sampled time tp ∈ [1 , 3] s an impulse of magnitude ∥F ∥ ∼ U (50 , 200) N and direction θ ∼ U (0 , 2π)
+
+is applied to the torso over one control step. Given this MDP, the objective is the standard discounted return 
+
+J(π) = Eτ ∼π
+
+" TX
+
+> t=0
+
+γtrt
+
+#
+
+, (2) with γ=0 .99 and T = 500 (10 s), under rewards designed so that the optimal policy (1) minimises recovery time, (2) exploits available environmental contacts when beneficial, and (3) remains robust to unseen friction, latency, and mass perturbations (Sec. IV-E). IV. M ETHOD 
+
+RECOVER FORMER is a transformer-based policy with two novel heads: a latent recovery mode predictor and a contact affordance head, both conditioned on a causal-transformer observation encoder over a 50-step history (Fig. 2). 
+
+A. Observation Encoder 
+
+Each observation frame ot ∈ R106 (29 joint positions, 29 joint velocities, 3 projected gravity, 3 torso angular velocity, 3 linear velocity, 2 foot contacts, 8 contact-region distances, 29 previous actions) is linearly projected to embedding dimension 
+
+d = 256 and augmented with a learned positional code pi ∈
+
+Rd (i = 1 , . . . ,H ): 
+
+xi = Wo ot−H+i + bo + pi, X = [ x1; . . . ; xH ] ∈ RH×d.
+
+(3) Observation history t = { ot − H + 1 , …, ot − 1 , ot} (H = 50 , dim( o) = 106 )          
+
+> ⋯tt−H+1
+> h(0)
+> i=xi+pi
+> Causal Transformer Encoder ( L= 4 ,d= 256 , heads = 4 )
+> residual
+
+×L                                     
+
+> Attn( Q,K,V) = softmax (
+> QK ⊤
+> √dk
+> +M)V
+> et=h(L)
+> t∈ℝ256
+> Linear Tokenizer
+> xi=Weoi+be∈ℝd
+> Positional Encoding
+> pi∈ℝd(sinusoidal)
+> +
+> LayerNorm Masked Multi-Head
+> Self-Attention
+> FFN
+> (GELU, 4d)
+> Latent Mode Head
+> pθ(zt|et) = softmax( Wzet),K= 4
+> Action Decoder
+> MLP ([ et; emb( zt); ct])
+> Contact Affordance Head
+> ct=σ(Wcet) ∈ [0, 1] Kc,Kc= 8
+> Action at∈ℝ29 (joint targets, 50 Hz)
+> Tokenizer
+> Positional Encoding
+> Self-Attention
+> Feed-Forward
+> Latent Mode
+> Affordance
+> Action Decoder
+
+Fig. 2: RECOVER FORMER architecture. A causal trans-former encodes the 50-step observation history into et. The la-tent mode head predicts zt over K = 4 modes; the affordance head predicts ct ∈ [0 , 1] Kc . Both feed the action decoder. 
+
+X is processed by L = 4 identical causal transformer blocks, each implementing masked multi-head self-attention (MHSA) with Hh = 4 heads followed by a feed-forward sublayer: 
+
+eX = X + MHSA (LN (X)) ,X′ = eX + FFN 
+
+
+
+LN ( eX)
+
+
+
+. (4) Each MHSA head computes scaled dot-product attention with a lower-triangular causal mask M ∈ { 0, −∞} H×H [35]: 
+
+Attn( Q, K, V ) = softmax 
+
+ QK ⊤
+
+√dk
+
++ M
+
+
+
+V, (5) with dk = d/H h per-head dimension. Causal masking ( Mij =
+
+−∞ for j > i ) ensures each timestep attends only to its past, enabling streaming deployment. We read out the encoder state from the final timestep of the last block: et = X′(L)
+
+H ∈ Rd.
+
+B. Latent Recovery Mode 
+
+We predict a latent recovery mode zt that captures the qualitative recovery strategy as a categorical variable over 
+
+K = 4 discrete modes. A linear head with temperature τ
+
+produces the mode posterior 
+
+pθ (zt=k | et) = exp  (Wz et + bz )k/τ PKj=1 exp  (Wz et + bz )j /τ  . (6) During training we use a differentiable soft mixture of learned mode embeddings 
+
+mt =
+
+KX
+
+k=1 
+
+pθ (zt=k | et) E(k)
+
+z , Ez ∈ RK×dz , (7) which keeps the PPO importance ratio well-defined; at infer-ence we use k⋆ = arg max k pθ (zt=k | et). The temperature is annealed τ : 1 .0 → 0.1. Modes receive no direct supervision ;to prevent collapse we add an entropy term and a batch-level utilization penalty: 
+
+Lmode = Et
+
+H(pθ (zt | et))  +
+
+KX
+
+k=1 
+
+max  0, u min − ¯pk
+
+, (8) where ¯pk = 1
+
+N
+
+P
+
+n pθ (zt=k | e(n)
+
+t ) is the empirical batch usage and umin = 0 .4/K ; this avoids collapse to a single mode (Sec. V-D). 
+
+C. Contact Affordance Head 
+
+The contact affordance head predicts the stabilization value of the Kc = 8 candidate contact regions: 
+
+ct = σ(Wcet + bc) ∈ [0 , 1] Kc , (9) with σ the element-wise logistic. Each c(i)
+
+t represents the predicted benefit of making contact with region i (a wall, railing, or table edge). The affordance head receives no direct supervision : it is trained through PPO gradients flowing from the reward term 
+
+rcontact (st, a t) = wu ⊮[useful t] − wh ⊮[harmful t], (10) where “useful” fires when a hand touches a geometry whose contact normal opposes the fall direction, and “harmful” fires for wrist-over-torso impacts. The affordance is an implicit representation of which surfaces PPO has found informative; Sec. V-B shows this suffices for zero-shot transfer to walled environments never seen during training. 
+
+D. Action Decoder 
+
+The decoder concatenates encoder state, mode mixture embedding, and affordance vector and decodes a whole-body joint target: 
+
+at = MLP  [ et; mt; ct ] ∈ R29 , (11) with output clipped to [−1, 1] and converted to joint targets 
+
+qref 
+
+t = qdef + α a t (action scale α=0 .25 rad) for the onboard PD controller. 
+
+E. Training 
+
+RECOVER FORMER is trained end-to-end using PPO [36] in MuJoCo [37] with the Unitree G1-29dof model. 
+
+Reward. The total reward decomposes as 
+
+rt = rup (st) + rcontact (st, a t)+ rreg (at, a t[−1]) − wterm ⊮[terminated ], (12) where rup sums exponential-kernel terms for projected gravity, base height, COM, default pose, bilateral foot contact, and TABLE I: Open-floor RSR (%) across 50–300 N, 200 episodes per force.             
+
+> Force (N) 50 100 150 200 250 300 RECOVER FORMER 100.0 100.0 85.0 79.0 68.0 68.0
+
+a per-step alive bonus; rcontact is Eq. (10) (active only in walled/cluttered envs); rreg = −λa∥at∥2 − λ ˙a∥at − at[−1] ∥2
+
+discourages jittery actions; and wterm =200 is a large termi-nation penalty. 
+
+PPO objective. Let rt(θ) = πθ (at | ht)/π θold (at | ht) and let ˆAt denote the GAE advantage 
+
+ˆAt = 
+
+> T−t−1
+
+X
+
+> l=0
+
+(γλ )lδt+l, δt = rt + γV ϕ(ht[+1]) − Vϕ(ht),
+
+(13) with γ=0 .99 , λ=0 .95 . The PPO-clip surrogate is 
+
+LPPO (θ, ϕ ) = − Et
+
+ min  rt(θ) ˆAt,
+
+clip( rt(θ), 1−ϵ, 1+ ϵ) ˆAt
+
+ 
+
++ cv Et
+
+(Vϕ(ht) − ˆRt)2
+
+− cH Et
+
+H(πθ (· | ht)) ,
+
+(14) with clip ϵ=0 .2, cv =0 .5, cH =0 .01 , and target ˆRt = ˆAt +
+
+Vϕ(ht). The value network Vϕ shares the transformer encoder with the actor and attaches a scalar head to et.
+
+Combined objective. The total loss is L = LPPO +β Lmode 
+
+with β=0 .1; the affordance head is trained implicitly through the PPO gradient of rcontact via the decoder’s dependence on 
+
+ct, without any auxiliary loss. 
+
+Domain randomization. Push magnitudes sample ∥F ∥ ∼ U(50 , 200) N, directions θ ∼ U (0 , 2π), timing ∼ U [1 , 3] s, and friction μ ∈ [0 .5, 1.2] ; mass, latency, and torque limits are tested zero-shot (Sec. V-C). V. E XPERIMENTS 
+
+We evaluate R ECOVER FORMER on the Unitree G1 (29 DoF, 1.27 m, 35 kg) in MuJoCo with policy at 50 Hz, physics at 200 Hz. Environments: Open floor and Walled (walls at 
+
+0.3–1.0 m). Perturbations: torso impulses 50–300 N over 0.1 sacross 8 directions (200 episodes per force-sweep condition, 100 per mismatch condition). Metric: Recovery Success Rate (RSR), the fraction of episodes in which the robot remains within 45 ◦ tilt and returns to stable standing within 10 s. 
+
+A. Open-Floor Push Recovery 
+
+Fig. 3 shows a representative recovery trajectory at 150 Nand Table I reports RSR across 50–300 N. R ECOVER FORMER 
+
+sustains 100% recovery for ≤ 100 N, remains above 68% at 250–300 N, and degrades gracefully with force. Fig. 4 visual-izes the underlying dynamics: the torso-tilt trace peaks within 
+
+0.05 –0.15 s after the push, oscillates with a period matching the robot’s natural inverted-pendulum mode, and decays within 
+
+1–1.5 s. Peak tilt scales sub-linearly with force ( 7◦ at 100 Nvs. 20 ◦ at 250 N)—a signature of learned damping rather than a passive impulse response. Low-force perturbations are TABLE II: Zero-shot walled-environment RSR (%). Models trained on open floor only.           
+
+> Force (N) 100 150 200 250 300 RECOVER FORMER 100 100 100 100 100
+
+TABLE III: RSR (%) under zero-shot dynamics mismatch (150 N push, 200 episodes).           
+
+> Nominal Low μLat. 30 ms +25% mCompound RECOVER FORMER 93.5 91.5 89.0 75.5 99.0
+
+absorbed with in-place posture adjustments, while high-force perturbations elicit multi-step strategies (see Sec. V-D). 
+
+B. Contact-Aware Recovery in Walled Environments 
+
+We test zero-shot generalization of contact-aware recov-ery: R ECOVER FORMER is trained only on open floor, then evaluated without retraining in a walled environment where balancing may require using nearby walls. Table II shows 
+
+100% RSR at every force level from 100 to 300 N. The policy’s affordance head, learned purely from the open-floor contact reward, produces recovery motions that remain spatially com-patible with the walls and, when useful, actively brace against them. 
+
+Wall distance and push direction sweeps. Additional 100-episode sweeps evaluate sensitivity to the geometry: R ECOV -
+
+> ER
+
+FORMER maintains 100 % RSR at every wall distance from 
+
+0.25 m to 1.40 m at 150 N, and 100% across all four push directions (toward/away from the wall and two lateral) at wall distance 0.5 m. The affordance head therefore generalizes across both the force magnitude and the detailed contact geometry, suggesting that the representation captures a general notion of “where a brace is available” rather than memorizing training-time wall layouts. 
+
+C. Zero-Shot Robustness Under Dynamics Mismatch 
+
+We evaluate four zero-shot physics perturbations at 150 N: low friction ( μ=0 .3), high latency ( τ =30 ms), +25% upper-body mass, and all three combined (Table III). Across all single-axis perturbations R ECOVER FORMER sustains ≥
+
+89% RSR, and holds 75 .5% even under +25% mass—a regime where single-step memoryless policies collapse. Un-der the compound mismatch (friction +latency +mass) RE-
+
+> COVER
+
+FORMER reaches 99% : the 50-step history receives enough signal from multiple sources to disambiguate dynam-ics quickly, consistent with history-based system identifica-tion [31] but without a dedicated adaptation module. 
+
+D. Latent Mode Interpretability 
+
+We collect per-episode mode activations from 300 episodes spanning six force levels (50 each) and apply t-SNE (perplexity=30 ) to the episode-level mean mode vector ¯z ∈
+
+RK (Fig. 5). Low-force episodes (50–100 N) form a tight clus-ter with Mode 3 ≈ 1; high-force episodes (150–300 N) spread into a distinct region as Modes 1 and 2 gain probability mass. 0) Stable stance 
+
+F  
+
+> 1) Push (150 N) 2) Compensatory motion 3) Stabilizing + steady-state recovery
+> RecoverFormer: push-recovery rollout on the Unitree G1 humanoid
+
+Fig. 3: Representative open-floor recovery rollout. Frames: (0) pre-push stance; (1) impact with F applied for 100 ms; (2) compensatory whole-body motion; (3) stabilizing + steady-state recovery phase. 0 1 2 3 4 5 6              
+
+> Time (s)
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> Torso tilt (deg)
+> fall threshold 45 ∘
+> (a) Torso tilt under push perturbation
+> 100 N 150 N 200 N 250 N
+> 0123456
+> Time (s)
+> 0.70
+> 0.75
+> 0.80
+> Base height (m)  nominal 0.78 m
+> (b) Base height under push perturbation
+> 100 N 150 N 200 N 250 N
+
+Fig. 4: Representative balance trajectories on open floor. 
+
+(a) Torso tilt and (b) base height versus time during a single push episode at four force levels. The red band marks the 
+
+100 ms push interval at t=1 .0 s. The tilt envelope decays exponentially with damping ratio that scales inversely with force; the base height dip grows monotonically from 1.5 cm at 100 N to 6.5 cm at 250 N and recovers within ∼ 1 s. Tilt remains well below the 45 ◦ fall threshold across the entire force sweep. Failure episodes concentrate predominantly in the single-mode region regardless of force: high-force episodes that respond with Mode 3 near 1 tend to fail, while those that distribute across multiple modes succeed. Successful high-force recovery therefore requires a multi-mode response, validating that the latent mode mechanism learns qualitatively meaningful recov-ery strategies without mode-level supervision. VI. I MPLEMENTATION DETAILS 
+
+The transformer encoder uses L = 4 layers, d = 256 
+
+embedding dimension, Hh = 4 attention heads, and history 
+
+H = 50 (1 s at 50 Hz). The latent mode uses K = 4 discrete modes with embedding size dz =32 ; the affordance head pre-t-SNE dim 1 
+
+> t-SNE dim 2
+> (a) t-SNE of per-episode mean mode activations, coloured by push force
+> Push force
+> 50 N
+> 100 N
+> 150 N
+> 200 N
+> 250 N
+> 300 N
+> t-SNE dim 1
+> t-SNE dim 2
+> (b) Same embedding, coloured by recovery outcome
+> Success (245)
+> Failure (55)
+
+Fig. 5: Latent mode t-SNE (300 episodes, 6 force levels, 50 each). Top : colored by push force; low-force episodes cluster where Mode 3 ≈ 1, high-force episodes spread as Modes 1 and 2 gain mass. Bottom : the same embedding colored by outcome; failures concentrate in the single-mode cluster while successes span the multi-mode region. dicts Kc = 8 contact-region values. We train with PPO using 64 parallel MuJoCo [37] environments for 5×10 6 steps ( ≈ 2 hon one RTX 5080), with rollout length 48 , minibatch size 
+
+128 , and 5 epochs per update. Hyperparameters: lr 3×10 −4,
+
+γ=0 .99 , GAE λ=0 .95 , β=0 .1, cH =0 .01 , cv =0 .5, clip ϵ=0 .2;mode softmax temperature anneals τ : 1 .0 → 0.1 linearly. Training pushes sample [50 , 200] N uniformly with random direction and timing; the walled variant additionally random-izes wall positions at 0.3–1.0 m. Observations are normalized with running mean/variance statistics estimated online during rollouts. VII. C ONCLUSION 
+
+We presented R ECOVER FORMER , an end-to-end contact-aware recovery policy combining a latent mode head, a contact affordance head, and a causal-transformer encoder over a 50-step history. Despite training only on open floor, it transfers zero-shot to walled environments at 100% RSR across all tested forces and distances, sustains ≥ 75% RSR under unseen mass, latency, and compound dynamics mismatch, and learns force-specialized modes from reward alone. Future work: sim-to-real transfer on the physical G1, integration with VLA planners [27], [28], [30] as a reactive recovery module, and visual perception for the affordance head. REFERENCES [1] S. Wang and K. Hauser, “Real-time stabilization of a falling humanoid robot using hand contact: An optimal control approach,” in IEEE-RAS 17th International Conference on Humanoid Robots (Humanoids) .IEEE, 2017, pp. 454–460. [2] E. Aslan, M. A. Arseric ¸m, and A. Uc ¸ar, “Development of push-recovery control system for humanoid robots using deep reinforcement learning,” 
+
+Ain Shams Engineering Journal , 2023. [3] S. Wang and K. Hauser, “Realization of a real-time optimal control strategy to stabilize a falling humanoid robot with hand contact,” in 
+
+IEEE International Conference on Robotics and Automation (ICRA) .IEEE, 2018. [4] Z. Meng, T. Liu, L. Ma, Y. Wu, R. Song, W. Zhang, and S. Huang, “SafeFall: Learning protective control for humanoid robots,” arXiv preprint arXiv:2511.18509 , 2025. [5] S. Wang and K. Hauser, “Unified multi-contact fall mitigation plan-ning for humanoids via contact transition tree optimization,” in IEEE-RAS 18th International Conference on Humanoid Robots (Humanoids) .IEEE, 2018, pp. 1–9. [6] C. Gaspard, M. Duclusaud, G. Passault, M. Daniel, and O. Ly, “FRASA: An end-to-end reinforcement learning agent for fall recovery and stand up of humanoid robots,” in IEEE International Conference on Robotics and Automation (ICRA) , 2025. [7] Z. Xu, Y. Li, K.-y. Lin, and S. X. Yu, “Unified humanoid fall-safety policy from a few demonstrations,” arXiv preprint arXiv:2511.07407 ,2025. [8] A. M. Sharma, S. Wang, Y.-M. Zhou, and A. Ruina, “Towards a maximally-robust self-balancing bicycle without reaction-moment gyro-scopes or reaction wheels,” in Bicycle and Motorcycle Dynamics , 2016. [9] X. He, R. Dong, Z. Chen, and S. Gupta, “Learning getting-up policies for real-world humanoid robots,” arXiv preprint arXiv:2502.12152 , 2025. [10] T. Huang, J. Ren, H. Wang, Z. Wang, Q. Ben, M. Wen, X. Chen, J. Li, and J. Pang, “HoST: Learning humanoid standing-up control across diverse postures,” arXiv preprint arXiv:2502.08378 , 2025. [11] S. Wang, C. Deng, and Q. Qi, “Efficient online calibration for au-tonomous vehicle’s longitudinal dynamical system: A Gaussian model approach,” in Proceedings of the Conference , 2023. [12] I. Radosavovic, T. Xiao, B. Zhang, T. Darrell, J. Malik, and K. Sreenath, “Real-world humanoid locomotion with reinforcement learning,” Sci-ence Robotics , vol. 9, 2024. [13] I. Radosavovic, B. Zhang, B. Shi, J. Rajasegaran, S. Kamat, T. Darrell, K. Sreenath, and J. Malik, “Humanoid locomotion as next token predic-tion,” in Advances in Neural Information Processing Systems (NeurIPS) ,2024. [14] X. Cheng, Y. Ji, J. Chen, R. Yang, G. Yang, and X. Wang, “ExBody: Expressive whole-body control for humanoid robots,” in Robotics: Science and Systems (RSS) , 2024. [15] M. Ji, X. Peng, F. Liu, J. Li, G. Yang, X. Cheng, and X. Wang, “ExBody2: Advanced expressive humanoid whole-body control,” arXiv preprint arXiv:2412.13196 , 2024. [16] C. Zhang, W. Xiao, T. He, and G. Shi, “WoCoCo: Learning whole-body humanoid control with sequential contacts,” in Conference on Robot Learning (CoRL) , 2024. [17] Y. Wang, H. Jiang, S. Yao, Z. Ding, and Z. Lu, “SENTINEL: A fully end-to-end language-action model for humanoid whole body control,” 
+
+arXiv preprint arXiv:2511.19236 , 2025. [18] Y. Shao, B. Zhang, Q. Liao, X. Huang, Y. Gao, Y. Chi, Z. Li, S. Shao, and K. Sreenath, “LangWBC: Language-directed humanoid whole-body control via end-to-end learning,” in Robotics: Science and Systems (RSS) , 2025. [19] T. He, W. Xiao, T. Lin, Z. Luo, Z. Xu, Z. Jiang, J. Kautz, C. Liu, G. Shi, X. Wang, L. Fan, and Y. Zhu, “HOVER: Versatile neural whole-body controller for humanoid robots,” arXiv preprint arXiv:2410.21229 , 2024. [20] H. Xue, X. Huang, D. Niu, Q. Liao, T. Kragerud, J. T. Gravdahl, X. B. Peng, G. Shi, T. Darrell, K. Sreenath, and S. Sastry, “LeVERB: Humanoid whole-body control with latent vision-language instruction,” 
+
+arXiv preprint arXiv:2506.13751 , 2025. [21] T. He, J. Gao, W. Xiao, Y. Zhang, Z. Wang, J. Wang, Z. Luo, G. He, N. Sobanbabu, C. Pan et al. , “ASAP: Aligning simulation and real-world physics for learning agile humanoid whole-body skills,” in Robotics: Science and Systems (RSS) , 2025. [22] W. Xie, J. Han, J. Zheng et al. , “KungfuBot: Physics-based humanoid whole-body control for learning highly-dynamic skills,” in Advances in Neural Information Processing Systems (NeurIPS) , 2025. [23] J. A. Barreiros, A. O. ¨Onol, M. Zhang, S. Creasey, A. Goncalves, A. Beaulieu, A. Bhat, K. M. Tsui, and A. Alspach, “Learning contact-rich whole-body manipulation with example-guided reinforcement learn-ing,” Science Robotics , vol. 10, p. eads6790, 2025. [24] M. Murooka, T. Hoshi, K. Fukumitsu, S. Masuda, M. Hamze, T. Sasaki, M. Morisawa, and E. Yoshida, “TACT: Humanoid whole-body contact manipulation through deep imitation learning with tactile modality,” 
+
+IEEE Robotics and Automation Letters (RA-L) , vol. 10, no. 8, pp. 7819– 7826, 2025. [25] S. Nasiriany, S. Kirmani, T. Ding, L. Smith, Y. Zhu, D. Driess, D. Sadigh, and T. Xiao, “RT-Affordance: Affordances are versatile intermediate representations for robot manipulation,” arXiv preprint arXiv:2411.02704 , 2024. [26] R. Xu, J. Zhang, M. Guo et al. , “A0: An affordance-aware hierarchical model for general robotic manipulation,” in International Conference on Computer Vision (ICCV) , 2025. [27] K. Black et al. , “ π0: A vision-language-action flow model for general robot control,” arXiv preprint arXiv:2410.24164 , 2024. [28] Figure AI, “Helix: A vision-language-action model for generalist hu-manoid control,” https://www.figure.ai/news/helix, 2025. [29] J. Bjorck, F. Casta˜ neda, N. Cherniadev et al. , “GR00T N1: An open foundation model for generalist humanoid robots,” arXiv preprint arXiv:2503.14734 , 2025. [30] OpenDriveLab et al. , “WholeBodyVLA: Towards unified latent VLA for whole-body loco-manipulation control,” in International Conference on Learning Representations (ICLR) , 2026. [31] A. Kumar, Z. Fu, D. Pathak, and J. Malik, “RMA: Rapid motor adaptation for legged robots,” in Robotics: Science and Systems (RSS) ,2021. [32] M. Yoo, S. Shin, D. Sub, and D. Lee, “World model implanting for test-time adaptation of embodied agents,” in International Conference on Machine Learning (ICML) , 2025. [33] A. Sukhija, L. Treven, J. Cheng, F. D¨ orfler, S. Coros, and A. Krause, “TARC: Time-adaptive robotic control,” arXiv preprint arXiv:2510.23176 , 2025. [34] D. Jiang, Y. Li, G. Li, and B. Li, “MAGMA: A multi-graph based agentic memory architecture for AI agents,” arXiv preprint arXiv:2601.03236 ,2026. [35] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, L. Kaiser, and I. Polosukhin, “Attention is all you need,” Advances in Neural Information Processing Systems (NeurIPS) , 2017. [36] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Prox-imal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 ,2017. [37] E. Todorov, T. Erez, and Y. Tassa, “MuJoCo: A physics engine for model-based control,” in IEEE/RSJ International Conference on Intelli-gent Robots and Systems (IROS) , 2012.

@@ -1,0 +1,414 @@
+Title: Safe Navigation in Unknown and Cluttered Environments via Direction-Aware Convex Free-Region Generation
+
+URL Source: https://arxiv.org/pdf/2604.23648v1
+
+Published Time: Tue, 28 Apr 2026 01:08:57 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+> 1
+
+# Safe Navigation in Unknown and Cluttered Environments via Direction-Aware Convex Free-Region Generation 
+
+Zhicheng Song 1, Yongjian Li 1, Kai Chen 1, Yulin Li 2, Fan Shi 2, and Jun Ma 1
+
+Abstract — Convex free regions provide a structured and optimization-friendly representation of collision-free space for robot navigation in unknown and cluttered environments. However, existing methods typically enlarge local collision-free regions mainly according to surrounding obstacle ge-ometry. In cluttered environments, such strategies may fail to generate regions that both accommodate robot geometry and preserve traversable extension along candidate motion directions, thereby limiting downstream traversal, especially in narrow passages. Even when such a region is available, safe motion generation remains challenging, because safety checking at discretized trajectory samples does not guaran-tee continuously collision-free motion when robot geometry is modeled explicitly. To address these issues, we propose a navigation framework that jointly incorporates candidate motion directions and robot geometry into convex free-region generation, and achieves continuously collision-free motion through continuous-safe trajectory generation. Within each region, the framework performs geometry-aware target pose selection and trajectory generation, together with Lipschitz-based continuous safety certification and local refinement. The resulting free regions and candidate motions are maintained in a region-based graph to support incremental planning. Quantitative results in cluttered 2D navigation scenarios show that the proposed method generates free regions better aligned with downstream traversal and enables reliable collision-free navigation, while additional 3D and real-world experiments on a quadrupedal robot and a UAV demonstrate the extensibility and practical applicability of the framework. The open-source project can be found at https://github.com/Zhichen gSong6/FRGraph .
+
+I. INTRODUCTION Collision-free navigation in cluttered and unknown envi-ronments requires a free-space representation that is both structured and amenable to downstream motion generation. Among existing representations, convex free-space decom-position is particularly attractive because it converts discrete obstacle observations into structured collision-free regions that can be used directly for trajectory generation and online replanning [1]–[3]. Such regions also provide a convenient geometric form for explicitly reasoning about robot geom-etry in both planar and spatial navigation settings [4]–[6]. 
+
+> 1
+
+Zhicheng Song, Yongjian Li, Kai Chen, and Jun Ma are with the Robotics and Autonomous Systems Thrust, The Hong Kong University of Science and Technology (Guangzhou), Guangzhou, China (e-mail: zsong469@connect.hkust-gz.edu.cn; yli125@connect.hkust-gz.edu.cn; kchen916@connect.hkust-gz.edu.cn; jun.ma@ust.hk) 
+
+> 2
+
+Yulin Li and Fan Shi are with the Department of Electrical and Computer Engineering, National University of Singapore, Singapore (e-mail:yline@nus.edu.sg; fan.shi@nus.edu.sg) 
+
+Fig. 1. Motivation of the proposed framework. Gray polygons denote obstacles, the blue polygon denotes the convex free region, the red rectangle denotes the robot, and the purple dashed arrow indicates the desired motion direction. (a) If the free region is generated solely according to the surrounding obstacle configuration, the resulting collision-free region may provide limited extension along the desired direction. This motivates direction-aware free-region generation that better preserves traversable space for forward motion. (b) With explicit robot geometry, a collision may occur between two safe sampled poses, motivating continuous-time safety verification and refinement. 
+
+However, for navigation, the quality of a convex free region is determined not only by collision avoidance, but also by whether it accommodates robot geometry and pre-serves traversable space along candidate motion directions. Existing convex free-region generation methods mainly con-struct regions according to local obstacle geometry [1], [4], [7]. Although such methods can produce geometrically valid collision-free regions, they are primarily designed to enlarge local free space and do not explicitly incorporate candidate motion directions or robot geometry into region construction. As a result, in cluttered scenes with narrow passages, the generated region may be poorly suited to downstream traversal even when it is collision-free, as illustrated in Fig. 1(a). This observation motivates a free-region generation strategy that jointly accounts for candidate motion directions and robot geometry. After a convex free region has been constructed, generat-ing safe motion within that region remains challenging when robot geometry is modeled explicitly. Many navigation sys-tems simplify robot geometry through point approximation or obstacle inflation [8], [9], reducing safety checking to verifying a single curve [3], [8], [10]. When robot geom-etry is modeled explicitly, however, collision-free sampled poses do not guarantee collision-free motion between them, 
+
+> arXiv:2604.23648v1 [cs.RO] 26 Apr 2026 2
+
+as illustrated in Fig. 1(b). Nevertheless, many navigation methods based on convex free regions still verify safety only at discretized trajectory samples [4], [11], which may miss such inter-sample collisions. To address these challenges, we propose a navigation framework that integrates direction-aware convex free-region generation and continuous-safe trajectory generation for robot navigation in unknown and cluttered environments. Starting from local LiDAR observations, the framework extracts candidate navigation directions to construct convex regions that better preserve traversable space along those directions while accommodating robot geometry. Within each region, it performs target pose selection, trajectory generation, and continuous safety verification under explicit robot-geometry constraints. The resulting free regions and candidate motions are further maintained in a region-based graph for incremental planning. In summary, the main contributions of this work are as follows:  
+
+> •
+
+We propose a direction-aware convex free-region gen-eration method that incorporates candidate navigation directions into obstacle selection and hyperplane op-timization through a direction-biased quadratic pro-gram (QP), producing free regions that better pre-serve traversable space along candidate directions while accommodating robot geometry in cluttered environ-ments.  
+
+> •
+
+We develop a continuous-safe trajectory generation method for convex-shaped robots inside convex free regions, combining B´ ezier trajectory parameterization with Lipschitz-based adaptive interval subdivision for continuous safety certification and local QP-based control-point refinement for iterative correction.  
+
+> •
+
+We integrate the above components with a region-based navigation graph for incremental planning and recovery from locally unproductive branches, and validate the open-source framework through quantitative 2D exper-iments together with 3D and real-world demonstrations. II. RELATED WORK 
+
+A. Free-Space Representations for Navigation 
+
+Existing navigation methods adopt a variety of collision-free space representations, including signed distance fields (SDFs) [12], [13], implicit collision constraints based on separating hypersurfaces [14], [15], and convex free-space decompositions [1], [2], [4]–[7], [11], [16], [17]. Among these, convex free-space decompositions are particularly attractive for online navigation because they provide struc-tured geometric constraints that can be used directly for target selection, trajectory generation, and replanning. Most existing convex free-region generation methods con-struct regions mainly according to local obstacle geometry. RILS [1] does not guarantee that the generated region fully contains the robot body. Although a line-segment seed can approximately encourage region growth along a desired direction, it may produce overly slender and unhelpful regions in narrow spaces. FRTree [4] mitigates this issue          
+
+> TABLE I COMPARISON OF CONVEX FREE -REGION GENERATION .Method Direction-Aware Region Generation Explicit Robot-Body Containment RILS [1] ✗✗
+> FRTree [4] ✗✗
+> FIRI [7] ✗✓
+> Ours ✓✓
+
+through overlapping line-segment seeds, but still does not guarantee full robot containment or fully avoid such slender regions. FIRI [7] can generate regions that contain the robot geometry, but it does not explicitly consider the intended motion direction during region generation. Table I summarizes these differences among representative convex free-region generation methods. 
+
+B. Navigation Direction Extraction 
+
+Navigation directions can be extracted from local obser-vations in different ways. Frontier-based methods guide the robot toward boundaries between explored and unexplored space [18]–[20], typically at the map level for high-level planning. Another line of work extracts directions from local ge-ometric openings in sensor observations. Gap-based ap-proaches identify traversable directions from the spatial ar-rangement of obstacles and guide the robot toward openings likely to admit collision-free motion [21]–[23]. Gap-based navigation has been studied mainly in planar settings, with relatively limited work in full 3D environments. Compared with frontier-based strategies, they provide local geometric cues that are more naturally suited to downstream free-region generation from local perception. 
+
+C. Safe Trajectory Generation 
+
+Trajectory generation methods differ substantially in how robot geometry is handled during collision checking. Many real-time planning methods simplify robot geometry during collision checking, so that safety evaluation reduces to verifying a single curve in free space [3], [8]–[10]. When robot geometry is modeled explicitly, ensuring collision-free motion becomes more challenging. Even if the start and goal poses are feasible, and even if sampled states along the trajectory are collision-free, the robot may still vi-olate safety constraints between adjacent samples, especially in cluttered environments with small geometric clearances. Although sampled checking is often effective in practice [4], [11], it does not provide a certificate of continuous-time safety when robot geometry is modeled explicitly. Related continuous-time safety issues have been studied in prior work on convex collision checking, continuous-time col-lision avoidance, and continuous collision detection for polynomial trajectories [24]–[26]. III. METHOD As illustrated in Fig. 2, the proposed framework takes lo-cal LiDAR observations as input and produces continuously 3 
+
+> Fig. 2. Overview of the proposed navigation framework. From LiDAR point cloud observations, candidate navigation directions are extracted via range-map projection and gap-based direction extraction. These directions are then used to generate direction-aware convex free regions that better support downstream robot traversal. Within a selected free region, a target pose is determined and a B´ ezier trajectory is iteratively refined through continuous safety verification and control-point updates, yielding a continuously collision-free motion. The generated free regions and candidate motions are further maintained in a region-based graph for incremental planning.
+
+collision-free motions in four stages: gap-based navigation direction extraction (Section III-A), direction-aware free-region generation (Section III-B), continuous-safe trajectory generation (Section III-C), and region-based graph mainte-nance for incremental planning (Section III-D). 
+
+A. Navigation Direction Extraction 
+
+The input point cloud is projected onto a spherical range map parameterized by azimuth and elevation, which degen-erates to a single-row angular range map in 2D, as illustrated in Fig. 2(b). Candidate gaps are detected as depth discon-tinuities between neighboring obstacle measurements, and representative directions are extracted from these angular openings for the subsequent region generation module. 
+
+B. Direction-Aware Convex Free-Region Generation 
+
+As illustrated in Fig. 2(c), given a candidate navigation direction, we construct a convex collision-free polyhedron by iteratively generating separating hyperplanes between the robot and surrounding obstacles. The candidate direction biases both obstacle selection and hyperplane generation so that the resulting free region better preserves traversable space along that direction. 
+
+a) Direction representation: Let p1 ∈ Rd denote the current robot position and let d ∈ Rd be a candidate navigation direction extracted from the gap-based perception module. The unit vector 
+
+e = d
+
+∥d∥
+
+represents the desired motion direction and is used to guide obstacle selection and hyperplane generation. 
+
+b) QP-based hyperplane generation: Obstacle points are processed iteratively to construct separating hyperplanes that expand the collision-free region. At each iteration, an obstacle point oi is selected using a direction-aware strategy. Obstacle points located in the forward half-space of the candidate direction are prioritized, and among them the point closest to the direction ray is selected. If no such point exists, the obstacle closest to the robot center is chosen. For the selected obstacle point oi, a separating hyperplane is computed by solving the following QP for the hyperplane normal n:
+
+min  
+
+> n
+
+n⊤Qn 
+
+s.t. (vj − oi)⊤n ≤ − ϵ, ∀j, 
+
+(p1 − oi)⊤n = −1,
+
+(1) where vj denotes the vertices of the convex robot body. The matrix Q introduces a directional bias according to the candidate navigation direction, 
+
+Q = ee ⊤ + λ(I − ee ⊤),
+
+which encourages the hyperplane normal to align with e,resulting in a hyperplane approximately perpendicular to the desired motion direction. In this way, the generated polyhedron tends to preserve more free space along the candidate direction while still separating the robot from surrounding obstacles. For obstacles located behind the robot, the weighting controlled by λ allows the hyperplane orientation to rotate so that the backward space can be truncated more efficiently. The inequality constraints keep all robot vertices on the safe side of the hyperplane, while the equality constraint fixes the normal vector’s scale and keeps the robot center inside the safe region. The generated hyperplane is added to the polyhedral rep-resentation, and obstacle points lying outside the new half-space are removed from further consideration. This process is repeated until all obstacle points have been separated. The intersection of all generated half-spaces defines the final convex collision-free polyhedron. 
+
+C. Safe Trajectory Generation 
+
+Once a convex collision-free polyhedron has been con-structed, the next step is to generate a feasible trajectory 4
+
+that remains inside the free region while making progress along the navigation direction. 
+
+a) Target pose selection: Let the convex free region be represented as the intersection of half-spaces 
+
+P = {p ∈ Rd | Ap ≤ b},
+
+where each row of A corresponds to the normal vector of a supporting hyperplane and b defines the corresponding offsets. Here, p denotes the position of the robot reference point in the workspace. Given the navigation direction e,the target pose is selected by sampling robot orientations and, for each sampled orientation, solving for the farthest position that the robot can reach along e while remaining inside the free region. Let R denote a sampled robot orientation. In the planar case, R is determined by a yaw angle, while in the spatial case, it is determined by sampled roll-pitch-yaw angles. For a convex robot with body vertices vj , the occupancy of the oriented robot at position p is constrained by 
+
+a⊤ 
+
+> k
+
+p + max  
+
+> j
+
+a⊤ 
+
+> k
+
+(Rv j ) ≤ bk, ∀k, 
+
+where a⊤ 
+
+> k
+
+x ≤ bk denotes the k-th half-space of the poly-hedron. For a fixed orientation R, the farthest reachable position along the navigation direction is then obtained by 
+
+p⋆(R) = arg max  
+
+> p
+
+e⊤p
+
+s.t. a⊤ 
+
+> k
+
+p + max  
+
+> j
+
+a⊤ 
+
+> k
+
+(Rv j ) ≤ bk, ∀k. 
+
+This yields a candidate target pose for the sampled orientation. By evaluating all sampled orientations, we ob-tain a set of feasible target poses and select the one that achieves the largest forward progress along e. This sampled-orientation strategy avoids a more expensive joint nonconvex search over position and orientation while remaining effec-tive for online local planning. 
+
+b) Trajectory parameterization: Given the selected tar-get pose, we parameterize the robot motion using B´ ezier curves for both position and orientation: 
+
+p(t) = 
+
+> k
+
+X
+
+> i=0
+
+Bki (t)Pi, θ(t) = 
+
+> k
+
+X
+
+> i=0
+
+Bki (t)Θ i, t ∈ [0 , 1] ,
+
+where Pi and Θi are the control points for position and orientation, respectively, and Bki (t) are the Bernstein basis polynomials. The initial and terminal control points are fixed by the current robot pose and the target pose, while the remaining control points are iteratively adjusted to improve smoothness and enforce safety. 
+
+c) Continuous safety verification: Let a supporting hyperplane of the convex free region be defined as 
+
+a⊤x ≤ b. 
+
+To guarantee collision-free motion, the entire robot body must remain inside this half-space throughout the trajectory. Let vj denote the robot vertices in the body frame, and let 
+
+R(t) be the rotation matrix determined by the orientation trajectory θ(t). Then the collision-free condition can be written as 
+
+a⊤p(t) + max  
+
+> j
+
+a⊤ R(t)vj
+
+ ≤ b. 
+
+Define the violation function 
+
+g(t) = a⊤p(t) + max  
+
+> j
+
+a⊤ R(t)vj
+
+ − b. 
+
+Ensuring collision-free motion is equivalent to verifying 
+
+g(t) ≤ 0 for all t ∈ [0 , 1] . Since p(t) and θ(t) are smooth B´ ezier curves, g(t) is Lipschitz continuous. Let 
+
+rmax = max  
+
+> j
+
+∥vj ∥, amax = max  
+
+> k
+
+∥ak∥,
+
+and let ¯vp and ¯vθ be upper bounds on the translational and rotational rates, obtained from the B´ ezier control-point dif-ferences. By upper-bounding the translational and rotational contributions to the rate of the support function, we obtain a valid global Lipschitz constant 
+
+L = amax 
+
+ ¯vp + rmax ¯vθ
+
+.
+
+For any interval [tL, t R], let tc = ( tL + tR)/2. Using the Lipschitz property, we define the upper bound 
+
+u(tL, t R) := g(tc) + L tR − tL
+
+2 ,
+
+which satisfies 
+
+max  
+
+> t∈[tL,t R]
+
+g(t) ≤ u(tL, t R).
+
+Thus, the interval is certified safe if u(tL, t R) ≤ 0.Based on this bound, we perform adaptive interval subdi-vision to search for the worst constraint violation along the trajectory. Intervals with u(tL, t R) ≤ 0 are safely discarded, while the remaining intervals are selectively subdivided, focusing on the most critical portions of the trajectory. The process terminates when either all intervals are certified safe or a most critical time instant t⋆ is identified for further refinement. As illustrated in Fig. 3(a), this procedure both provides a safety certificate and localizes the time instant 
+
+t⋆ corresponding to the highest potential violation, which is subsequently used to guide local trajectory refinement. 
+
+d) Local trajectory refinement: When a positive worst violation is detected, the trajectory is locally refined around the corresponding time instant t⋆. As shown in Fig. 3(b), we exploit the local structure of the violation function to efficiently correct the trajectory. At t⋆, we first identify the most violated supporting hyperplanes and the corresponding active robot vertices. We then select a small subset of internal B´ ezier control points with the largest Bernstein weights at t⋆, since these control points have the strongest local influence on the trajectory near the violating time. Let δx denote the stacked update vector of the selected position and orientation control points, and let s ≥ 0 be a slack variable. Using a first-order approximation of the 5                  
+
+> Fig. 3. Safe trajectory generation via Lipschitz-based verification and local refinement. (a) The violation function g(t)measures the signed distance to the supporting hyperplanes, where g(t)≤0indicates safety. Lipschitz upper bounds u(tL, t R)enable adaptive subdivision to localize the most critical time t⋆. (b) At t⋆, the gradient ∇g(t⋆)indicates the ascent direction of violation, and the control points are updated via δx in the descent direction to enforce g(t⋆)≤0.
+
+violation function at t⋆, the refinement step is formulated as a QP 
+
+min  
+
+> δx, s
+
+∥δx p∥2 
+
+> Wp
+
++ ∥δx θ ∥2 
+
+> Wθ
+
++ wss2
+
+s.t. ∇gℓ(t⋆)⊤δx − s ≤ − gℓ(t⋆) − m, ∀ℓ, δx ∈ B , s ≥ 0,
+
+(2) where gℓ(t⋆) denotes the violation of the ℓ-th selected hyperplane at t⋆, m > 0 is a safety margin, and B is a trust region that bounds the control-point updates. The weights 
+
+Wp and Wθ penalize translational and rotational changes, respectively. After solving the QP, the resulting control-point update is applied with a backtracking line search. The updated trajec-tory is accepted if the worst continuous violation decreases; otherwise, the step size is reduced. This verification-and-refinement process is repeated until the trajectory becomes continuously safe, no further improvement can be found, or a predefined maximum number of iterations (set to 30 in our implementation) is reached, which guarantees termination of the procedure. The overall safe trajectory generation procedure is summarized in Algorithm 1. 
+
+D. Navigation Graph 
+
+The generated free regions and candidate motions are maintained in a region-based navigation graph for incremen-tal planning in unknown environments. Each node stores a robot pose and a locally constructed convex free region, and each edge represents a candidate motion from that region to a target pose along an extracted direction. At each planning step, the current node is expanded into multiple frontier edges, and the edge whose target pose is closest to the global goal is selected for execution. Trajectory generation with continuous safety verification is performed only for the selected edge. If the edge is continuously safe, the robot executes it and adds a new node at the 
+
+Algorithm 1 Trajectory Generation with Continuous Veri-fication and Local Refinement  
+
+> 1:
+
+Input: convex polyhedron P, navigation direction e,initial pose (p0, θ 0), maximum iterations N 
+
+> 2:
+
+Output: continuously safe B´ ezier trajectory (p(t), θ (t))  
+
+> 3:
+
+Sample robot orientations  
+
+> 4:
+
+for each sampled orientation R do  
+
+> 5:
+
+Compute the farthest feasible target pose along e 
+
+> 6:
+
+end for  
+
+> 7:
+
+Select a target pose (p⋆, θ ⋆) 
+
+> 8:
+
+Initialize B´ ezier trajectory from (p0, θ 0) to (p⋆, θ ⋆) 
+
+> 9:
+
+for k = 1 to N do  
+
+> 10:
+
+Perform continuous safety verification  
+
+> 11:
+
+if trajectory is certified safe then  
+
+> 12:
+
+break  
+
+> 13:
+
+end if  
+
+> 14:
+
+Identify the worst violating time t⋆ 
+
+> 15:
+
+Collect the most violated hyperplanes at t⋆ 
+
+> 16:
+
+Select control points with the largest Bernstein weights at t⋆ 
+
+> 17:
+
+Solve the local refinement QP  
+
+> 18:
+
+Apply the control-point update with line search  
+
+> 19:
+
+end for 
+
+reached target pose. Otherwise, the edge is marked invalid, and the planner selects the next most promising frontier edge, enabling recovery from locally unproductive branches through previously generated free regions. IV. EXPERIMENTAL RESULTS In this section, we evaluate the proposed framework through validation of direction-aware free-region generation, quantitative studies in cluttered 2D navigation, and addi-tional demonstrations in 3D and real-world environments. 
+
+A. Validation of the Proposed Direction-Aware Free-Region Generation 
+
+We validate the proposed direction-aware free-region gen-eration method in narrow-passage scenarios, where region quality depends not only on collision-free geometry but also on whether it supports traversal along a feasible direc-tion. Existing methods, such as RILS [1], FRTree [4], and FIRI [7], mainly construct convex regions from the local obstacle configuration around the seed, without explicitly considering navigation directions. Fig. 4 shows two representative examples. RILS and FRTree use seed lines along the same candidate direction as ours. RILS may produce slender regions that do not fully contain the robot body, while FRTree improves coverage through overlapping local inflations but can still leave in-sufficient clearance. FIRI also focuses on local free-space enlargement without explicitly considering the candidate direction and is not shown because its implementation is unavailable. In contrast, our method fully contains the robot body while preserving traversable space along the candidate direction. 6             
+
+> Fig. 4. Free-region generation in two narrow-passage scenarios. The black rectangle denotes the robot body, and the purple dashed arrow indicates the candidate direction. With the same direction seed, RILS and FRTree may fail to fully contain the robot or leave limited clearance, while ours maintains full containment. TABLE II AVERAGE RUNTIME OF MAIN MODULES IN 2D/3D S ETTINGS .Setting Module Avg. Time (ms) 2D Free-Region Generation 1.488 Target Pose Selection 1.328 Safe Trajectory Generation 1.628 3D Free-Region Generation 2.057 Target Pose Selection 16.816 Safe Trajectory Generation 3.473
+
+B. Simulation 
+
+Before presenting the comparative simulations, we report the runtime of the main modules. Table II shows the average runtime of free-region generation, target pose selection, and safe trajectory generation in 2D and 3D settings, indicating that the proposed pipeline remains computationally efficient. 
+
+1) Navigation in Cluttered and Unknown 2D Environ-ments: We compare the proposed framework with DDR-OPT [12], FASTER [3], and FRTree [4] in randomly gen-erated 2D scenes. Each scene is a 5 m × 5 m workspace with cylindrical obstacles of radius 0.3 m , under obstacle densities of 0.6, 0.8, 1.0, and 1.2 obstacles /m2 (Fig. 5). For each density, we generate five scenarios and conduct four trials per scenario, yielding 20 trials per density per method; results are summarized in Table III. All methods use the same scenarios, start–goal pairs, robot footprint, and success/collision criteria. DDR-OPT uses a two-disc robot model, with map resolution, collision-checking resolution, and inflation parameters tuned to the robot size and obstacle radius. FASTER and FRTree use the same robot footprint, with corresponding safety margins and region parameters tuned accordingly. We report three metrics: Length Scale , the ratio of path length to the straight-line start–goal distance; Complete Rate , the fraction of trials reaching the goal; and Collision-Free Rate , the fraction of trials without collision during execution, regardless of goal completion. As shown in Table III, all methods complete the task in sparse scenes, but safety differences appear as density increases. DDR-OPT and FASTER drop in both completion and collision-free rates, while FRTree maintains high com-pletion but exhibits increasing collisions. In contrast, the proposed method maintains full completion and collision-free navigation across all densities.                                                                
+
+> Fig. 5. Representative 2D environments with obstacle densities of 0.6,0.8,
+> 1.0, and 1.2 obstacles /m2. Each 5 m ×5 m workspace contains cylin-drical obstacles of radius 0.3 m . Trajectories generated by the proposed framework are shown, illustrating safe navigation in cluttered scenes of varying density. TABLE III COMPARISON OF KEY METRICS FOR DIFFERENT PLANNERS IN 2D
+> ENVIRONMENTS WITH VARYING OBSTACLE DENSITIES .Obstacle Density Metric DDR-OPT FASTER FRTree Ours 0.6 Length Scale 1.02 1.03 1.29 1.03 Complete Rate 1.00 1.00 1.00 1.00 Collision-Free Rate 1.00 1.00 1.00 1.00 0.8 Length Scale 1.09 1.10 1.22 1.12 Complete Rate 1.00 0.90 1.00 1.00
+> Collision-Free Rate 0.55 0.20 1.00 1.00
+> 1.0 Length Scale 1.14 1.08 1.22 1.27 Complete Rate 0.90 0.25 1.00 1.00
+> Collision-Free Rate 0.45 0.15 0.60 1.00
+> 1.2 Length Scale 1.13 N/A 1.21 1.10
+> Complete Rate 0.45 0.00 0.90 1.00
+> Collision-Free Rate 0.35 N/A 0.40 1.00
+
+These differences are related to how the compared meth-ods represent free space and enforce safety. DDR-OPT and FASTER do not explicitly model robot geometry during safety checking, which limits their reliability in dense clutter. FRTree models robot geometry explicitly but ver-ifies safety only at sampled states, which can miss inter-sample collisions. The proposed framework incorporates feasible traversal directions during free-region generation while providing continuous safety guarantees, allowing it to better preserve passable narrow gaps. Although some baselines achieve smaller length scales in certain settings, these shorter paths are accompanied by collisions or reduced completion rates. 7                             
+
+> TABLE IV ABLATION STUDY IN HIGH -DENSITY SCENES . LS: L ENGTH SCALE . CR: COMPLETE RATE . CFR: C OLLISION -F REE RATE .Density 1.0 Density 1.2 Variant LS CR CFR LS CR CFR Ours w/o Direction-Aware 1.61 0.80 1.00 1.20 0.75 1.00 Ours w/o Continuous Safety 1.58 0.95 0.95 1.19 0.70 0.85 Ours (Full) 1.27 1.00 1.00 1.10 1.00 1.00
+> Fig. 6. Representative result of 3D navigation in a cluttered environment with dead-end branches. The figure shows that the proposed framework can generate collision-free motion in 3D and continue navigation after exploring a dead-end branch. The upper-left top view highlights the corresponding backtracking behavior enabled by the maintained free-region graph.
+
+2) Ablation Study: To isolate the two main components, we evaluate two ablation variants at densities 1.0 and 1.2 using the same scenarios. Ours w/o Direction-Aware sets Q
+
+to the identity matrix and disables direction-aware obstacle selection, reducing the region generation to standard sepa-rating hyperplane construction. Ours w/o Continuous Safety 
+
+removes continuous safety verification and local refinement, replacing them with sampled safety checking; the two are removed jointly because refinement relies on the violation time and gradient from continuous verification. As shown in Table IV, removing direction-aware region generation reduces the completion rate while the collision-free rate remains 1.00, indicating that the generated regions become poorly aligned with feasible traversal directions, preventing the robot from finding viable paths through narrow passages. Removing continuous safety also reduces the completion rate, because without local refinement the planner must discard trajectories with even small violations rather than repairing them, and occasionally fails to detect inter-sample collisions. Both ablation variants also exhibit larger length scales than the full method, indicating less efficient paths even in successful trials. The full method achieves the best performance across all metrics, confirming that the two components address complementary aspects of cluttered navigation. 
+
+3) Navigation in 3D Environments with Dead Ends: We further provide a qualitative 3D experiment in a cluttered environment with dead-end branches to demonstrate the applicability of the proposed framework beyond planar navigation. In this experiment, the robot plans directly in 3D free space and navigates through the cluttered environment toward the goal.  
+
+> Fig. 7. Real-world navigation results of the proposed framework on a quadrupedal robot and a UAV. (a) 2D navigation in a cluttered environment. The robot successfully reaches the goal through narrow and cluttered regions without collision. (b) 3D navigation in a cluttered environment with 3D obstacles of varying heights.
+
+As shown in Fig. 6, the proposed method successfully guides the robot from the start to the goal while maintaining collision-free motion throughout the execution. The example also highlights the role of the region-based graph in handling dead ends. After entering a dead-end branch on the left side of the environment, the planner backtracks using the maintained graph of previously generated free regions and then continues toward the goal through another branch, as further illustrated in the top-view inset. 
+
+C. Real-World Validation 
+
+We finally validate the proposed framework in real-world experiments on two robotic platforms: a quadrupedal robot for 2D navigation and a UAV for 3D navigation. This part is mainly intended to verify the practical applicability of the complete system in cluttered environments. 
+
+1) 2D Real-World Navigation: We first test the proposed framework on a Unitree Go2 robot equipped with a MID360 LiDAR in an unknown and cluttered indoor environment. The robot is commanded to reach a designated goal in a 6 m × 4 m workspace containing multiple obstacles. As shown in Fig. 7(a), the robot successfully navigates through cluttered regions and reaches the goal without collision. 
+
+2) 3D Real-World Navigation: We further evaluate the proposed framework on a UAV in a real-world 3D naviga-tion scenario within a 6 m ×4 m ×2.5 m workspace contain-ing obstacles of varying heights. As shown in Fig. 7(b), the 8
+
+robot successfully traverses the cluttered environment and reaches the goal without collision. V. D ISCUSSION AND CONCLUSION 
+
+In this paper, we propose a robot navigation framework that integrates direction-aware convex free-region generation and continuous-safe trajectory generation for navigation in unknown and cluttered environments. The proposed method produces free regions that better preserve traversable space along candidate directions, and generates continuously safe motion via Bezier trajectory parameterization, Lipschitz-based verification, and local control-point refinement. Ex-periments validate the framework in cluttered 2D navigation, with additional 3D and real-world demonstrations. The proposed framework has several limitations that suggest directions for future work. First, the framework does not guarantee completeness: in extremely elongated free regions, the fixed-degree B´ ezier parameterization may fail to produce a continuously safe trajectory even when a feasible path exists geometrically. This can be mitigated by tuning the λ parameter in region generation or by increasing the number of B´ ezier control points at the cost of additional computation. Second, the current formulation addresses geometric continuous safety and delegates dynamic feasi-bility to the downstream tracking controller, following the common hierarchical planning-control architecture. Explicit velocity and acceleration constraints can be naturally inte-grated into the refinement QP as a straightforward extension, which we leave to future work. REFERENCES [1] S. Liu, M. Watterson, K. Mohta, K. Sun, S. Bhattacharya, C. J. Taylor, and V. Kumar, “Planning dynamically feasible trajectories for quadrotors using safe flight corridors in 3-d complex environments,” 
+
+IEEE Robotics and Automation Letters , vol. 2, no. 3, pp. 1688–1695, 2017. [2] R. Deits and R. Tedrake, “Computing large convex regions of obstacle-free space through semidefinite programming,” in Algo-rithmic Foundations of Robotics XI: Selected Contributions of the Eleventh International Workshop on the Algorithmic Foundations of Robotics . Springer, 2015, pp. 109–124. [3] J. Tordesillas, B. T. Lopez, M. Everett, and J. P. How, “FASTER: Fast and safe trajectory planner for navigation in unknown environments,” 
+
+IEEE Transactions on Robotics , vol. 38, no. 2, pp. 922–938, 2022. [4] Y. Li, Z. Song, C. Zheng, Z. Bi, K. Chen, M. Y. Wang, and J. Ma, “FRTree planner: Robot navigation in cluttered and unknown envi-ronments with tree of free regions,” IEEE Robotics and Automation Letters , vol. 10, no. 4, pp. 3811–3818, 2025. [5] Y. Li, C. Zheng, K. Chen, Y. Xie, X. Tang, M. Y. Wang, and J. Ma, “Collision-free trajectory optimization in cluttered environments us-ing sums-of-squares programming,” IEEE Robotics and Automation Letters , vol. 9, no. 12, pp. 11 026–11 033, 2024. [6] Y. Li, X. Tang, K. Chen, C. Zheng, H. Liu, and J. Ma, “Geometry-aware safety-critical local reactive controller for robot navigation in unknown and cluttered environments,” IEEE Robotics and Automa-tion Letters , vol. 9, no. 4, pp. 3419–3426, 2024. [7] Q. Wang, Z. Wang, M. Wang, J. Ji, Z. Han, T. Wu, R. Jin, Y. Gao, C. Xu, and F. Gao, “Fast iterative region inflation for computing large 2-d/3-d convex regions of obstacle-free space,” IEEE Transactions on Robotics , vol. 41, pp. 3223–3243, 2025. [8] K. Chen, H. Liu, Y. Li, J. Duan, L. Zhu, and J. Ma, “Robot navigation in unknown and cluttered workspace with dynamical system modula-tion in starshaped roadmap,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) , 2025, pp. 10 140–10 146. [9] C. Wu, R. Wang, M. Song, F. Gao, J. Mei, and B. Zhou, “Real-time whole-body motion planning for mobile manipulators using environment-adaptive search and spatial-temporal optimization,” in 
+
+2024 IEEE International Conference on Robotics and Automation (ICRA) , 2024, pp. 1369–1375. [10] M. Otte and E. Frazzoli, “Rrtx: Asymptotically optimal single-query sampling-based motion planning with quick replanning,” The International Journal of Robotics Research , vol. 35, no. 7, pp. 797– 822, 2016. [11] Y. Qu, Y. Li, Y. Guo, W. Yi, H. Cui, Y. Lv, and S. Zhong, “Manageable convex region iteration without half-plane optimization for robot navigation in 2d cluttered scenes,” IEEE Robotics and Automation Letters , pp. 1–8, 2026. [12] M. Zhang, N. Chen, H. Wang, J. Qiu, Z. Han, Q. Ren, C. Xu, F. Gao, and Y. Cao, “Universal trajectory optimization framework for differential drive robot class,” IEEE Transactions on Automation Science and Engineering , vol. 22, pp. 13 030–13 045, 2025. [13] S. Geng, Q. Wang, L. Xie, C. Xu, Y. Cao, and F. Gao, “Robo-centric esdf: A fast and accurate whole-body collision evaluation tool for any-shape robotic planning,” in 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2023, pp. 290–297. [14] J. Tordesillas and J. P. How, “Mader: Trajectory planner in multiagent and dynamic environments,” IEEE Transactions on Robotics , vol. 38, no. 1, pp. 463–476, 2022. [15] S. Li, Z. Song, Y. Li, Z. Bi, and J. Ma, “Online trajectory optimization for arbitrary-shaped mobile robots via polynomial separating hyper-surfaces,” arXiv preprint arXiv:2601.09231 , 2026. [16] S. Ruan, K. L. Poblete, H. Wu, Q. Ma, and G. S. Chirikjian, “Efficient path planning in narrow passages for robots with ellipsoidal components,” IEEE Transactions on Robotics , vol. 39, no. 1, pp. 110– 127, 2023. [17] Z. Han, Z. Wang, N. Pan, Y. Lin, C. Xu, and F. Gao, “Fast-racing: An open-source strong baseline for SE(3) planning in autonomous drone racing,” IEEE Robotics and Automation Letters , vol. 6, no. 4, pp. 8631–8638, 2021. [18] B. Yamauchi, “A frontier-based approach for autonomous explo-ration,” in Proceedings 1997 IEEE International Symposium on Computational Intelligence in Robotics and Automation CIRA’97. ’Towards New Computational Principles for Robotics and Automa-tion’ , 1997, pp. 146–151. [19] A. Batinovic, T. Petrovic, A. Ivanovic, F. Petric, and S. Bogdan, “A multi-resolution frontier-based planner for autonomous 3d explo-ration,” IEEE Robotics and Automation Letters , vol. 6, no. 3, pp. 4528–4535, 2021. [20] H. Zhang, S. Wang, Y. Liu, P. Ji, R. Yu, and T. Chao, “Efp: Efficient frontier-based autonomous uav exploration strategy for unknown environments,” IEEE Robotics and Automation Letters , vol. 9, no. 3, pp. 2941–2948, 2024. [21] M. Mujahad, D. Fischer, B. Mertsching, and H. Jaddu, “Closest gap based (cg) reactive obstacle avoidance navigation for highly cluttered environments,” in 2010 IEEE/RSJ International Conference on Intelligent Robots and Systems , 2010, pp. 1805–1812. [22] S. Feng, A. Abuaish, and P. A. Vela, “Safer gap: Safe navigation of planar nonholonomic robots with a gap-based local planner,” IEEE Robotics and Automation Letters , vol. 9, no. 12, pp. 11 034–11 041, 2024. [23] R. Xu, S. Feng, and P. A. Vela, “Potential gap: A gap-informed reactive policy for safe hierarchical navigation,” IEEE Robotics and Automation Letters , vol. 6, no. 4, pp. 8325–8332, 2021. [24] J. Schulman, Y. Duan, J. Ho, A. Lee, I. Awwal, H. Bradlow, J. Pan, S. Patil, K. Goldberg, and P. Abbeel, “Motion planning with sequential convex optimization and convex collision checking,” The International Journal of Robotics Research , vol. 33, no. 9, pp. 1251– 1270, 2014. [25] W. Merkt, V. Ivan, and S. Vijayakumar, “Continuous-time collision avoidance for trajectory optimization in dynamic environments,” in 
+
+2019 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2019, pp. 7248–7255. [26] Z. Zhang, Y. Zhang, R. Han, L. Zhang, and J. Pan, “A generalized continuous collision detection framework of polynomial trajectory for mobile robots in cluttered environments,” IEEE Robotics and Automation Letters , vol. 7, no. 4, pp. 9810–9817, 2022.
