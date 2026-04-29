@@ -1,0 +1,248 @@
+Title: asRoBallet: Closing the Sim2Real Gap via Friction-Aware Reinforcement Learning for Underactuated Spherical Dynamics
+
+URL Source: https://arxiv.org/pdf/2604.24916v1
+
+Published Time: Wed, 29 Apr 2026 00:28:21 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# AS ROBALLET : C LOSING THE SIM 2R EAL GAP VIA 
+
+# FRICTION -A WARE REINFORCEMENT LEARNING FOR 
+
+# UNDERACTUATED SPHERICAL DYNAMICS ∗
+
+A P REPRINT 
+
+Fang Wan 
+
+Southern University of Science and Technology Shenzhen, China 
+
+wanfang@ieee.org 
+
+Guangyi Huang, Tianyu Wu, Zishang Zhang, Bangchao Huang 
+
+Southern University of Science and Technology Shenzhen, China 
+
+Haoran Sun 
+
+The University of Hong Kong, Hong Kong SAR, China 
+
+Mingdong Chen 
+
+Shenzhen AncoraSpring Robotics Co., Ltd. Shenzhen, China 
+
+chen@AncoraSpring.com 
+
+Chaoyang Song 
+
+Mohamed bin Zayed University of Artificial Intelligence Abu Dhabi, United Arab Emirates 
+
+songcy@ieee.org 
+
+April 29, 2026 
+
+# ABSTRACT 
+
+We introduce asRoBallet , to the best of our knowledge, the first successful deployment of rein-forcement learning (RL) on a humanoid ballbot hardware. Historically, ballbots have served as a canonical benchmark for underactuated and nonholonomic control, which are characterized by a reality gap in complex friction models for wheel-sphere-ground interactions. While current litera-ture demonstrates successful handling of 3D balancing with LQR and MPC, transitioning to actual hardware for a humanoid ballbot using RL is currently hindered by critical gaps in contact modeling, actuator latency & jitter, and safe hardware exploration, and safe hardware exploration. This study proposes a high-fidelity MuJoCo simulation that explicitly models the discrete roller mechanics of ETH-type omni-wheels, thereby capturing parasitic vibrations and contact discontinuities that are previously ignored. We also developed a Friction-Aware Reinforcement Learning framework that achieves zero-shot Sim2Real transfer by mastering the coupled rolling, lateral, and torsional friction channels at the wheel-sphere and sphere-ground interfaces. We designed asRoBallet through subtractive reconfiguration, repurposing key components from an overconstrained quadruped and integrating them into a newly designed structural frame to achieve a robust research platform at low cost. We also developed a generalized iOS ecosystem that transforms consumer electronics into a low-latency interface, enabling a single operator to orchestrate expressive humanoid maneuvers via intuitive natural motion. 
+
+Keywords Humanoid BallBot · Tribology Modeling · Reinforcement Learning · Human-Robot Interaction ·
+
+Smartphone-based Robotics 
+
+> ∗
+
+This work has been accepted for presentation at RSS 2026. 
+
+> arXiv:2604.24916v1 [cs.RO] 27 Apr 2026
+
+A PREPRINT - A PRIL 29, 2026 
+
+# 1 Introduction 
+
+The single-spherical-wheel robot, or “ballbot,” presents a theoretically optimal morphology for robotic assistants in human-centric environments [ 1, 2]. Its omnidirectional mobility allows for agile navigation in constrained domestic spaces, while its tall, slender profile facilitates compliant physical interaction and social presence [ 3 , 4]. However, its widespread deployment remains limited compared to quadrupedal or differential-drive systems due to the prohibitive complexity of custom hardware integration and the Sim2Real gap inherent in controlling underactuated spherical dynamics .
+
+1.1 Motivation and Related Work 
+
+The first barrier lies in hardware architecture. Traditional ballbot platforms typically rely on expensive, custom-built drivetrains utilizing high-gear-ratio motors to ensure precise kinematic constraints [ 5, 6, 7 ]. While effective at minimizing control uncertainty, this approach yields rigid, mechanically complex systems that lack impact resilience. Furthermore, perception often relies on dedicated industrial-grade LiDARs and robotic vision, driving costs beyond the reach of many research labs. This stands in stark contrast to recent advances in quadrupedal robotics, which have converged on proprioceptive quasi-direct-drive actuators [ 8 ] and smartphone-based computing [ 9]. These architectures offer high torque density, back-drivability, and significant cost reductions. However, the application of such compliant actuation ecosystems to the inherently unstable dynamics of a ballbot remains underexplored. The second , and perhaps more critical, barrier is the Reality Gap in control. Classical control approaches for ballbots, such as Linear Quadratic Regulators (LQR) [ 2, 6] or Model Predictive Control (MPC) [ 10 , 11 ], rely on linearized dynamic models (e.g., the Planar Inverted Pendulum). These controllers operate under strict assumptions: infinite friction at the contact point (no slip), negligible rolling resistance, and ideal actuation. In reality, the interface between a rubber-coated sphere and omni-directional rollers is governed by complex tribology, specifically the chaotic coupling of rolling resistance, lateral slip, and torsional friction [12]. When coupled with the passive dynamics of the rollers and the floating sphere, the system explodes in complexity. A single ETH-type omni-wheel with multiple roller rows could introduce 10 to 12 passive Degrees of Freedom (DoF). Standard model-based controllers struggle to account for these micro-dynamics, and prior Reinforcement Learning (RL) approaches often fail to transfer to reality because their simulation environments smooth over these tribological nuances [ 13 , 14 ]. To achieve robust, agile performance, the control policy must be trained in an environment that explicitly captures the full dimensionality of these interactions, rather than interacting with a simplified kinematic abstraction. 
+
+Finally , a significant usability gap exists in the teleoperation of such high-Degree-of-Freedom (DoF) systems. Operating a balancing humanoid typically requires complex, non-intuitive interfaces (e.g., joystick arrays), often necessitating multiple operators to coordinate locomotion and upper-body gestures separately. There is a distinct lack of lightweight interfaces that leverage ubiquitous consumer hardware to provide unified, whole-body control. 
+
+1.2 Key Contributions 
+
+To bridge these gaps in hardware accessibility, control robustness, and interface usability, this paper presents asRoBallet, a holistic ballbot system for robust humanoid balancing. Our specific contributions are as follows: 1. We present a cost-effective, high-bandwidth humanoid ballbot design achieved by reconfiguring the propriocep-tive actuation, computation core, and mobile perception of an overconstrained quadruped into an underactuated spherical morphology. 2. We introduce a granular dynamics model that explicitly simulates the discrete roller mechanics of ETH-type omni-wheels, successfully capturing the parasitic vibrations and roller handovers critical to physical balancing stability. 3. We propose a friction-aware reinforcement learning framework that achieves zero-shot hardware deployment by mastering the tribological couplings of rolling, lateral, and torsional friction at the wheel-sphere-ground interfaces, enabling robust whole-body locomotion. 4. We develop a generalized iOS interface that leverages consumer-grade sensing for low-latency, markerless whole-body teleoperation, facilitating intuitive human-robot interaction across diverse humanoid platforms. 2A PREPRINT - A PRIL 29, 2026 
+
+# 2 Reconfigurable Design of asRoBallet 
+
+We employ a subtractive reconfiguration methodology to construct asRoBallet, transforming the open-source asOverDog 
+
+quadruped [ 15 , 16 ] into a humanoid ballbot. By retaining the high-bandwidth actuation, computation, and perceptual core while redesigning the structural chassis, we achieve a cost-effective, impact-resilient platform, as shown in Fig. 1. 
+
+Figure 1: Structural transformation from the asOverDog quadruped (top left) to the asRoBallet humanoid (right). 
+
+2.1 Mechanical Architecture: From Quadruped to Sphere 
+
+The design transformation primarily replaces the chassis and four overconstrained limbs to build asRoBallet. 
+
+2.1.1 Spherical Wheel Base 
+
+Three ETH-type omni-wheels (12 rollers each, offset by 120 ◦) drive a 220 mm SBR-coated hollow steel sphere. To minimize starting torque and cogging, we replaced the original quadruped drive units with lower-torque 5.5 Nm actuators (RobStride 05). 
+
+2.1.2 Humanoid Upper Body & Frame 
+
+The remaining high-torque actuators (RobStride 01, 17 Nm) are reconfigured to form a 2-DoF head and two 4-DoF arms equipped with tactile spheres capable of Vision-based Deformable Perception (VBDeformP) [ 17 , 18 ]. These are mounted on a lightweight T-shaped sheet-metal frame with a 3D printed shoulder designed to minimize rotational inertia relative to the Center of Mass (CoM). The final system comprises 49 degrees of freedom (13 active, 36 passive), presenting a highly underactuated control challenge. 
+
+2.2 Proprioceptive & Computational Core 
+
+We transplant the electro-mechanical stack directly to accelerate commissioning. The quasi-direct-drive actuators provide intrinsic proprioception via current-based torque estimation, which is essential for our friction-aware policy. 3A PREPRINT - A PRIL 29, 2026 The self-contained computational unit houses a DJI TB47S battery, a 2 kHz industrial IMU (XSense MTI630), an Intel NUC for real-time control, and a Jetson Orin for neural inference, eliminating the need for custom power electronics. 
+
+2.3 Consumer-Grade Perception & Interaction 
+
+To minimize cost and complexity, we replace industrial sensing arrays with a unified consumer-grade ecosystem. 
+
+2.3.1 Visual-Inertial Odometry (VIO) 
+
+An iPhone 12 Pro mounted on the spine (Fig. 2) serves as the primary state estimator. By offloading VIO to the device’s Neural Engine, we achieve drift-free 6-DoF localization that feeds directly into the controller, eliminating the need for discrete LiDARs. 
+
+Figure 2: Repurpose mobile perception & computing from an iPhone for robotics, the same for asRoBallet & asOverDog. 
+
+2.3.2 Scalable Teleoperation 
+
+We developed a custom iOS application that uses Wi-Fi Aware for low-latency peer-to-peer communication. The interface ranges from simple gamepad control to embodied telepresence, in which a distributed network of Apple devices (Watch, AirPods, iPhone) captures markerless human motion, enabling future generalization for intuitive whole-body retargeting. 4A PREPRINT - A PRIL 29, 2026 
+
+# 3 Friction-Aware Modeling and Reinforcement Learning of Underactuated Spherical Dynamics 
+
+3.1 High-Fidelity Modeling in MuJoCo 
+
+Analytical models typically assume ideal rolling constraints (no slip) and negligible rolling resistance, thereby ignoring complex tribological phenomena, including the hysteresis of the rubber coating, the anisotropic slip of the omni-rollers, and the nonlinear friction of the actuators. To bridge the reality gap, we construct a high-fidelity multibody simulation in MuJoCo in Fig. 3 that models those uncertainties. 
+
+Figure 3: High-fidelity MuJoCo simulation of asRoBallet’s highly underactuated spherical dynamics. We model asRoBallet as a floating-base system comprising the upper torso, three omni-wheel drive units, and a spherical base. For training, we added a virtual low-damped ball joint between the torso and ball, ensuring stable contact during action exploration. The ball joint is set to ensure that the total contact force between the wheels and the ball equals the torso’s weight, thereby reproducing the real robot’s contact state. We experimentally found that training fails without the ball joint. Once the omni-wheels are no longer in contact with the ball, it is almost impossible to further improve the model or the reward. We will later demonstrate that the policy trained with this virtual ball joint is sufficiently robust to be directly transferred to simulation and to real-world hardware tests without this virtual ball joint. 5A PREPRINT - A PRIL 29, 2026 
+
+Omni-wheel Modeling. We explicitly model the drive unit’s physical geometry. Each wheel is constructed as a ring of 12 free-spinning rollers (alternating between load-bearing and spacer rollers) attached to the main hub via hinge joints. This geometric fidelity is crucial for capturing lateral compliance . Holonomic motion in the asRoBallet hardware is achieved by allowing the rollers to spin freely orthogonal to the drive direction. In our simulation, this is not a mathematical abstraction but a physical outcome of the physics of roller–ball contact. We employ MuJoCo’s soft-constraint convex solver with an elliptic friction cone ( cone=“elliptic” ) and a high constraint impedance ratio (impratio=10 ) to resolve the overconstrained nature of the three-point drive system without numerical instability. To handle the stick-slip transitions inherent to balancing, we enable the Newton solver with noslip_iterations=1 .
+
+Solver & Contact Formulation. We carefully model friction at two critical contact interfaces. For the ball–ground contact pair, we specify full six-dimensional contact (normal, two tangential directions, torsional spin, and two rolling resistances) with relatively high sliding μslide and spin μtorsion friction but small rolling resistance μroll . This choice prevents the sphere from spinning freely in place, yields a realistic rolling onset, and helps the robot “bite” the floor when generating yaw torques. At the ball–roller interface, we use standard three-dimensional contact (normal plus two tangential directions). We model a soft rubber-like layer on the ball by making contacts start stiff (impedance 0.85) and become very stiff (0.99) by 3 mm penetration ( solimp=“0.85 0.99 0.003” ). Lateral compliance is provided by the rollers’ free joints rather than by anisotropic friction coefficients, thereby keeping the model both faithful and numerically robust. 
+
+Frictions in actuators. We further identify the friction parameters of the omni-wheel actuators under no-load, including the viscous friction coefficient Dv and the Coulomb friction torque Dc, which is the minimum torque required to rotate the omni wheel. An increasing torque was given to the motor, and the motion of the motor can be described by [2]: 
+
+Imotor ¨θ = τ (t) − Dv ˙θ − Dc, ˙θ > 0. (1) In the station-keeping task, the omni-wheels rotate slightly, with small motor torques typically oscillating around zero. Hence, it is especially sensitive to the Coulomb friction torque Dc. We experimentally determine Dc in our system to be approximately 130 mNm, which is much lower than Rezero (42 mNm) [ 19 ] and Kugle (26 mNm) [ 6] with much more expensive motors. The relatively large breakaway torque creates a dead zone in our wheel torques. Tiny corrective torques from the controller/policy do not move the wheels until the error grows enough to exceed that threshold, then the wheel breaks free , producing a bigger-than-intended correction. This manifests as limit-cycle jitter in position/yaw, which occasionally results in bursty corrections during station-keeping. We add a body frame B at the ball center, but rigidly attached to the body, providing linear velocity in local coordinates. We also add an IMU frame to host the gyro and orientation sensors, and an iPhone frame providing localization in world coordinates W . Another interesting finding is the selection of actuation types. Following previous work on simulating robotic arms and quadrupeds, the joints in the two arms and neck are actuated using position servos [ 20 ]. However, the three omni-wheels are actuated using direct motor torques. We experimentally find that training fails when a motor-type actuator is replaced with a velocity-type actuator. 
+
+3.2 Reinforcement Learning Task Formulation. We define two distinct locomotive tasks: Velocity Tracking and Station Keeping for long-term hovering. We decouple the upper-body manipulation from the base stabilization to simplify the learning landscape. During locomotion training, the arms and head are treated as passive inertial payloads subject to randomized configura-tions. This makes the base policy robust to significant shifts in the Center of Mass (CoM) without requiring a unified whole-body policy, thereby reducing the dimensionality of the learning problem. 
+
+State and Action Space. The action space A ∈ R3 are continuous torque commands for the three omni-wheel motors. The observation vector ot differs slightly between tasks. • Velocity Tracking ( oV T t ): Relies exclusively on onboard proprioception. 
+
+oV T t = vB , ˆvcmd , qtilt , ωB , at−1
+
+⊤ (2) Here, vB ∈ R2 is the body frame’s estimated linear velocity, ˆvcmd is the user command, qtilt is the roll and pitch orientation relative to gravity, ωB is the gyroscope angular rate, and at−1 is the previous action history. • Station Keeping ( oSK t ): We augment proprioceptive state with exteroceptive position data provided by the iPhone’s VIO pipeline. 
+
+oSK t = vB , pW , ψ heading , qtilt , ωB , at−1
+
+⊤ (3) where pW ∈ R2 is the planar position error in the world frame and ψheading is the yaw error. 6A PREPRINT - A PRIL 29, 2026 A critical challenge in the observation design is estimating vB . In simulation, the ball’s linear velocity in the body frame is measured by a velocimeter mounted at the body frame B. In real experiments, we approximate this via non-slip forward kinematics at the wheel-ball interface. 
+
+Reward Design. As shown in Table 1, the rewards for velocity tracking consist of (a) tracking reward of the target linear and angular velocities, (b) penalty for roll/pitch angular velocities, (c) an uprightness penalty to prevent excessive leaning, and (d) a smoothness penalty on control inputs (e.g. −λ|ut − ut−1|2 to discourage abrupt changes in action). The smoothness term directly promotes graceful motion by implicitly minimizing jerk. For station-keeping, the rewards include terms for (a) minimizing the distance of the robot from the goal position (current position when asRoBallet is asked to stay station), (b) minimizing the tilt angle (uprightness), and (c) low control effort and smoothness. Table 1: Summary of reward terms. Task Term Weight Expression Velocity Tracking Linear Vel. 0.5 exp( − ∥ vxy − ˆvxy ∥2 /σ xy 2)
+
+Yaw Ang. Vel. 0.5 exp( − ∥ ωz − ˆωz ∥2 /σ w2)
+
+Angular Vel. -0.1 ∥ωxy ∥2
+
+Torque -0.1 ∥τ ∥2
+
+Action Rate -0.1 ∥at − at−1∥2
+
+Termination 1 ⊮(ϕ, θ ≤ 20 ◦)
+
+Station Keeping Pos. & Heading 1 1 − tanh( ∥(x, y, ψ )∥)
+
+Angular Vel. -0.001 ∥ω∥2
+
+Body Tilt -0.001 ∥(ϕ, θ )∥2
+
+Torque -0.01 ∥τ ∥2
+
+Action Rate -0.01 ∥at − at−1∥2
+
+Termination 1 ⊮(ϕ, θ ≤ 20 ◦)
+
+Episode Reset & Termination. For velocity tracking, episode-wise target commands are sampled by a masked update rule. A fresh proposal yk ∼ U (Vmin , V max )3 is filtered by two independent Bernoulli masks zk, w k ∼ Bernoulli (0 .5) 
+
+per dimension, yielding 
+
+xk+1 = xk − wk ⊙ (xk − zk ⊙ yk), (4) which either holds, zeros, or replaces each component with a new value drawn from the distribution. This command is injected at reset and remains constant during the episode. The pose and velocity of the body are reset at every episode following: 1. yaw: ψ ∼ U (−π, π ),2. roll/pitch: θx, θ y ∼ U (−5, 5) degree, 3. horizontal linear velocities: vx, v y ∼ U (−0.5, 0.5) m/s, 4. angular velocities: wx, w y , w z ∼ U (−0.1, 0.1) rad/s, 5. head/arms configurations uniformly sampled from the control range of each joint. Episodes terminate early if roll or pitch exceeds 20 ◦; otherwise, they truncate at a horizon of 1, 000 steps (equal to 10 seconds). The arm collision is ignored in the configuration randomization, as we do not actually use the joint values, but rather to randomize the COM dynamics. For station-keeping tasks, the targeted position and heading direction are set to zero. The reset is similar to velocity tracking except the first two items are replaced by resetting the initial pose in yaw of ψ ∼ U (−π/ 6, π/ 6) and location of x, y ∼ U (−0.5, 0.5) m. 
+
+Domain Randomization & Robustness. Previous work has shown that ballbots are highly sensitive to noises in the body’s angular velocities, resulting in tremors during hardware deployment, thereby requiring post-processing filters, such as low-pass and Kalman filters. Classic model-based controllers for ballbots, such as those at CMU and Kugle, are typically designed under the no-slip (high-friction) assumption and linearize the dynamics around that constraint to enable clean LQR/MPC designs with precise torque tracking. When friction drops (due to dust, smooth tile, or moisture), their assumptions may break. We implement a randomization routine that samples (a) the floor tangential and torsional friction coefficient from U(0 .6, 1.2) , and (b) the motor’s Coulomb friction torque from U(0 .08 , 0.12) Nm, (c) gyroscope sensor noises from N (0 , 0.009) rad/s, matching real IMU’s noise level. 7A PREPRINT - A PRIL 29, 2026 
+
+Learning Algorithm & Training Setup. One environment step advances the simulator by frame_skip =5 internal steps, and the control period is 0.01 s. 
+
+# 4 General Purpose Humanoid Interaction with an iOS App 
+
+This section introduces an iOS application we developed for asRoBallet, aiming at providing (1) an All-in-One real-time sensory suite for advanced robotics, (2) a scalable interface for humanoid interaction, and (3) a general-purpose visualization for humanoid robots. 
+
+4.1 iPhone as an All-in-One Real-time Sensing Suite 
+
+While it is generally understood that robots require a wide range of real-time sensory feedback to achieve physical intelligence, building such perceptual capability has been a challenging task, considering various morphologies of the robot embodiment, different sensing physics and electro-mechanical integration, multi-source heterogeneous data fusion, and real-time demand for physical interaction, all of which must be kept within an affordable budget towards meaningful implementation. The traditional approach typically requires substantial resources and effort for system integration [21 ], making it challenging to build physical agents and resulting in extensive difficulties with cross-embodiment reuse [22, 23]. Recent developments in mobile computing have enabled significant improvements in integrating multiple sensors into consumer-grade smartphones at relatively low cost. A leading example is Apple’s iPhone series, which has matured in embedded sensing and features a rich codebase and APIs for everyday and professional use, making it an ideal alternative to custom sensing integration. In this work, we present an iOS app we developed to demonstrate a promising direction: leveraging mobile computing and perception toward an All-in-One solution for advanced robotics. We develop the app with extensive APIs to provide robotic researchers with direct access to all sensors of Apple devices, including iPhone, Apple Watch, iPad, AirPods, and Mac. To evaluate its performance in robotics, we select pose estimation accuracy and peer-to-peer communication latency to exemplify the feasibility of this concept. Shown in Fig. 4A is the evaluation of iPhone 17 Pro’s pose estimation performance against ground truth collected from an UR7e robotic arm. We observed promising relative errors in position tracking (within 5%) and orientation tracking (within 1.5%) in Fig. 4B, both of which are sufficiently competitive to consider the iPhone Pro as a high-performing sensor for advanced robotics. We also tested the latency performance between an iPhone 16 Pro Max and an iPhone 17 Pro. The average latency was approximately 1.2 ms in common usage conditions, measured over a 100 s communication session with a communication frequency of 100 Hz, as shown in Fig. 4C. This performance is consistent over an extended period of use but drops significantly due to heating, which can be easily mitigated by adding active cooling to the back of the iPhone. We intentionally use multiple Pro series models in our tests because results are generally consistent due to Apple’s quality control. 
+
+4.2 A Scalable Interface for Humanoid Interaction 
+
+The anthropomorphic design of humanoid robots poses challenges for human-robot interaction due to the lack of an interface to retarget expressive human commands to the humanoid’s multi-DoF execution. For example, a recent report by Disney Research indicates that 4 operators, each using different interfaces, are required to achieve expressive and lively interaction with the H.E.R.B.I.E. humanoid in filmmaking. The majority of commercial humanoids are controlled using joystick-like devices for preprogrammed actions, which requires additional development and hardware to enable whole-body interaction. In this work, we propose a scalable interface for humanoid interaction with our app by leveraging the iOS ecosystem. Three levels of direct interactions are implemented, including (1) simple control as a joystick (Touchscreen control in Fig. 2 without using a physical joystick), (2) wearable motion capture as an IMU suit (Fig. 5A), and (3) markerless motion capture via whole-body pose tracking (Fig. 5B), all achieved by a single operator using iOS devices. 
+
+4.3 A General Purpose Visualization for Humanoid Robots 
+
+We also developed a series of intuitive user interfaces to facilitate the visualization of human-robot interaction. Shown in Fig. 6A is the data streaming interface when using an iPhone Pro as a robot’s sensing suite, which is not limited to asRoBallet but generally applicable by attaching an iPhone to the robot. Fig. 6B is the MacOS version of our app, enabling users to load OpenUSD models to create a custom simulation environment, such as those in the BEHAVIOUR Challenge [ 24 ]. Fig. 6C is the iPad version of our app, showcasing a game-like visualization where users can either play with a virtual asRoBallet or load asRoBallet into a game for entertainment, where the robot model can be customized. 8A PREPRINT - A PRIL 29, 2026 
+
+Figure 4: iPhone’s ARKit pose estimation performance and peer-to-peer latency results. 9A PREPRINT - A PRIL 29, 2026 
+
+Figure 5: Scalable Human-Robot Interaction via iOS & our app. 
+
+Figure 6: Our iOS app ecosystem for multi-modal data streaming and sim-like interactive control. 
+
+# 5 Results, Demonstrations, and Discussions 
+
+5.1 Benchmark Whole-Body Performance of asRoBallet 
+
+We conducted a systematic set of simulation experiments to evaluate our proposed reinforcement learning (RL) controller on velocity tracking and station-keeping tasks against a commonly used linear quadratic regulator (LQR) baseline. To assess robustness, both controllers were tested under four levels of increasing task difficulty, designed to progressively violate modeling assumptions typically made by model-based controllers. 1. Fixed default arms with all joints fixed at zero. 10 A PREPRINT - A PRIL 29, 2026 Table 2: Comparison between LQR controller and RL policy simulation with different task complexities. Velocity Tracking Station Keeping Methods Arm Configuration Success rate Tracking MAE (cm/s) STD (cm/s) Success rate Range (cm) Speed (cm/s) LQR Fixed home position P0 100 7.7 6.0 10.5 9.5 9.8 12.7 100 8.7 3.1 Fixed P0 & random friction 96 8.0 6.2 10.4 9.8 10.1 12.7 18 8.1 2.9 Fixed P0 & random orientation 56 7.5 5.9 10.5 9.1 9.6 12.7 0 / /Random arm pose 86 23.1 23.0 10.8 28.7 27.7 12.1 6 8.4 3.3 RL Fixed home position P0 100 4.0 3.8 1.9 7.1 7.4 2.4 100 4.5 3.0 Fixed P0 & random friction 92 3.8 4.0 1.9 6.9 7.4 2.4 100 4.5 2.9 Fixed P0 & random orientation 100 4.1 3.8 1.9 7.2 7.0 2.4 100 4.3 2.4 Random arm pose 100 6.6 6.2 1.7 8.8 8.9 2.1 100 5.0 3.1 2. Fixed default arms with torsional friction between the ball and the floor randomly sampled from [0.01,0.5]. The LQR controller relies on the common assumption that sufficiently large torsional friction prevents rotation about the vertical axis. However, this assumption is known to be occasionally violated in practice, particularly on low-friction surfaces [6]. 3. Fixed default arms with random initial body tilt within 5 degrees. 4. Random arm configurations representing the most challenging setting with significant variations in system inertia and coupling effects. For each configuration, we report the success rate, mean absolute error (MAE), and standard deviation (STD) of the velocity tracking error, as well as the success rate, steady-state range, and residual speed for station keeping, with results summarized in Table 2. Table 3: Ablation study of RL policy in simulation. Velocity Tracking Station Keeping Method Success rate Tracking MAE (cm/s) STD (cm/s) Success rate Range (cm) Speed (cm/s) 
+
+Ablation on Obs/Reward 
+
+arm-obs 92 12.0 17.1 2.9 15.0 20.0 3.6 98 8.5 5.0 track-sigma-0.1 96 11.5 21.1 1.7 13.8 23.8 1.9 / / /tanh-reward 96 6.6 7.8 1.9 8.5 10.1 2.3 100 4.5 2.6 
+
+exp-reward 96 5.8 6.3 1.7 8.4 8.9 2.1 96 7.7 4.4 
+
+Ablation on Sim-to-Real 
+
+w/o-imu-noise 78 5.6 6.8 1.7 8.3 9.7 2.1 96 5.1 2.8 w/o-friction-randomization 82 7.2 7.1 2.0 8.6 9.4 2.3 98 5.9 3.4 asRoBallet 96 5.8 6.3 1.7 8.4 8.9 2.1 100 4.5 2.6 
+
+Under nominal conditions (fixed arm configuration), both controllers achieve a 100% success rate. However, the RL policy consistently achieves substantially lower tracking errors, with an MAE of 4.0 cm/s compared with 7.7 cm/s for LQR, and a lower variance. As task difficulty increases, the performance gap becomes more pronounced. In the presence of random torsional friction, the LQR success rate drops to 96%, whereas RL maintains high accuracy with a lower MAE and STD. When random initial orientations are introduced, the LQR controller degrades significantly, achieving only a 56% success rate, while the RL controller remains robust with a 100% success rate. In the most challenging scenario with random arm configurations, the LQR controller exhibits large tracking errors (MAE exceeding 23 cm/s) and high variability, whereas the RL controller preserves stable performance with a 100% success rate and comparatively low error. A similar trend is observed for station keeping. While both controllers perform well under nominal conditions, the LQR controller degrades rapidly when assumptions are violated. In scenarios involving random friction or orientation perturbations, the LQR success rate drops sharply (down to 18% and 0%, respectively), and in some cases fails entirely. In contrast, the RL controller consistently achieves a 100% success rate across all configurations, maintaining a smaller steady-state position range and lower residual velocity. Notably, even under random arm configurations, RL preserves stable station-keeping behavior, whereas LQR performance degrades substantially. 11 A PREPRINT - A PRIL 29, 2026 
+
+5.2 Ablation Study 
+
+We further conducted ablation studies to isolate the contribution of key design choices in the RL policy, covering: (i) observation/reward shaping, and (ii) domain randomization for sim-to-real robustness. All ablated variants were trained under the same protocol as the full RL method (denoted asRoBallet) and evaluated on the same velocity-tracking and station-keeping benchmarks reported in Table 3. All evaluation tasks were executed after removing the virtual ball joint between the torso and the ball. Each ablation task was repeated 50 times, with randomizations applied to the episode reset. 
+
+Ablation on Observation/Reward Design. Arm-obs: replaces the body-centric state representation by directly using the 8 arm joints’ observed positions, instead of the CoM–related features used in the full design. This ablation test assesses whether the policy benefits more from a task-relevant global representation (CoM) than from high-dimensional arm-configuration signals. Tanh-reward: uses a tanh-shaped tracking reward, which saturates for large errors and therefore reduces gradient sensitivity to outliers. Exp-reward: uses an exponential tracking reward, providing stronger shaping near the target region. Track-sigma-0.1: changes the exponential reward sharpness by setting σ = 0 .1.
+
+Ablation on Domain Randomization. w/o-imu-noise: removes injected IMU noise during training, to test whether sensor perturbations are necessary for policy robustness. w/o-friction-randomization: removes friction randomization (e.g., contact/torsional friction variations) during training, to test whether contact uncertainty is a key driver of generalization. Replacing the CoM-related state with raw arm joint positions substantially degrades performance (velocity-tracking success drops to 92% with a much larger MAE/STD, and station-keeping shows greater drift), indicating that a compact, task-relevant global representation is critical. Reward shaping mainly affects the tracking–holding trade-off: the exponential tracking reward achieves the best tracking accuracy (MAE 5.8/6.3/1.7 cm/s with low STD, matching the full model), while the tanh-shaped reward slightly reduces tracking accuracy but yields the best station keeping (100% success, 4.5 cm range, 2.6 cm/s residual speed). In contrast, an overly sharp exponential reward ( σ = 0 .1)harms tracking, suggesting brittle optimization when deviations are penalized too aggressively. Removing domain randomization markedly reduces robustness, especially without IMU noise (tracking success 78%) and without friction randomization (tracking success 82%), highlighting that realistic sensing/contact perturbations are essential for reliable generalization. Figure 7 shows the learning curves (mean episode reward) for the velocity-tracking task under the proposed RL design and several ablations. Although removing IMU noise or friction randomization during training yields curves nearly indistinguishable from those in the proposed setting in terms of final reward and convergence speed, these modifications are important for robust success rates at evaluation time. In Addition, we tested whether the policy can be further trained without the virtual ball joint between the torso and the ball (the gray curve, “restart without ball joint”). This setting yields highly variable rewards, with no clear monotonic improvement and a consistently lower ceiling than that of the proposed method. Empirically, removing the virtual joint destabilizes training and prevents reliable convergence, indicating that the virtual coupling is important for maintaining learnable, well-conditioned training dynamics in our setup. 
+
+5.3 Sim2Real Transfer of Underactuated Spherical Dynamics 
+
+We achieved zero-shot Sim2Real transfer of our RL policy during hardware deployment across various floor textures under indoor and outdoor lighting conditions, as shown in Fig. 8. asRoBallet moves smoothly in these common floor conditions we found around the campus, and can even pass through slight obstacles or move across different floor textures. One example is the last two images of Fig. 8, where asRoBallet successfully moved down a 5 degree slope in office carpet, overcame a slight aluminum bump on the door frame, then transited to a hard and anti-slip floor. Please refer to our supplementary video for further demonstration. The testing process is not without failure, especially when there is a sudden increase of floor height. When it falls, the 3D printed neck connector seems to be the most vulnerable component. However, the whole system exhibited exceptional robustness and survived several strong impacts, which is still operational almost immediately after the fall. It should be noted that in the tests shown in Fig. 8, we purposely removed the protective ring around the ball, as shown in Fig. 1, to stress test asRoBallet’s performance and our proposed learning method. We evaluated the stationary keeping policy on asRoBallet across two floor surfaces: ceramic tiles and a yoga mat (Fig. 9A), where the position variation remained within 5 cm and 3 cm, respectively, and the average residual speeds were 5.1 cm/s and 4.4 cm/s. We further tested the push recovery on the yoga mat. asRoBallet managed to return to the starting point after being pushed from different directions as far as 0.3 meters away in 7 trials (Fig. 9B). Hardware results 12 A PREPRINT - A PRIL 29, 2026 
+
+Figure 7: Velocity-tracking learning curves (mean episode reward) for the proposed RL policy and ablations. on velocity tracking are shown in Fig. 9A, where asRoBallet is controlled by a human operator via a joystick on the common office floor carpet and achieved a mean absolute error of 0.05 m/s. 
+
+# 6 Conclusion, Limitation, and Future Work 
+
+This work presents asRoBallet , a holistic system that overcomes the historical barriers to deploying reinforcement learning on underactuated spherical robots. By closing the Reality Gap inherent in the complex tribology of wheel-sphere-ground interactions, we, to the best of our knowledge, achieved the first successful zero-shot Sim2Real deployment of an RL-controlled humanoid ballbot. We validated subtractive reconfiguration as a viable design strategy, demonstrating that high-performance humanoid research platforms can be constructed cost-effectively by repurposing the proprioceptive, computational, and perceptual cores of an overconstrained quadruped. We showed that the primary bottleneck for ballbot RL is not the learning algorithm itself, but the fidelity of the contact model. By explicitly simulating the discrete roller mechanics and parasitic vibrations of ETH-type omni-wheels in MuJoCo, our Friction-Aware framework outperforms classical LQR baselines in robustness against unknown surface textures and calibration errors. We bridged the usability gap by integrating consumer-grade mobile computing directly into the control loop. The iOS app ecosystem demonstrates that pervasive devices (i.e., iPhones) can serve as low-latency, high-bandwidth interfaces for whole-body telepresence, democratizing access to advanced humanoid control. Despite these successes, several limitations remain in the current implementation. As noted in our ablation studies, the policy fails to converge without a virtual ball joint between the torso and the sphere during training. This dependence suggests that the reward landscape for spherical balancing is exceptionally sparse, requiring artificial constraints to guide the agent through the initial exploration phase. While our policy manages station-keeping effectively, the experimentally identified Coulomb friction ( Dc ≈ 130 mNm) creates a dead zone that necessitates continuous micro-oscillations for stabilization. While our RL policy learns to manage this better than LQR, it still yields residual jitter that is inherent to the current drivetrain configuration. Our reliance on the iPhone’s proprietary VIO stack, while practical, introduces a black box into the state estimation pipeline. The specific filtering latencies and fusion algorithms of the A-series 13 A PREPRINT - A PRIL 29, 2026 
+
+Figure 8: Successful Sim2Real deployment of asRoBallet on various indoor & outdoor floor textures and lighting conditions. 14 A PREPRINT - A PRIL 29, 2026 
+
+Figure 9: Performance of real robot experiments. chip are not accessible to users, which may pose challenges for rigorous safety certification in dynamic, clutter-rich environments. Future development will focus on extending the dynamic capabilities of asRoBallet from robust balancing to useful mobile manipulation. We intend to integrate the currently passive upper-body joints into the active control loop. By training a unified policy that integrates the spherical base with the 4-DoF arms, we aim to achieve dynamic tasks such as door opening and object transport, in which the robot must leverage its body weight to generate manipulation forces. To eliminate dependence on state estimation and further reduce the reality gap, we plan to train policies that map raw visual inputs from the iPhone directly to torque commands. This would allow the agent to implicitly learn surface-texture properties (e.g., visual recognition of carpet versus tile) and proactively adjust its friction model. Leveraging the peer-to-peer Wi-Fi Aware capabilities of our iOS ecosystem, we plan to investigate multi-agent collaborative balancing, where multiple asRoBallet units coordinate their movements to transport large objects or navigate crowded social spaces fluidly. Public release of the asRoBallet will be updated here ( https://doc.ancoraspring.com/ ). Our iOS app, asMagic, is now available here ( https://apps.apple.com/us/app/asmagic/id6661033548 ). 
+
+# Acknowledgment 
+
+This work is supported by Shenzhen AncoraSpring Robotics Co., Ltd. 15 A PREPRINT - A PRIL 29, 2026 
+
+# References 
+
+[1] Tom B. Lauwers, George A. Kantor, and Ralph L. Hollis. A Dynamically Stable Single-Wheeled Mobile Robot with Inverse Mouse-Ball Drive. In IEEE International Conference on Robotics and Automation (ICRA) , pages 2884–2889, 2006. [2] Umashankar Nagarajan, George Kantor, and Ralph L. Hollis. The Ballbot: An Omnidirectional Balancing Mobile Robot. The International Journal of Robotics Research , 33(6):917–930, 2014. [3] Seung Yun Song, Nadja Marin, Chenzhang Xiao, Ryu Okubo, Joao Ramos, and Elizabeth T. Hsiao-Wecksler. Hands-Free Physical Human-Robot Interaction and Testing for Navigating a Virtual Ballbot. In IEEE International Conference on Robot and Human Interactive Communication (RO-MAN) , pages 556–563, 2023. [4] Chenzhang Xiao, Mahshid Mansouri, David Lam, Joao Ramos, and Elizabeth T. Hsiao-Wecksler. Design and Control of a Ballbot Drivetrain with High Agility, Minimal Footprint, and High Payload. In IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pages 376–383, 2023. [5] Christoph Skrabel. Mechanical Design of a Ballbot Platform . Bachelor thesis, ETH Zurich, 2013. [6] Thomas Kølbæk Jespersen. Kugle - Modelling and Control of a Ball-balancing Robot . Bachelor thesis, Aalborg University, 2019. [7] Roberto Shu and Ralph Hollis. Momentum-Based Whole-Body Optimal Planning for a Single-Spherical-Wheeled Balancing Mobile Manipulator. In IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) ,pages 3221–3226, 2021. [8] Nathan Kau, Aaron Schultz, Natalie Ferrante, and Patrick Slade. Stanford Doggo: An Open-Source, Quasi-Direct-Drive Quadruped. In IEEE International Conference on Robotics and Automation (ICRA) , pages 6309–6315, 2019. [9] Nicolas Oros and Jeffrey L Krichmar. Smartphone Based Robotics:Powerful, Flexible and Inexpensive Robots forHobbyists, Educators, Students and Researchers. Technical report, University of California, Irvine, 2013. [10] Thomas K Jespersen, Mohammad al Ahdab, F Mendez Juan de Dios, Malte R Damgaard, Karl D Hansen, Rasmus Pedersen, and Thomas Bak. Path-Following Model Predictive Control of Ballbots. In IEEE International Conference on Robotics and Automation (ICRA) , pages 1498–1504, 2020. [11] Max Studt, Ievgen Zhavzharov, and Hossam S Abbas. Parameter Identification and LQR/MPC Balancing Control of a Ballbot. In European Control Conference (ECC) , pages 1315–1321, 2022. [12] Bharat Bhushan. Introduction to Tribology . John Wiley & Sons, Ltd, 2013. [13] Yifan Zhou, Jianghao Lin, Shuai Wang, and Chong Zhang. Learning Ball-Balancing Robot through Deep Reinforcement Learning. In International Conference on Computer, Control and Robotics (ICCCR) , pages 1–8, 2021. [14] Achkan Salehi. Reinforcement Learning for Ballbot Navigation in Uneven Terrain, 2025. arXiv:2505.18417 [cs.RO]. [15] Haoran Sun, Bangchao Huang, Zishang Zhang, Ronghan Xu, Guojing Huang, Guangyi Huang, Jiayi Yin, Nuofan Qiu, Hua Chen, Wei Zhang, Jia Pan, Fang Wan, and Chaoyang Song. Overconstrained Locomotion. In 
+
+International Symposium of Robotics Research (ISRR) , 2024. [16] Yuping Gu, Bangchao Huang, Haoran Sun, Ronghan Xu, Jiayi Yin, Wei Zhang, Fang Wan, Jia Pan, and Chaoyang Song. One-DoF Robotic Design of Overconstrained Limbs with Energy-Efficient, Self-Collision-Free Motion. 
+
+Fundamental Research , 21(5):1571, 2025. [17] Fang Wan and Chaoyang Song. SeeThruFinger: See and Grasp Anything with a Multi-Modal Soft Touch, 2025. arXiv:2312.09822 [cs.RO]. [18] Xudong Han, Ning Guo, Ronghan Xu, Fang Wan, and Chaoyang Song. Anchoring Morphological Representations Unlocks Latent Proprioception in Soft Robots. Advanced Intelligent Systems , 7(12):e202500444, 2025. [19] Simon Doessegger, Peter Fankhauser, Corsin Gwerder, Jonathan Huessy, Jerome Kaeser, Thomas Kammermann, Lukas Limacher, and Michael Neunert. Rezero, Focus Project Report. Technical report, ETH Zurich, 2010. [20] Kevin Zakka, Baruch Tabanpour, Qiayuan Liao, Mustafa Haiderbhai, Samuel Holt, Jing Yuan Luo, Arthur Allshire, Erik Frey, Koushil Sreenath, Lueder A. Kahrs, Carmelo Sferrazza, Yuval Tassa, and Pieter Abbeel. MuJoCo Playground, 2025. arXiv:2502.08844 [cs.RO]. [21] Andrea Bonci, Pangcheng David Cen Cheng, Marina Indri, Giacomo Nabissi, and Fiorella Sibona. Human-Robot Perception in Industrial Environments: A Survey. Sensors , 21(5):1571, 2021. 16 A PREPRINT - A PRIL 29, 2026 [22] Tianyu Wang, Dwait Bhatt, Xiaolong Wang, and Nikolay Atanasov. Cross-Embodiment Robot Manipulation Skill Transfer using Latent Space Alignment, 2024. arXiv:2406.01968 [cs.RO]. [23] Ria Doshi, Homer Rich Walke, Oier Mees, Sudeep Dasari, and Sergey Levine. Scaling Cross-Embodied Learning: One Policy for Manipulation, Navigation, Locomotion and Aviation. In Conference on Robot Learning (CoRL) ,2024. [24] Chengshu Li, Ruohan Zhang, Josiah Wong, Cem Gokmen, Sanjana Srivastava, Roberto Martín-Martín, Chen Wang, Gabrael Levine, Wensi Ai, Benjamin Martinez, Hang Yin, Michael Lingelbach, Minjune Hwang, Ayano Hiranaka, Sujay Garlanka, Arman Aydin, Sharon Lee, Jiankai Sun, Mona Anvari, Manasi Sharma, Dhruva Bansal, Samuel Hunter, Kyu-Young Kim, Alan Lou, Caleb R. Matthews, Ivan Villa-Renteria, Jerry Huayang Tang, Claire Tang, Fei Xia, Yunzhu Li, Silvio Savarese, Hyowon Gweon, C. Karen Liu, Jiajun Wu, and Li Fei-Fei. BEHAVIOR-1K: A Human-Centered, Embodied AI Benchmark with 1,000 Everyday Activities and Realistic Simulation, 2024. arXiv:2403.09227 [cs.RO]. 17
