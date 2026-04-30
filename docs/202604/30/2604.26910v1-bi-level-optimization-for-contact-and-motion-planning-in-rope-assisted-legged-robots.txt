@@ -1,0 +1,586 @@
+Title: Bi-Level Optimization for Contact and Motion Planning in Rope-Assisted Legged Robots
+
+URL Source: https://arxiv.org/pdf/2604.26910v1
+
+Published Time: Thu, 30 Apr 2026 01:12:41 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Bi-Level Optimization for Contact and Motion Planning in Rope-Assisted Legged Robots 
+
+Ruben Malacarne 1, Ioannis Tsikelis 2, Enrico Mingo Hoffman 2, and Michele Focchi 1
+
+Abstract — This paper presents a planning pipeline frame-work for locomotion in rope-assisted robots climbing vertical surfaces. The proposed framework is formulated as a bi-level optimization scheme that addresses a mixed-integer problem: selecting feasible terrain regions for landing while simulta-neously optimizing the control inputs, namely rope tensions and leg forces, and landing location. The outer level of the optimization is solved using the Cross-Entropy Method, while the inner level relies on gradient-based nonlinear optimization to compute dynamically feasible motions. The approach is validated on a novel climbing robot platform, ALPINE , across a variety of challenging terrain configurations. 
+
+I. I NTRODUCTION AND RELATED WORKS 
+
+Robotic systems operating in mountainous environments face several challenges arising from the harshness of these settings, including severe climatic conditions and highly variable morphology [1, 2]. Climbing robots, in particular, have been employed to navigate uneven terrain, with some systems adopting alternative locomotion strategies, such as ropes, to ascend extremely steep or vertical surfaces [3, 4, 5]. However, while ropes enable access to otherwise inaccessible spaces, they increase the complexity of planning and control strategies due to several factors, most notably the underactuation arising from the unilateral nature of rope tension under gravity. Despite several works in the literature addressing motion and contact planning for climbing legged robots [6], only a limited number explicitly incorporate ropes and their effects. For example, in [7], optimal control is employed to plan motions and contacts for dynamic rappelling for a legged system anchored by a single rope, using a template model. In [8], the effects of rope bending on climbing systems are examined. [4] addresses the generation of a feasible pendular motion for a novel platform named ALPINE , combining the action of a leg and adjustable ropes to connect a starting location to a landing location. Concerning contact planning strategies, one class com-prises contact-implicit methods [9, 10], which model the robot dynamics as a hybrid dynamical system. To make the resulting optimization problem computationally tractable,                 
+
+> 1The authors are with the Dipartimento di Ingegneria eScienza dell’Informazione (DISI), University of Trento. Email: name.surname@unitn.it
+> 2The authors are with Inria, Universit´ e de Lorraine, CNRS, 54000 Nancy, France. Email: ioannis.tsikelis@inria.fr, enrico.mingo-hoffman@inria.fr. The publication was created with the co-financing of the European Union FSE-REACT-EU, PON Research and Innovation 2014-2020 DM1062 / 2021 and the French National Research Agency (ANR) under the project ANR-24-CE33-0753-01 (MeRLin).
+
+these approaches typically rely on relaxations of the comple-mentarity constraints [11]. A second class of methods explic-itly parameterizes contact locations within the optimization, yielding mixed-integer nonlinear programs [12]. While this formulation enables direct reasoning over discrete contact decisions, its computational complexity scales exponentially with the number of candidate contacts. 
+
+Fig. 1: (left) Dynamic simulation of the ALPINE robot performing a multi-jump maneuver on a rough wall; (right) close-up of the robot during the first intermediate (downward) jump. The reference trajectory is shown in white, while the green marker indicates the intermediate landing target. The ropes are depicted in green, and the red arrows represent the instantaneous pulling forces. 
+
+Hybrid methods seek to bridge these two approaches by pre-selecting a subset of gait or contact parameters while optimizing the remaining variables. A particularly promising direction is the use of a bi-level hybrid opti-mization framework that combines black-box optimization with optimization-based motion planning, enabling the inde-pendent discovery of feasible contact sequences for a given motion task [13, 14]. Hence, despite the extensive existing literature on motion and contact planning, the same problem, when formulated for rope-assisted robots under physical and environmental constraints, has received comparatively little attention. 
+
+Contribution. In this regard, this work presents a com-putationally efficient algorithm for planning sequences of jumping motions for climbing robots assisted by ropes, explicitly accounting for both the physical limitations of the hardware and constraints imposed by the environment. We formulate the problem of simultaneous contact and motion planning as a bi-level nested optimization, in both discrete and continuous decision variables:  
+
+> •
+
+the outer loop consists of a black-box optimizer that 
+
+> arXiv:2604.26910v1 [cs.RO] 29 Apr 2026
+
+handles contact scheduling (number of jumps) and patch selection by dividing the environment into discrete patches;  
+
+> •
+
+the inner loop consists of a gradient-based optimization that attempts to provide a feasible jumping trajectory and contact placements within the selected patches. The efficacy of the proposed planning strategy is tested on multiple terrains and in dynamic simulations involving the 
+
+ALPINE robot, presented in [4]. The paper is organized as follows: Section II introduces the particular ALPINE robot kinematics and dynamics model, as well as the cost map used to define the environment patches; Section III presents the bi-level optimization strat-egy and its components; Section IV showcases planning and simulation experiments; and finally, Section V provides conclusions and discusses future work. II. P RELIMINARIES 
+
+A. ALPINE robot platform 
+
+A robot hanging on a single rope [15, 7] has severe limitations in terms of possible lateral motions, and hence reachable locations. Additionally, the lateral pull of the rope makes the system unstable when static, limiting its ability to execute tasks. The ALPINE robot [4] overcomes these limitations, considering two ropes attached to fixed anchors on the wall. Both ropes can be independently wound or unwound via hoist motors (see Fig. 3a and Fig. 3b). A prismatic leg initiates the jumping motion by rapidly pushing the robot away from the slope. During the flight phase, the ropes are actively wound or unwound to regulate the robot’s motion during the flight, enabling it to swing over the wall surface and overcome obstacles. During landing, the excess of kinetic energy is dissipated via two landing legs with passive torsional springs or via the prismatic leg itself. A propeller is mounted on the rear of the robot to reject tracking errors in the direction normal to the ropes’ plane during the flight phase. The full detailed model for the 
+
+ALPINE robot is underactuated and requires accounting for a holonomic kinematic loop constraint. However, by neglecting angular dynamics and assuming that the mass is concentrated at the Center of Mass (CoM), with the additional assumption that the ropes remain taut at all times, a reduced-order (3DOFs) model can be adopted. In this formulation, the holonomic constraint is eliminated by an appropriate choice of generalized coordinates, namely qr = ψ l1 l2
+
+ ∈ R3,where ψ is the angle between the plane defined by the ropes and the vertical plane passing through anchors and l1, l2
+
+are the lengths of the left and right ropes, respectively. The dynamics of the robot in an inertial frame W attached to the 
+
+left anchor point, is: 
+
+m(¨p − g) = ˆarl frl 
+
+| {z } 
+
+> frl
+
++ ˆarr frr 
+
+| {z } 
+
+> frr
+
++fleg (1) where ˆari = p−pai  
+
+> ∥p−pai ∥
+
+∈ R3 and fri ∈ R, with i = {r, l },are the rope axes and the magnitude of the exerted forces, respectively, with the two anchor point positions defined by 
+
+pal and par , respectively 1. The expression of the forward kinematics for the position p of the robot (origin of the base-link) as a function of qr is given by: 
+
+p(qr ) = 
+
+px
+
+py
+
+pz
+
+ =
+
+
+
+l1 sin( ψ)
+
+q
+
+1 − (d2  
+
+> a+l21−l22)2
+> 4d2
+> al21
+
+(d2 
+
+> a
+
++ l21 − l22)/(2 da)
+
+−l1 cos( ψ)
+
+q
+
+1 − (d2  
+
+> a+l21−l22)2
+> 4d2
+> al21
+
+ . (2) Double differentiating w.r.t the state variables, the final equation of the reduced model (3) can be obtained (see [4] for details) in terms of the state variables where the holonomic constraint has been embedded (by construction) thanks to the specific choice of coordinates qr :
+
+
+
+¨ψ
+
+¨l1
+
+¨l2
+
+ = A−1
+
+> d
+
+ 1
+
+m ftot − bd
+
+
+
+. (3) The reduced model was shown in [4] to be a good approximation of the real system, and it is sufficient to generate feasible jump trajectories that do not involve large orientation changes. 
+
+B. Cost Map 
+
+Regarding the terrain (e.g. rock wall) on which the robot operates, the proposed planning framework relies on acomprehensive cost map derived from an acquired terrain 
+
+height map . We assume that the input terrain point-cloud has undergone pre-processing, such as outlier rejection and inpainting, to remove spurious measurements and fill missing regions, thereby eliminating holes and ensuring a spatially consistent representation. The resulting sparse point cloud is then interpolated into a continuous surface representation. This step enables the application of convolution opera-tions with multiple kernels, whose outputs are subsequently mapped to specific cost values at each point of the terrain. In addition to the filters evaluating the surface morphology, we also incorporate a distance-based cost relative to the robot’s anchoring points. This term penalizes terrain regions that lie significantly deeper with respect to the robot’s anchor location as they would lead to statically infeasible configurations for the robot (that cannot address overhangs). The level of detail at which the terrain is divided into patches is selected manually, based on the map dimensions. For each candidate foothold, we compute a quality score defined as a linear combination of slope, and roughness metrics, obtained from the above-mentioned filters. Each cell in the height map is associated with a landing cost cl(Y, Z ) that represents the quality of the landing location and is a linear combination of different quality measures: 
+
+cl(Y, Z ) = X
+
+> i
+
+wcm,i ci, (4) where wcm = wsl wsd wd
+
+ represents the weight vector assigned to the morphological filters and quality metrics: 
+
+> 1While in Section IV-C we simulate the full model depicted in Fig. 3a, in the reduced model, for the sake of simplicity, we assume the rope attachment points to be coincident with the robot’s CoM.
+
+(a) Height map. (b) Patch division. (c) Cost map. 
+
+Fig. 2: The Cost map is generated from the height map of a rocky wall. The color represents the slope intensity at 10 cm resolution. The cost values are represented using a color scale, with green indicating the minimum cost and red the maximum. Base link 
+
+> xyz
+> Right anchor
+> xyz
+> Left anchor
+> Rope plane Rock wall
+
+(a) Kinematic model of the ALPINE robot. A prismatic leg initiates the jump. Two ropes guide the motion during flight, while a rear-mounted propeller improves tracking performance. Two lateral legs attached to the base help stabilize the landing. The inertial frame W
+
+is attached to the left anchor frame. The actuation forces are shown in light red, while the generalized coordinates of the reduced-order model are depicted in pink. 
+
+(b) Built prototype of the ALPINE robot. 
+
+Fig. 3: The ALPINE robot. On top, the kinematics model, and on the bottom the real prototype.  
+
+> •
+
+wsl (Slope filter): filter associated with first-order derivatives, to penalize the slope.  
+
+> •
+
+wsd (Roughness filter): filter associated with second-order derivatives to penalize abrupt changes in curva-ture.  
+
+> •
+
+wd (Deep filter): heavily penalizes regions inside the anchors’ vertical. Fig. 2 shows the computed cost map generated from a height map of the rock wall. III. M ETHODOLOGY 
+
+The proposed planning algorithm is based on a bi-level optimization scheme. The outer loop employs a gradient-free Cross Entropy Method (CEM) method to handle integer variables, such as patch selection and the number of jumps. The inner loop performs nonlinear trajectory optimization to compute a set of trajectories corresponding to the number of jumps selected by the outer optimization, while respect-ing under-actuation, hardware, and rope constraints, and simultaneously determining the optimal placement of landing contacts within the selected patches. A block diagram of the pipeline is shown in Fig. 4. This formulation enables the Gridmap Generation outer loop CEM patch evaluator Filters Gazebo Sim Height Map Point Cloud Use input Cost Map Final Target patch IDs  
+
+> Slope Roughness
+> MPC control
+> Inner loop TO
+> Fitness energy feasibility
+> Jump Scheduling
+
+Fig. 4: Block Diagram of the bi-level multi-jump optimization pipeline for the ALPINE robot. 
+
+inner loop to plan physically consistent motions and landing locations, while the outer loop selects a minimal sequence of intermediate jumps and landing patches to connect start and goal, based on energy consumption, inner-loop convergence quality, and terrain cost information. We denote by D the set of integer decision variables, namely the number of jumps n ∈ Z+, n ≥ 1 and the indices of the selected intermediate patches π ∈ Zn−1:
+
+D = {n, π} . (5) Notice that the dimension of π is n−1 since the goal location is assumed to be known. The bi-level optimization problem solved at each iteration has the following form: 
+
+min  
+
+> D
+
+F(D) = {f (D0), f (D1), . . . , f (DI−1)}
+
+s.t. ni ≥ 1, ∀ i ∈ I, 
+
+πi ∈ ΠID , ∀ i ∈ I, 
+
+(6) where I represents the number of individuals of the popula-tion for each iteration , and Di is a set of discrete variables associated with the individual i, composed by ni the number of jumps and ΠID the set of all patches identifiers (IDs). The objective is to minimize the cost function F(D) by selecting the optimal number of jumps and a set of patch IDs from the catalog ΠID . The cost f (Di) is formed by summing 2 terms: 
+
+f (Di) = f1(Di) + f2(Di). (7) The first term is the sum of the average terrain costs ¯ct,j 
+
+associated with the selected patch j:
+
+f1(Di) = wac 
+
+X
+
+> j∈πi
+
+¯ct,j . (8) This enables us to rule out bad rock features like cracks, asperities, holes, etc., favoring locally flat surfaces. The second term results from the resolution of multiple non-linear Optimal Control Problem (OCP) parameterized with the set of integer variables Di selected by the outer op-timization, which will be detailed in Section III-B. In partic-ular, f2(Di) is composed of the cumulative consumed energy 
+
+ce (with weights we) to jump between the selected patches. In case a constraint violation and/or non-convergence, for each sub jump, occurs, a high penalty wp is returned. 
+
+f2(Di) = 
+
+(Pnj=1 wece,j , if ∀j OCP j converges ,wp, if ∃j : OCP j does not conv. .
+
+(9) Time is not considered as a feature to minimize because it is linked to the energy consumption, and the optimization might leverage a longer jump to accommodate a tighter con-straint in the rope force magnitude. Consider, for instance, an upward jump: the limited actuation capability of the rope strongly constrains the achievable upward acceleration, thereby requiring a stronger leg push. This increased impulse allows the robot to remain airborne longer and thus reach the desired vertical displacement. Whenever a loop is detected in the patch selection, i.e., when the same patch is visited two or more times within a single jump sequence, the cost f2(Di)
+
+is assigned a large penalty without executing the inner-loop optimization. This avoids unnecessary computation and reduces the likelihood of such candidate solutions being favored during sampling. 
+
+Algorithm 1 Cross-Entropy Method For Contact Selection  
+
+> 1:
+
+procedure CEM( Niter , N elites , K, F) 
+
+> 2:
+
+Initialize probability r[1]  
+
+> 3:
+
+for iter = 1 → Niter do  
+
+> 4:
+
+D = {D 1, . . . , DI }, Di ∼ Cat (K, r[k]) 
+
+> 5:
+
+F(D) = {f (D1 ), . . . , f (DI )} 
+
+> 6:
+
+Delite = {D elite  
+
+> 1
+
+, . . . , Delite  
+
+> Nelites
+
+} 
+
+> 7:
+
+for i = 1 → K do  
+
+> 8:
+
+r[iter +1] = count occurrences (Ki,Delite ) 
+
+> Nelites
+> 9:
+
+end for  
+
+> 10:
+
+end for  
+
+> 11:
+
+end procedure 
+
+A. Outer optimization: Cross Entropy Method 
+
+The outer loop of our bi-level optimization framework adopts the CEM due to its ability to handle integer vari-ables and arbitrary, non-differentiable cost functions, and to converge toward a probability distribution whose mass is concentrated in regions of near-optimal solutions [16]. CEM, as shown in Algorithm 1, is a black-box optimization method that models the optimal solution as a parameterized proba-bility distribution, in our case, a categorical distribution. At every iteration, it generates a sample of population members, i.e., number of jumps and patch IDs, (Alg. 1.4) and evaluates their cost (Alg. 1.5), as shown in (7). Given a percentage of the best performing candidates, the probability of each category r is updated as the arithmetic mean of the times it was selected by the elites (Alg. 1.8). In each iteration of CEM, a percentage of the best-fitting members, the elites, is selected to update the distribution parameters to converge to a solution for (6). 
+
+B. Inner optimization 
+
+The outer-loop optimization determines the number of intermediate jumps and the associated set of patches on which the robot must land to reach the goal. The purpose of this section is to describe how to connect them with feasible jumping motion plans from one patch to the next, and to select/favor the landing location with the lowest cost within each patch. The first component of the outer optimization output vec-tor specifies the number of jumps, n ≤ nmax . Since all indi-viduals in the population must share the same dimensionality, only the first n elements of the discrete decision vector are evaluated. These elements encode the patch IDs associated with the intermediate landings. For each selected patch, its centroid pc,i ∈ R2 and the corresponding cost function 
+
+ci(·) are provided as inputs to the trajectory optimization of the associated intermediate jump. The jumps are solved sequentially in cascade: the lift-off location coincides with the start robot position for the first jump, and with the previous landing position for all subsequent jumps. Planning motions for the ALPINE robot is challenging because the robot’s dynamics are highly nonlinear and the leg thrust force is impulsive and friction-limited. As a result, we formulated the robot’s motion planning as a nonlinear OCP transcribed into a finite-dimensional Non Linear Program (NLP) where we discretized the rope forces along the horizon in N knots equally spaced by dt = tf /N time intervals, 
+
+X = [ x0, . . . , xN ] state variables, and U = [ u0, . . . , uN −1]
+
+controls 2:
+
+min  
+
+> X,U,t f
+> N−1
+
+X
+
+> k=0
+
+ℓ (xk, uk) + ℓf (xN ) (10a) s.t. x0 = ˆ x0, (10b) 
+
+xk+1 = int (xk, ˙xk), ∀ k ∈ [0 , N ) , (10c) 
+
+hk (xk, uk) ≤ 0, ∀ k ∈ [0 , N ) , (10d) 
+
+gk (xk) ≤ 0, ∀ k ∈ [0 , N ] , (10e) where ℓ(xk, uk) and ℓf (xN ) are the running and the terminal costs, (10c) is the integrated discretized version of the reduced robot dynamics in (3), (10d) and (10e) are the 
+
+path constraints, and (10b) are the boundary conditions. The control inputs include both the rope forces and the leg impulse uk = frl,k , f rr,k , fleg ,k 
+
+ ∈ R5. Notice that fleg ∈ R3
+
+is applied only during a short thrusting phase ( t ≤ tth ∈ R)at the beginning of the jump 3. The states are the generalized variables of the reduced model introduced in Section II-A and their first derivatives: 
+
+xk = ψk l1,k l2,k ˙ψk ˙l1,k ˙l2,k 
+
+T ∈ R6. (11) Consequently, the state-space representation of the nonlinear dynamics (3), casted in input-affine form [4], can be derived: 
+
+˙xk = f (xk) + g(xk)uk, (12) where: 
+
+f (xk) = 
+
+"  ˙ψk ˙l1,k ˙l2,k 
+
+T
+
+Ad(xk)−1 (g − bd(xk)) 
+
+#
+
+, (13) 
+
+g(xk) = 
+
+ 03×1 03×1 03×3
+
+Ad(xk)−1 ˆarl Ad(xk)−1 ˆarr 1 
+
+> m
+
+I3×3
+
+
+
+. (14) Finally, we also consider the jump duration tf ∈ R as a decision variable. To solve the optimization problem in (10), we use a single shooting approach eliminating the dependent state variables 
+
+X that can be expressed by the controls U. In particular, we compute the state vector xk+1 from the input uk, by integrating the dynamics via a Runge-Kutta 4 (RK4) method starting from the initial state x0 = ˆ x0 (Boundary Conditions) till the end of the horizon while the time tf is bound to be positive. 
+
+State Constraints. State constraints are related to regions of the operation space that are not accessible. A constraint is added to prevent collision with the wall mesh for the    
+
+> 2Here, the state and control variables are associated with the sub-jump
+> jof individual i, and the cost and constraint functions are additionally parameterized by the integer decision variables Di. These dependencies are omitted to avoid notational clutter.
+> 3The jump is inherently a hybrid motion planning problem because there is a contact switch at lift-off. We make it time-variant by fixing the thrusting phase duration. In addition to the control inputs, we also optimize for the jump duration.
+
+whole jump duration. Since the rocky wall can have an irregular shape, or there can be obstacles that the robot should overcome to reach its final destination, we model the inaccessible area as a region whose boundary is a surface. We assume that this surface can be expressed by a smooth 2D manifold expressed by Q(x) = 0 . Therefore, the admissible region is generally given by Q(x) ≥ 0 and could be non-convex. Considering a function fmesh (.) that interpolate the mesh at a point (Y, Z ), see Fig. 2(a), the constraints can be expressed as: 
+
+pX (xk) ≥ fmesh (pY (xk), p Z (xk)) , ∀ k ∈ [0 , N ] . (15) Additionally, we found it useful to encourage a clearance 
+
+h ∈ R including an inequality, for example, at the middle of the duration of the jump trajectory: 
+
+nTc p(xN/ 2) ≥ h, (16) where nc is the surface normal of the terrain at contact location computed as: 
+
+nc = ∇F
+
+∥∇ F ∥ , (17) with F = 0 , the parametric function defining the terrain 2D curve in the space. In our specific case, because of the definition of the inertial frame in Fig. 3a, we define the curve as a scalar field on the Y, Z plane F = fmesh (Y, Z ) − X:
+
+nc =
+
+h
+
+−1 ∂f mesh 
+
+> ∂y ∂f mesh
+> ∂z
+
+iT
+
+q
+
+1 + ∂f mesh  
+
+> ∂y
+> 2
+
++ ∂f mesh  
+
+> ∂z
+> 2
+
+. (18) 
+
+Landing Point Optimization. We improved the problem formulation from the original one found in [4], by optimizing also the landing location on the terrain mesh (i.e., height map/voxel map) for the intermediate jumps. To achieve this, we constrain the solver to search the landing position inside the landing patch selected for the jump at hand (19a), while (19b) enforces consistency with the mesh: 
+
+pc,i − d/2 ≤ pY,Z (xN ) ≤ pc,i + d/2, (19a) 
+
+∥pX (xN ) − fmesh (pY (xN ), p Z (xN )) ∥ ≤ ϵ, (19b) where d denotes the size of the i-th patch along the Y -and Z-directions, pc,i ∈ R2 denotes Y, Z coordinates of the center location of the i-th patch, and ϵ ≥ 0 is afixed relaxation parameter. The terrain cost associated with the landing location selected by the optimization will be accounted for in the objective (25). Since in the sequence of jumps dictated by the outer loop, the final jump must land at the desired goal location pf , the landing constraints (19) are replaced by: 
+
+∥p(xN ) − pf ∥ ≤ ϵ. (20) 
+
+Actuation Constraints. The forces that act along the direc-tion of the respective rope axes ˆarl , ˆarr , see Section II-A, can not push the robot while the leg can not pull on the rock wall: 
+
+nTc fleg ,k ≥ 0, fr,k ≤ 0, ∀ k ∈ [0 , N ) , (21) with fr,k = [ frl,k , f rr,k ]T .Additionally, both the rope forces and the leg impulse are bounded by actuation limits and a second-order friction cone: 
+
+∥fleg ,k ∥ ≤ fleg ,max , ∀ k ∈ [0 , N ) , (22) 
+
+−f max  
+
+> r,k
+
+⪯ fr,k , ∀ k ∈ [0 , N ) , (23) 
+
+∥tTx fleg ,k + tTy fleg ,k ∥ ≤ μnTc fleg ,k , ∀ k ∈ [0 , N ) , (24) where μ is the friction coefficient , and tx and ty the unit vectors perpendicular to the contact normal. We observed that strongly reducing fr,max encourages the robot to rely more on its leg and detach further from the wall, spending more time in the air and thereby giving the rope hoist more time to accelerate. 
+
+Objective Function. We do not consider any particular terminal cost. For the running cost, we use a smoothing term for the rope forces, a second term that penalizes the hoist work (i.e., work made to wind/unwind the ropes), and a third term to minimize the terrain cost at the landing location .Thus, the cost function is:              
+
+> J=ws
+> X
+> i∈{ r,l }
+> "N−1X
+> k=0
+> (fri,k −fri,k −1)2+whw N−1X
+> k=0
+> |fri,k ˙li,k |Ts
+> #
+> ++wlcl(p(xN)) ,(25)
+
+where cl(.) is the function evaluating the cost at a certain location and ws, whw , and wl are the weights associated with the three costs. The time tf is initialized with the time constant for the system linearized around the initial position 
+
+p0. The rope forces are initialized with zeros, and the leg impulse with fleg ,max .
+
+Contribution to Outer Optimization Cost . From the output of the inner loop optimization, we compute the cumulative cost value f2 (9) from multiple jumps of: 1) the total energy consumption ce,j , 2) the punctual cost of the landing location evaluating the last point of the trajectory computed by the inner loop, and 3) the degree of convergence. The total energy consumption for the j-th jump will be the sum of the hoist work (first term) and the thrusting work (second term) due to the action of the thrusting force, which is the kinetic energy at lift-off starting from standstill: 
+
+ce,j = X 
+
+> i∈{ r,l }
+> N−1
+
+X
+
+> k=0
+
+|fri,k ˙lk|Ts + + It∈[0 ,t th ]
+
+12 m ˙p(xk)T ˙p(xk),
+
+(26) where It∈[0 ,t th ] is the indicator function selecting the samples 
+
+k such that 0 ≤ tk ≤ tth .IV. E XPERIMENTAL RESULTS 
+
+This section presents simulation results demonstrating how the proposed framework enables the robot to navigate along a mountain wall. We present 3 experiments, where we apply the optimization output to: 1) a big hemispheric obstacle to show the capability to split the jump into smaller intermedi-ate jumps, 2) a bulged terrain to show the capability of our approach to avoid complex obstacles patterns, 3) to a rocky wall template where we track the optimization results with an MPC controller within a realistic simulation environment. The experiments were run on a Notebook computer equipped with a 20-core Intel Core 7 CPU that can reach up to 
+
+4.9 GHz clock time. We modify the CEM algorithm so that every class, i.e., the number of jumps and patch ID, has a minimum non-zero probability of being selected. This mechanism acts as a form of learning-rate regularization, preventing elite samples from excessively dominating the probability updates, thereby maintaining exploration and avoiding premature convergence to local minima. Moreover, we found it beneficial to bias the initial iteration of the algorithm by injecting a percentage of elites that follow a path along the line connecting the starting and goal positions. This represents a reasonable heuristic that will give a good initial guess to the patch ID probabilities. The algorithm then proceeds to navigate around possible obstacles by moving around that initial path. It should also be noted that since each evaluation within CEM is independent, they can be cal-culated in parallel to improve the total execution time of our framework. The inner loop optimization has been originally implemented in Matlab using the fmincon function. To improve performance, we used a C++ implementation of the OCP both for motion planning and control. The outer loop optimization is written in Python, leveraging multi-threading for parallelization. where each thread runs an independent instance of the internal loop combination and communicates only via shared summary statistics protected by locks. We generated height maps for the three experiments using primitives such as Gaussian filters to create bulges emulating pillars. In experiment 3, we locally reshaped the map to form ridges and dihedrals, producing high directional gradients, and added multiscale fractal noise with a Perlin-like structure to model surface roughness across multiple spatial frequencies. The resulting height maps have a size of 10 × 20 m for each experiment, with a grid resolu-tion of 0.5 m and a path spacing of 1 m. The height maps are then passed to the cost map filters described in Section II-B. A bi-linear interpolation is used to obtain a smooth function over the query points. Parameters of both the inner loop optimization and the simulation are reported in Tab. I. The source code is publicly available at: https://anonymous.4open.science/r/climbing robots2-3D28 
+
+A. Use Case 1: Hemispheric Obstacle 
+
+We first evaluate our framework in a scenario where the robot must find a feasible path from the start to the goal via multiple intermediate jumps. This constraint arises either from physical hardware limitations or from obstacles that prevent a single large jump. In this setup, a hemispherical obstacle is positioned between the robot’s initial location and the goal above. The goal is located above the start, requiring the robot to perform upward jumps that are more likely to hit the actuation bounds because there is no aid from gravity. Because the robot cannot clear the obstacle in a single upward jump, it must perform a sequence of jumps to navigate around it, see Fig. 5 (left). As can be seen in Fig. 6 (upper plot), the CEM solver explores several jumps and the fitness converges to a value of 321.3 , see Fig. 6 (lower plot), after 4 iterations. (a) Hemispheric map. (b) Bulged Pillar Wall map. (c) Rock-Wall Terrain. 
+
+Fig. 5: Computed trajectory for three types of maps. With is depicted the starting point, with the desired goal, with the intermediate jumps, and with the reached goal. Multiple feasible trajectories were generated using different random seeds; the optimal one is reported in blue. TABLE I Hyper-Parameters 
+
+Parameter Symbol Value Physical and Simulation Parameters 
+
+Robot mass [kg] m 5Gravity acceleration [m/s 2] g 9.81 Left anchor position [m] pa, 1
+
+0 0 0
+
+Right anchor position [m] pa, 2
+
+0 10 0
+
+Friction coefficient [-] μ 0.8 
+
+Inner-loop Optimization Parameters 
+
+Integration method – RK4 Dynamic discretisation steps Ndyn 30 Sub-integration steps Nsub 5Thrust impulse duration [s] Tth 0.05 Max. leg force [N] f max  
+
+> leg
+
+300 Min. Max. rope force [N] f min  
+
+> r
+
+/f max  
+
+> r
+
+15/80 Inner loop. cost weights ws whw wl
+
+ 0.001 0 1000 
+
+Jump clearance [m] h 0.5 
+
+Cost Function Weights 
+
+Non-convergence penalty wp 1 × 10 7
+
+Energy consumption weight we 1Average costmap patch weight (N/a) wcp 0Landing costmap weight wlc 100 trajectory length weight wlt 20 
+
+Terrain and Environment Modeling 
+
+Terrain grid resolution Ng 100 Wall depth [m] dw 10 Maximum ridge depth [m] dmax  
+
+> r
+
+0.5 Terrain size (vertical/lateral) [m] Lz / Ly -10/20 Patch grid width/height Nw /Nh 10/20 Number of terrain patches N patch  
+
+> p
+
+200 Patch width/height [m] ∆y/∆z derived 
+
+Costmap Filtering Weights 
+
+First-derivative (gradient) weight wsl 1Second-derivative (Laplacian) weight wsd 1
+
+CEM Hyper-parameters 
+
+Number of threads Nt 10 Maximum number of jumps nmax 6Discrete CEM dimension dd Jmax + 1 
+
+Population size Npop 200 Percentage of elites Ne 20 Maximum iterations K 50 Smoothing factor α 0.5 Minimum discrete probability pmin 0.8/N p
+
+B. Use Case 2: Multi Bulge Terrain 
+
+In this usecase we test the effectiveness of our approach in producing feasible obstacle-free plans. The goal in the following use case is located below the start (see Fig. 5(center), the robot is initialized at the Y Z starting pose 
+
+p0=(6 .556 , −18 .49) m and goal pose pf =(2 .47 , −6.3) m,so the robot will perform downward jumps. In this way, we 1 2 3 4 5 6 7     
+
+> Number of Jumps
+> 0
+> 200
+> 400
+> 600
+> 800
+> 1000
+> 1200
+> 1400
+> 1600
+> Frequency
+> Jump Count Distribution - Fusion
+> Gaussian
+> Rocky
+> Hemisphere 246810 12
+> Iteration
+> 400
+> 500
+> 600
+> 700
+> 800
+> Fitness
+> Gaussian
+> Rocky
+> Hemisphere
+
+Fig. 6: (upper plot) Combination jump selected during all itera-tions, (lower plot) fitness trend for all 3 use cases. 
+
+would expect the robot to perform fewer jumps thanks to the help of gravity, but the presence of a complex pattern of obstacles on the way requires at least 3 jumps. The total duration of the multi-jump sequence is 9.45s. 
+
+C. Use Case 3: Rocky terrain Gazebo Simulation 
+
+Finally, we evaluate the effectiveness of our approach on a realistic rocky wall by simulating the robot with a Model Predictive Control (MPC) controller that tracks the optimized multi-jump sequence in a high-fidelity Gazebo environment, see Fig. 1. The simulation computes the full constrained robot dynamics using the ODE physics engine [17]. Vi-sualizations of the resulting behaviors are provided in the supplementary video.We employ the URDF formalism to describe the robot model and the Pinocchio library [18] to compute the kinematic functions. We want to take a 20 m
+
+jump from p0 = (2 .5, −6) m to pf = (4 .5, −17) m,we deliberately set actuation constraints f max 
+
+leg = 150 N
+
+and f max 
+
+r = 60 N such that the robot cannot reach pfwith a single feasible jump. Given the mesh of the rocky wall, we solve the bi-level optimization problem to find the optimal landing locations for the intermediate jumps. Rather than strictly following the corresponding planned trajectories, which could lead to error accumulation due to imperfect controller tracking, we re-optimize each jump after landing, using the robot’s actual landing location as the new initial condition. Each optimization provides the values of the initial leg impulse, the pattern of the rope forces, and the jump duration for each jump. The simulation runs at 
+
+1 kHz , since the optimized trajectory has a different time discretization ( dt = tf /N ), depending on the jump duration 
+
+tf , appropriate interpolations are performed to adapt the rate difference. Each jump is regulated by a state machine that sequences a set of phases, i.e., leg reorient , thrusting , flying ,and landing . During the thrusting phase, we generate the pushing impulse fleg at the CoM by applying a force fc at the contact point. Since fleg is applied at the pushing leg tip, to avoid generating moments at the CoM, we perform a preliminary orientation of the prismatic leg to align it in the direction of fleg . During the flying phase, the rope (prismatic) joints are actuated in force control mode. After liftoff, the leg no longer influences the linear motion of the base; therefore, during the flight phase, an MPC action is superimposed on the optimized force profiles to reject disturbances and minimize the tracking error with respect to the reference trajectory during flight [4]. Since the robot has no control authority in the direction perpendicular to the rope plane while airborne, the controller also commands the thrust fp of a propeller mounted on the robot back (see Fig. 3a) to regulate the ψ state [4]. The propeller generates a force ˆxbfp along the base-link X unit axis ˆxb ∈ R3, which is orthogonal to the rope plane. For control computation, we use a slightly modified reduced-order model in which the term ˆxbfp is added to the right-hand side of (1). After each intermediate jump, the robot’s velocity is assumed to be completely dissipated by an impedance controller on the prismatic leg. V. C ONCLUSIONS 
+
+We presented a motion and contact planner based on bi-level optimization to navigate complex terrain environments, such as mountainous regions. The outer optimization layer relies on the CEM, while the inner loop formulates an OCP to autonomously compute contact schedules, contact locations, and motion trajectories from a given terrain representation. We extend the original problem formulation introduced in [4] by supporting arbitrary terrain meshes and by optimizing the landing location using a terrain cost map. The planner is coupled with an MPC-based controller and validated in simulation using the ALPINE robot. Although demonstrated on this specific platform, the framework readily generalizes to other robotic systems by adapting the dynamic model used in the inner-loop optimization. Current limitations of the framework include the treatment of cables, whose potential penetration into obstacles is not yet considered, as well as the absence of a fitness term accounting for the depletion level of the gas bottle supplying the pneumatic piston that actuates the leg. We plan to consider these aspects in future works, together with experiments performed on the real hardware. REFERENCES 
+
+[1] Lorenzo Marconi et al., “The SHERPA project: Smart collaboration between humans and ground-aerial robots for improving rescuing activities in alpine environments”, IEEE international symposium on safety, security, and rescue robotics , 2012. [2] Takahiro Miki et al., “Learning robust perceptive locomotion for quadrupedal robots in the wild”, Science robotics , 2022. [3] Kyle Uckert et al., “Investigating habitability with an in-tegrated rock-climbing robot and astrobiology instrument suite”, Astrobiology , 2020. [4] Michele Focchi et al., “ALPINE: A climbing robot for opera-tions in mountain environments”, Robotics and Autonomous Systems , 2025. [5] Francesco Cepolina et al., “Roboclimber versus landslides: design and realization of a heavy-duty robot for teleoperated consolidation of rocky walls”, IEEE Robotics & Automation Magazine , 2006. [6] Timothy Bretl, “Motion planning of multi-limbed robots subject to equilibrium constraints: The free-climbing robot problem”, The International Journal of Robotics Research ,2006. [7] Enrico Mingo Hoffman et al., “Modeling and Optimal Control for Rope-Assisted Rappelling Maneuvers”, IEEE In-ternational Conference on Robotics and Automation , 2021. [8] Myeongjin Choi et al., “Examining the mechanics of rope bending over a three-dimensional edge in ascending robots”, 
+
+Scientific Reports , 2023. [9] Igor Mordatch, Emanuel Todorov, and Zoran Popovic, “Discovery of complex behaviors through contact-invariant optimization”, ACM Transactions on Graphics , 2012. [10] Gijeong Kim et al., “Contact-implicit Model Predictive Control: Controlling diverse quadruped motions without pre-planned contact modes or trajectories”, The International Journal of Robotics Research , 2025. [11] Simon Le Cleac’h et al., “Fast Contact-Implicit Model Predictive Control”, IEEE Transactions on Robotics , 2024. [12] Abhishek Cauligi et al., “Learning Mixed-Integer Convex Optimization Strategies for Robot Planning and Control”, 
+
+IEEE Conference on Decision and Control , 2020. [13] Ioannis Tsikelis et al., “AHMP: Agile Humanoid Motion Planning with Contact Sequence Discovery”, IEEE-RAS International Conference on Humanoid Robots , 2025. [14] Victor Dh´ edin, Haizhou Zhao, and Majid Khadiv, “Simul-taneous Contact Sequence and Patch Planning for Dynamic Locomotion”, IEEE-RAS International Conference on Hu-manoid Robots , 2025. [15] Michele Focchi et al., “CLIO: a Novel Robotic Solution for Exploration and Rescue Missions in Hostile Mountain Environments”, IEEE International Conference on Robotics and Automation , 2023. [16] Reuven Y Rubinstein, “The Cross-Entropy Method for Com-binatorial and Continuous Optimization”, Methodology And Computing In Applied Probability , 1999. [17] Russell Smith. Open Dynamics Engine . https://www. ode.org/ . 2001. [18] Justin Carpentier et al., “The Pinocchio C++ library – A fast and flexible implementation of rigid body dynamics algo-rithms and their analytical derivatives”, IEEE International Symposium on System Integrations , 2019.

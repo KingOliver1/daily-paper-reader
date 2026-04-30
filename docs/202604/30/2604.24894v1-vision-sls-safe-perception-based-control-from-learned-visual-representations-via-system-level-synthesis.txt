@@ -1,0 +1,3917 @@
+Title: VISION-SLS: Safe Perception-Based Control from Learned Visual Representations via System Level Synthesis
+
+URL Source: https://arxiv.org/pdf/2604.24894v1
+
+Published Time: Wed, 29 Apr 2026 00:05:44 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# VISION-SLS: Safe Perception-Based Control from Learned Visual Representations via System Level Synthesis 
+
+Antoine P. Leeman ⋆1 Shuyu Zhan ⋆2 Melanie N. Zeilinger 1 Glen Chou 3
+
+Abstract —We propose VISION-SLS, a method for nonlinear output-feedback control from high-resolution RGB images which provides robust constraint satisfaction guarantees under calibrated uncertainty bounds despite partial observability, sensor noise, and nonlinear dynamics. To enable scalability while retaining guarantees, we propose: (i) a learned low-dimensional observation map from pretrained visual features with state-dependent error bounds, and (ii) a causal affine time-varying output-feedback policy optimized via System Level Synthesis (SLS). We develop a scalable, novel solver for the resulting nonconvex program that leverages sequential convex programming coupled with efficient Riccati recursions. On two simulated visuomotor tasks (a 4D car and a 10D quadrotor) with ≥ 512 × 512 pixels and a 59D humanoid task with partial observability, our method enables safe, information-gathering behavior that reduces uncertainty while guaranteeing constraint satisfaction with empirically-calibrated error bounds. We also validate our method on hardware, safely controlling a ground vehicle from onboard images, outperforming baselines in safety rate and solve times. Together, these results show that learned visual abstractions coupled with an efficient solver make SLS-based safe visuomotor output-feedback practical at scale. The code implementation of our method is available at https://github.com/trustworthyrobotics/VISION-SLS. 
+
+⋆ Equal contribution. 1Institute for Dynamic Systems and Control, ETH Z¨ urich {aleeman, mzeilinger }@ethz.ch . 23 Georgia Institute of Technology, Schools of 2Interactive Computing, 3Aerospace Engineering and Cybersecurity & Privacy {szhan45, chou }@gatech.edu . This work was supported by the European Space Agency OSIP 4000133352 and by an ETH Zurich Doc.Mobility Fellowship. 
+
+I. I NTRODUCTION 
+
+Reliable robot deployment demands safety and performance guarantees. Yet, perception-in-the-loop control, i.e., output-feedback control, makes both control synthesis and safety verification difficult: robots must act under partial observabil-ity and noisy sensor feedback while efficiently stabilizing their nonlinear dynamics. These challenges are magnified when feedback comes from high-dimensional, non-smooth visual sensor outputs. Due to these difficulties, existing methods typically trade off scalable information-seeking under partial observability against certification of safety and performance. For instance, reinforcement learning (RL) [26] and imitation learning [9] scales to high-dimensional visuomotor tasks but yields policies that are difficult to certify. In contrast, model-based methods like model predictive control (MPC) [27, 7], Lyapunov-based control via sum-of-squares (SOS) [33, 10, 12] or belief-space planning [19] offer guarantees but are mainly limited to linear, low-dimensional settings or rely on the classical separation principle between estimation and control, thereby precluding information-seeking behaviors that are often necessary in robotics for robustness to visual occlusions. 
+
+A. Contributions 
+
+To close this gap, we present a VISual Output-feedback Nonlinear System Level Synthesis (VISION-SLS), a method t = 0 s t = 0.15 s t = 0.3 s t = 0.45 s t = 0.6 s      
+
+> Front view Side view
+> 010 20 30 40 50 60
+> °0.3
+> °0.2
+> °0.1
+> 0.0
+> 0.1
+> Position  px [m]
+
+closed-loop rollout 
+
+open-loop rollout 
+
+reachable set 
+
+optimal trajectory             
+
+> 010 20 30 40 50 60
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> 1.1
+> Position  pz [m]
+> 010 20 30 40 50 60
+
+Time step k      
+
+> °0.075
+> °0.050
+> °0.025
+> 0.000
+> 0.025
+> 0.050
+> 0.075
+> Quaternion  qx
+> 010 20 30 40 50 60
+
+Time step k
+
+> °0.05
+> 0.00
+> 0.05
+> 0.10
+> Quaternion  qz
+
+(a) 
+
+(b) 
+
+0.0 0.5 1.0 1.5 2.0 2.5 3.0
+
+px
+
+°0.5
+
+0.0
+
+0.5
+
+1.0
+
+1.5
+
+2.0
+
+2.5
+
+> py
+
+Obstacle 
+
+Nominal 
+
+Rollout 
+
+t = 0 t = 11 t = 23 t = 35 t = 47 t = 59 
+
+t = 0 t = 11 t = 23 
+
+t = 35 
+
+t = 47 
+
+t = 59 
+
+(c) (d) [m] 
+
+> [m]
+
+s 
+
+> <latexit sha1_base64="70IH6sjtCnJJHb8uOzJnTG6ld3A=">AAACFXicjVDLSsNAFL2pr1pfUZduBovgopREfC2LblxWsA9IQ5hMJ+3QySTMTIQQ+hNu/BU3LhRxK7jzb0zTCj7BAxfOnHPv3MvxY86Utqw3ozQ3v7C4VF6urKyurW+Ym1ttFSWS0BaJeCS7PlaUM0FbmmlOu7GkOPQ57fij84nfuaZSsUhc6TSmbogHggWMYJ1LnlnLesUnjhz4bmbXrQK1H2Qce+nYM6sfb/Q3qcIMTc987fUjkoRUaMKxUo5txdrNsNSMcDqu9BJFY0xGeECdnAocUuVmxUFjtJcrfRREMi+hUaF+nshwqFQa+nlniPVQffcm4m+ek+jg1M2YiBNNBZkuChKOdIQmEaE+k5RonuYEE8nyWxEZYomJzoOs/C+E9kHdPq4fXR5WG2ezOMqwA7uwDzacQAMuoAktIHADd/AAj8atcW88Gc/T1pIxm9mGLzBe3gH5G5rr</latexit>
+
+py 
+
+> <latexit sha1_base64="A8iE6j5fvidVw8iBCCNG8GY4L9k=">AAACFXicjVDLSsNAFL3xWesr6tJNsAguSknE17LoxmUF+4A0hMl00g6dTMLMRCwhP+HGX3HjQhG3gjv/xmlawSd44MKZc+6dezlBwqhUtv1mzMzOzS8slpbKyyura+vmxmZLxqnApIljFotOgCRhlJOmooqRTiIIigJG2sHwbOy3r4iQNOaXapQQL0J9TkOKkdKSb1azbvGJK/qBlzk1u0D1B8kT/zr3zcrH2/qbVGCKhm++dnsxTiPCFWZIStexE+VlSCiKGcnL3VSSBOEh6hNXU44iIr2sOCi3drXSs8JY6OLKKtTPExmKpBxFge6MkBrI795Y/M1zUxWeeBnlSaoIx5NFYcosFVvjiKweFQQrNtIEYUH1rRYeIIGw0kGW/xdCa7/mHNUOLw4q9dNpHCXYhh3YAweOoQ7n0IAmYLiBO3iAR+PWuDeejOdJ64wxndmCLzBe3gH3lprq</latexit>
+
+px
+
+Onboard image observations used for control 
+
+reachable 
+
+tube 
+
+(e) permitted range (constraint) 
+
+Fig. 1. We stabilize a Unitree G1 humanoid (59 states) around a backflip trajectory that is jointly optimized, enabling robust constraint satisfaction. (a) Two views of a timelapse of the backflip trajectory that our method stabilizes. (b) A subset of the reachable tubes (green), closed-loop rollouts (blue), and open-loop rollouts (red). The optimized closed-loop controller via Alg. 1 keeps the system within the reachable tubes, whereas executing the nominal trajectory open-loop (i.e., without feedback) causes the system to exit the tubes and result in constraint violations (e.g., on the quaternion qz ). See App. D6 for reachable tubes for all states. (c) We evaluate our method on a physical TurtleBot robot, controlled via onboard images. Closed-loop rollouts obtained by using our controller (blue) stay within the tubes (green), avoiding obstacles (red). (d) Rollout time-lapse. (e) Onboard images collected to implement our controller. 
+
+> arXiv:2604.24894v1 [cs.RO] 27 Apr 2026
+
+for scalable and uncertainty-aware output-feedback control from high-dimensional visual inputs with robust constraint sat-isfaction guarantees under calibrated uncertainty bounds. We do not rely on the separation principle: by coupling estimation and control, our policies actively reduce state uncertainty by moving to regions of the state space with more informative sensor readings while maintaining safety guarantees. To achieve this, our method informs system level synthesis (SLS)-based robust control design with learned visual repre-sentations. Our key idea is to represent perception error as bounded disturbance on a reduced observation, so that partial observability, information gathering, and robust constraint sat-isfaction can be handled directly in the closed-loop response parameterization that is optimized by SLS. This yields a scal-able output-feedback synthesis pipeline for nonlinear systems with high-dimensional sensor data. Our main contributions are:  
+
+> •
+
+We develop a novel controller parameterization for par-tially observed nonlinear systems by coupling nonlinear trajectory optimization with output-feedback SLS. In contrast to prior nonlinear SLS results, which focus on state feedback [25, 24], and prior output-feedback SLS results [48, 2], which focus on linear or LTV systems, our method enables robust information-gathering control with safety guarantees under nonlinear dynamics (Prop. 3).  
+
+> •
+
+We construct a low-dimensional reduced observation from foundation-model features using a dynamics-aware observability loss, and calibrate a state-dependent overbound on the resulting reduction error (Sec. VI-C1– VI-C2). This makes high-dimensional visual observations compatible with our robust output-feedback synthesis.  
+
+> •
+
+We show that unconstrained output-feedback linear–quadratic–Gaussian (LQG) in the SLS parameterization has a double-Riccati solution, enabling an efficient solver for the output-feedback subproblems in our method (Prop. 4). Our solver exploits this structure to scale synthesis to large systems.  
+
+> •
+
+We validate the approach on a 4D car with RGB observations, a 10D quadrotor with RGB observations, a 59D humanoid with partial state measurements, and a hardware TurtleBot, showing safe information-gathering behavior, scalability to high-dimensional dynamics, and successful perception-based deployment on hardware. II. R ELATED WORK 
+
+RL has achieved impressive performance in visuomotor control, scaling to high-dimensional tasks and enabling end-to-end pixel-to-torques policies [26, 41, 31, 6, 46]. However, RL methods are notoriously data-hungry and difficult to certify, as the resulting policies are complex and lack interpretability. While visual foundation models (VFMs) [28, 1, 47] have recently improved generalization by providing rich feature representations, coupling them with RL still leaves the overall perception–control pipeline without calibrated guarantees. SLS offers a principled, scalable model-based control framework for large LTV systems for output feedback [2, 14, 29], with recent extensions to nonlinear state-feedback under robust constraints [25]. Belief-space planning (BSP) instead casts output-feedback as a partially-observable Markov deci-sion process (POMDP) to model sensor noise and information gathering, but exact solutions are intractable and practical Gaussian/sampling-based approximations (e.g., based on the extended Kalman filter (EKF) or iterative LQG) typically do not consider constraints under uncertain dynamics [19, 15]. Finally, a line of work on safe control with learned models and visual inputs has emerged [37, 10], but only heuristically encourages safety or is limited to low-dimensional systems. In summary, prior work couples learning with control from images but typically lacks end-to-end guarantees, assumes state reconstruction, or does not handle robust constraints under nonlinear dynamics. These limitations motivate our approach, which combines visual abstractions from VFMs with dynamic output-feedback control using SLS, enabling scalable, information-gathering, and safe visuomotor control. 
+
+a) Notation: For vectors or matrices a and b with the same number of rows, we denote their horizontal concate-nation by [a, b], and their vertical stacking as (a, b ) =[a⊤, b ⊤]⊤. Let 0n×m and In denote the n×m-zeros and n×n
+
+identity matrix, respectively, with dimensions inferred from context when omitted. We use nx, nu, and ny for the dimen-sions of state, input, and observation. The matrix Z denotes the block downshift operator, with Inx on the first subdiagonal and zeros elsewhere. For sets, A ⊕ B denote the Minkowski sum. For a vector a ∈ Rn, we denote as ai its ith entry. We use the unit ℓ∞ ball Bn := {z ∈ Rn : ∥z∥∞ ≤ 1}. We use 
+
+N0: T := {0, . . . , T }, and use the Frobenius norm as ∥ · ∥ F.III. P ROBLEM STATEMENT 
+
+We consider discrete-time, partially-observed, nonlinear systems, with states x ∈ Rnx , controls u ∈ Rnu , and observations y ∈ Rny ,
+
+xk+1 = f (xk, u k) + E(xk)wk (1a) 
+
+yk+1 = h(xk) + F (xk)ek, (1b) where f : Rnx ×Rnu → Rnx are the dynamics and h : Rnx →
+
+Rny are the delayed sensor outputs (IMU, camera images, etc), accounting for processing latency common in vision-based feedback systems. The functions E : Rnx → Rnx×nx ,
+
+F : Rnx → Rny ×ny represent the effect of the process noise and measurement noise on the system dynamics and observations, respectively. 
+
+Assumption 1. We assume bounded process and measurement noise (arising, e.g., from VFM error) with wt ∈ B nx and et ∈Bny , with a system-specific scaling via E(xk) and F (xk).
+
+Assumption 2. We assume the dynamics f are twice contin-uously differentiable. 
+
+We aim to guarantee that all reachable states and controls satisfy the constraint 
+
+S = {(x, u ) ∈ Rnx+nu | c⊤ 
+
+> i
+
+(x, u ) + bi ≤ 0, i = 1 , ..., n c} (2) despite the process noise and measurement noise. To ensure robust constraint satisfaction 1 over the prediction horizon, we seek an output-feedback policy that leverages the history of measurements to compute the control at time k. To obtain this policy, we formulate the following constrained non-convex optimization problem for obtaining an output-feedback policy 
+
+π := ( π0(·), . . . , π T −1(·)) :min  
+
+> π
+
+Jπ (π) (3a) s.t. xk+1 = f (xk, u k) + E(xk)wk, k ∈ N0: T −1, (3b) 
+
+yk+1 = h(xk) + F (xk)ek, k ∈ N0: T −1, (3c) 
+
+x0 ∈ X 0, (3d) 
+
+uk = πk(y1, . . . , y k), ∀k ∈ N0: T −1, (3e) 
+
+(xk, u k) ∈ S , ∀wk ∈ B nx , ∀ek ∈ B ny , k ∈ N0: T −1,
+
+(3f) where Jπ (·) is the objective and X0 is the set of possible initial states. The optimization problem (3) is challenging for three reasons:  
+
+> •
+
+The optimization ranges over all causal maps (3e) from measurement histories to controls, and hence is infinite-dimensional unless parameterized.  
+
+> •
+
+The constraints (3f) must hold for each of the infinitely-many possible disturbances wk, ek in the sets Bnx , Bny . 
+
+> •
+
+The dynamics and observation functions f , h are non-linear and high-dimensional. In particular, the observa-tions are assumed to be high-dimensional images, i.e., 
+
+yk ∈ Rny with ny in the order of 10 5 or more. In this paper, we develop a tractable pipeline, VISION-SLS, to address these challenges. We will first summarize background preliminaries on SLS in Sec. IV and overview our method in Sec. V, which learns reduced observations and robustly synthesizes safe nonlinear output-feedback control (Sec. VI) via an efficient solver based on Riccati recursions and sequential convex programming (Sec. VII). IV. P RELIMINARIES 
+
+In this section, we review the SLS framework for linear time-varying systems [2], which we leverage as a subrou-tine in Section VI-A to design a dynamic output-feedback controller for the nonlinear system (1). We consider a one-step measurement-delayed linear time-varying (LTV) system to capture perception latency typical of vision-based feedback 
+
+x0 = ¯ x0 + Ξ ˜ w, xk+1 = Akxk + Bkuk + Ekwk,yk+1 = Ckxk + Fkek,
+
+(4) where ˜w ∈ B nx denotes a normalized initial state uncertainty, and Ξ ∈ Rnx×nx denotes the corresponding scaling matrix. The corresponding nominal dynamics evolve according to 
+
+¯xk+1 = Ak ¯xk + Bk ¯uk, ¯yk+1 = Ck ¯xk. (5) 
+
+> 1For simplicity, we present linear constraints; nonlinear constraints (e.g., obstacle avoidance) are handled via sequential linearizations, similarly in Section VII and [43]. Likewise, terminal constraints can also be imposed.
+
+We define the stacked variables x = (x0, . . . , x T ), u =(u0, . . . , u T −1), y = ( y1, . . . , y T ), w = ( ˜ w, w 0, . . . , w T −1),and e = (e0, . . . , e T −1), and block-diagonal matrices as 
+
+A = blkdiag( A0, . . . , A T −1), and similarly for B, C, and 
+
+F, and E = blkdiag(Ξ , E 0, . . . , E T −1). We further define deviations ∆x := x − ¯x, ∆u := u − ¯u, ∆y := y − ¯y, and by stacking the dynamics over the time horizon, the closed-loop error system is written compactly as 
+
+∆x = ZA ∆x + ZB ∆u + Ew , (6a) 
+
+∆y = ZC ∆x + Fe . (6b) We consider an output-feedback controller of the form 
+
+u = ¯ u + K(y − ZC ¯x). (7) Optimizing K directly is difficult since enforcing robust con-straint satisfaction for the realized trajectory is nonconvex in 
+
+K. In contrast, SLS designs the closed-loop response maps Φ
+
+directly, mapping disturbances to state and input deviations 
+
+∆x
+
+∆u
+
+
+
+=
+
+Φxw Φxe 
+
+Φuw Φue 
+
+| {z }
+
+> Φ
+
+E 00 F
+
+  we
+
+
+
+, (8) where the matrices Φxw , Φxe , Φuw , and Φue are block-lower-triangular. Crucially, this output-feedback parameterization enables an efficient convex controller synthesis with robust constraint satisfaction, as we will see next. 
+
+Proposition 1 (Adapted from [2, 48]) . The error LTV system 
+
+(6) in closed-loop with the controller (7) can be written as Eq. (8) 2 if and only if Φ satisfies 
+
+I − ZA −ZB  Φ = I 0 ,
+
+Φ
+
+I − ZA 
+
+−ZC 
+
+
+
+=
+
+I0
+
+
+
+. (9) 
+
+The feedback gains K in (7) can be recovered from Φ via 
+
+K = Φue − Φuw (Φxw )−1Φxe . (10) 
+
+Proof: See, e.g., [48, Prop. 1]. We show that the associated LQG problem [2, 40] can be written as the convex program min 
+
+> Φ
+
+Q1/2 00 R1/2
+
+  Φxw Φxe 
+
+Φuw Φue 
+
+  EF
+
+ 2F
+
++ P 1/2 Φxw  
+
+> T
+
+Φxe 
+
+> T
+
+ EF
+
+ 2F
+
+(11a) s.t. I − ZA −ZB  Φxw Φxe 
+
+Φuw Φue 
+
+
+
+= I 0 , (11b) 
+
+Φxw Φxe 
+
+Φuw Φue 
+
+  I − ZA 
+
+−ZC 
+
+
+
+=
+
+I0
+
+
+
+, (11c) with Q = blkdiag( Q, . . . , Q ) and R = blkdiag( R, . . . , R )
+
+the state and input cost matrices, respectively, with Q ⪰ 0             
+
+> 2In the stacked matrices Φxw and Φuw , the block at index j=0
+> corresponds to the initial condition, while indices j≥1correspond to process disturbances injected at time j−1.
+
+and R ≻ 0, and P the terminal cost corresponding to the last time step T , and last block-row Φ•
+
+T of Φ•. As for typical LQG design, this cost function in (11) corresponds to the expected value of the variance of the quadratic performance objective under stochastic process and measurement noise [2]. In the following, we formulate the corresponding robust constraint satisfaction conditions for the output-feedback setting. 
+
+Proposition 2. Consider (6) in closed loop with (7) , and let 
+
+Φxw , Φxe , Φuw , Φue satisfy (9) . Then robust satisfaction of 
+
+(2) for all k and all admissible disturbances holds if and only if 
+
+kX
+
+j=0 
+
+∥c⊤
+
+i Φw
+
+k,j Ej ∥1 +∥c⊤
+
+i Φe
+
+k,j Fj ∥1 +c⊤
+
+i (zk, v k) + bi ≤ 0. (12) 
+
+for i = 1, . . . , n c with Φw
+
+k,j = (Φxw 
+
+k,j , Φuw 
+
+k,j ) and 
+
+Φe
+
+k,j = ( Φxe 
+
+k,j , Φue 
+
+k,j ).Proof: The proof follows directly from the state-feedback result in [32]; we provide the full proof in Appendix A. V. M ETHOD OVERVIEW 
+
+In this section, we summarize our method for approximately solving the nonlinear output-feedback problem (3) (also see Fig. 2), which we call VISION-SLS. To make solving (3) tractable, we introduce two approximations. First, instead of planning directly from high-dimensional images, we map each observation y ∈ Rny to a low-dimensional reduced measurement yr ∈ Rnr . Concretely, we compose a pre-trained DINO feature extractor [28] with a learned projection to obtain 
+
+pdino (·) : Rny → Rnr
+
+together with a corresponding state-based reduced observation model 
+
+hr (·) : Rnx → Rnr ,
+
+so that the reduced observation can be written as 
+
+yrk+1 = p dino (yk) = hr (xk) + F r (xk)ek. (13) Intuitively, hr (xk) captures the control-relevant information in the image, while F r (xk)ek is an inflated, state-dependent un-certainty term that overbounds both sensor noise and the error introduced by compressing the image into a low-dimensional observation. This lets us plan efficiently in a reduced feature space, rather than directly in pixel space (see Sec. VI-C2). 
+
+Remark 1. Although tailored for camera sensors, this work could be implemented with other sensors, such as LiDAR (see Sec. VIII-A), depth sensors, or joint encoders. 
+
+Second, since optimizing over general causal policies is intractable, we restrict (3e) to causal affine , time-varying feedback policies around a jointly-optimized nominal state/-control/measurement trajectory (z, v) 3, i.e., 
+
+uk = ¯ uk + K0
+
+k (x0 − ¯x0) + 
+
+k−1X
+
+j=1 
+
+Kk,j (yrj+1 − hr (¯ xj )) , (14) 
+
+3We use the notation (¯x, ¯u) to denote the nominal trajectory of the LTV dynamics, in contrast to (z, v) which denote the nominal trajectory of the nonlinear dynamics. 
+
+with optimized gains Kk,j (Sec. VI-A). The additional term 
+
+K0
+
+k (x0 − ¯x0) explicitly accounts for uncertainty in the initial condition ¯x0, which cannot in general be inferred from the measurement history and therefore enters the closed-loop system as an independent disturbance channel. This form admits fast evaluation at runtime via matrix–vector products. <latexit sha1_base64="GrZaPQnESUeEnSVPUcGAYRl8N44=">AAACC3icbVDLSsNAFJ34rPUVdelmaBFaKiURXxuhKILLCvYBbQiT6aQdMnkwM9GW0L0bf8WNC0Xc+gPu/BsnbRbaeuDCmXPuZe49TsSokIbxrS0sLi2vrObW8usbm1vb+s5uU4Qxx6SBQxbytoMEYTQgDUklI+2IE+Q7jLQc7yr1W/eECxoGd3IUEctH/YC6FCOpJFsvDO3Eq5hjeAHd0tD2DmFse2VYgdfpqwwfbM/Wi0bVmADOEzMjRZChbutf3V6IY58EEjMkRMc0ImkliEuKGRnnu7EgEcIe6pOOogHyibCSyS1jeKCUHnRDriqQcKL+nkiQL8TId1Snj+RAzHqp+J/XiaV7biU0iGJJAjz9yI0ZlCFMg4E9ygmWbKQIwpyqXSEeII6wVPHlVQjm7MnzpHlUNU+rJ7fHxdplFkcO7IMCKAETnIEauAF10AAYPIJn8AretCftRXvXPqatC1o2swf+QPv8AaIzmEQ=</latexit> 
+
+xk+1 = f (xk, u k) + E(xk)wk
+
+nominal trajectory and SLS controller 
+
+> VFM features  .
+> <latexit  sha1_base64="V2P+d6RzkpTyz1mXZkTDzpxP9NA=">AAAB73icbVDLSgNBEOyNrxhfUY9eBoMQL2FXfB2DXjxGMA9IljA7O5sMmZ1ZZ2aFsOQnvHhQxKu/482/cZLsQRMLGoqqbrq7goQzbVz32ymsrK6tbxQ3S1vbO7t75f2DlpapIrRJJJeqE2BNORO0aZjhtJMoiuOA03Ywup367SeqNJPiwYwT6sd4IFjECDZW6iTVHgmlOe2XK27NnQEtEy8nFcjR6Je/eqEkaUyFIRxr3fXcxPgZVoYRTielXqppgskID2jXUoFjqv1sdu8EnVglRJFUtoRBM/X3RIZjrcdxYDtjbIZ60ZuK/3nd1ETXfsZEkhoqyHxRlHJkJJo+j0KmKDF8bAkmitlbERlihYmxEZVsCN7iy8ukdVbzLmsX9+eV+k0eRxGO4Biq4MEV1OEOGtAEAhye4RXenEfnxXl3PuatBSefOYQ/cD5/AHW8j5s=</latexit>
+> p(·)
+> Observation reduction
+
+<latexit sha1_base64="5SFr+Mx7G207T6B6p8Ajpm6xWx0=">AAADEnicbVLLbtNAFB2bVzGvFJZsRkRIiQiRHdIHi0pVWYDEpiDSVoqT0XgyThyPH5pHVWPNN7DhV9iwACG2rNjxN4zTREpaX2mko3PuPWfmaoKcRUK67j/LvnHz1u07W3ede/cfPHzU2H58IjLFCR2QjGX8LMCCsiilAxlJRs9yTnESMHoaxG8q/fScchFl6SdZ5HSU4GkahRHB0lBo22r5Exqa4YVVmSueM6rLj2+PdOl5vU5/v+PtutrZ6Mo4Tqerrt6rvY7X2+n0X2tHoRgeQF/SC7npd45iDV+sKwFThn+P4rGrW2v8yvsCuRq+rPPyA8xhJbdXjkIWjPpCJaicH7h6HNcFlXFnrmujCjQf8ypshnirJvAzmut2GzWabtddFLwOvCVogmUdo8Zff5IRldBUEoaFGHpuLkcl5jIixtbxlaA5JjGe0qGBKU6oGJWLaA2fG2YCw4ybk0q4YNcnSpwIUSSB6UywnImrWkXWaUMlw/1RGaW5kjQll0GhYlBmsPofcBJxSiQrDMCER+aukMwwx0SaX+SYJXhXn3wdnPS63m5350O/eXi0XMcWeAqegRbwwB44BO/AMRgAYn2xvlk/rJ/2V/u7/cv+fdlqW8uZJ2Cj7D//AQLz/2c=</latexit> 
+
+uk = vk + K0
+
+k (x0   ¯x0) + Pk
+
+j=0 Kk,j (yr
+
+j   hr (zj )) 
+
+> <latexit  sha1_base64="o2p+0Rv73KwhmctVBeq621hNSqI=">AAACAnicbVDLSsNAFJ3UV62vqCtxEyxC3ZREfC2LblxWsA9oYplMpu3QyUyYuRFLKG78FTcuFHHrV7jzb5w+Ftp64MLhnHu5954w4UyD635buYXFpeWV/GphbX1jc8ve3qlrmSpCa0RyqZoh1pQzQWvAgNNmoiiOQ04bYf9q5DfuqdJMilsYJDSIcVewDiMYjNS29/xEszsf6AOoOIuYkMOSTyIJR2276JbdMZx54k1JEU1RbdtffiRJGlMBhGOtW56bQJBhBYxwOiz4qaYJJn3cpS1DBY6pDrLxC0Pn0CiR05HKlABnrP6eyHCs9SAOTWeMoadnvZH4n9dKoXMRZEwkKVBBJos6KXdAOqM8nIgpSoAPDMFEMXOrQ3pYYQImtYIJwZt9eZ7Uj8veWfn05qRYuZzGkUf76ACVkIfOUQVdoyqqIYIe0TN6RW/Wk/VivVsfk9acNZ3ZRX9gff4Ax5+Xrg==</latexit>
+> dino (·)
+
+observation 
+
+history 
+
+perception module 
+
+<latexit sha1_base64="K8KTft9zNdvxkkRgsXBAiJ/yn28=">AAACKnicbVC7TsMwFHV4U14FRpaICokBqqRQChuUAUZAFJDaqnLcm2LVcSL7BlGifA8Lv8LSAYRY+RDckIHXkSwdnXOvj328SHCNjvNmjY1PTE5Nz8wW5uYXFpeKyytXOowVgwYLRahuPKpBcAkN5CjgJlJAA0/Atdc/HvnXd6A0D+UlDiJoB7Qnuc8ZRSN1iketLvhmN7spCRWVPUiTi5N6mlR2altupbq1e5AWWgj3+HPmoZP0t9007RRLTtnJYP8lbk5KJMdZpzhsdUMWByCRCap103UibCdUIWcCTFasIaKsT3vQNFTSAHQ7ycJTe8MoXdsPlTkS7Uz9vpHQQOtB4JnJgOKt/u2NxP+8Zoz+fjvhMooRJPsK8mNhY2iPerO7XAFDMTCEMsXNW212SxVlaNotmBLc31/+S64qZXevXD3fLR3W8zpmyBpZJ5vEJTVySE7JGWkQRh7JM3khr9aTNbTerPev0TEr31klP2B9fAIOdqet</latexit> 
+
+zk 1
+
+<latexit sha1_base64="CNaOYyjHScof/BXmiLUWcHrdoII=">AAACKHicbVDLSgMxFM3Ud31VXboZLIKLUmbqe6XoQpdVrC20pWTSOzU0kxmSO2Id5nPc+CtuRBRx65eYPhbaeiBwOOfenOR4keAaHefLykxNz8zOzS9kF5eWV1Zza+u3OowVgwoLRahqHtUguIQKchRQixTQwBNQ9brnfb96D0rzUN5gL4JmQDuS+5xRNFIrd9Jog292BzcloaKyA2lyfXGWJqXdw4Jb2i/sHafZBsID/p15bCXdNG3l8k7RGcCeJO6I5MkI5VburdEOWRyARCao1nXXibCZUIWcCTBJsYaIsi7tQN1QSQPQzWQQndrbRmnbfqjMkWgP1N8bCQ207gWemQwo3ulxry/+59Vj9I+aCZdRjCDZMMiPhY2h3W/NbnMFDEXPEMoUN2+12R1VlKHpNmtKcMe/PEluS0X3oLh/tZc/PRvVMU82yRbZIS45JKfkkpRJhTDyRF7IO/mwnq1X69P6Go5mrNHOBvkD6/sHBdqnOw==</latexit> 
+
+zk
+
+<latexit sha1_base64="60ESL8FaaeQ4s3UbIwuUxY9Bw7U=">AAACJnicbVDLSgMxFM3Ud31VXboZLIKLUmZqfS0E0YUuVawttKVk0jttaCYzJHfEOszXuPFX3LhQRNz5Kaa1C209EDicc29OcrxIcI2O82llpqZnZufmF7KLS8srq7m19VsdxopBhYUiVDWPahBcQgU5CqhFCmjgCah6vbOBX70DpXkob7AfQTOgHcl9zigaqZU7brTBN7vDm5JQUdmBNLk+P02T0u5BwS3tFcpHabaBcI9/Zx5aTtrK5Z2iM4Q9SdwRyZMRLlu510Y7ZHEAEpmgWtddJ8JmQhVyJsDkxBoiynq0A3VDJQ1AN5NhcGpvG6Vt+6EyR6I9VH9vJDTQuh94ZjKg2NXj3kD8z6vH6B82Ey6jGEGynyA/FjaG9qAzu80VMBR9QyhT3LzVZl2qKEPTbNaU4I5/eZLclorufnHvqpw/OR3VMU82yRbZIS45ICfkglySCmHkkTyTV/JmPVkv1rv18TOasUY7G+QPrK9vunWl9A==</latexit> 
+
+z0
+
+<latexit sha1_base64="Xik6Gqg8gFsI/TCraYqv0RSWjtI=">AAACKXicbVDLSgMxFM34rPVVdelmsAgVpMzU1seu1IUuVawKbSmZ9E4bmskMyR2xDPM7bvwVNwqKuvVHTGsXaj0QOJxzb05yvEhwjY7zbk1Nz8zOzWcWsotLyyurubX1Kx3GikGdhSJUNx7VILiEOnIUcBMpoIEn4NrrHw/961tQmofyEgcRtALaldznjKKR2rlqswO+2R3dlISKyi6kycVJLU1Kewe7bqmyWz5Ks02EO/w90yvctZ2dtJ3LO0VnBHuSuGOSJ2OctXPPzU7I4gAkMkG1brhOhK2EKuRMgImKNUSU9WkXGoZKGoBuJaPs1N42Ssf2Q2WORHuk/txIaKD1IPDMZECxp/96Q/E/rxGjf9hKuIxiBMm+g/xY2Bjaw9rsDlfAUAwMoUxx81ab9aiiDE25WVOC+/fLk+SqVHT3i5Xzcr5aG9eRIZtkixSISw5IlZySM1InjNyTR/JCXq0H68l6sz6+R6es8c4G+QXr8wuEzabJ</latexit> 
+
+h(x0)
+
+<latexit sha1_base64="LUNQBwMWhq4TQ18BU7hODbjKJzI=">AAACLXicbVDLSgMxFM34tr6qLt0MFkFBy0x974oKuqxiW6EtJZPeaUMzmSG5Iy3D/JAbf0UEF4q49TdMHwtfBwKHc+7NSY4XCa7RcV6ticmp6ZnZufnMwuLS8kp2da2iw1gxKLNQhOrOoxoEl1BGjgLuIgU08ARUve75wK/eg9I8lLfYj6AR0LbkPmcUjdTMXtRb4Jvd4U1JqKhsQ5rcXJ6lSWH/eNctHO4enKaZOkIPf850tnvNpLvnpjtpM5tz8s4Q9l/ijkmOjFFqZp/rrZDFAUhkgmpdc50IGwlVyJkAExdriCjr0jbUDJU0AN1IhvmpvWWUlu2HyhyJ9lD9vpHQQOt+4JnJgGJH//YG4n9eLUb/pJFwGcUIko2C/FjYGNqD6uwWV8BQ9A2hTHHzVpt1qKIMTcEZU4L7+8t/SaWQd4/yh9cHueLZuI45skE2yTZxyTEpkitSImXCyAN5Iq/kzXq0Xqx362M0OmGNd9bJD1ifX9ygqII=</latexit> 
+
+h(xk 1)
+
+<latexit sha1_base64="TxF3sAjbDrDrE9UpcMlW8g7IuqU=">AAACK3icbVDLSgMxFM34rPVVdelmsAgVpMzU967UhS5VrBbaUjLpnTY0kxmSO2IZ5n/c+CsudOEDt/6Hae1CWw8EDufcm5McLxJco+O8W1PTM7Nz85mF7OLS8spqbm39RoexYlBloQhVzaMaBJdQRY4CapECGngCbr3e6cC/vQOleSivsR9BM6AdyX3OKBqplas02uCb3eFNSaio7ECaXJ1V0qS0d7Trlg5290/SbAPhHv/OdAv3raSX7qStXN4pOkPYk8QdkTwZ4aKVe260QxYHIJEJqnXddSJsJlQhZwJMWKwhoqxHO1A3VNIAdDMZpqf2tlHath8qcyTaQ/X3RkIDrfuBZyYDil097g3E/7x6jP5xM+EyihEk+wnyY2FjaA+Ks9tcAUPRN4Qyxc1bbdalijI09WZNCe74lyfJTanoHhYPLvfz5cqojgzZJFukQFxyRMrknFyQKmHkgTyRV/JmPVov1of1+TM6ZY12NsgfWF/f0n6oEA==</latexit> 
+
+h(xk)
+
+<latexit sha1_base64="w5hUEl478dplJXtnJW2TxmO/hV8=">AAACKHicbVDLSsNAFJ3Ud31VXboJFsGFlKTW10rRhS5VrBXaGCbTm3boZBJmbsQS8jlu/BU3Ioq49Uuc1i58HRg4nHPvnJkTJIJrdJx3qzA2PjE5NT1TnJ2bX1gsLS1f6ThVDOosFrG6DqgGwSXUkaOA60QBjQIBjaB3PPAbt6A0j+Ul9hPwItqRPOSMopH80kGrDaHZHd6UxYrKDuTZxclRnlW3djfd6vZmbT8vthDu8OdM33duurlfKjsVZwj7L3FHpExGOPNLz612zNIIJDJBtW66ToJeRhVyJsAkpRoSynq0A01DJY1Ae9kwOrfXjdK2w1iZI9Eeqt83Mhpp3Y8CMxlR7Orf3kD8z2umGO55GZdJiiDZV1CYChtje9Ca3eYKGIq+IZQpbt5qsy5VlKHptmhKcH9/+S+5qlbcncr2ea18eDSqY5qskjWyQVyySw7JKTkjdcLIPXkkL+TVerCerDfr/Wu0YI12VsgPWB+fXf6mzQ==</latexit> 
+
+yh
+
+0
+
+<latexit sha1_base64="QPU1jMoO9VudxQh6SEoQMrlG1+0=">AAACLHicbVDLSgMxFM34rPVVdelmsAgutMzU1uqu6EKXVawKbS2Z9E4bmskMyR2xDPNBbvwVQVxYxK3fYVq78HUgcDjn3pzkeJHgGh1naE1Nz8zOzWcWsotLyyurubX1Kx3GikGdhSJUNx7VILiEOnIUcBMpoIEn4Nrrn4z86ztQmofyEgcRtALaldznjKKR2rmTZgd8szu+KQkVlV1Ik4vT4zQp7ld23WJ5t3SUZpsI9/hzZtBO+ntuettL27m8U3DGsP8Sd0LyZIJaO/fc7IQsDkAiE1TrhutE2EqoQs4EmLRYQ0RZn3ahYaikAehWMo5P7W2jdGw/VOZItMfq942EBloPAs9MBhR7+rc3Ev/zGjH6h62EyyhGkOwryI+FjaE9as7ucAUMxcAQyhQ3b7VZjyrK0PSbNSW4v7/8l1wVC+5BoXxeylePJ3VkyCbZIjvEJRVSJWekRuqEkQfyRF7J0Hq0Xqw36/1rdMqa7GyQH7A+PgG1HqiG</latexit> 
+
+yh
+
+k 1
+
+<latexit sha1_base64="KFHlQp0uzpmN6sCQFS/IYe48Tno=">AAACKnicbVDJTsMwFHTKXrYCRy4RFRIHVCVlKdwKHOAIiC5SWyrHfWmtOk5kvyCqKN/DhV/h0gOo4sqH4JYe2EayNJp5z2OPFwmu0XFGVmZmdm5+YXEpu7yyurae29is6jBWDCosFKGqe1SD4BIqyFFAPVJAA09AzetfjP3aAyjNQ3mHgwhaAe1K7nNG0Ujt3FmzA77ZndyUhIrKLqTJ7eV5mhQPSvtu8Wj/8DTNNhEe8efMoJ300/te2s7lnYIzgf2XuFOSJ1Nct3PDZidkcQASmaBaN1wnwlZCFXImwGTFGiLK+rQLDUMlDUC3kkl4au8apWP7oTJHoj1Rv28kNNB6EHhmMqDY07+9sfif14jRP2klXEYxgmRfQX4sbAztcW92hytgKAaGUKa4eavNelRRhqbdrCnB/f3lv6RaLLjHhaObw3z5fFrHItkmO2SPuKREyuSKXJMKYeSJvJBX8mY9W0NrZL1/jWas6c4W+QHr4xOrwKgU</latexit> 
+
+yh
+
+k
+
+Fig. 2. Online SLS execution: Images are mapped to low-dimensional observations p(ψdino (y)) , approximated by a learned linear map hr (x) = 
+
+Cx with bounded error. These observations feed into an SLS-based dynamic output-feedback controller, which combines the nonlinear nominal trajectory 
+
+(z, v) and feedback gains K to generate safe inputs. 
+
+We detail our method in Sec. VI and VII. In Sec. VI-A, we develop a nonlinear SLS approach to the output-feedback policy in (3e) by combining nonlinear trajectory optimization with an SLS parameterization of the local closed-loop error dynamics, with robust constraint satisfaction (Sec. VI-B). In Sec. VI-C1, we use pre-trained visual features to learn a low-dimensional observation map hr , together with error bounds in Sec. VI-C2, so that pixel observations can be used while retaining robust constraint satisfaction guarantees in Sec. VI-B. In Sec. VII, we propose an efficient iterative convexification algorithm to solve the resulting nonconvex program efficiently. VI. N ONLINEAR CONTROL DESIGN 
+
+In this section, we build upon the linear LTV SLS frame-work from Propositions 1–2 to synthesize a dynamic output-feedback controller for the nonlinear system (1) (Sec. VI-A) with robust constraint satisfaction guarantees (Sec. VI-B). Specifically, we jointly optimize the nominal trajectory (z, v),the closed-loop responses Φ of the induced LTV system, and modeling-error overbounds for robust constraint satisfaction of the nonlinear system. Finally, we tractably implement the proposed output-feedback SLS framework for visual measure-ments by learning a reduced observation model (Sec. VI-C1). 
+
+A. Closed-loop error dynamics 
+
+Our robust prediction leverages a nominal system 
+
+zk+1 = f (zk, v k), k = 0 , . . . , T − 1 (15) where zk ∈ Rnx is the nominal state, and vk ∈ Rnu is the nominal input. We approximate the tracking error dynamics 
+
+∆xk+1 
+
+.
+
+= f (xk, u k) + E(xk)wk − f (zk, v k) (16) around the nominal trajectory (z, v) using a first-order Taylor expansion. This yields the LTV error system 
+
+∆xk+1 = A(zk, v k)∆ xk + Bk(zk, v k)∆ uk + σ(τk, z k, v k),
+
+(17) with Ak := ∂f (x, u )
+
+∂x (zk ,v k )
+
+, Bk := ∂f (x, u )
+
+∂u (zk ,v k )
+
+, (18) and the term σ(τk, z k, v k) captures the modelling error with 
+
+τ ∈ R satisfying 
+
+∆x
+
+∆u
+
+
+
+> ∞
+
+≤ τ, ∆x = x − z, ∆u = u − v. (19) 
+
+Assumption 3. For each k ∈ N0: T −1 and any deviations 
+
+(∆ x, ∆u) satisfying ∥(∆ x, ∆u)∥∞ ≤ τk, the dynamics re-mainder is bounded as 
+
+|f (zk + ∆ x, v k + ∆ u) − f (zk, v k)
+
+− Ak∆x − Bk∆u| ≤ σ(τk, z k, v k). (20) 
+
+Remark 2. The function σ(τk, z k, v k) can be constructed to capture the linearization error of the dynamics f around the nominal trajectory, as detailed in [25, 24] or directly learned from data [34]. 
+
+Similarly, the reduced measurement model (13) with mea-surement noise ek can be expanded around the nominal tra-jectory. In the following, we use a linear reduced observation model 
+
+hr (x) = Cr x, Cr ∈ Rnr ×nx , (21) which yields the reduced measurement error model 
+
+∆yrk+1 = Cr ∆xk + F r (zk)ek + η(τk). (22) where η(τk) captures the residual approximation error due to nonlinearities in F r (·).
+
+Remark 3. The reduced observation model hr in (13) may be any differentiable nonlinear function. A key strength of the linear reduced observation model (22) is that the learned perception map p( ·) absorbs the main nonlinearities of visual perception offline, so that online planning can rely on a simple linear reduced model, with the remaining mismatch captured by the calibrated state-dependent error bound in Sec. VI-C2. 
+
+To certify the nonlinear output-feedback loop, we require that the residual reduced-observation mismatch admits a state-and tube-dependent overbound. This is stated in Assumption 4 below and is implemented in Sec. VI-C2 via an empirical calibration process. 
+
+Assumption 4. For each k ∈ N0: T −1 and any deviations 
+
+(∆ x, ∆u) satisfying ∥(∆ x, ∆u)∥∞ ≤ τk, the reduced obser-vation mismatch in (22) is bounded by the calibrated state-dependent overbound Υ( τk, z k), i.e., 
+
+F r (zk)ek + η(τk) ≤ Υ( zk, τ k)ek, (23) 
+
+where the absolute value is understood component-wise. 
+
+In Section VI-C2, we work with a reduced image yr and a corresponding reduced observation model (22). The function 
+
+F is defined to explicitly capture the approximation error introduced by this reduction, as described in (13). We then define the closed-loop response variables Φ and enforce the SLS constraints (9). In this formulation, the system matrices A(z, v) and B(z, v) depend on the nominal decision variables z and v. Specifically, the deviation variables satisfy 
+
+∆x ∆u 
+
+
+
+= Φ
+
+Σ 00 Υ
+
+  we
+
+
+
+(24) which corresponds to the closed-loop response of the lin-earized dynamics (17). Here, Σ = blkdiag (Ξ , Σ0, . . . , ΣT −1)
+
+captures state-dependent disturbance scaling induced by the function σ(τk, z k, v k), with 
+
+Σj = σ(τj , z j , v j )Inx , j ∈ N0: T −1, (25) including the initial condition uncertainty Ξ. The vector τ =(ρ, τ 0, . . . , τ T −1) collects the tube radii, and Υ is defined analogously to capture the observation uncertainty. 
+
+B. Nonlinear robust constraint satisfaction 
+
+Based on the LTV controller parameterization and the error overbounds, we can now enforce robust constraint satisfaction of the nonlinear system (1). 
+
+Proposition 3. Consider the output–feedback SLS responses 
+
+Φxw , Φxe , Φuw , Φue satisfying (9) for the LTV error model and suppose that Assumptions 1, 3 and 4 hold. Then the closed-loop trajectories of the nonlinear system (1) satisfy the state and input constraints robustly if the following tightened inequalities hold: 
+
+Pkj=0 c⊤ 
+
+> i
+
+Φw 
+
+> k,j
+
+Σj 1 + c⊤ 
+
+> i
+
+Φe 
+
+> k,j
+
+Υj 1 + c⊤ 
+
+> i
+
+(zk, v k) + bi ≤ 0.
+
+(26a) 
+
+Pkj=0 ˆe⊤ 
+
+> l
+
+Φw 
+
+> k,j
+
+Σj 1 + ˆe⊤ 
+
+> l
+
+Φe 
+
+> k,j
+
+Υj 1 ≤ τk, (26b) 
+
+for all k ∈ N0: T −1, i = 1 , . . . , n c, with Σj = σ(τj , z j , v j )Inx ,for l = 1 , . . . , n x +nu where ˆel denote standard basis vectors. Proof: The proof follows directly from [32, 25]. See Appendix C for details. Collecting the nominal dynamics (15), the controller pa-rameterization (9) based on the linearized dynamics (17) and observation model, and the robust constraint satisfaction in (26a)–(26b), we pose the following finite-horizon nonlinear output-feedback SLS synthesis problem in Eq. (27). min 
+
+> Φ,τz,v
+
+J(z, v, τ , Φ) (27a) s.t. zk+1 = f (zk, v k), k ∈ N0: T −1, (27b) 
+
+I − ZA (z, v) − ZB (z, v) Φ = [ I 0 ], (27c) 
+
+Φ
+
+"I − ZA (z, v)
+
+−ZC (z, v)
+
+#
+
+=
+
+I0
+
+
+
+, (27d) 
+
+> k
+
+X
+
+> j=0
+
+c⊤ 
+
+> i
+
+Φw 
+
+> k,j
+
+Σj 1
+
++ c⊤ 
+
+> i
+
+Φe 
+
+> k,j
+
+Υj 1
+
++ c⊤
+
+> i
+
+zk
+
+vk
+
+
+
++ bi ≤ 0,i = 1 , . . . , n c, k ∈ N0: T −1, (27e) 
+
+> k
+
+X
+
+> j=0
+
+ˆe⊤ 
+
+> l
+
+Φw 
+
+> k,j
+
+Σj 1
+
++ ˆe⊤ 
+
+> l
+
+Φe 
+
+> k,j
+
+Υj 1
+
+≤ τk, (27f) 
+
+l = 1 , . . . , n x + nu, k ∈ N0: T −1.The formulation (27) integrates all components of the robust prediction and control design:  
+
+> •
+
+The nominal trajectory is propagated according to the nonlinear dynamics model (27b).  
+
+> •
+
+The propagation of model and measurement disturbance is captured via (27c)–(27d), ensuring that the response matrices Φ correspond to the closed-loop response of the LTV system linearized around the nominal trajectory.  
+
+> •
+
+Robust constraint satisfaction is enforced by the tightened constraints (27e), which guarantee that constraints (2) hold for all disturbances and modeling errors. As per Prop. 3, the disturbance-feedback gains resulting from solving (27) ensures that the uncertain nonlinear system (27b) remains within the constraints S over the prediction horizon. 
+
+C. Perception function 
+
+We now describe how to build the reduced observation map in (13) from camera output using pre-trained visual features. The goal is to compress high-dimensional images into a low-dimensional, control-relevant observation, while fitting a calibrated overbound on the error introduced by this reduction, so that robust constraint satisfaction can still be enforced via Prop. 3. 
+
+1) Learning a lower-dimensional visual representation: We seek a reduced representation that retains only the information in the image needed for control. Since directly planning from high-dimensional visual features is intractable, we instead project them into a low-dimensional observation space that is as informative as possible about the underlying state. To quantify this, we use a dynamics-aware observability metric. Based on the dynamics f and the reduced observation model 
+
+hr , we define the local discrete-time nonlinear observability matrix at ˆx over an input sequence u := {u0, . . . , u n} as 
+
+O(ˆ x, u) .
+
+=
+
+
+
+hr (f (ˆ x, u 0)) 
+
+hr (f (f (ˆ x, u 0), u 1)) 
+
+...
+
+hr (f (f (. . . ), u n−1), u n)) 
+
+ , (28) The observability matrix O quantifies how well x can be inferred from outputs: higher (Jacobian) rank implies better observability[17, Ch. 3], implemented here via the minimum singular value σmin .
+
+Remark 4. If ∇xO| x=ˆ x is full rank, the system is strongly observable, i.e., x is locally recoverable from n+1 outputs. 
+
+Remark 5. Dimensionality reduction via reconstruction (e.g., autoencoders [5]) often retains visually salient but control-irrelevant distractors [44] making overbounds loose. 
+
+Given DINO features ψdino (yi), we learn two objects: a projection p( ·) from the feature space to a low-dimensional observation space yr , and a state-based reduced observation model hr (·). The projection is trained so that the reduced observation p( ψdino (yi)) matches the state-based target hr (xi).To make this reduced observation useful for control, we also encourage it to preserve observability of the underlying state through the metric above. Specifically, over the dataset D, we train p( ·) and hr by minimizing 
+
+ℓ(θp, θ h) = ∥ p( ψdino (yi); θp) − hr (xi; θh)∥ − λσ min (O(ˆ x, u)) 
+
+(29) where θp are the parameters of the projection network and 
+
+θh parameterizes the reduced observation model hr (in our implementation, the entries of Cr ). The scalar λ > 0 balances feature matching against observability. The dimension of the reduced observation hr and the horizon length n used in O
+
+are treated as hyperparameters, and ˆx and u are randomly sampled during training. After training, we fix p( ·) and hr (·),and then calibrate a state-dependent overbound on the residual reduction error in Sec. VI-C2. 
+
+2) Calibration of the perception reduction error: Finally, once the perception module is fixed, we bound the residual error introduced by replacing the original high-dimensional observation with the reduced observation yr = p( ψdino (y)) .This residual captures the mismatch between the learned reduced observation and its state-based model hr (x). To empirically preserve robust constraint satisfaction in (13), we overbound this mismatch by a state-dependent uncertainty set. Specifically, from a dataset {(xi, y i)} we form residuals 
+
+ri = p( ψdino (yi)) − hr (xi) ∞. (30) To define a state-dependent uncertainty set of the form F r (x)B
+
+that bounds this mismatch, we empirically calibrate a scalar envelope b(x) by fitting a polynomial via the convex program 
+
+min 
+
+> β, ξ i≥0
+
+X
+
+> i
+
+ β⊤m(xi) + γ∥β∥22 + μ X
+
+> i
+
+ξi
+
+s.t. β⊤m(xi) ≥ ri − ξi ∀i, 
+
+(31) where γ, μ ≥ 0 trade off smoothness and outlier violations, 
+
+m(·) is a monomial basis, and b(x) := β⊤m(x) is the calibrated scalar envelope. We then set F r (x) = b(x) I so that 
+
+p( ψdino (y)) − hr (x) ∈ F r (x) B∞. (32) This procedure yields a differentiable, state-dependent uncer-tainty set that is cheap to evaluate inside constrained trajectory optimizers. 
+
+Remark 6. The calibrated scalar overbound is intended to certify perception error over the operating region covered by the calibration data, and is therefore most reliable near that distribution. Adapting the certificate to a new environment only requires recalibrating the scalar bound b(x), rather than retraining the full perception-control pipeline. In our experiments (Section VIII), this recalibration is data-efficient: even a small number of calibration samples already provides high empirical coverage. The learned perception map plays a different role: because it is built on DINO features that capture transferable geometric structure, it may generalize beyond the calibration environment, see, e.g, [47], while the bound is used only for safety certification. Alternatively, Lipschitz-type bounds [20, 11] and bounds given by neural network veri-fiers [45] can provide rigorous overbounding guarantees, but typically lead to nonsmooth or overly conservative constraint tightenings. Alternatively, distribution-free approaches such as conformal prediction [34] or extreme value theory [21] can provide statistical guarantees beyond the sampled data. 
+
+VII. I MPLEMENTATION VIA SCP In this section, we will discuss how we efficiently solve (27) for high-dimensional robotics problems. We first discuss an efficient Riccati-based solver for the LTV SLS output feedback problem (11) (Sec. VII-A), which will be used as a subroutine in a sequential convex programming solver (Sec. VII-B), which we call VISION-SLS. 
+
+A. Efficient Solver for SLS-based Output-Feedback LQG 
+
+Although the LTV SLS output-feedback problem (11) is convex and therefore amenable to off-the-shelf general-purpose convex optimization solvers [18], the large number of decision variables and constraints causes these solvers to scale poorly with the horizon and system dimension in SLS prob-lems [23]. This can become prohibitive for large-scale robotics problems. To overcome this challenge, we demonstrate that the unconstrained linear time-varying problem (11) admits an efficient double-Riccati structure, akin to state-feedback [23]. In Section VII, this structure is used as a computational building block inside the nonlinear SCP algorithm. 
+
+Proposition 4. Problem (11) has an optimal solution given by T parallel backward Riccati recursions 
+
+ST,j = P, Kk,j = −  R + B⊤ 
+
+> k
+
+Sk+1 ,j Bk
+
+−1  B⊤ 
+
+> k
+
+Sk+1 ,j Ak
+
+ ,Sk,j = Q + A⊤ 
+
+> k
+
+Sk+1 ,j Ak +  A⊤ 
+
+> k
+
+Sk+1 ,j Bk
+
+ Kk,j ,
+
+(33) 
+
+and independently T parallel backward Kalman recursions 
+
+Πk, 0 = ΞΞ ⊤,Lk,j +1 = −
+
+
+
+Fj F ⊤ 
+
+> j
+
++ Cj Πk,j C⊤
+
+> j
+
+−1
+
+Cj Πk,j A⊤ 
+
+> j
+
+,
+
+Πk,j +1 = Ej E⊤ 
+
+> j
+
++ Aj Πk,j A⊤ 
+
+> j
+
++ Aj Πk,j C⊤ 
+
+> j
+
+Lk,j +1 ,
+
+(34) 
+
+where S and Π are the cost-to-go and estimation error covariance matrices, respectively, defined recursively. Given the controller gains Kk,j and observer gains Lk,j , compute the closed-loop propagation operators in parallel via the two 
+
+T forward passes 
+
+¯Φx 
+
+> j,j
+
+= I, 
+
+¯Φu 
+
+> k,j
+
+= Kk,j ¯Φx 
+
+> k,j
+
+, ¯Φx 
+
+> k+1 ,j
+
+= ( Ak + BkKk,j ) ¯Φx 
+
+> k,j
+
+, (35) 
+
+and 
+
+ˆΦx 
+
+> k,k
+
+= I, 
+
+ˆΦy 
+
+> k,j
+
+= ˆΦx 
+
+> k,j
+
+L⊤ 
+
+> k,j
+
+, ˆΦx 
+
+> k,j
+
+= ˆΦx
+
+> k,j +1
+
+Aj + ˆΦy
+
+> k,j +1
+
+Cj , (36) 
+
+for j = 0 , . . . , T, k = j, . . . , T − 1 and k = 0 , . . . , T, j =0, . . . , k − 1 respectively. Finally, assemble the matrices using M = I − ZA ,
+
+Φxw = ¯Φx + ˆΦx − ¯ΦxM ˆΦx, Φuw = ¯Φu(I − M ˆΦx),
+
+(37a) 
+
+Φxe = ˆΦy − ¯ΦxM ˆΦy, Φue = − ¯ΦuM ˆΦy. (37b) 
+
+Proof: See Appendix B. In the nonlinear constrained setting, we use this double-Riccati structure as an efficient computational primitive inside SCP; we discuss the resulting nonlinear algorithm in Sec. VII-B. 
+
+B. Implementation via SCP 
+
+To solve (27), we adopt an sequential convex programming (SCP) approach [38] that, at each iteration, constructs a convex second-order cone program (SOCP) by linearizing the dynam-ics and convexifying the cost and constraint tightening around the current nominal trajectory (z, v). Each subproblem is then solved using a structure-exploiting SLS method based on [23], together with the double-Riccati construction of Proposition 4 to construct feasible output-feedback responses Φ and their reachable sets. In practice, this amounts to combining the control-side state-feedback SLS solution with a time-varying Kalman recursion for state estimation. Because the extra estimation step only requires a standard Riccati recursion, the per-iteration complexity remains close to that of a single state-feedback fast-SLS model predictive control (MPC) step. We note that the overall runtime of this SCP procedure can be reduced by leveraging GPU parallelization, following [16]. The resulting scheme is efficient and maintains feasibility, though we note the coupling is ultimately heuristic and does not yield optimality guarantees. In particular, as opposed to the state-feedback fast-SLS solver [23], the dual-based cost update used within the unconstrained Riccati recursions (11) is not based on the KKT structure of the constrained problem (analogous to [23, Eq. 21]), and is hence a heuristic. Future work should focus on uncovering the banded numerical struc-ture of the constrained SLS-based LQG. The full procedure is summarized in Algorithm 1. 
+
+Algorithm 1 : SCP-based Output-Feedback SLS 
+
+Repeat until convergence (SCP loop): 
+
+1) Linearize nonlinear dynamics/constraints around 
+
+(z, v); quadratize cost to obtain a convex SOCP subproblem. 2) Solve linear approximation: 
+
+a) solve QP: update (∆ z, ∆v),b) compute ¯Φx, ¯Φu via fast-SLS [23] (parallel Riccati recursions). c) compute ˆΦx, ˆΦy (parallel Kalman recursions). d) compute Φxw , Φuw , Φxe , Φue via (37) e) compute constraint tightening (26a)–(26b) f) set (z, v) ← (z, v) + (∆ z, ∆v)
+
+3) Repeat 
+
+VIII. R ESULTS 
+
+We evaluate our output-feedback SLS pipeline on four systems with uncertain nonlinear dynamics and uncertain partial observations: a 4D car with overhead RGB images (Sec. VIII-C), a 10D quadrotor with onboard RGB images (Sec. VIII-D), a humanoid with partial state sensing (Sec. VIII-E), and a real-world TurtleBot with onboard RGB images (Sec. VIII-F). For intuition, we also evaluate on the classic light-dark benchmark [19] (Sec. VIII-B) and perform a baseline comparison against a recent safe perception-based control algorithm [42] (Sec. VIII-A). We demonstrate (i) robust constraint satisfaction via tube tightening, (ii) information-gathering motion emerging from the SLS design even for large state dimensions and RGB observations. For the car and quadrotor, we use DINOv2-vitg14 and DINOv2-vitl14 [28] as the pre-trained VFM, leveraging 512x512 RGB images rendered in PyBullet, respectively with 3 × 10 5 and 
+
+2 × 10 6 datapoints to train p( ·) and Cr , and fit a polynomial error bound with (31). To implement Alg. 1, we use CasADi [3], using IPOPT [39] to find an initial guess for (z, v) (Step 1 of Alg. 1) and OSQP [35] to solve the QP in Step 2a of Alg. 1 4. Alg. 1 terminates if ∥(∆ z, ∆v)∥2 ≤ 0.001 or after 20 iterations. We compare Alg. 1 to several baselines, including 1) a certainty equivalent (CE) controller [13, 36], which assumes the separation principle, akin to iLQG, by optimizing a reference and controller under the assumption of perfect observations, i.e., with post-hoc tubes, which corresponds to the first iteration of our algorithm 2) a non-robust (NR) belief-space controller inspired by [19], which performs information gathering but does not perform constraint tightening to robustly ensure safety under uncertainty. We define success as reaching the terminal set without collision and report success rate (SR) and constraint violation rate (CVR) of our method and baselines over 15 random initial states each with 50 rollouts under random disturbance sequence in Table I. 
+
+Light-dark 4D Car Ours CE NR Ours CE NR SR 100% 90.13% 87.73% 98.53% 93.47% 48.13% CVR 0% 9.87% 12.27% 1.6% 6.53% 55.87% Quadrotor Humanoid Ours CE NR Ours CE NR SR 100% 100% 29.47% 100% 100% 2% CVR 0% 0% 92.8% 0% 0% 98% TABLE I COMPARISON BETWEEN OUR METHOD , CERTAINTY EQUIVALENT (CE) 
+
+AND NON -ROBUST (NR) BASELINE IN TERMS OF SUCCESS RATE (SR) AND CONSTRAINT VIOLATION RATE (CVR). 
+
+A. Safe Perception-Based Control Baseline 
+
+To compare the performance of VISION-SLS compared to recent safe perception-based control methods, we compare with [42] in their F1/10th autonomous driving setting [42, Sec. 5], which assumes a 3D vehicle state [px, p y , θ ] ∈ R3
+
+consisting of translation (px, p y ) and orientation θ. We use the dataset generated by the code implementation of [42] to train our perception module and error bound. Notably, [42] leverages a 64-dimensional LiDAR observation instead of pixel observations; our method can flexibly be applied to this setting by learning a projection function p : R64 → R3, setting 
+
+hr (x) = x, and calibrating the error bound F r (xk) using the procedure of (31). VISION-SLS achieves 100% safety, higher than the 93% reported by [42], since our method jointly 
+
+4The implementation and experiment code are available at https://github.com/trustworthyrobotics/VISION-SLS. 20 30 40 50 60 
+
+Horizon 
+
+> 10 1
+> 10 3
+> Log Runtime (s)
+
+(a)     
+
+> 20 30 40 50 60
+
+Horizon 
+
+> 0.0
+> 0.2
+> 0.4
+> Normalized
+> Tube Cost
+
+(b)       
+
+> Double
+> Riccati (ours)
+> MOSEK
+> °2°101234
+
+Position px [m]  
+
+> °0.5
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> Position  py [m]
+> Optimal reference
+> Closed-loop rollouts
+> CE reference
+> Optimal tube (Cost = 660)
+> CE: post-hoc tube (Cost = 832)
+> Terminal constraint
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30 Uncertainty  eØ (x)
+
+(c) 
+
+> <latexit  sha1_base64="SvhgniAwCMlz1WbAOzpN7Qphj3M=">AAAB63icbVDLSgNBEOz1GeMr6tHLYBDiJeyKr2NQEI8RzAOSJcxOZpMhM7PLzKwYlvyCFw+KePWHvPk3ziZ70MSChqKqm+6uIOZMG9f9dpaWV1bX1gsbxc2t7Z3d0t5+U0eJIrRBIh6pdoA15UzShmGG03asKBYBp61gdJP5rUeqNIvkgxnH1Bd4IFnICDaZdFt5OumVym7VnQItEi8nZchR75W+uv2IJIJKQzjWuuO5sfFTrAwjnE6K3UTTGJMRHtCOpRILqv10eusEHVulj8JI2ZIGTdXfEykWWo9FYDsFNkM972Xif14nMeGVnzIZJ4ZKMlsUJhyZCGWPoz5TlBg+tgQTxeytiAyxwsTYeIo2BG/+5UXSPK16F9Xz+7Ny7TqPowCHcAQV8OASanAHdWgAgSE8wyu8OcJ5cd6dj1nrkpPPHMAfOJ8/Pr+Nuw==</latexit>
+> F (x)
+
+Fig. 3. On the classic light-dark domain, our method optimally visits the low perception-error region, where lighter shades indicate lower error (c), reducing final state uncertainty, whereas a na¨ ıve CE controller accumulates more uncertainty over the horizon. Computationally, our method is much faster than a baseline convex optimization-based SLS solver [2, 48], implemented via MOSEK [4] (a) while achieving the same optimal solution cost (b). 
+
+synthesizes a trajectory and robust controller that provides hard guarantees on safety given a valid overbound F r .
+
+B. Light-Dark 
+
+We first show the information-gathering abilities, runtime scaling with horizon length, and optimality of our method in the light-dark domain [19], a benchmark for partially-observed control. We consider a 2D single integrator with state 
+
+x = ( px, p y ), with state, input, and terminal state constraints (see App. D2). Alg. 1 converges after 17 SCP iterations in 
+
+1.171 seconds. By penalizing the tube volume in (27a), our method steers the system to lower perception-error regions (Fig. 3c), which reduces tube growth and enables information-gathering while satisfying the terminal constraints. In contrast, the CE baseline experiences larger perception error, causing larger tubes and terminal constraint violation. All 10 simulated closed-loop rollouts stay in their computed reachable sets, as expected. Moreover, we show that our method scales much better than a na¨ ıve SLS output feedback controller synthesized via convex optimization [2, 48] that does not use the double Riccati structure (Fig. 3a) while achieving the same cost (Fig. 3b), empirically validating the optimality result of Prop. 4. Our method always reaches the terminal set while CE fails in 9.87% and NR fails in 12.27% of all trials (see Table I). 
+
+C. 4D Car with Overhead RGB Images 
+
+In the vision-based driving task shown in Fig. 4, we steer a 4D car with state (px, p y , p θ , v ) (position, rotation, linear velocity) [11] to a specified goal over a horizon T = 30 
+
+with a timestep of 0.15 s, enforcing state and input constraints, avoiding collisions with other cars modeled as circular ob-stacles, while minimizing the propagated uncertainty along the trajectory. More details are in App. D3. To clearly show information-gathering in the vision-based control setting, a heavy visual occlusion (0.97 opacity) is placed in the middle of the environment, increasing the worst-case measurement error for those states. In Fig. 4, we visualize the learned (a)         
+
+> −2.5−2.0−1.5−1.0−0.50.00.5
+> Position px[m]
+> −2.0
+> −1.5
+> −1.0
+> −0.5
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> Position  py [m]
+
+(b)             
+
+> Optimal trajectory Optimal rollouts Optimal tubes (cost=2710) CE trajectory CE tubes (cost=3410) Non-robust trajectory Non-robust rollouts Obstacle
+> 0510 15 20 25 30
+> −2
+> −1
+> 0
+> Position  px [m]
+> closed-loop rollout open-loop rollout reachable set optimal trajectory
+> 0510 15 20 25 30
+> 0
+> 2
+> Position  py [m]
+
+(c)                                     
+
+> 0510 15 20 25 30
+> −1
+> 0
+> 1
+> Heading  θ [rad]
+> 0510 15 20 25 30
+> 0
+> 1
+> 2
+> Speed  v [m/s]
+> 0510 15 20 25 30
+> 0.00
+> 0.05
+> 0.10
+> Tube width of  px [m]
+> optimal CE
+> 0510 15 20 25 30
+> 0.00
+> 0.05
+> 0.10
+> Tube width of  py [m]
+> 0510 15 20 25 30
+> Time step k
+> 0.00
+> 0.02
+> 0.04
+> Tube width of  θ [rad]
+> 0510 15 20 25 30
+> Time step k
+> 0.00
+> 0.02
+> 0.04
+> Tube width of  v [m/s]
+
+(d) 0.015 0.030 0.045 0.060 0.075 0.090 0.105 0.120 0.135 0.150 Uncertainty  F r(x)Fig. 4. (a) Car in an occluded parking lot with a top-down camera avoiding red obstacles. (b) Grayscale shows the learned uncertainty for the reduced observation (darker = higher uncertainty/occlusion). Our controller tightens constraints using the propagated set and yields a collision-free trajectory. In contrast, the certainty-equivalent trajectory stays longer in the high-uncertainty occluded region. (c) Closed-loop rollouts in the occluded scene, overlaying the nominal plan, the SLS-induced uncertainty set (for constraint tightenings), and sample closed-loop rollouts. (d) Comparing reachable tube size per state dimension. We minimize a weighted tube-volume cost, with a stronger penalty on the terminal tube, encouraging information gathering to reduce final-time uncertainty. 
+
+state-dependent polynomial overbound F r (x) as a grayscale heatmap over the (px, p y ) workspace. The calibration of the perception error bounds are given in App. D5. The coverage of error bound over-approximation (tested at 500 randomly sam-pled states) vs. number of calibration points, presented in Table II, demonstrates the data-efficiency of our perception calibra-tion procedure. Notably, our method exceeds 90% empirical coverage with only 50 samples. The optimal plan produced by Alg. 1 (computed in 3.584s over 20 SCP iterations) is shown in green in Fig. 4. The resulting trajectory avoids the occluded region to actively reduce perception uncertainty, whereas the CE baseline drives through the occlusion and incurs larger tube widths (Fig. 4d). Closed-loop rollouts using DINO-v2 features remain in the computed reachable tubes and satisfy all con-straints despite heavy occlusion (Fig. 4c). In contrast, the non-robust baseline violates safety under disturbance, highlighting the necessity of constraint tightening for vision-based control. In this setting, we also compare our method against a variant of [37] in which we replace the NeRF model with a convolutional neural network trained on our perception dataset to predict the minimum distance to obstacles (to better match our constrained single-camera-view setting). The SR and CVR of the variant of [37] are 65.47% and 27.93% respectively, indicating our method outperforms all baselines with 98.53% SR and 1.6% CVR. The variant of [37] performs poorly here because its formulation makes it difficult to sample safe actions for nonlinear dynamics. Moreover, [37] does not formally account for robust constraint satisfaction under disturbances, and thus cannot counteract the error of the distance predictor. 
+
+calibration points 50 100 250 500 1500 empirical coverage 91.4% 92.2% 97.4% 99% 99% TABLE II ERROR BOUND OVER -APPROXIMATION COVERAGE VS . NUMBER OF CALIBRATION POINTS .
+
+D. 10D Quadrotor with Onboard RGB Images 
+
+We evaluate on a vision-based flying task (Fig. 5), steering a 10D quadrotor model [11] in a cluttered 3D environment to a goal under partial observability (see App. D4). The °1.5  
+
+> °1.0
+> °0.5
+> 0.0
+> 0.5
+> px[m]
+> 2.0
+> 2.2
+> 2.4
+> 2.6
+> 2.8
+> 3.0
+> 3.2
+> 3.4
+> py [m]
+> 1.0
+> 1.1
+> 1.2
+> 1.3
+> 1.4
+> 1.5
+> pz [m]
+> Optimal trajectory
+> Optimal tubes (cost=3120)
+> Optimal rollouts
+> CE trajectory
+> CE tubes (cost=3130)
+> Non-robust trajectory
+> Non-robust rollouts
+> Obstacle
+> °1.5
+> °1.0
+> °0.5
+> 0.0
+> 0.5
+> px [m]
+> 2.22.42.62.83.03.2
+> py[m]
+
+t = 0 t = 10 t = 16 t = 24 t = 28 t = 34 
+
+(a) (b) 
+
+(c)       
+
+> t= 0
+> t= 10
+> t= 16
+> t= 24
+> t= 28
+> t= 34
+
+Fig. 5. Controlling a quadcopter with an onboard camera, showcasing obstacle avoidance despite disturbances from perception error and dynamics uncertainty. (a) Our closed-loop rollouts stay within the computed tubes, reaching the target with smaller uncertainty bounds compared to the CE base-line, maintaining safety while executing a non-robust information-gathering policy does not. (b) A top-down view of (a). (c) Snapshots of the images collected onboard to implement feedback control. 
+
+resulting prediction tubes robustly avoid obstacles despite perception uncertainty, whereas both the certainty-equivalent controller and the non-robust information-gathering baseline collide with obstacles, even though their nominal trajectories are collision-free. In addition, tight state constraints (e.g., pitch) are respected throughout the horizon due to robust constraint tightening. Our method succeeds and never violates constraints in all trials. The CE baseline also succeeds in all trials, but produces larger tubes because it cannot perform information gathering. In contrast, the NR baseline succeeds only in 29.47% trials (see Table I). Overall, these results show robust constraint satisfaction for vision-based control tasks on higher-dimensional dynamics. 
+
+E. Humanoid with Partial State Measurement 
+
+We demonstrate applicability to high-dimensional sys-tems with partial state measurements on a Unitree G1 hu-manoid [22] with 59 states and 23 inputs modeled in Pinoc-chio [8]. We consider a vision-free setting to isolate scalability with respect to the state dimension from scalability with re-spect to the observation dimension, since the former primarily impacts online control synthesis whereas the latter is handled offline by the perception reduction module (see Remark 1). Hence, only joint angles and base pose are observed (no vision), and state and input constraints must be satisfied (see App. D6 for details and all reachable tubes). The task is robust tracking of a backflip trajectory under disturbance (Fig. 1a). In Fig. 1b, open-loop rollouts (red) exit the reachable tubes and violate constraints (e.g., quaternion limits), whereas all closed-loop rollouts (blue) remain within the tubes and satisfy constraints, demonstrating effective output-feedback optimization and joint reachability–trajectory optimization for partially observed large-scale dynamics. Our method always steers the humanoid to the terminal set without constraint violation despite the uncertainties and partial observation. In this example, the CE baseline also yields the same solution because the perception uncertainty is uniformly bounded over the space. However, the NR baseline performs far worse than VISION-SLS, achieving only 2% SR and 98% CVR (Table I), because even small disturbances can be amplified by the complex nonlinear humanoid dynamics. 
+
+F. Hardware experiment 
+
+We evaluate our method on a physical TurtleBot 4 platform operating in an office environment (Fig. 1d). The robot is tasked with reaching a goal position under state and input constraints, including collision avoidance with furniture. See App. D7 for detailed experiment description. Using onboard visual feedback, the closed-loop controller robustly tracks the planned trajectory across 3 real-world runs (Fig. 1c). Fig. 1e shows representative onboard images used during execution. All executions remain within the computed reachable tubes and satisfy collision-avoidance constraints, demonstrating safe perception-based output-feedback control on hardware. IX. C ONCLUSION 
+
+We introduced a tractable framework for safe nonlinear output-feedback planning and control directly from pixels. The key ingredients are (i) a learned low-dimensional obser-vation map that turns high-dimensional images into reduced measurements with calibrated error bounds, and (ii) an SLS-based parameterization of dynamic output-feedback as causal affine policies around a nominal trajectory with robust con-straint satisfaction. After training the perception map and error bounds from data, the full nonlinear output-feedback synthesis problem is solved efficiently via SCP and an SLS solver based on Riccati recursions. Empirically, the method enables information-gathering behavior and robust constraint satisfac-tion on high-dimensional, underactuated systems with realistic visual observations. Overall, the results suggest that pairing visual representation learning with system-level synthesis is a practical path to safe visuomotor control at scale. Future work includes total occlusion handling and learned dynamics, and an optimal solver for the constrained version of (11). REFERENCES 
+
+[1] Shir Amir, Yossi Gandelsman, Shai Bagon, and Tali Dekel. Deep vit features as dense visual descriptors. 
+
+CoRR , abs/2112.05814, 2021. [2] James Anderson, John C. Doyle, Steven H. Low, and Nikolai Matni. System level synthesis. Annu. Rev. Control. , 47:364–393, 2019. [3] Joel AE Andersson, Joris Gillis, Greg Horn, James B Rawlings, and Moritz Diehl. Casadi: a software frame-work for nonlinear optimization and optimal control. 
+
+Mathematical Programming Computation , 11(1):1–36, 2019. [4] MOSEK ApS. The MOSEK optimization toolbox for Python manual. Version 11.1. , 2019. URL http://docs. mosek.com/9.0/toolbox/index.html. [5] Pierre Baldi. Autoencoders, unsupervised learning, and deep architectures. In Isabelle Guyon, Gideon Dror, Vincent Lemaire, Graham W. Taylor, and Daniel L. Silver, editors, Unsupervised and Transfer Learning -Workshop held at ICML 2011, Bellevue, Washington, USA, July 2, 2011 , volume 27 of JMLR Proceedings ,pages 37–50. JMLR.org, 2012. [6] Ershad Banijamali, Rui Shu, Mohammad Ghavamzadeh, Hung Bui, and Ali Ghodsi. Robust locally-linear con-trollable embedding. In AISTATS , 2018. [7] Dimitri P Bertsekas. Dynamic programming and sub-optimal control: A survey from adp to mpc. European journal of control , 11(4-5):310–334, 2005. [8] Justin Carpentier, Guilhem Saurel, Gabriele Buondonno, Joseph Mirabel, Florent Lamiraux, Olivier Stasse, and Nicolas Mansard. The pinocchio c++ library: A fast and flexible implementation of rigid body dynamics algorithms and their analytical derivatives. In 2019 IEEE/SICE International Symposium on System Integra-tion (SII) , pages 614–619. IEEE, 2019. [9] Cheng Chi, Zhenjia Xu, Siyuan Feng, Eric Cousineau, Yilun Du, Benjamin Burchfiel, Russ Tedrake, and Shuran Song. Diffusion policy: Visuomotor policy learning via action diffusion. The International Journal of Robotics Research , 44(10-11):1684–1704, 2025. [10] Glen Chou and Russ Tedrake. Synthesizing stable reduced-order visuomotor policies for nonlinear systems via sums-of-squares optimization. In 2023 62nd IEEE Conference on Decision and Control (CDC) , pages 624– 631. IEEE, 2023. [11] Glen Chou, Necmiye Ozay, and Dmitry Berenson. Model error propagation via learned contraction metrics for safe feedback motion planning of unknown systems. In 2021 60th IEEE Conference on Decision and Control (CDC) ,pages 3576–3583. IEEE, 2021. [12] Glen Chou, Necmiye Ozay, and Dmitry Berenson. Safe output feedback motion planning from images via learned perception modules and contraction theory. In 
+
+International Workshop on the Algorithmic Foundations of Robotics , pages 349–367. Springer, 2022. [13] Sarah Dean and Benjamin Recht. Certainty equivalent perception-based control. In Learning for Dynamics and Control , pages 399–411. PMLR, 2021. [14] Sarah Dean, Andrew Taylor, Ryan Cosner, Benjamin Recht, and Aaron Ames. Guaranteeing safety of learned perception modules via measurement-robust control bar-rier functions. In Conference on Robot Learning , pages 654–670. PMLR, 2021. [15] Sampada Deglurkar, Michael H. Lim, Johnathan Tucker, Zachary N. Sunberg, Aleksandra Faust, and Claire J. Tomlin. Compositional learning-based planning for vi-sion pomdps. In Learning for Dynamics and Control Conference, L4DC 2023 , volume 211 of Proceedings of Machine Learning Research , pages 469–482. PMLR, 2023. [16] Jeffrey Fang and Glen Chou. Safe large-scale robust non-linear mpc in milliseconds via reachability-constrained system level synthesis on the gpu. arXiv preprint arXiv:2604.07644 , 2026. [17] Walter D. Grossman. Observers for discrete-time non-linear systems. In PhD thesis, New Jersey Institute of Technology , 1999. [18] Gurobi Optimization, LLC. Gurobi Optimizer Reference Manual, 2026. URL https://www.gurobi.com. [19] Robert Platt Jr., Russ Tedrake, Leslie Kaelbling, and Tom´ as Lozano-P´ erez. Belief space planning assuming maximum likelihood observations. In R:SS , 2010. [20] Craig Knuth, Glen Chou, Necmiye Ozay, and Dmitry Berenson. Planning with learned dynamics: Probabilis-tic guarantees on safety and reachability via lipschitz constants. IEEE Robotics and Automation Letters , 6(3): 5129–5136, 2021. [21] Craig Knuth, Glen Chou, Jamie Reese, and Joseph Moore. Statistical safety and robustness guarantees for feedback motion planning of unknown underactuated stochastic systems. In 2023 IEEE International Confer-ence on Robotics and Automation (ICRA) , pages 12700– 12706, 2023. [22] Scott Kuindersma, Robin Deits, Maurice Fallon, Andr´ es Valenzuela, Hongkai Dai, Frank Permenter, Twan Koolen, Pat Marion, and Russ Tedrake. Optimization-based locomotion planning, estimation, and control de-sign for the atlas humanoid robot. Autonomous robots ,40(3):429–455, 2016. [23] Antoine P. Leeman, Johannes K¨ ohler, Florian Messerer, Amon Lahr, Moritz Diehl, and Melanie N. Zeilinger. Fast system level synthesis: Robust model predictive control using Riccati recursions. IFAC-PapersOnLine (Conference on Nonlinear MPC) , 58(18):173–180, 2024. ISSN 2405-8963. doi: https://doi.org/10.1016/j.ifacol. 2024.09.027. [24] Antoine P Leeman, Johannes K¨ ohler, and Melanie N Zeilinger. Guaranteed robust nonlinear mpc via distur-bance feedback. arXiv preprint arXiv:2509.18760 , 2025. [25] Antoine P. Leeman, Johannes K¨ ohler, Andrea Zanelli, Samir Bennani, and Melanie N. Zeilinger. Robust non-linear optimal control via system level synthesis. IEEE Transactions on Automatic Control , 70(7):4780–4787, 2025. doi: 10.1109/TAC.2025.3552482. [26] Sergey Levine, Chelsea Finn, Trevor Darrell, and Pieter Abbeel. End-to-end training of deep visuomotor policies. 
+
+Journal of Machine Learning Research , 17(39):1–40, 2016. [27] Florian Messerer, Katrin Baumg¨ artner, and Moritz Diehl. A dual-control effect preserving formulation for nonlin-ear output-feedback stochastic model predictive control with constraints. IEEE Control Systems Letters , 7:1171– 1176, 2022. [28] Maxime Oquab, Timoth´ ee Darcet, Th´ eo Moutakanni, Huy Vo, Marc Szafraniec, Vasil Khalidov, Pierre Fer-nandez, Daniel Haziza, Francisco Massa, Alaaeldin El-Nouby, Mahmoud Assran, Nicolas Ballas, Wojciech Galuba, Russell Howes, Po-Yao Huang, Shang-Wen Li, Ishan Misra, Michael G. Rabbat, Vasu Sharma, Gabriel Synnaeve, Hu Xu, Herv´ e J´ egou, Julien Mairal, Patrick Labatut, Armand Joulin, and Piotr Bojanowski. Di-nov2: Learning robust visual features without supervi-sion. CoRR , abs/2304.07193, 2023. doi: 10.48550/arXiv. 2304.07193. [29] Sadra Sadraddini and Russ Tedrake. Robust output feedback control with guaranteed constraint satisfaction. In Proceedings of the 23rd International Conference on Hybrid Systems: Computation and Control , pages 1–10, 2020. [30] Michel Schubiger, Goran Banjac, and John Lygeros. Gpu acceleration of admm for large-scale quadratic program-ming. Journal of Parallel and Distributed Computing ,144:55–67, 2020. [31] Dhruv Shah, Benjamin Eysenbach, Gregory Kahn, Nicholas Rhinehart, and Sergey Levine. Ving: Learn-ing open-world navigation with visual goals. In IEEE International Conference on Robotics and Automation, ICRA 2021, Xi’an, China, May 30 - June 5, 2021 , pages 13215–13222. IEEE, 2021. [32] Jerome Sieber, Samir Bennani, and Melanie N Zeilinger. A system level approach to tube-based model predictive control. IEEE Control Systems Letters , 6:776–781, 2021. [33] Sumeet Singh, Mo Chen, Sylvia L Herbert, Claire J Tomlin, and Marco Pavone. Robust tracking with model mismatch for fast and safe planning: an sos optimization approach. In International Workshop on the Algorithmic Foundations of Robotics , pages 545–564. Springer, 2018. [34] Anutam Srinivasan, Antoine Leeman, and Glen Chou. Safety beyond the training data: Robust out-of-distribution mpc via conformalized system level synthe-sis. arXiv preprint arXiv:2602.12047 , 2026. [35] Bartolomeo Stellato, Goran Banjac, Paul Goulart, Al-berto Bemporad, and Stephen Boyd. Osqp: An operator splitting solver for quadratic programs. Mathematical Programming Computation , 12(4):637–672, 2020. [36] Emanuel Todorov and Weiwei Li. A generalized itera-tive lqg method for locally-optimal feedback control of constrained nonlinear stochastic systems. In Proceedings of the 2005, American Control Conference, 2005. , pages 300–306. IEEE, 2005. [37] Mukun Tong, Charles Dawson, and Chuchu Fan. En-forcing safety for vision-based controllers via control barrier functions and neural radiance fields, 2023. URL https://arxiv.org/abs/2209.12266. [38] Robin Verschueren, Gianluca Frison, Dimitris Kouzoupis, Jonathan Frey, Niels van Duijkeren, Andrea Zanelli, Branimir Novoselnik, Thivaharan Albin, Rien Quirynen, and Moritz Diehl. acados—a modular open-source framework for fast embedded optimal control. Mathematical Programming Computation , 14 (1):147–183, 2022. [39] Andreas W¨ achter and Lorenz T Biegler. On the imple-mentation of an interior-point filter line-search algorithm for large-scale nonlinear programming. Mathematical programming , 106(1):25–57, 2006. [40] Yuh-Shyang Wang and Nikolai Matni. Localized lqg optimal control for large-scale systems. In 2016 Ameri-can Control Conference (ACC) , pages 1954–1961. IEEE, 2016. [41] Manuel Watter, Jost Tobias Springenberg, Joschka Boedecker, and Martin A. Riedmiller. Embed to control: A locally linear latent dynamics model for control from raw images. In Neural Information Processing Systems ,pages 2746–2754, 2015. [42] Shuo Yang, George J. Pappas, Rahul Mangharam, and Lars Lindemann. Safe perception-based control under stochastic sensor uncertainty using conformal prediction, 2023. URL https://arxiv.org/abs/2304.00194. [43] Shuyu Zhan, Chih-Yuan Chiu, Antoine P Leeman, and Glen Chou. Robustly constrained dynamic games for uncertain nonlinear dynamics. arXiv preprint arXiv:2509.16826 , 2025. [44] Amy Zhang, Rowan Thomas McAllister, Roberto Calan-dra, Yarin Gal, and Sergey Levine. Learning invariant representations for reinforcement learning without recon-struction. In 9th International Conference on Learning Representations, ICLR , 2021. [45] Huan Zhang, Tsui-Wei Weng, Pin-Yu Chen, Cho-Jui Hsieh, and Luca Daniel. Efficient neural network ro-bustness certification with general activation functions. 
+
+Neural Information Processing Systems , 31, 2018. [46] Marvin Zhang, Sharad Vikram, Laura M. Smith, Pieter Abbeel, Matthew J. Johnson, and Sergey Levine. SO-LAR: deep structured representations for model-based reinforcement learning. In ICML , 2019. [47] Gaoyue Zhou, Hengkai Pan, Yann LeCun, and Lerrel Pinto. Dino-wm: World models on pre-trained vi-sual features enable zero-shot planning. arXiv preprint arXiv:2411.04983 , 2024. [48] Hongyu Zhou and Vasileios Tzoumas. Safe control of partially-observed linear time-varying systems with minimal worst-case dynamic regret, 2023. APPENDIX 
+
+A. Proof of Proposition 2 Proof: As per (8), the state and input trajectories are affine images of ℓ∞ balls, hence can be written as Minkowski sums 
+
+x ∈ ¯x ⊕ Φxw EBnxT ⊕ Φxe FBnxT ,
+
+u ∈ ¯u ⊕ Φuw EBnxT ⊕ Φue FBnxT , (38) By (8), (x, u) are affine images of ℓ∞ balls, i.e., Minkowski sums. Robust feasibility of (2) is the support function of the disturbance set in direction ci. Since the support function of a (scaled) ℓ∞ ball equals a weighted ℓ1 norm, (12) follows. 
+
+B. Proof of Proposition 4 Proof: The proof proceeds in two parts. We first show that the closed-loop responses constructed in (37) are feasible, i.e., they satisfy the SLS constraints (9). We then show that, among all feasible responses, this construction is optimal for the quadratic objective (11). 
+
+a) Feasibility: Define M := I − ZA . We show that the matrices in (37) satisfy the SLS constraints (9) and are block-lower-triangular. First, let ¯Φx, ¯Φu denote the state-feedback closed-loop responses associated with the gains Kk,j , constructed by the forward recursion (35). By construction, they satisfy the stacked closed-loop relation 
+
+M ¯Φx − ZB ¯Φu = I. (39) Second, let ˆΦx, ˆΦy denote the observer-side operators as-sociated with the gains Lk,j , constructed by the forward recursion in Proposition 4. These operators satisfy the right-inverse identity 
+
+ˆΦx M − ˆΦy ZC = I. (40) We now verify (9) for the assembled matrices (37). Using (37a)–(37b), (39), and (40), we get (i) Left constraint, w-channel in (11b): 
+
+MΦ xw − ZB Φ uw 
+
+= M
+
+ ¯Φx + ˆΦx − ¯ΦxM ˆΦx
+
+− ZB 
+
+ ¯Φu − ¯ΦuM ˆΦx
+
+=  M ¯Φx − ZB ¯Φu + M ˆΦx −  M ¯Φx − ZB ¯Φu M ˆΦx
+
+= I + M ˆΦx − I M ˆΦx = I.
+
+(ii) Left constraint, e-channel in (11b): 
+
+MΦ xe − ZB Φ ue 
+
+= M
+
+ ˆΦy − ¯ΦxM ˆΦy
+
+− ZB 
+
+
+
+− ¯ΦuM ˆΦy
+
+= M ˆΦy −  M ¯Φx − ZB ¯Φu M ˆΦy
+
+= M ˆΦy − I M ˆΦy = 0.(iii) Right constraint, w-channel in (11c): 
+
+Φxw M − Φxe ZC 
+
+=
+
+ ¯Φx + ˆΦx − ¯ΦxM ˆΦx
+
+M −
+
+ ˆΦy − ¯ΦxM ˆΦy
+
+ZC 
+
+= ¯ΦxM +
+
+ ˆΦxM − ˆΦyZC 
+
+
+
+− ¯ΦxM
+
+ ˆΦxM − ˆΦyZC 
+
+
+
+= ¯ΦxM + I − ¯ΦxM I = I.
+
+(iv) Right constraint, e-channel in (11c): 
+
+Φuw M − Φue ZC 
+
+=
+
+ ¯Φu − ¯ΦuM ˆΦx
+
+M −
+
+
+
+− ¯ΦuM ˆΦy
+
+ZC 
+
+= ¯ΦuM − ¯ΦuM
+
+ ˆΦxM − ˆΦyZC 
+
+
+
+= ¯ΦuM − ¯ΦuM I = 0.
+
+Finally, ¯Φx, ¯Φu, ˆΦx, ˆΦy are block-lower-triangular by construction, and the set of block-lower-triangular oper-ators is closed under addition and multiplication; hence 
+
+Φxw , Φuw , Φxe , Φue are block-lower-triangular. Therefore, the matrices defined by (37) satisfy (9), and provide a feasible solution to Problem (11). 
+
+b) Optimality: We now show that this feasible solution is optimal for the quadratic objective. We adopt a stochastic disturbance model in this section to leverage the classical LQG separation structure underlying the quadratic objective in (11) under SLS parameterization. The error dynamics following (4) and (5) is 
+
+∆xk+1 = Ak∆xk + Bk∆uk + Ekwk, (41) 
+
+∆yk+1 = Ck∆xk + Fkek, (42) where {wk} and {ek} are zero-mean, mutually independent stochastic disturbances with identity covariance, independent across time. The objective in (11) corresponds to the expected finite-horizon quadratic cost (43) since we can substitute ∆xk and 
+
+∆uk with Φxw , Φxe , Φuw , Φue defined in (8) 
+
+Jerror = E
+
+"T −1X
+
+> k=0
+
+∆xk
+
+∆uk
+
+⊤Q 00 R
+
+ ∆xk
+
+∆uk
+
+
+
++ ∆ x⊤ 
+
+> T
+
+P ∆xT
+
+#
+
+.
+
+(43) We decompose the state error into its estimate and estima-tion error, 
+
+∆xk = ∆ˆ xk + dk,
+
+where ∆ˆ xk := E[∆ xk | y1: k] and dk := ∆ xk − ∆ˆ xk.Substituting this decomposition into the quadratic cost yields 
+
+∆x⊤ 
+
+> k
+
+Q∆xk = (∆ˆ xk + dk)⊤Q(∆ˆ xk + dk)= ∆ˆ x⊤ 
+
+> k
+
+Q∆ˆ xk + d⊤ 
+
+> k
+
+Qd k + 2∆ˆ x⊤ 
+
+> k
+
+Qd k. (44) Taking expectation and using the orthogonality of ∆ˆ xk and 
+
+dk under conditional expectation gives 
+
+E[∆ˆ x⊤ 
+
+> k
+
+Qd k] = 0 ,
+
+so the expected cost decomposes exactly as 
+
+Jerror = Jctrl + Jobs , (45) with 
+
+Jctrl := E
+
+"T −1X
+
+> k=0
+
+∆ˆ xk
+
+∆uk
+
+⊤Q 00 R
+
+ ∆ˆ xk
+
+∆uk
+
+
+
++ ∆ˆ x⊤ 
+
+> T
+
+P ∆ˆ xT
+
+#
+
+,
+
+(46) 
+
+Jobs := E
+
+"T −1X
+
+> k=0
+
+d⊤ 
+
+> k
+
+Qd k + d⊤ 
+
+> T
+
+P d T
+
+#
+
+. (47) 
+
+Control subproblem. The state estimate evolves according to 
+
+∆ˆ xk+1 = Ak∆ˆ xk + Bk∆uk + Lk+1 (∆ yk+1 − Ck∆ˆ xk) ,
+
+∆ˆ xk+1 = Ak∆ˆ xk + Bk∆uk + Lk+1 (Ckdk + Fkek), (48) 
+
+dk+1 = ∆ xk+1 − ∆ˆ xk+1 (49) 
+
+= Akdk − Lk+1 Ckdk + Ekwk − Lk+1 Fkek,
+
+which follows from (41)–(42) and the definition of ∆ˆ xk.Conditioned on the observations, (48) is linear in (∆ˆ xk, ∆uk)
+
+and dk is a self-evolving variable that is not controlled by 
+
+uk. Minimizing Jctrl over causal policies ∆uk = Kk∆ˆ xk is therefore a finite-horizon LQR problem. Equivalently, if we treat Lk+1 (Ckdk + Fkek) as some disturbance independent of xk and uk, in the system-level parameterization, this problem can be written as a convex quadratic optimization over closed-loop responses ( ¯Φx, ¯Φu):
+
+min  
+
+> ¯Φx,¯Φu
+
+Q1/2 00 R1/2
+
+  ¯Φx
+
+¯Φu
+
+ 2F
+
++ P 1/2 ¯ΦxT
+
+> 2F
+
+(50) s.t. I − ZA −ZB   ¯Φx
+
+¯Φu
+
+
+
+= I
+
+The unique optimal solution is characterized by a backward Riccati recursion, as in [23]. 
+
+Estimation subproblem. The estimation error evolves as 
+
+dk+1 = ( Ak − Lk+1 Ck)dk + Ekwk − Lk+1 Fkek. (51) With the stacked variables, we have 
+
+d = ZAd − LZCd + w − Le = ˆΦxw + ˆΦy e.
+
+Then 
+
+ˆΦx =( I − ZA + ZLZC )−1,
+
+ˆΦy = − (I − ZA + ZLZC )−1ZL .
+
+Substituting dk with ˆΦx and ˆΦy in (47), we get 
+
+Jobs =E
+
+
+
+Q1/2( ˆΦxEw + ˆΦyFe ) 2F
+
+
+
++
+
+E
+
+
+
+P 1/2( ˆΦxT Ew + ˆΦyT Fe ) 2F
+
+
+
+Minimizing Jobs corresponds to selecting the observer gains 
+
+{Lk}, or equivalently the observer system responses ( ˆΦx, ˆΦy ),to minimize the expected quadratic energy of dk as shown in (52). This is a dual LQR problem whose solution is given by the (time-reversed) Kalman Riccati recursion. 
+
+min  
+
+> ˆΦx,ˆΦy
+
+Q1/2  ˆΦx ˆΦy  EF
+
+ 2F
+
++ P 1/2  ˆΦxT ˆΦyT
+
+ EF
+
+ 2F
+
+(52) s.t.  ˆΦx ˆΦy  I − ZA 
+
+−ZC 
+
+
+
+= I
+
+Optimality and separation. Since the expected cost de-composes exactly as in (45), and the controller and observer subproblems depend on disjoint decision variables, the joint minimization of (43) is achieved by independently solving (46) and (47). As (43) is equivalent to (11), the resulting output-feedback controller is therefore optimal and admits the classical double-Riccati characterization. Importantly, this stochastic interpretation is used solely to justify the structure and optimality of the unconstrained performance objective. The resulting controller is later combined with robust con-straint tightenings that treat disturbances in a worst-case, bounded sense, ensuring that safety guarantees do not rely on stochastic assumptions. This completes the proof. 
+
+C. Proof of Proposition 3 Proof: We follow the same argument as Proposition 2, with the only change being that the disturbance scalings are now given by the nonlinear-model overbounds Σj and Υj ,and the nominal point is (zk, v k). By Assumptions 3 and 4, whenever ∥(∆ xk, ∆uk)∥∞ ≤ τk, the nonlinear deviation dynamics are contained in the LTV error model with additive disturbances scaled by Σk = σ(τk, z k, v k)Inx , which includes the linearization error. Fix any time k. By the SLS parameterization (8) applied to the LTV error model, the deviations satisfy 
+
+∆xk
+
+∆uk
+
+
+
+=
+
+> k
+
+X
+
+> j=0
+
+Φw 
+
+> k,j
+
+Σj wj +
+
+> k
+
+X
+
+> j=0
+
+Φe 
+
+> k,j
+
+Υj ej .
+
+For any constraint row c⊤ 
+
+> i
+
+(xk, u k) + bi ≤ 0,
+
+c⊤ 
+
+> i
+
+(xk, u k) + bi = c⊤ 
+
+> i
+
+(zk, v k) + bi
+
++
+
+> k
+
+X
+
+> j=0
+
+c⊤ 
+
+> i
+
+Φw 
+
+> k,j
+
+Σj wj +
+
+> k
+
+X
+
+> j=0
+
+c⊤ 
+
+> i
+
+Φe 
+
+> k,j
+
+Υj ej .
+
+Taking the worst case over ∥wj ∥∞ ≤ 1 and ∥ej ∥∞ ≤ 1
+
+uses the same support-function identity as in Proposition 2: 
+
+max ∥d∥∞≤1 a⊤d = ∥a∥1. Therefore, 
+
+max  
+
+> wj,e j
+
+ c⊤ 
+
+> i
+
+(xk, u k) = c⊤ 
+
+> i
+
+(zk, v k)+
+
+> k
+
+X
+
+> j=0
+
+∥c⊤ 
+
+> i
+
+Φw 
+
+> k,j
+
+Σj ∥1 +
+
+> k
+
+X
+
+> j=0
+
+∥c⊤ 
+
+> i
+
+Φe 
+
+> k,j
+
+Υj ∥1.
+
+which shows that (26a) is sufficient (and exact for this affine disturbance model) to guarantee robust satisfaction. Then, the condition ∥(∆ xk, ∆uk)∥∞ ≤ τk is equivalent to |ˆe⊤ 
+
+> ℓ
+
+(∆ xk, ∆uk)| ≤ τk for all standard basis vectors ˆeℓ.Applying the same support-function argument coordinate-wise yields 
+
+max  
+
+> wj,e j
+
+ˆe⊤
+
+> ℓ
+
+∆xk
+
+∆uk
+
+
+
+≤
+
+> k
+
+X
+
+> j=0
+
+
+
+∥ˆe⊤ 
+
+> ℓ
+
+Φw 
+
+> k,j
+
+Σj ∥1 + ∥ˆe⊤ 
+
+> ℓ
+
+Φe 
+
+> k,j
+
+Υj ∥1
+
+
+
+,
+
+so enforcing (26b) guarantees ∥(∆ xk, ∆uk)∥∞ ≤ τk.Combining both parts for all k and all constraints i com-pletes the proof. 
+
+D. Experiment Details 
+
+We omit linearization error for simplicity within our imple-mentation, as empirically, the resulting tubes maintain 100% robust constraint satisfaction, following [43]. Linearization error can be reintroduced by following the procedure laid out in [25]. In the following sections, we list the dynamics models as well as important parameters used in the experiments. 
+
+1) Cost Function: The cost function (27a) is the sum of a trajectory cost (54) and a tube cost (55) where xg is the goal state. In the humanoid experiment, we have a reference trajectory instead of a single goal state. 
+
+J(z, v, τ , Φ) = Jtraj + Jtube (53) 
+
+Jtraj (z, v) =  
+
+> T−1
+
+X
+
+> k=0
+
+(( zk − xg )⊤ ¯Q(zk − xg ) + v⊤ 
+
+> k
+
+¯Rv k)+ ( zT − xg )⊤ ¯P (zT − xg ) (54) 
+
+Jtube (z, v, τ , Φ) = 
+
+Q1/2 00 R1/2
+
+  Φxw Φxe 
+
+Φuw Φue 
+
+  EF
+
+ 2F
+
++ P 1/2 Φxw  
+
+> T
+
+Φxe 
+
+> T
+
+ EF
+
+ 2F
+
+(55) where we use the shorthand notation E = E(z, v, τ ) and 
+
+F = F(z, v, τ ).
+
+2) Light-Dark: We consider 2D single integrator dynamics: 
+
+ ˙px
+
+˙py
+
+
+
+=
+
+vx
+
+vy
+
+
+
+(56) with state x = ( px, p y ) ∈ R2 and control u = ( vx, v y ) ∈ R2.The constraints include state constraints ( xk ∈ [−2, 5] ×
+
+[−2, 5] ) and control constraints ( uk ∈ [−1, 1] × [−1, 1] ), as well as terminal state constraints xT ∈ [−0.15 , 0.15] ×
+
+[−0.15 , 0.15] . The initial nominal state is ¯x0 = (0 , 2) and goal state is xg = (0 , 0) . The penalty terms in cost function are ¯Q = ¯R = I2, ¯P = 50 I2, Q = R = P = 10 4I2.We consider initial condition uncertainty and dynamics un-certainty matrix Ξ = E = 0 .05 I2 and observation uncertainty 
+
+F (x) = 0 .02( px − 2) 2. The planning horizon is T = 20 with a timestep of 0.2s. 
+
+3) Parking-Lot: We consider Dubins’ car dynamics: 
+
+
+
+˙px
+
+˙py
+
+˙θ
+
+˙v
+
+ =
+
+
+
+v cos θv sin θu1
+
+u2
+
+ (57) with x-position px, y-position py , orientation θ, and linear velocity v as states. The state constraints are [−3.5, 0.5] ×
+
+[−2, 1.9] × [−2π, 2π] × [−1, 2] and input constraints are 
+
+[−π, π ] × [−4, 4] . The terminal state constraints are [0 , 0.45] ×
+
+[0 .35 , 0.65] × [−2π, 2π] × [−1, 1] . The initial nominal state is ¯x0 = ( −2.1, −1.75 , 0.5π, 0) and the goal state is xg =(0 .25 , 0.5, 0, 0) . We consider initial condition uncertainty de-scribed by Ξ = 0 .01 I4 and dynamics uncertainty E = 0 .01 I4.The perception uncertainty bound is given by the shading in Fig. 4b. The penalty terms in cost function are ¯Q =
+
+diag ([1 , 1, 0, 0]) , ¯R = 0 .5I2, ¯P = diag([100,100,0,10]) , Q =10 5I4, R = 10 5I2, P = 3 × 10 6I4. The planning horizon is 
+
+T = 30 , and the continuous-time dynamics of (57) are time-discretized with a timestep of 0.15 s. The mapping p(·) is a three-layer MLP with GELU as activation functions. The hidden dimensions are 512. The observation matrix Cr learned is 
+
+ 0.976 0.132 −0.172 0
+
+−0.216 0.668 −0.712 00.0209 0.733 0.680 0
+
+ .
+
+The monomial basis m(·) is third order and the states related to F r are px and py .
+
+4) Quadrotor: We consider 3D quadrotor dynamics with ten states [33]: 
+
+
+
+˙px
+
+˙py
+
+˙pz
+
+˙vx
+
+˙vy
+
+˙vz
+
+˙θx
+
+˙θy
+
+˙ωx
+
+˙ωy
+
+
+
+=
+
+
+
+vx
+
+vy
+
+vz
+
+g tan( θx) − 3vx
+
+g tan( θy ) − 3vy
+
+uz − g − vz
+
+−10 θx + ωx
+
+−10 θy + ωy
+
+−10 θx + 50 ux
+
+−10 θy + 50 uy
+
+
+
+(58) The state constraints are xT ∈ [−10 , 10] ×[−10 , 10] ×[0 , 10] ×
+
+[−5, 5] ×[−5, 5] ×[−5, 5] ×[−2, 2] ×[−2, 2] ×[−2, 2] ×[−2, 2] 
+
+and the control constraints are uk ∈ [−5, 5] × [−5, 5] × [0 , 40] .The initial nominal state and goal state are respectively 
+
+¯x0 =(0 .9, 3.1, 1, 0.001 , 0.001 , 0.001 , 0.001 ,
+
+− 0.001 , −0.001 , −0.001) 
+
+xg =( −1.5, 2.5, 1.4, 0.001 , 0.001 , 0.001 , −0.001 ,
+
+− 0.001 , −0.001 , −0.001) .
+
+We consider an initial state uncertainty and dynamics error of 
+
+Ξ = E = 0 .01 I10 and a learned state-dependent perception uncertainty map. The penalty terms in cost function are ¯Q =
+
+diag ([1 , 1, 1, 1, 1, 1, 1, 0, 0, 0]) , ¯R = diag ([1 , 1, 0, 1]) , ¯P =
+
+diag ([50 , 50 , 50 , 5, 5, 5, 5, 1, 1, 1]) , Q = P = 5 × 10 5I10 , R =5 × 10 5I3. The planning horizon is T = 35 , with the continuous-time dynamics of (58) time-discretized with atimestep of 0.15 s. The runtime of Alg. 1 is 5.592 seconds over 10 SCP iterations. We also plot the reachable tubes for each state in Fig. 6. 0 10 20 30                              
+
+> −1
+> 0
+> 1
+> Position  px [m]
+> 010 20 30
+> 2.2
+> 2.4
+> 2.6
+> 2.8
+> 3.0
+> Position  py [m]  closed-loop rollout open-loop rollout reachable set (closed-loop) optimal trajectory
+> 010 20 30
+> 1.0
+> 1.2
+> 1.4
+> Position  pz [m]
+> 010 20 30
+> −0.6
+> −0.4
+> −0.2
+> 0.0
+> Velocity  vx [m/s]
+> 010 20 30
+> −0.4
+> −0.2
+> 0.0
+> 0.2
+> Velocity  vy [m/s]
+> 010 20 30
+> −0.75
+> −0.50
+> −0.25
+> 0.00
+> 0.25
+> Velocity  vz [m/s]
+> 010 20 30
+> −0.20
+> −0.15
+> −0.10
+> −0.05
+> 0.00
+> Thrust
+> 010 20 30
+> −0.2
+> −0.1
+> 0.0
+> Yaw  φ [rad]
+> 010 20 30
+> Time step k
+> −2.0
+> −1.5
+> −1.0
+> −0.5
+> 0.0
+> Pitch  θ [rad]
+> 010 20 30
+> Time step k
+> −2
+> −1
+> 0
+> Roll  ψ [rad]
+
+Fig. 6. For quadrotor visuomotor control, we plot the reachable tubes (shaded green) around the planned nominal trajectory (green line) and verify that the closed-loop rollouts (blue) stay within the tubes. Note that our closed-loop rollouts experience smaller deviation from the nominal trajectory compared to the open-loop rollouts, showcasing the utility of our closed-loop controller. 
+
+The mapping p(·) is a nine-layer MLP with GELU as activation functions. The hidden dimensions are 1024. The learned observation matrix Cr is 
+
+
+
+0.34 −0.78 0.15 0 0 0 −0.27 −0.42 0 0
+
+−0.47 −0.62 −0.22 0 0 0 0.24 0.53 0 00.78 −0.04 −0.33 0 0 0 0.42 0.32 0 00.07 −0.05 0.89 0 0 0 0.40 0.20 0 00.21 0.04 0.18 0 0 0 −0.72 0.63 0 0
+
+ .
+
+The monomial basis m(·) is fourth order and the states related to F r are px, py , pz , θx and θy .
+
+5) Parking-Lot Perception Error Calibration: To quantify how well the learned measurement-error bound ˆe(x) captures the true perception residuals, we evaluate its empirical cov-erage on a held-out dataset. For each sample {xi, y i}, we compute the residual ri = ∥p(ϕ(yi)) − hr (xi)∥∞ and report the fraction of points whose residual lies below the predicted bound, Coverage = 1
+
+> N
+
+PNi=1 1{ ri ≤ ˆe(xi)}. Empirically, we find that this recalibration is data-efficient: in the parking-lot environment, high empirical coverage is already obtained with a modest number of calibration points (App. D5). Coverage is empirically evaluated on 500 randomly-sampled data points over the state space; detailed empirical coverage rates are presented in Table II. 
+
+6) Unitree G1 Humanoid: Refer to the URDF of G1 with 23 DOF for joint angle bounds. The pose ([px, p y , p z , q x, q y , q z , q w]) bounds are 
+
+[−10 , −10 , −10 , −1, −1, −1, −1] × [10 , 10 , 10 , 1, 1, 1, 1] ,linear velocity bounds are all −[30 , 30] , angular velocity bounds are all [−40 π, 40 π], and joint velocity bounds are all [−20 π, 20 π]. We constrain the wrist states to be within 
+
+[−0.5, 0.5] . The input (torque) bounds are all [−500 , 500] .We consider initial condition and dynamics uncertainty of 
+
+Ξ = E = 0 .05 I59 , and perception uncertainty is described by F = 0 .001 I30 . The planning horizon is T = 60 and the continuous-time dynamics are time-discretized with timestep 
+
+0.01 s. The overall computation time is 11542 .795 s, with 20 SCP iterations. We note that these times are dominated by the QP solve step (9445.333s) for performing the trajectory optimization, rather than in the Riccati steps needed to compute the reachable sets; as such, these solve times can be decreased by leveraging, e.g., structure-exploiting optimal control QP solvers [38] or GPU acceleration [30]. For simplicity, for dynamics modeling, we only consider the phase when the robot is not in contact with ground. In this experiment, we use a slightly different trajectory cost (59) where xg is a reference trajectory. The penalty terms in cost function are 
+
+¯Q =diag ([0 , 100 , 0, 10 , 100 , 10 , 100 , 75 , . . . , 75 
+
+| {z }
+
+> 23
+
+, 0, 100 , 0, 100 ,
+
+100 , 100 , 0.5, . . . , 0.5
+
+| {z }
+
+> 23
+
+]) ,
+
+¯P =diag ([0 , 100 , 50 , 100 , . . . , 100 
+
+| {z }
+
+> 27
+
+, 0, 100 , 50 , 100 , 100 , 100 ,
+
+0, . . . , 0
+
+| {z }
+
+> 23
+
+]) ,
+
+¯R = 0 .001 I23 , Q = P = 10 4I59 , R = 10 4I23 .
+
+Jtraj (z, v, τ ) =  
+
+> T−1
+
+X
+
+> k=0
+
+(( zk − xgk)⊤ ¯Q(zk − xgk) + v⊤ 
+
+> k
+
+¯Rv k) (59) 
+
++ ( zT − xgT )⊤ ¯P (zT − xgT )
+
+Figs. 7 and 8 additionally report the full trajectories and reachable tubes for all states and inputs under Algorithm 1. Fig. 7 only displays the closed-loop tubes for clarity, as some of the open-loop tubes exit the tubes with a large margin and makes visualization difficult; both open-loop and closed-loop are overlaid in Fig. 8. 
+
+7) Hardware: We consider a modified Dubin’s car dynam-ics: 
+
+˙px
+
+˙py
+
+˙θ
+
+˙v
+
+˙ω
+
+ =
+
+
+
+v cos θv sin θωu1
+
+u2
+
+ (60) The Turtlebot robot should satisfy state constraints 
+
+[px, p y , p θ , v, ω ] ∈ [−5, 5] ×[−5, 5] ×[−2π, 2π]×[−0.2, 0.4] ×
+
+[−1, 1] (position, heading, linear velocity, angular velocity), input constraints [u1, u 2] ∈ [−0.1, 0.1] × [−0.2, 0.2] (linear acceleration, angular acceleration). For this experiment, the robot plans over a horizon of 
+
+T = 60 from ¯x0 = (0 , 0, 0, 0, 0) to a target state 
+
+xg = (3 , 1.5, 0, 0, 0) . The initial condition uncertainty is 
+
+Ξ = diag ([0 .025 , 0.025 , 0.05 , 0.0001 , 0.0001]) and E =
+
+diag ([0 .01 , 0.01 , 0.01 , 0.0001 , 0.0001]) . The penalty terms in cost function are ¯Q = diag ([1 , 1, 0, 0.1, 0.1]) , ¯R = 0 .2I2, ¯P =
+
+diag ([10 , 10 , 1, 1, 1]) , Q = P = 5 × 10 6I5, R = 5 × 10 6I2.Planning requires 5.779 s over 20 SCP iterations, and com-mands are executed at 5 Hz via ROS 2. The mapping p(·)
+
+trained from 1096 image–state pairs collected under vary-ing lighting conditions is a four-layer MLP with GELU as activation functions. The hidden dimensions are 512. The observation matrix Cr learned is 
+
+
+
+−0.184 0.008 −0.983 0 0
+
+−0.435 0.443 0.784 0 00.610 −0.193 −0.768 0 0
+
+ .
+
+We use a constant perception error bound F = 0.05 I3
+
+achieving 99 .8% empirical coverage along the trajectory. 0 10 20 30 40 50 60 
+
+−0.3
+
+−0.2
+
+−0.1
+
+0.0
+
+0.1
+
+> Position  px [m]
+
+closed-loop rollout reachable set optimal trajectory 
+
+0 10 20 30 40 50 60 
+
+−0.10 
+
+−0.05 
+
+0.00 
+
+0.05 
+
+0.10 
+
+> Position  py [m]
+
+0 10 20 30 40 50 60 
+
+0.6
+
+0.7
+
+0.8
+
+0.9
+
+1.0
+
+1.1
+
+> Position  pz [m]
+
+0 10 20 30 40 50 60 
+
+−0.075 
+
+−0.050 
+
+−0.025 
+
+0.000 
+
+0.025 
+
+0.050 
+
+0.075 
+
+> Quaternion  qx
+
+0 10 20 30 40 50 60 
+
+−1.0
+
+−0.8
+
+−0.6
+
+−0.4
+
+−0.2
+
+> Quaternion  qy
+
+0 10 20 30 40 50 60 
+
+−0.075 
+
+−0.050 
+
+−0.025 
+
+0.000 
+
+0.025 
+
+0.050 
+
+0.075 
+
+> Quaternion  qz
+
+0 10 20 30 40 50 60 
+
+−0.5
+
+0.0
+
+0.5
+
+1.0
+
+> Quaternion  qw
+
+0 10 20 30 40 50 60 
+
+−2.0
+
+−1.5
+
+−1.0
+
+−0.5
+
+0.0
+
+> Left hip pitch
+
+0 10 20 30 40 50 60 
+
+−0.05 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+> Left hip roll
+
+0 10 20 30 40 50 60 
+
+−0.075 
+
+−0.050 
+
+−0.025 
+
+0.000 
+
+0.025 
+
+0.050 
+
+> Left hip yaw
+
+0 10 20 30 40 50 60 
+
+1.0
+
+1.5
+
+2.0
+
+2.5
+
+> Left knee
+
+0 10 20 30 40 50 60 
+
+−0.5
+
+−0.4
+
+−0.3
+
+−0.2
+
+−0.1
+
+> Left ankle pitch
+
+0 10 20 30 40 50 60 
+
+−0.075 
+
+−0.050 
+
+−0.025 
+
+0.000 
+
+0.025 
+
+0.050 
+
+0.075 
+
+> Left ankle roll
+
+0 10 20 30 40 50 60 
+
+−2.0
+
+−1.5
+
+−1.0
+
+−0.5
+
+0.0
+
+> Right hip pitch
+
+0 10 20 30 40 50 60 
+
+−0.3
+
+−0.2
+
+−0.1
+
+0.0
+
+> Right hip roll
+
+0 10 20 30 40 50 60 
+
+−0.10 
+
+−0.05 
+
+0.00 
+
+0.05 
+
+> Right hip yaw
+
+0 10 20 30 40 50 60 
+
+1.0
+
+1.5
+
+2.0
+
+2.5
+
+> Right knee
+
+0 10 20 30 40 50 60 
+
+−0.5
+
+−0.4
+
+−0.3
+
+−0.2
+
+−0.1
+
+> Right ankle pitch
+
+0 10 20 30 40 50 60 
+
+−0.075 
+
+−0.050 
+
+−0.025 
+
+0.000 
+
+0.025 
+
+0.050 
+
+0.075 
+
+0.100 
+
+> Right ankle roll
+
+0 10 20 30 40 50 60 
+
+−0.10 
+
+−0.05 
+
+0.00 
+
+0.05 
+
+0.10 
+
+> Waist yaw
+
+0 10 20 30 40 50 60 
+
+−2.5
+
+−2.0
+
+−1.5
+
+−1.0
+
+−0.5
+
+0.0
+
+0.5
+
+> Left shoulder pitch
+
+0 10 20 30 40 50 60 
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+> Left shoulder roll
+
+0 10 20 30 40 50 60 
+
+−0.10 
+
+−0.05 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+> Left shoulder yaw
+
+0 10 20 30 40 50 60 
+
+−0.50 
+
+−0.25 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+> Left elbow
+
+0 10 20 30 40 50 60 
+
+−0.10 
+
+−0.05 
+
+0.00 
+
+0.05 
+
+0.10 
+
+> Left wrist
+
+0 10 20 30 40 50 60 
+
+−2.5
+
+−2.0
+
+−1.5
+
+−1.0
+
+−0.5
+
+0.0
+
+0.5
+
+> Right shoulder pitch
+
+0 10 20 30 40 50 60 
+
+−0.8
+
+−0.6
+
+−0.4
+
+−0.2
+
+> Right shoulder roll
+
+0 10 20 30 40 50 60 
+
+−0.25 
+
+−0.20 
+
+−0.15 
+
+−0.10 
+
+−0.05 
+
+0.00 
+
+0.05 
+
+0.10 
+
+> Right shoulder yaw
+
+0 10 20 30 40 50 60 
+
+−0.25 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+> Right elbow
+
+0 10 20 30 40 50 60 
+
+−0.10 
+
+−0.05 
+
+0.00 
+
+0.05 
+
+0.10 
+
+> Right wrist
+
+0 10 20 30 40 50 60 
+
+0
+
+1
+
+2
+
+3
+
+4
+
+> Velocity  vx [m/s]
+
+0 10 20 30 40 50 60 
+
+−0.4
+
+−0.2
+
+0.0
+
+0.2
+
+0.4
+
+> Velocity  vy [m/s]
+
+0 10 20 30 40 50 60 
+
+−3
+
+−2
+
+−1
+
+0
+
+1
+
+2
+
+3
+
+> Velocity  vz [m/s]
+
+0 10 20 30 40 50 60 
+
+−0.4
+
+−0.2
+
+0.0
+
+0.2
+
+0.4
+
+> Velocity  wx [rad/s]
+
+0 10 20 30 40 50 60 
+
+−17 .5
+
+−15 .0
+
+−12 .5
+
+−10 .0
+
+−7.5
+
+−5.0
+
+−2.5
+
+> Velocity  wy [rad/s]
+
+0 10 20 30 40 50 60 
+
+−0.6
+
+−0.4
+
+−0.2
+
+0.0
+
+0.2
+
+0.4
+
+0.6
+
+> Velocity  wz [rad/s]
+
+0 10 20 30 40 50 60 
+
+−10 
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+> Left hip pitch vel
+
+0 10 20 30 40 50 60 
+
+−5
+
+0
+
+5
+
+10 
+
+> Left hip roll vel
+
+0 10 20 30 40 50 60 
+
+−20 
+
+−10 
+
+0
+
+10 
+
+> Left hip yaw vel
+
+0 10 20 30 40 50 60 
+
+−30 
+
+−20 
+
+−10 
+
+0
+
+10 
+
+20 
+
+30 
+
+> Left knee vel
+
+0 10 20 30 40 50 60 
+
+−15 
+
+−10 
+
+−5
+
+0
+
+5
+
+10 
+
+15 
+
+> Left ankle pitch vel
+
+0 10 20 30 40 50 60 
+
+−7.5
+
+−5.0
+
+−2.5
+
+0.0
+
+2.5
+
+5.0
+
+7.5
+
+> Left ankle roll vel
+
+0 10 20 30 40 50 60 
+
+−10 
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+> Right hip pitch vel
+
+0 10 20 30 40 50 60 
+
+−10 
+
+−5
+
+0
+
+5
+
+> Right hip roll vel
+
+0 10 20 30 40 50 60 
+
+−10 
+
+0
+
+10 
+
+20 
+
+> Right hip yaw vel
+
+0 10 20 30 40 50 60 
+
+−30 
+
+−20 
+
+−10 
+
+0
+
+10 
+
+20 
+
+30 
+
+> Right knee vel
+
+0 10 20 30 40 50 60 
+
+−15 
+
+−10 
+
+−5
+
+0
+
+5
+
+10 
+
+15 
+
+> Right ankle pitch vel
+
+0 10 20 30 40 50 60 
+
+−7.5
+
+−5.0
+
+−2.5
+
+0.0
+
+2.5
+
+5.0
+
+7.5
+
+> Right ankle roll vel
+
+0 10 20 30 40 50 60 
+
+−1.0
+
+−0.5
+
+0.0
+
+0.5
+
+1.0
+
+> Waist yaw vel
+
+0 10 20 30 40 50 60 
+
+−20 
+
+0
+
+20 
+
+40 
+
+60 
+
+> Left shoulder pitch vel
+
+0 10 20 30 40 50 60 
+
+−10 
+
+−5
+
+0
+
+5
+
+10 
+
+> Left shoulder roll vel
+
+0 10 20 30 40 50 60 
+
+−10 
+
+0
+
+10 
+
+20 
+
+> Left shoulder yaw vel
+
+0 10 20 30 40 50 60 
+
+−40 
+
+−30 
+
+−20 
+
+−10 
+
+0
+
+10 
+
+> Left elbow vel
+
+0 10 20 30 40 50 60 
+
+−5
+
+0
+
+5
+
+10 
+
+> Left wrist vel
+
+0 10 20 30 40 50 60 
+
+−20 
+
+0
+
+20 
+
+40 
+
+60 
+
+> Right shoulder pitch vel
+
+0 10 20 30 40 50 60 
+
+Time step k
+
+−10 
+
+−5
+
+0
+
+5
+
+10 
+
+> Right shoulder roll vel
+
+0 10 20 30 40 50 60 
+
+Time step k
+
+−20 
+
+−10 
+
+0
+
+10 
+
+> Right shoulder yaw vel
+
+0 10 20 30 40 50 60 
+
+Time step k
+
+−40 
+
+−30 
+
+−20 
+
+−10 
+
+0
+
+10 
+
+> Right elbow vel
+
+0 10 20 30 40 50 60 
+
+Time step k
+
+−10 .0
+
+−7.5
+
+−5.0
+
+−2.5
+
+0.0
+
+2.5
+
+5.0
+
+> Right wrist vel
+
+Fig. 7. Humanoid (all tubes, closed-loop only). 0 10 20 30 40 50 60 
+
+−0.3
+
+−0.2
+
+−0.1
+
+0.0
+
+0.1
+
+> Position  px [m]
+
+closed-loop rollout open-loop rollout reachable set optimal trajectory 
+
+0 10 20 30 40 50 60 
+
+−0.10 
+
+−0.05 
+
+0.00 
+
+0.05 
+
+0.10 
+
+> Position  py [m]
+
+0 10 20 30 40 50 60 
+
+0.6
+
+0.7
+
+0.8
+
+0.9
+
+1.0
+
+1.1
+
+> Position  pz [m]
+
+0 10 20 30 40 50 60 
+
+−0.075 
+
+−0.050 
+
+−0.025 
+
+0.000 
+
+0.025 
+
+0.050 
+
+0.075 
+
+> Quaternion  qx
+
+0 10 20 30 40 50 60 
+
+−1.0
+
+−0.8
+
+−0.6
+
+−0.4
+
+−0.2
+
+> Quaternion  qy
+
+0 10 20 30 40 50 60 
+
+−0.05 
+
+0.00 
+
+0.05 
+
+0.10 
+
+> Quaternion  qz
+
+0 10 20 30 40 50 60 
+
+−0.5
+
+0.0
+
+0.5
+
+1.0
+
+> Quaternion  qw
+
+0 10 20 30 40 50 60 
+
+−2.0
+
+−1.5
+
+−1.0
+
+−0.5
+
+0.0
+
+> Left hip pitch
+
+0 10 20 30 40 50 60 
+
+0.0
+
+0.1
+
+0.2
+
+0.3
+
+0.4
+
+> Left hip roll
+
+0 10 20 30 40 50 60 
+
+−0.075 
+
+−0.050 
+
+−0.025 
+
+0.000 
+
+0.025 
+
+0.050 
+
+> Left hip yaw
+
+0 10 20 30 40 50 60 
+
+1.0
+
+1.5
+
+2.0
+
+2.5
+
+> Left knee
+
+0 10 20 30 40 50 60 
+
+−0.5
+
+−0.4
+
+−0.3
+
+−0.2
+
+−0.1
+
+> Left ankle pitch
+
+0 10 20 30 40 50 60 
+
+−0.05 
+
+0.00 
+
+0.05 
+
+0.10 
+
+> Left ankle roll
+
+0 10 20 30 40 50 60 
+
+−2.0
+
+−1.5
+
+−1.0
+
+−0.5
+
+0.0
+
+> Right hip pitch
+
+0 10 20 30 40 50 60 
+
+−0.3
+
+−0.2
+
+−0.1
+
+0.0
+
+0.1
+
+0.2
+
+> Right hip roll
+
+0 10 20 30 40 50 60 
+
+−0.10 
+
+−0.05 
+
+0.00 
+
+0.05 
+
+> Right hip yaw
+
+0 10 20 30 40 50 60 
+
+1.0
+
+1.5
+
+2.0
+
+2.5
+
+> Right knee
+
+0 10 20 30 40 50 60 
+
+−0.4
+
+−0.2
+
+0.0
+
+0.2
+
+0.4
+
+> Right ankle pitch
+
+0 10 20 30 40 50 60 
+
+−0.075 
+
+−0.050 
+
+−0.025 
+
+0.000 
+
+0.025 
+
+0.050 
+
+0.075 
+
+0.100 
+
+> Right ankle roll
+
+0 10 20 30 40 50 60 
+
+−0.4
+
+−0.2
+
+0.0
+
+0.2
+
+0.4
+
+> Waist yaw
+
+0 10 20 30 40 50 60 
+
+−2.5
+
+−2.0
+
+−1.5
+
+−1.0
+
+−0.5
+
+0.0
+
+0.5
+
+> Left shoulder pitch
+
+0 10 20 30 40 50 60 
+
+−0.4
+
+−0.2
+
+0.0
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+> Left shoulder roll
+
+0 10 20 30 40 50 60 
+
+−2
+
+−1
+
+0
+
+1
+
+2
+
+> Left shoulder yaw
+
+0 10 20 30 40 50 60 
+
+−0.75 
+
+−0.50 
+
+−0.25 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+> Left elbow
+
+0 10 20 30 40 50 60 
+
+−4
+
+−2
+
+0
+
+2
+
+> Left wrist
+
+0 10 20 30 40 50 60 
+
+−2.5
+
+−2.0
+
+−1.5
+
+−1.0
+
+−0.5
+
+0.0
+
+0.5
+
+> Right shoulder pitch
+
+0 10 20 30 40 50 60 
+
+−0.8
+
+−0.6
+
+−0.4
+
+−0.2
+
+0.0
+
+0.2
+
+0.4
+
+> Right shoulder roll
+
+0 10 20 30 40 50 60 
+
+−2
+
+−1
+
+0
+
+1
+
+2
+
+> Right shoulder yaw
+
+0 10 20 30 40 50 60 
+
+−0.5
+
+0.0
+
+0.5
+
+1.0
+
+> Right elbow
+
+0 10 20 30 40 50 60 
+
+−2
+
+0
+
+2
+
+4
+
+> Right wrist
+
+0 10 20 30 40 50 60 
+
+0
+
+1
+
+2
+
+3
+
+4
+
+> Velocity  vx [m/s]
+
+0 10 20 30 40 50 60 
+
+−0.4
+
+−0.2
+
+0.0
+
+0.2
+
+0.4
+
+0.6
+
+> Velocity  vy [m/s]
+
+0 10 20 30 40 50 60 
+
+−3
+
+−2
+
+−1
+
+0
+
+1
+
+2
+
+3
+
+> Velocity  vz [m/s]
+
+0 10 20 30 40 50 60 
+
+−1
+
+0
+
+1
+
+2
+
+3
+
+> Velocity  wx [rad/s]
+
+0 10 20 30 40 50 60 
+
+−17 .5
+
+−15 .0
+
+−12 .5
+
+−10 .0
+
+−7.5
+
+−5.0
+
+−2.5
+
+> Velocity  wy [rad/s]
+
+0 10 20 30 40 50 60 
+
+−1.5
+
+−1.0
+
+−0.5
+
+0.0
+
+0.5
+
+> Velocity  wz [rad/s]
+
+0 10 20 30 40 50 60 
+
+−10 
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+> Left hip pitch vel
+
+0 10 20 30 40 50 60 
+
+−5
+
+0
+
+5
+
+10 
+
+> Left hip roll vel
+
+0 10 20 30 40 50 60 
+
+−20 
+
+−10 
+
+0
+
+10 
+
+> Left hip yaw vel
+
+0 10 20 30 40 50 60 
+
+−30 
+
+−20 
+
+−10 
+
+0
+
+10 
+
+20 
+
+30 
+
+> Left knee vel
+
+0 10 20 30 40 50 60 
+
+−15 
+
+−10 
+
+−5
+
+0
+
+5
+
+10 
+
+15 
+
+> Left ankle pitch vel
+
+0 10 20 30 40 50 60 
+
+−7.5
+
+−5.0
+
+−2.5
+
+0.0
+
+2.5
+
+5.0
+
+7.5
+
+> Left ankle roll vel
+
+0 10 20 30 40 50 60 
+
+−10 
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+> Right hip pitch vel
+
+0 10 20 30 40 50 60 
+
+−10 
+
+−5
+
+0
+
+5
+
+> Right hip roll vel
+
+0 10 20 30 40 50 60 
+
+−10 
+
+0
+
+10 
+
+20 
+
+> Right hip yaw vel
+
+0 10 20 30 40 50 60 
+
+−30 
+
+−20 
+
+−10 
+
+0
+
+10 
+
+20 
+
+30 
+
+> Right knee vel
+
+0 10 20 30 40 50 60 
+
+−15 
+
+−10 
+
+−5
+
+0
+
+5
+
+10 
+
+15 
+
+> Right ankle pitch vel
+
+0 10 20 30 40 50 60 
+
+−7.5
+
+−5.0
+
+−2.5
+
+0.0
+
+2.5
+
+5.0
+
+7.5
+
+> Right ankle roll vel
+
+0 10 20 30 40 50 60 
+
+−10 
+
+−5
+
+0
+
+5
+
+10 
+
+15 
+
+> Waist yaw vel
+
+0 10 20 30 40 50 60 
+
+−20 
+
+0
+
+20 
+
+40 
+
+60 
+
+> Left shoulder pitch vel
+
+0 10 20 30 40 50 60 
+
+−15 
+
+−10 
+
+−5
+
+0
+
+5
+
+10 
+
+> Left shoulder roll vel
+
+0 10 20 30 40 50 60 
+
+−30 
+
+−20 
+
+−10 
+
+0
+
+10 
+
+20 
+
+> Left shoulder yaw vel
+
+0 10 20 30 40 50 60 
+
+−40 
+
+−30 
+
+−20 
+
+−10 
+
+0
+
+10 
+
+> Left elbow vel
+
+0 10 20 30 40 50 60 
+
+−40 
+
+−20 
+
+0
+
+20 
+
+40 
+
+> Left wrist vel
+
+0 10 20 30 40 50 60 
+
+−20 
+
+0
+
+20 
+
+40 
+
+60 
+
+> Right shoulder pitch vel
+
+0 10 20 30 40 50 60 
+
+Time step k
+
+−10 
+
+−5
+
+0
+
+5
+
+10 
+
+15 
+
+20 
+
+> Right shoulder roll vel
+
+0 10 20 30 40 50 60 
+
+Time step k
+
+−20 
+
+0
+
+20 
+
+40 
+
+> Right shoulder yaw vel
+
+0 10 20 30 40 50 60 
+
+Time step k
+
+−40 
+
+−30 
+
+−20 
+
+−10 
+
+0
+
+10 
+
+> Right elbow vel
+
+0 10 20 30 40 50 60 
+
+Time step k
+
+−40 
+
+−20 
+
+0
+
+20 
+
+40 
+
+> Right wrist vel
+
+Fig. 8. Humanoid (all tubes, open-loop and closed-loop).

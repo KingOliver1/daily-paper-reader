@@ -1,0 +1,561 @@
+Title: STAR-Filter: Efficient Convex Free-Space Approximation via Starshaped Set Filtering in Noisy Environments
+
+URL Source: https://arxiv.org/pdf/2604.26626v1
+
+Published Time: Thu, 30 Apr 2026 00:52:15 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# STAR-Filter: Efficient Convex Free-Space Approximation via Starshaped Set Filtering in Noisy Environments 
+
+Yuwei Wu 1, Yichen Zhao 2, Dexter Ong 1, Vijay Kumar 1
+
+> 1
+
+University of Pennsylvania, Philadelphia, PA, 19104 USA 
+
+{yuweiwu, odexter, kumar}@seas.upenn.edu 
+
+> 2
+
+Georgia Institute of Technology, Georgia, GA 30332, USA 
+
+yzhao654@gatech.edu 
+
+Abstract. Approximating collision-free space is fundamental to robot planning in complex environments. Convex geometric representations, such as polytopes and ellipsoids, are widely employed due to their struc-tural properties, which can be easily integrated with convex optimiza-tion. Iterative optimization-based inflation methods can generate large volume polytopes in cluttered environments, but their efficiency degrades as the obstacle set becomes more complex or when sensor data are noisy. These methods are also sensitive to initialization and often rely on ac-curate geometric models. In this paper, we propose the STAR-Filter, a lightweight framework that employs starshaped set construction as a fast filter for convex region generation in collision-free space. By identifying obstacle points as active supporting constraints, the proposed method significantly reduces redundant computation while preserving feasibility and robustness to sensor noise. We provide theoretical and numerical analyses that characterize the structural properties of the starshaped set and proposed pipeline in environments of varying complexity. Sim-ulation results show that the proposed framework achieves the lowest computation time and reduces conservativeness in polytope generation for real-world noisy and large-scale data. We demonstrate the effective-ness of the framework for Safe Flight Corridor (SFC) generation and agile quadrotor planning in noisy environments. 
+
+Keywords: Starshaped construction, Convex region generation, Colli-sion avoidance 
+
+## 1 Introduction 
+
+Effective motion planning relies on compact and computationally tractable rep-resentations of collision-free space for collision avoidance [1, 2]. For onboard sys-tems that rely on real-time sensory data, the choice between obstacle-centric and free-space-centric parameterizations, as well as the selection of the specific form of free-space representation, critically affects the efficiency, robustness, and scal-ability of planning and control algorithms. Direct discretized representations,  
+
+> arXiv:2604.26626v1 [cs.RO] 29 Apr 2026 2Y. Wu et al.
+
+such as occupancy grids, signed distance fields, and related volumetric maps, are widely used for localization and mapping [3]. However, their computational and memory inefficiency often limits their ability to perform real-time motion planning tasks. Geometric representations, such as convex or starshaped decom-position or extraction [4–8], are commonly employed to enable efficient colli-sion checking and to formulate collision-free constraints within motion planning frameworks. Depending on the input data (e.g., pre-existing map, raw sensor measurements), a suitable representation of the free space should balance geo-metric expressiveness, computational tractability, manageability, and the ability to incorporate incremental sensory updates in real time [9]. While obstacle-centric modeling is prevalent in computational geometry and computer vision, motion planning often benefits more from direct free-space de-composition, which is typically more compact and better suited to trajectory optimization [10–19]. However, constructing such representations remains inher-ently challenging, as the continuous free space generally lacks an explicit geo-metric characterization unless the environment is discretized. Therefore, most methods approximate free space indirectly by excluding the entire obstacle set, although it can be conservative and may exclude larger feasible convex regions. Polytope-based approximations of the collision-free space are widely adopted in trajectory-planning frameworks, e.g., Graphs of Convex Sets (GCS) [20], Safe Flight Corridors (SFC) [21], and Forward Reachable Sets (FRS) [22]. These convex representations can be overly conservative in nonconvex environments, typically requiring multiple convex sets to achieve adequate coverage. To remedy this, starshaped set representations [23] provide a natural alternative that aligns well with ray-based sensing modalities such as LiDAR and depth cameras. Since starshaped sets directly encode visibility from a reference point, they offer a more expressive geometric model of locally observable free space and can reduce the need for an excessive spatial decomposition. Prior work has utilized starshaped polytopes as intermediate representations for convex polytope generation [24] or applied them to visibility-aware aerial inspection and exploration [25]. In this paper, we present the STAR-Filter, a lightweight obstacle filtering framework to accelerate convex polytope generation for collision-free space ap-proximation. STAR-Filter leverages starshaped set construction to identify a small subset of obstacle points that directly limit the size of the local free space for restricted convex polytope inflation. This step significantly reduces compu-tational cost while preserving query seed containment and maintaining collision avoidance in the resulting convex region. We analyze the geometric properties of the induced starshaped set and show that its radial extreme points provide an effective approximation of the local free-space boundary relevant for ellipsoid inflation. The framework is evaluated in both simulated environments and real-world datasets, demonstrating robustness to sensor noise and effectiveness for agile motion planning tasks. 
+
+Contributions. (1) We introduce a starshaped, visibility-based filtering of obstacle point clouds and demonstrate the correspondence between extreme points of the starshaped set and the active constraints of the convex polytope. STAR-Filter for Convex Free-Space Approximation 3
+
+(2) We leverage this structure to enable fast convex polytope generation, reduc-ing computational cost while preserving feasibility. (3) We validate the proposed method through extensive simulations and benchmark comparisons on real-world datasets from diverse sensor sources (e.g., LiDAR and stereo event camera). 
+
+## 2 Related Works 
+
+Conventional geometric map decomposition methods approximate the environ-ment using convex components at varying levels of fidelity [5, 6, 26–28]. In robotics, particularly for aerial vehicles, sequences of overlapping convex poly-topes are widely adopted [10–12, 16, 18, 19], as they support efficient trajec-tory optimization and graph-based global planning. These convex corridors sup-port piecewise trajectory optimization and efficient graph-based global planning. Other common choices include axis-aligned boxes [10, 11], spheres and ellip-soids [14–17], rectangular pyramid (RAPPIDS) [13], and convex polytopes [18, 19], typically constructed from point clouds or occupancy maps. To extract convex regions from nonconvex environments, [29] proposed an al-gorithm of Iterative Regional Inflation by Semidefinite Programming (IRIS) to generate maximum volume polytopes around convex obstacles given seed points. The iterative optimization procedure involved two phases: sequential quadratic programming (SQP) to compute separating hyperplanes with respect to obsta-cles, followed by semidefinite programming (SDP) to determine the inscribed maximum-volume ellipsoid within this polytope. However, due to the high com-putational cost of this approach, subsequent work has focused on improving its efficiency. The work in [21] proposed a non-iterative version of IRIS and used line segments as an initial guess of the ellipsoid axes. Fast iterative region infla-tion (FIRI) in [9] further optimizes each phase and extends it to include a given convex polytope. Given voxel maps as inputs, [12] proposed parallel convex infla-tion of axis-aligned cubes along axis directions by incrementally checking voxel points, which can achieve a resolution near real-time. An alternative approach for constructing convex regions is proposed in [30], where they introduce a stere-ographic projection that maps obstacle points or point clouds into a transformed space and converts them into a convex hull. The resulting free region is often overly conservative for practical applications, and this limitation is addressed in [24] by using sphere flipping to generate starshaped regions that are subse-quently modified into convex polytopes. These methods demonstrate efficient polytope generation and show potential for online planning. For dynamic or local map construction from raw sensor data, free-space rep-resentations should support low-latency incremental updates, remain robust un-der noisy sensing, and scale efficiently in memory. Authors in [31] introduce a framework for global polytope map construction with dynamic updates under environmental changes. However, repeated decomposition of existing polytopes often results in fragmentation into many small regions, reducing overall rep-resentational and computational efficiency. Other work, such as [32] and [33], applies starshaped sets to build a motion graph for navigation in 2-dimensional 4 Y. Wu et al. 
+
+(2D) navigation problems, and in [34], deformable polygons are used as free-space representations for radar-based sensing in the 2D setting. We differ by using a sphere flipping map to filter the noisy raw data, and supporting both 2D and 3D workspaces while extending nonconvex representations to higher dimen-sions. Our approach maintains robustness, computational efficiency, and online updates, which remain challenging for most methods. Another line of research jointly considers perception and planning by explicitly incorporating state esti-mation uncertainty into the planning process, which places additional demands on the underlying free-space representation. For example, [35] integrates safe re-gions with perception-aware costs to mitigate estimation uncertainty, while [36] uses odometry drift to refine SFCs. While the proposed framework focuses on collision-free space generation, it remains compatible with drift-compensated approaches and can be integrated into onboard autonomy pipelines. 
+
+## 3 Prerequisite 
+
+Let W ⊂ Rn denote the workspace and O ⊂ W be a closed obstacle set. The collision-free space is defined as F := W \ O . We consider a robot operating in 
+
+Rn, with n ∈ { 2, 3}, equipped with a ray-casting sensor (e.g., LiDAR or depth camera) rigidly mounted at the robot origin q ∈ Rn. A sensor scan yields a point cloud X = {xi}Ni=1 ⊆ O . Each point xi corresponds to the first occupied measurement along its sensing ray, implying that every point on the line interval 
+
+[q, x i) is collision-free. Consequently, the visibility region induced by the scan, 
+
+V (q, X ) := S 
+
+> xi∈X
+
+[q, x i) = {q + λ(xi − q) | xi ∈ X, λ ∈ [0 , 1) } is contained in F.We now recall the notion of starshaped sets. 
+
+Definition 1 (Starshaped set). A set S ⊂ Rn is starshaped with respect to q
+
+if 
+
+x ∈ S =⇒ (1 − s)q + sx ∈ S, ∀s ∈ [0 , 1] .
+
+A starshaped set w.r.t. any point q ∈ F is always a valid conservative ap-proximation for F. Accordingly, we aim to find a starshaped region S ⊆ F to under-approximate F while preserving geometric properties. The maximal star-shaped region w.r.t. q is Smax (q) = {x ∈ F | [q, x ] ⊆ F} can be approximated given a point cloud X which satisfies Smax (q) ⊇ V (q, X ).Several inverse mappings (e.g., Kelvin inversion) preserve radial directions toward the query point (e.g., the robot origin), so the inverse-mapped points form a starshaped set. However, the numerical stability can vary significantly in practice. We now revisit starshaped construction in [24, 25] via sphere flipping that has been implemented with point cloud inputs and formalize this approach. Consider the map 
+
+fR(x) = x − q + 2  R − ∥ x − q∥ x − q
+
+∥x − q∥ , ∀x ∈ Rn \ { q}, (1) and if x = q, f R(x) = q such that fR is well-defined everywhere. Given a point cloud X, we define the map such that R ≥ sup xi∈X ∥x − q∥ so the point cloud STAR-Filter for Convex Free-Space Approximation 5Query point �      
+
+> Point clouds �Flipped clouds
+> Convex hull ��
+> Flipping Convex hull Projection
+> �
+> Starshaped set ��
+> Radial extreme points ��
+
+Fig. 1. Generation of a collision-free starshaped set from point clouds and a query point. Blue points are the extreme points of the starshaped set. 
+
+gets flipped outside of the sphere. Moreover, f −1 
+
+> R
+
+(fR(x)) = Id( x) = x, where 
+
+f −1 
+
+> R
+
+= fR. We show that (1) yields a starshaped set that preserves visibility. 
+
+Proposition 1 (Starshaped set from sphere flipping). Let X = {xi}Ni=1 
+
+be a finite set of points, Let ¯B(q, 2R) := {x ∈ Rn | ∥ x − q∥ ≤ 2R} be the closed ball that contains all the flipped points under (1) , and define 
+
+CR := conv  fR(X ∪ { q}), SR := ¯B(q, 2R) \ f −1 
+
+> R
+
+(CR) .
+
+for some R ≥ sup xi∈X ∥xi −q∥, where conv denotes the convex hull, and f −1(CR)
+
+denotes the preimage of the set CR. Then SR is starshaped with respect to q.Proof. Without loss of generality, let q = 0, then the map becomes 
+
+fR(x) = 2R − ∥ x∥∥x∥ x. (2) Expressing x = rv with r > 0 and v ∈ Sn−1 where Sn−1 := {x ∈ Rn | ∥ x∥ = 1 }
+
+is the unit sphere, (2) can then be written as fR(rv ) = (2 R − r)v, which shows that the sphere flipping map preserves each ray and extends it to the other side of the sphere. Since sup xi∈X ∥xi∥ ≤ R, we have R ≤ ∥ fR(xi)∥ < 2R,so fR(X) ⊂ ¯B(0, 2R). Because ¯B(0, 2R) is convex and contains the origin, it follows that CR ⊂ ¯B(0, 2R).Fix v ∈ Sn−1, and let ℓv = {tv | t ≥ 0}. Since CR is convex and 0 ∈ C R, there exists ρ(v) ∈ [0 , 2R] such that 
+
+CR ∩ ℓv = {tv | 0 ≤ t ≤ ρ(v)},
+
+where ρ := max {t ∈ [0 , 2R] | tv ∈ C R}. Therefore, 
+
+f −1 
+
+> R
+
+(CR) ∩ ℓv = {rv | 2R − ρ(v) ≤ r ≤ 2R}.
+
+Taking the complement in B(0, 2R) and then taking the closure gives 
+
+SR ∩ ℓv = {rv | 0 ≤ r ≤ 2R − ρ(v)}.
+
+Thus SR is an initial radial segment on every ray from the origin. Hence, if 
+
+x ∈ S R, then [0, x ] ⊂ S R. Therefore SR is starshaped with respect to 0, and thus with respect to q in the sense of Definition 1. Proposition 1 shows that SR is a starshaped set, and its inscribed polytope is also starshaped with extreme points Xs as in Fig. 1. We leverage the expres-siveness of the starshaped set in Section 5 to find an inscribed convex polytope. 6 Y. Wu et al. 
+
+## 4 Problem Formulation 
+
+We consider the general case in which obstacles are represented by a finite point set. Obstacles may be represented either as point sets or as polytopes; for poly-topic obstacles, it suffices to consider only their vertices. Given a finite point set 
+
+X = {xi}Ni=1 ⊂ Rn to be excluded and a required inclusion query point q ∈ Rn,we aim to find a convex polytope P ⊂ F with maximum volume that contains 
+
+q while excluding all obstacle points from its interior: 
+
+max  
+
+> P
+
+vol( P) (3a) s.t. xi /∈ int( P), ∀i ∈ { 1, . . . , N } q ∈ P . (3b) We transform the polytope towards the query point q by defining the ˜P = P − q,so that 0 ∈ ˜P. We then obtain the polytope in the normalized H-representation 
+
+˜P = y ∈ Rn a⊤ 
+
+> j
+
+y ≤ 1, ∀j ∈ { 1, . . . , m } . (4) where {aj }mj=1 ⊂ Rn. We assume that m is chosen so that ˜P is full-dimensional and bounded. This representation ensures q ∈ P by construction. Let yi = xi −q,the condition that xi does not lie strictly inside P is equivalent to the existence of at least one facet that separates yi, i.e., 
+
+yi /∈ int( ˜P) ⇐⇒ ∃j ∈ { 1, . . . , m } such that a⊤ 
+
+> j
+
+yi ≥ 1. (5) We introduce zij ∈ { 0, 1} indicating whether separating plane j certifies the exclusion of point xi, and a sufficiently large constant M > 0, the condition (5) can be rewritten as 
+
+∃zi ∈ { 0, 1}m s.t. a⊤ 
+
+> j
+
+yi ≥ 1 − M (1 − zij ), ∀j ∈ { 1, . . . , m },
+
+> m
+
+X
+
+> j=1
+
+zij ≥ 1. (6) For the objective (3a), exact volume computation over a convex polytope is computationally intractable in general. Hence, we adopt a standard objective of maximizing the volume of an inscribed ellipsoid (inner Löwner–John ellipsoid). We introduce an ellipsoid E = {y ∈ Rn | y = μ + D˜y, ∥˜y∥ ≤ 1}, centered at μ ∈
+
+Rn, where D ∈ Rn×n is invertible. The volume of E is proportional to maximizing 
+
+log det D, which provides a tight geometric bound on the polytope volume and has a tractable formulation. Although the polytope ˜P is origin-centered, we do not fix the ellipsoid center μ, which is optimized jointly with D. For each halfspace a⊤ 
+
+> j
+
+y ≤ 1, the containment condition E ⊆ ˜P requires 
+
+sup 
+
+> ∥˜y∥≤ 1
+
+a⊤ 
+
+> j
+
+(μ + D˜y) = a⊤ 
+
+> j
+
+μ + ∥D⊤aj ∥ ≤ 1, ∀j ∈ { 1, . . . , m }. (7) We formulate the coupled problem as the following mixed-integer program 
+
+max  
+
+> a, μ, D, z
+
+log det D
+
+s.t. (6) , (7) (8) STAR-Filter for Convex Free-Space Approximation 7
+
+The resulting polytope P = q + ˜P contains the point q by construction and excludes all points in the obstacle point set X from its interior. This prob-lem is highly nonconvex due to the joint optimization over the polytope pa-rameters {aj } and the binary variables {zij }. Deits and Tedrake [29] decouple a similar problem via a two-stage iterative framework that alternates between greedily constructing separating hyperplanes and computing a maximum-volume inscribed ellipsoid (MVIE) for a fixed polytope. There are several possible improvements at each stage of this algorithm. MVIE is a convex optimization problem and formulated as a semidefinite pro-gram (SDP) with conic quadratic constraints in [29]. Further improvements refor-mulate the problem as a second-order cone program (SOCP) for computational efficiency [9]. For the construction of separating hyperplanes, prior approaches employ a greedy strategy that repeatedly identifies the obstacle point closest to the current ellipsoid, computes the ellipsoid-induced normals, and a supporting hyperplane tangent to a uniformly inflated version of the ellipsoid at that point. This hyperplane is then added to the polytope to exclude the point outside the free region while preserving the feasibility of the current ellipsoid. However, this greedy procedure can be conservative and expensive, as it requires evaluating distances to all remaining obstacle points at each iteration. The computational cost becomes significant for large-scale point clouds. We propose a more efficient and lightweight approach for generating separating hyperplanes that reduces per-iteration complexity while maintaining practical effectiveness. 
+
+## 5 Approach 
+
+In the iterative optimization framework, the polytope update step leverages the current MVIE as a heuristic to select separating planes that preserve collision-free and enable further ellipsoid expansion. In practice, however, most obstacle points are redundant and do not become active constraints at the solution, and therefore do not influence either the ellipsoid or the polytope. Ellpsoids Iteration Normals Iteration Polytope Iteration 
+
+> Query point
+> Supporting points
+> Radial extreme points ��
+> Point clouds �
+> Hyperplanes
+> Ellispoids
+
+Fig. 2. Iterative refinement of the polytope, ellipsoid, and associated normals. A subset of obstacle points serves as supporting points that determine the active hyperplanes of the polytope, and this subset is contained in the starshaped set. 
+
+As shown in Fig. 2, the majority of obstacle points remain inactive through-out the polytope, ellipsoid, and normal update steps. The objective of the it-eration is the identification of effective separating normals for a small set of supporting points, rather than the construction of an accurate maximum-volume ellipsoid within the collision-free space. The ellipsoid is not required to be strictly 8 Y. Wu et al. 
+
+collision-free nor to contain the query seed at every iteration. This iterative pro-cedure can be interpreted as an optimization over the normals associated with this subset of points using the ellipsoid as a heuristic. In addition, the intermedi-ate polytopes generated during the iteration only require a sufficiently tight local approximation to support ellipsoid growth, while an exact collision-free coverage at every iteration is not required. This observation motivates reducing the full obstacle point set to a smaller subset that is the most relevant to optimizing the supporting points’ normals. The starshaped set construction naturally identifies obstacle points lying on the visible inner boundary of the free space towards the ellipsoid center. These points are precisely those that can become active supporting constraints, making them a suitable choice for filtering the obstacle point set. The proposed algorithm is summarized in Alg. 1. We consider scenarios in which the robot seed is either a point or a line segment, which allows the initial-ization of a collision-free ellipsoid. When the seed is a point, we approximate it using a sufficiently short line segment aligned with the major axis of the ellipsoid. 
+
+Algorithm 1: Iterative Inflation with Starshaped Filtering                                               
+
+> Input: query point q∈ F , obstacle point set X⊂Rn, ellipsoid parameters D0
+> Output: convex polytope P
+> 1E0←InitEllipsoid (D0, q )
+> 2Xs←StarshapedFiltering (X, q )
+> 3k←1
+> 4repeat
+> 5Pk←UpdateNormals (Ek−1, X s)
+> 6Ek(Dk, μ k)←MVIE (Pk)
+> 7k←k+ 1
+> 8until end condition ∨k≥kmax ;
+> 9if certify then
+> 10 Pk←GreedySeparatingPlanes (Ek−1, X )
+> 11 return Pk
+
+Given a query point, we construct a starshaped set and extract its radial ex-treme points (Line 2). These points approximate the active supporting point set during polytope refinement. During polytope generation (Line 5), we do not em-ploy a greedy hyperplane selection strategy. Instead, when the number of points 
+
+Xs is moderate, we update the normals of the separating hyperplanes for all supporting points and directly assemble the polytope in H-representation. This procedure may introduce redundant constraints, however, redundancy removal is only performed when the number of constraints becomes large. In such cases, we convert the polytope to a vertex V-representation to identify and eliminate redundant hyperplanes. The MVIE update and end condition follow [29], with a maximum iteration limit kmax for the iterative loop (Line 8). If a strictly collision-free polytope is required (Line 9-10), we perform a final iteration of greedy sepa-rating hyperplane generation to obtain collision-free guarantees. This framework is particularly effective for environments with large-scale obstacle point clouds, STAR-Filter for Convex Free-Space Approximation 9
+
+as it avoids repeated global collision checks and expensive greedy updates. The remainder of this section presents the vertex generation via the starshaped con-struction and the resulting interior polytope construction. 
+
+5.1 Supporting Point Approximation via Starshaped Construction 
+
+The filtered set is mainly influenced by the choice of the flipping radius R, which controls the extent of radial reweighting in the starshaped construction, and the inclusion of boundary points, which affect the completeness of the starshaped approximation near map limits. In this section, we analyze the geometric and robustness properties of this construction and its variants, including the flipping radius R, the treatment of the workspace boundary, the conditions under noisy point clouds, and the ellipsoid-normalized flipping map. 
+
+Flipping radius . For any two points xi, x j ∈ X, let li = ∥xi − q∥ and 
+
+lj = ∥xj − q∥. The radial ratio induced by the flipping satisfies 
+
+β = R − li
+
+R − lj
+
+≤ 1 + sup x∈X ∥x − q∥ − inf x∈X ∥x − q∥
+
+R . (9) As R increases, relative radial variation among flipped points diminishes and the transformed points concentrate on the sphere with radius R denoted Sn−1 
+
+> R
+
+. As the limit R → ∞ , the flipping map becomes nearly radial-invariant, and the induced starshaped construction approaches the identity mapping. The flipping radius R
+
+controls a trade-off between aggressive filtering and geometric approximation. 
+
+Proposition 2 (Monotonicity in R). Let R1, R 2 ∈ R>0 satisfy R2 ≥ R1 ≥
+
+sup xi∈X ∥xi∥, Then SR1 ⊆ S R2 , where SR is defined in Proposition 1. Proof. For any xi ∈ X \ { q}, the sphere flipping maps satisfy 
+
+fR2 (xi) = fR1 (xi) + 2( R2 − R1)
+
+∥xi − q∥ (xi − q),
+
+thus fR1 (X) ⊆ cone( fR2 (X)) , where cone( fR2 (X)) := {θ(xi−q) | xi ∈ X, θ ≥ 0}.Since R1 ≤ R2, taking convex hulls yields CR1 ⊆ C R2 , applying inverse maps give 
+
+f −1 
+
+> R1
+
+(CR1 ) ⊇ f −1 
+
+> R2
+
+(CR2 ), and therefore SR1 ⊆ S R2 .In practice, the flipping radius R is chosen adaptively based on the distri-bution of obstacle points. When multiple starshaped constructions are applied in a localized region, parameter R can be increased progressively to balance exploration and refinement. Fig. 3 (a) shows a numerical example. 
+
+Regional boundary . In starshaped constructions, the set SR may under-approximate the collision-free region if q /∈ conv  fR(X), and the projected starshaped set can be a small projected set that does not contain the query point. In [25], additional points are added around the map boundary to alleviate this issue. We define the boundary set as ∂W := {y ∈ W | [q, y ] ⊂ F} , now consider the augmented region 
+
+C+ 
+
+> R
+
+:= conv  fR(X ∪ { q} ∪ ∂W), S+ 
+
+> R
+
+:= ¯B(q, 2R) \ f −1
+
+> R
+
+ C+
+
+> R
+
+. (10) 10 Y. Wu et al. (b)  
+
+> Sampled boundary Ground truth
+> (c) (a)
+> No boundary
+
+Fig. 3. Starshaped construction. (a) Monotonic expansion of a 2D starshaped region as 
+
+R increases; darker to lighter (yellow) indicates increasing R. (b) Increased boundary sampling reduces region loss (region in blue). (c) 3D starshaped meshes. 
+
+The augmented set S+ 
+
+> R
+
+remains starshaped with respect to the query point and typically provides a larger and more robust inner approximation of the free space, as can be seen in Fig. 3(b). In the idealized continuous setting, a perfect boundary is invariant under the flipping map and the convex-hull operation. As checking the containment of the actual boundary is usually more expensive than simply adding discrete points to the obstacle point set, the selection of the augmented points reflects the reso-lution of the discretization. For a discrete approximation d∂W ⊂ ∂W, invariance holds approximately. The quality of the approximation increases as the sampling density increases. Assuming the boundary is known with a continuous realiza-tion, then the procedure described in Fig. 1 preserves the boundary set when it is augmented to the original point cloud. A discretization procedure can be done on the boundary set to generate points that augment the point cloud X. A finer discretization produces a better approximation of the free space F. However, it also increases computational cost and remains conservative, still potentially excluding portions of free space. Therefore, we do not explicitly maintain the full starshaped set, but keep its radial extreme points as interior approximated obstacle points for polytope generation. This relaxation avoids sensitivity to boundary discretization while preserving the geometric information for ellipsoid and normals updates. 
+
+Starshaped filtering under noise . Fix the query point q ∈ Rn. For any point xi ∈ X with xi̸ = q, define 
+
+ri := ∥xi − q∥ ∈ (0 , R ], θi := xi − q
+
+∥xi − q∥ ∈ Sn−1,
+
+such that xi = q + riθi. Now assume the measurement noise on xi is ˆxi =
+
+xi + wi, w i
+
+> i.i.d.
+
+∼ Nn(0, Σ ). Define ˆxi along direction θi by ˆri := θ⊤ 
+
+> i
+
+(ˆ xi − q). Then 
+
+ˆri = ri + θ⊤ 
+
+> i
+
+wi, where 
+
+θ⊤ 
+
+> i
+
+wi ∼ N (0 , σ 2 
+
+> θi
+
+), σ2 
+
+> θi
+
+:= θ⊤ 
+
+> i
+
+Σθ i.
+
+Now fix a direction θ ∈ Sn−1. Let ¯r(θ) be the true first-hit range and assume all other measurements along this direction satisfy rk(θ) ≥ ¯r(θ) + δ(θ) with some gap δ(θ) > 0. Let {ˆrj }N1 
+
+> j=1
+
+be the measured ranges of first-hit returns and {ˆrk}N2
+
+> k=1
+
+be the measured ranges of non-first-hit returns along this θ, i.e., 
+
+ˆrj = ¯ r(θ) + εj , ˆrk = rk(θ) + ηk,STAR-Filter for Convex Free-Space Approximation 11 
+
+where εj , η k
+
+> i.i.d.
+
+∼ N (0 , σ 2 
+
+> θ
+
+) with σ2 
+
+> θ
+
+:= θ⊤Σθ . Let ˆx(θ) be the selected measured point with the minimum measured range. Proposition 3 provides an upper bound on the probability that, due to Gaussian measurement noise, a non-first-hit mea-surement is incorrectly selected. 
+
+Proposition 3 (Non-first-hit probability bound). Let ˆX1 := {ˆxj }N1 
+
+> j=1
+
+be the set of measured first-hit points along direction θ. Then 
+
+P
+
+
+
+ˆx(θ) /∈ ˆX1
+
+
+
+≤ N1N2 Φ
+
+
+
+− δ(θ)
+
+√2σθ
+
+
+
+≤ N1N2σθ
+
+√π δ (θ) exp 
+
+
+
+− δ2(θ)4σ2
+
+> θ
+
+
+
+,
+
+where Φ(·) is the cumulative distribution function (CDF) of a standard normal distribution. Proof. The condition ˆx(θ) /∈ ˆX1 requires ˆrk < ˆrj for some pair (j, k ). Since 
+
+rk(θ) ≥ ¯r(θ) + δ(θ), ˆrk < ˆrj ⇒ ηk − εj < −δ(θ). Because ηk − εj ∼ N (0 , 2σ2 
+
+> θ
+
+),
+
+P(ˆ rk < ˆrj ) ≤ Φ
+
+
+
+− δ(θ)
+
+√2σθ
+
+
+
+.
+
+A union bound over N1N2 pairs yields the first inequality. The second inequality follows from Φ(−t) ≤ 1√2πt exp( −t2/2) for t > 0.
+
+Biased line-segment containment . Let Ek = {μk + Dk ˜y | ∥ ˜y∥ ≤ 1} be an ellipsoid (e.g., the current MVIE of the polytope) that contains the line segment, and define the ellipsoid-normalized coordinate u(x) := D−1 
+
+> k
+
+(x − μk), where Ek is mapped to the unit ball. The distance of a point x in this normalized coordinate is 
+
+∥u(x)∥. We define an ellipsoid-normalized flipping map parameterized by R > 1:
+
+gR(x) := μk + Dk
+
+ 2R − ∥ u(x)∥ u(x)
+
+∥u(x)∥
+
+
+
+, x̸ = μk. (11) This map reflects points in ellipsoid-normalized space across the level set LR(u) := 
+
+{x ∈ Rn | u(x) = R} and maps them to the original space. An example of a 3D starshaped polytope is shown in Fig. 3(c). When the query point or environment changes incrementally, the starshaped representation can be updated locally. We can test whether the new query point lies within an approximation of the star kernel, computed as the intersection of halfspaces induced by the original supporting planes. If satisfied, the starshaped property is preserved, and only local refinements are performed to incorporate newly observed obstacles; otherwise, the starshaped set is reconstructed from the new query position. 
+
+5.2 Interior Polytope Generation 
+
+With a starshaped approximation of the local collision-free region, we derive a convex polytope that provides an inner approximation of the region. In [24], the starshaped set is approximated by a nonconvex polytope and then convexified 12 Y. Wu et al. 
+
+by adding separating hyperplanes that exclude interior obstacle points. This is overly conservative and loses a significant amount of free-space volume. Given the starshaped extreme point set Xs as shown in Fig. 1, we con-struct the interior polytope by intersecting supporting halfspaces induced by each 
+
+xi ∈ Xs. We define the outward normal in the ellipsoid normalized coordinate as 
+
+ai = u(xi)/∥u(xi)∥ and the associated halfspace Hi = {y ∈ Rn | a⊤ 
+
+> i
+
+(y −xi) ≤ 0},which excludes xi while preserving containment of the current ellipsoid. The re-sulting polytope Pk = T 
+
+> xi∈Xs
+
+Hi provides a valid inner approximation of the collision-free space. Unlike greedy IRIS-style methods that add a single separat-ing constraint per iteration, all candidate supporting halfspaces induced by Xs
+
+are incorporated in the subsequent MVIE update. 
+
+## 6 Results 
+
+6.1 Implementation Details     
+
+> Fig. 4. Evaluation maps (left to right): real, obstacle, maze.
+
+We evaluate the proposed framework using the benchmark pipeline in [37] using diverse environments. As shown in Fig. 4, we con-sider maze environments (denoted as maze), randomly generated obstacle fields (denoted as obstacle), and real-world point clouds (denoted as real) derived from the M3ED dataset [38]. For the simulated environment, we consider two map representa-tions. Raw uses raw point clouds augmented with zero-mean Gaussian noise to model sensing uncertainty. Surface Grid uses a voxelized surface representation of inflated obstacles and does not include additional noise. For the real-world dataset, we only use raw point clouds. We set the obstacle and real map as size of 40 m × 40 m × 10 m, and the maze as 20 m × 10 m × 5 m. In each test, a lo-cal map is cropped with a range of 3m. For starshaped construction, we choose 
+
+R = γ · max xi∈X ∥u(xi)∥, γ ∈ [1 , 5] to ensure sufficient radial separation and augment X with the vertices of the local map’s bounding box. For benchmarking, we compare our method with FIRI [9], RILS [21], and Galaxy [24]. For FIRI, we adopt the lite implementation (denoted as FIRI-lite) to address the seed containment issue in IRIS and improve the MVIE compu-tation. FIRI is significantly faster than IRIS and achieves computation time comparable to RILS and Galaxy. In this lite version, the seed is represented as a point or a line segment, and the restrictive half-space computation for polytope containment is neglected. We employ Quickhull [39] for convex hull construction in both Galaxy and our method. Galaxy directly generates convex hulls from starshaped polytopes and meshes. To reduce collision violations, Galaxy typi-cally requires a higher resolution in the convex hull construction. However, even with increased resolution, strict collision-free guarantees cannot be ensured. The dominant runtime in Galaxy arises from repeated convex hull construction, and the performance of Quickhull degrades as the effective sampling radius increases, since a larger radius introduces more obstacle points. Galaxy needs an inherent STAR-Filter for Convex Free-Space Approximation 13 
+
+trade-off between sampling resolution, computational cost, and practical colli-sion avoidance. In contrast, our method does not require the starshaped region to be collision-free during its construction. This allows the proposed method to apply a low-precision convex hull with significantly reduced computation cost while maintaining effectiveness in iterative optimization. 
+
+6.2 Performance Analysis 
+
+We evaluate computational performance and different initializations across di-verse environments, with 200 runs per setting. 
+
+Computation time . We evaluate runtime performance using randomly gen-erated obstacle maps with varying parameterizations. Three obstacle density levels are considered using raw point clouds. The computation time of each component is shown in Table 1. 
+
+Table 1. Computation time (ms) for three density levels of obstacle map.                                                                
+
+> Component Dense Medium Sparse
+> #Local points 36771 ±11192 13156 ±9437 4564 ±7216 Starshaped construction 0.979 ±0.362 0.338 ±0.242 0.210 ±0.200 Iteration in total 1.054 ±0.369 0.698 ±0.257 0.722 ±0.478 Normal updates (per-iter) 0.0004 ±0.0002 0.0003 ±0.0001 0.0006 ±0.0003 MVIE (per-iter) 0.168 ±0.029 0.138 ±0.023 0.225 ±0.135 Greedy separating planes 1.366 ±0.583 0.373 ±0.341 0.165 ±0.214 All 3.398 ±1.062 1.410 ±0.725 1.097 ±0.744
+
+The cost of greedy computing separating planes over the full obstacle point set increases significantly with the number of obstacle points. In dense envi-ronments, the greedy separating planes step becomes the dominant part of the total runtime. The proposed starshaped construction mitigates this cost by re-ducing the effective point set used in iterations. After the starshaped region is constructed, the point subsets involved in normal updates (typically fewer than 40 points) are smaller and the computation time is negligible across all density levels. Although the convex hull computation for starshaped construction intro-duces some cost, it is comparable to a single greedy separating plane computation and is allocated over the iterative process. 
+
+Ellipsoid initialization . If the seed is a query point, previous works typi-cally initialize the ellipsoid as a small sphere centered at the seed, with a radius comparable to the map resolution. When the seed is a line segment, the initial-ization is less obvious and has not been explicitly discussed in prior work. In this case, different choices can affect the behavior of the optimization. Initial-izing the ellipsoid with its major axis aligned to the line segment may overly constrain the feasible region at early stages, leading to conservative behavior, such as in RILS. To analyze this effect, we consider three initialization modes: a small spherical initialization to point seeds (denoted as small), a large spherical initialization whose radius is half the segment length (denoted as large), and a thin segment-aligned initialization that produces an elongated ellipsoid along the line direction (denoted as thin). Here, we use RIFI-lite as a reference and test 14 Y. Wu et al. 
+
+in maze and obstacle maps with raw point clouds. As shown in Fig. 5, the thin Maze Map Obstacle Map  
+
+> Fig. 5. Comparison of performance by different ellipsoid initialization.
+
+and segment-aligned initialization generates the smallest final ellipsoid volumes. It does not improve performance and consistently leads to poor local optima. As this elongated ellipsoid introduces overly restrictive geometric constraints, re-sulting in conservative polytope growth and limited expansion of the free space. Even in scenarios where line-segment containment is desired, segment-aligned initialization is suboptimal compared to simple spherical initializations. 
+
+6.3 Benchmark Comparison 
+
+We conduct 500 test cases for each scenario for a complete comparison. The re-sults are shown in Table 2. The proposed method consistently achieves the lowest average computation time while maintaining comparable polytope volumes to FIRI-lite in all evaluated environments. Line-segment seeds are more challeng-ing with higher computational cost and smaller polytopes across all methods, as they introduce additional geometric constraints to restrict feasible expansion. Despite this increased complexity, the proposed method remains the fastest in all scenarios and preserves full seed inclusion. Galaxy is unstable in some real maps, and failed trials are excluded from the reported results. Line seed  
+
+> Raw  Surface grid
+> Point seed
+> Fig. 6. Pairwise comparison of polytope volumes in maze maps with FIRI-lite as the x-axis reference.
+
+To further illustrate the volume differences across each test, we plot the pairwise comparisons against FIRI-lite on maze maps in Fig. 6. Our method achieves performance similar to FIRI-lite, whereas Galaxy and RILS consistently underperform it. Although these two methods reduce computation time, this improvement is achieved at the expense of solution quality, while our method maintains performance without such degradation. STAR-Filter for Convex Free-Space Approximation 15 
+
+Table 2. Comparison across different scenarios. 
+
+Scenario Seed Type Input (#Local points) Method Time (ms) vol( P) ( m3) #Planes Collision Seed Inclusion 
+
+Maze Point Raw FIRI-lite 2.66 ± 1.39 47.78 ± 14.86 22.77 ± 4.89 0.000 1.000 RILS 2.05 ± 1.60 33.68 ± 16.96 20.32 ± 3.84 0.000 1.000 (8283 ± 1824) Galaxy 4.55 ± 1.23 28.48 ± 16.08 25.49 ± 7.06 0.000 1.000 Ours 1.32 ± 0.26 47.56 ± 14.87 21.35 ± 4.54 0.000 1.000 Surface Grid FIRI-lite 2.77 ± 1.43 37.49 ± 14.53 19.43 ± 3.49 0.000 1.000 RILS 4.21 ± 2.20 28.63 ± 15.77 17.50 ± 3.35 0.000 1.000 (14732 ± 2214) Galaxy 6.25 ± 1.83 18.75 ± 14.88 25.31 ± 8.82 0.002 1.000 Ours 2.07 ± 0.57 37.34 ± 14.60 18.99 ± 3.24 0.000 1.000 Line Raw FIRI-lite 3.33 ± 1.44 48.79 ± 15.71 23.95 ± 4.73 0.000 1.000 RILS 2.92 ± 2.09 33.85 ± 16.67 20.41 ± 4.27 0.000 1.000 (10646 ± 2290) Galaxy 4.93 ± 1.19 27.12 ± 15.19 24.96 ± 6.72 0.000 0.996 Ours 1.48 ± 0.28 48.25 ± 15.45 22.70 ± 4.45 0.000 1.000 Surface Grid FIRI-lite 3.13 ± 1.14 38.26 ± 15.79 19.77 ± 3.41 0.000 1.000 RILS 3.78 ± 1.91 29.08 ± 16.52 17.69 ± 3.27 0.000 1.000 (17527 ± 2478) Galaxy 5.46 ± 1.31 18.68 ± 15.15 24.96 ± 8.51 0.002 0.981 Ours 1.94 ± 0.35 38.23 ± 15.94 19.71 ± 3.49 0.000 1.000 Obstacle Point Raw FIRI-lite 9.70 ± 4.14 29.16 ± 13.02 29.78 ± 5.29 0.000 1.000 RILS 8.12 ± 2.90 21.31 ± 10.78 23.41 ± 3.97 0.000 1.000 (48085 ± 13766) Galaxy 5.57 ± 1.26 20.18 ± 9.42 33.33 ± 6.42 0.000 0.999 Ours 4.19 ± 1.11 28.63 ± 13.04 27.97 ± 4.71 0.000 1.000 Surface Grid FIRI-lite 6.99 ± 2.57 17.57 ± 10.87 29.71 ± 5.12 0.000 1.000 RILS 5.54 ± 1.52 11.66 ± 8.47 23.64 ± 3.87 0.000 1.000 (31453 ± 5573) Galaxy 5.06 ± 0.84 11.04 ± 7.36 29.04 ± 6.41 0.000 1.000 Ours 3.29 ± 0.69 16.67 ± 10.82 28.06 ± 5.25 0.000 1.000 Line Raw FIRI-lite 11.92 ± 4.93 28.42 ± 12.57 30.39 ± 5.02 0.000 1.000 RILS 10.28 ± 3.74 20.26 ± 9.93 23.74 ± 3.88 0.000 1.000 (60113 ± 15479) Galaxy 6.30 ± 1.45 19.87 ± 9.50 32.99 ± 6.39 0.000 0.997 Ours 5.00 ± 1.41 27.78 ± 12.60 28.58 ± 4.84 0.000 1.000 Surface Grid FIRI-lite 8.54 ± 3.06 22.02 ± 13.97 29.21 ± 5.00 0.000 1.000 RILS 5.74 ± 1.55 14.57 ± 10.48 23.53 ± 3.87 0.000 1.000 (34777 ± 6276) Galaxy 5.29 ± 0.88 13.82 ± 9.59 29.85 ± 6.58 0.000 0.998 Ours 3.53 ± 0.56 21.14 ± 14.03 28.05 ± 4.76 0.000 1.000 Real Point Raw FIRI-lite 2.26 ± 4.26 136.99 ± 47.30 13.64 ± 4.78 0.000 1.000 RILS 1.36 ± 2.79 127.73 ± 54.27 13.06 ± 4.12 0.000 1.000 (10618 ± 20559) Galaxy 1.32 ± 2.05 63.67 ± 39.84 28.83 ± 9.77 0.011 0.935 Ours 1.19 ± 1.62 136.72 ± 47.31 13.67 ± 4.71 0.000 1.000 Line Raw FIRI-lite 3.45 ± 7.73 169.30 ± 62.97 14.35 ± 4.67 0.000 1.000 RILS 2.20 ± 5.16 156.60 ± 72.17 13.56 ± 3.99 0.000 1.000 (15085 ± 28657) Galaxy 1.81 ± 3.33 80.12 ± 54.09 28.58 ± 8.86 0.013 0.910 Ours 1.67 ± 2.58 168.87 ± 63.24 14.27 ± 4.58 0.000 1.000 
+
+6.4 Application to Agile Quadrotor Planning 
+
+To further evaluate the ability for real-world deployment, we study the proposed framework under two challenging conditions, including single convex polytope generation from sparse, noisy incremental sensory updates and large-scale SFC construction for trajectory optimization. For single polytope generation, we test on real event camera data collected on quadrotor platforms [40]. Event cameras generate data with microsecond tempo-ral resolution and low latency, which requires fast computation and robustness to sparse measurements. We obtain depth estimates from stereo event camera data using the method of [41], with an average computation time of approximately 
+
+10 ms. Fig. 7 shows convex polytopes constructed from event camera data over a short temporal window. In a 10 m × 10 m × 2 m workspace, we evaluate 200 trials with a 1 m local range and an average 229 .26 ± 413 .97 points. Our method achieves a runtime of 0.17 ± 0.14 ms and produces polytope volume 7.11 ± 0.92 m3. We generate 16 Y. Wu et al.  
+
+> Fig. 7. Convex polytopes over increasing temporal windows. The top row uses event-based data, and the bottom row uses ground-truth LiDAR.
+
+convex regions from event camera point clouds and evaluate collisions against the ground-truth point cloud. The average rate of volume in collision is 0.0226 ±
+
+0.0257 . The results demonstrate that the proposed method achieves low-latency computation and enables fast incremental updates for agile planning. For trajectory and SFC generation, the proposed method is integrated into a parallel optimization framework in [42]. We employ global LiDAR data to gener-ate SFCs with predefined waypoints. The SFC by our method enables continuous piecewise polynomial trajectory optimization, as shown in Fig. 8, and supports real-time deployment on onboard quadrotor hardware.  
+
+> Fig. 8. Piecewise polynomial trajectories (in magenta) optimized within SFC.
+
+## 7 Conclusion and Future Work 
+
+We propose a framework for superfast polytope inflation that leverages star-shaped set as an efficient filtering to accelerate polytope extraction. By filtering obstacle points that are likely to become active supporting constraints, the pro-posed approach reduces the number of candidates considered during separating hyperplane generation. The alternating polytope and ellipsoid procedure can be interpreted as an optimization over a reduced set of candidate normals, with the inscribed ellipsoid as a heuristic to guide normal selection rather than as a strict geometric approximation. This design reduces redundant computation and improves robustness when operating on noisy sensor data and large-scale point clouds in real-world environments. Future work will focus on GPU acceleration and learning-based filtering to further improve closed-loop onboard performance, especially for navigation with an event camera. 
+
+## Acknowledgments 
+
+We greatly acknowledge the support of TILOS, funded by NSF Grant CCR-2112665, as well as the support from Pratik Chaudhari. We used language models (e.g., GPT) for text and code refinement. STAR-Filter for Convex Free-Space Approximation 17 
+
+## References 
+
+1. Steven M LaValle. Planning algorithms . Cambridge university press, 2006. 2. Laurent Gouzènes. Strategies for solving collision-free trajectories problems for mobile and manipulator robots. The International Journal of Robotics Research ,3(4):51–65, 1984. 3. Helen Oleynikova, Zachary Taylor, Marius Fehr, Roland Siegwart, and Juan Ni-eto. Voxblox: Incremental 3d euclidean signed distance fields for on-board mav planning. In 2017 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pages 1366–1373, 2017. 4. Zoltan Csaba Marton, Radu Bogdan Rusu, and Michael Beetz. On fast surface re-construction methods for large and noisy point clouds. In 2009 IEEE International Conference on Robotics and Automation , pages 3218–3223, 2009. 5. Jyh-Ming Lien and Nancy M. Amato. Approximate convex decomposition of poly-hedra. In Proceedings of the 2007 ACM Symposium on Solid and Physical Modeling ,SPM ’07, page 121–131, New York, NY, USA, 2007. Association for Computing Machinery. 6. Bernard M. Chazelle. Convex decompositions of polyhedra. In Proceedings of the Thirteenth Annual ACM Symposium on Theory of Computing , STOC ’81, page 70–79, New York, NY, USA, 1981. Association for Computing Machinery. 7. Roland Geraerts. Planning short paths with clearance using explicit corridors. In 
+
+2010 IEEE International Conference on Robotics and Automation , pages 1997– 2004, 2010. 8. Albin Dahlin and Yiannis Karayiannidis. Creating star worlds: Reshaping the robot workspace for online motion planning. IEEE Transactions on Robotics , 39(5):3655– 3670, 2023. 9. Qianhao Wang, Zhepei Wang, Mingyang Wang, Jialin Ji, Zhichao Han, Tianyue Wu, Rui Jin, Yuman Gao, Chao Xu, and Fei Gao. Fast iterative region inflation for computing large 2-d/3-d convex regions of obstacle-free space. IEEE Transactions on Robotics , 41:3223–3243, 2025. 10. Jing Chen, Tianbo Liu, and Shaojie Shen. Online generation of collision-free tra-jectories for quadrotor flight in unknown cluttered environments. In 2016 IEEE International Conference on Robotics and Automation (ICRA) , pages 1476–1483, 2016. 11. Tobia Marcucci, Parth Nobel, Russ Tedrake, and Stephen Boyd. Fast path planning through large collections of safe boxes. IEEE Transactions on Robotics , PP:1–17, 01 2024. 12. Fei Gao, Luqi Wang, Boyu Zhou, Xin Zhou, Jie Pan, and Shaojie Shen. Teach-repeat-replan: A complete and robust system for aggressive flight in complex en-vironments. IEEE Transactions on Robotics , 36(5):1526–1545, 2020. 13. Nathan Bucki, Junseok Lee, and Mark W. Mueller. Rectangular pyramid parti-tioning using integrated depth sensors (rappids): A fast planner for multicopter navigation. IEEE Robotics and Automation Letters , 5(3):4626–4633, 2020. 14. Fei Gao and Shaojie Shen. Online quadrotor trajectory generation and autonomous navigation on point clouds. In 2016 IEEE International Symposium on Safety, Security, and Rescue Robotics (SSRR) , pages 139–146, 2016. 15. Jialin Ji, Zhepei Wang, Yingjian Wang, Chao Xu, and Fei Gao. Mapless-planner: A robust and fast planning framework for aggressive autonomous flight without map fusion. In 2021 IEEE International Conference on Robotics and Automation (ICRA) , pages 6315–6321, 2021. 18 Y. Wu et al. 16. Aaron Ray, Alyssa Pierson, and Daniela Rus. Free-space ellipsoid graphs for multi-agent target monitoring. In 2022 International Conference on Robotics and Au-tomation (ICRA) , pages 6860–6866, 2022. 17. Jon Arrizabalaga, Zachary Manchester, and Markus Ryll. Differentiable collision-free parametric corridors. In 2024 IEEE/RSJ International Conference on Intelli-gent Robots and Systems (IROS) , pages 1839–1846, 2024. 18. Zhepei Wang, Chao Xu, and Fei Gao. Robust trajectory planning for spatial-temporal multi-drone coordination in large scenes. In 2022 IEEE/RSJ Interna-tional Conference on Intelligent Robots and Systems (IROS) , pages 12182–12188, 2022. 19. Peter Werner, Alexandre Amice, Tobia Marcucci, Daniela Rus, and Russ Tedrake. Approximating robot configuration spaces with few convex sets using clique cov-ers of visibility graphs. In 2024 IEEE International Conference on Robotics and Automation (ICRA) , pages 10359–10365. IEEE, 2024. 20. Tobia Marcucci, Jack Umenberger, Pablo Parrilo, and Russ Tedrake. Shortest paths in graphs of convex sets. SIAM Journal on Optimization , 34(1):507–532, 2024. 21. Sikang Liu, Michael Watterson, Kartik Mohta, Ke Sun, Subhrajit Bhattacharya, Camillo J. Taylor, and Vijay Kumar. Planning dynamically feasible trajectories for quadrotors using safe flight corridors in 3-d complex environments. IEEE Robotics and Automation Letters , 2(3):1688–1695, 2017. 22. Shreyas Kousik, Patrick Holmes, and Ram Vasudevan. Safe, aggressive quadrotor flight via reachability-based trajectory design. In Dynamic Systems and Control Conference , volume 59162, page V003T19A010. American Society of Mechanical Engineers, 2019. 23. M Beltagy and A El-Araby. On convex and starshaped hulls. Kyungpook mathe-matical journal , 40(2):313–321, 2000. 24. Xingguang Zhong, Yuwei Wu, Dong Wang, Qianhao Wang, Chao Xu, and Fei Gao. Generating large convex polytopes directly on point clouds. arXiv preprint arXiv:2010.08744 , 2020. 25. Tianyu Liu, Qianhao Wang, Xingguang Zhong, Zhepei Wang, Chao Xu, Fu Zhang, and Fei Gao. Star-convex constrained optimization for visibility planning with application to aerial inspection. In 2022 International Conference on Robotics and Automation (ICRA) , pages 7861–7867. IEEE, 2022. 26. Xinyue Wei, Minghua Liu, Zhan Ling, and Hao Su. Approximate convex de-composition for 3d meshes with collision-aware concavity and tree search. ACM Transactions on Graphics (TOG) , 41(4):1–18, 2022. 27. Yasser Shoukry, Pierluigi Nuzzo, Indranil Saha, Alberto L. Sangiovanni-Vincentelli, Sanjit A. Seshia, George J. Pappas, and Paulo Tabuada. Scalable lazy smt-based motion planning. In 2016 IEEE 55th Conference on Decision and Control (CDC) ,pages 6683–6688, 2016. 28. Mahroo Bahreinian, Erfan Aasi, and Roberto Tron. Robust path planning and control for polygonal environments via linear programming. In 2021 American Control Conference (ACC) , pages 5035–5042, 2021. 29. Robin Deits and Russ Tedrake. Computing large convex regions of obstacle-free space through semi-definite programming. In Eleventh International Workshop on the Algorithmic Foundations of Robotics (WAFR) , pages 109–124, 2015. 30. Sergei Savin. An algorithm for generating convex obstacle-free regions based on stereographic projection. In 2017 International Siberian Conference on Control and Communications (SIBCON) , pages 1–6, 2017. STAR-Filter for Convex Free-Space Approximation 19 31. Junlong Guo, Zhiren Xun, Shuang Geng, Yi Lin, Chao Xu, and Fei Gao. Dynamic free-space roadmap for safe quadrotor motion planning. In 2022 IEEE/RSJ Inter-national Conference on Intelligent Robots and Systems (IROS) , pages 10523–10528, 2022. 32. Dharshan Bashkaran Latha and Ömür Arslan. Key-scan-based mobile robot nav-igation: Integrated mapping, planning, and control using graphs of scan regions, 2024. 33. Shiyu Feng, Ahmad Abuaish, and Patricio A. Vela. Safer gap: Safe navigation of planar nonholonomic robots with a gap-based local planner. IEEE Robotics and Automation Letters , 9(12):11034–11041, 2024. 34. Xiangyu Gao, Sihao Ding, and Harshavardhan Reddy Dasari. Deformable radar polygon: A lightweight and predictable occupancy representation for short-range collision avoidance. IEEE Sensors Journal , 24(16):26104–26114, 2024. 35. Xiangyu Wu, Shuxiao Chen, Koushil Sreenath, and Mark W. Mueller. Perception-aware receding horizon trajectory planning for multicopters with visual-inertial odometry. IEEE Access , 10:87911–87922, 2022. 36. Devansh R Agrawal, Taekyung Kim, Rajiv Govindjee, Trushant Adeshara, Jiangbo Yu, Anurekha Ravikumar, and Dimitra Panagou. Certifiably-correct mapping for safe navigation despite odometry drift. In Robotics: Science and Systems (RSS) ,2025. 37. Yifei Simon Shao, Yuwei Wu, Laura Jarin-Lipschitz, Pratik Chaudhari, and Vijay Kumar. Design and evaluation of motion planners for quadrotors in environments with varying complexities. In 2024 IEEE International Conference on Robotics and Automation (ICRA) , pages 10033–10039, 2024. 38. Kenneth Chaney, Fernando Cladera, Ziyun Wang, Anthony Bisulco, M. Ani Hsieh, Christopher Korpela, Vijay Kumar, Camillo J. Taylor, and Kostas Daniilidis. M3ed: Multi-robot, multi-sensor, multi-environment event dataset. In Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Workshops , pages 4015–4022, June 2023. 39. C. Bradford Barber, David P. Dobkin, and Hannu Huhdanpaa. The quickhull algorithm for convex hulls. ACM Trans. Math. Softw. , 22(4):469–483, December 1996. 40. Alex Zihao Zhu, Dinesh Thakur, Tolga Özaslan, Bernd Pfrommer, Vijay Kumar, and Kostas Daniilidis. The multivehicle stereo event camera dataset: An event cam-era dataset for 3d perception. IEEE Robotics and Automation Letters , 3(3):2032– 2039, 2018. 41. Junkai Niu, Sheng Zhong, Xiuyuan Lu, Shaojie Shen, Guillermo Gallego, and Yi Zhou. Esvo2: Direct visual-inertial odometry with stereo event cameras. IEEE Transactions on Robotics , 2025. 42. Yuwei Wu, Igor Spasojevic, Pratik Chaudhari, and Vijay Kumar. Towards optimiz-ing a convex cover of collision-free space for trajectory generation. IEEE Robotics and Automation Letters , 10(5):4762–4769, 2025.

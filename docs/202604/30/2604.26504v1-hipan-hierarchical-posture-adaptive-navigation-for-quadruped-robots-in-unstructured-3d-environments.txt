@@ -1,0 +1,939 @@
+Title: HiPAN: Hierarchical Posture-Adaptive Navigation for Quadruped Robots in Unstructured 3D Environments
+
+URL Source: https://arxiv.org/pdf/2604.26504v1
+
+Published Time: Thu, 30 Apr 2026 00:43:47 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+> 1
+
+# HiPAN: Hierarchical Posture-Adaptive Navigation for Quadruped Robots in Unstructured 3D Environments 
+
+Jeil Jeong 1,∗, Minsung Yoon 1,∗, Seokryun Choi 1, Heechan Shin 1, Taegeun Yang 1, and Sung-eui Yoon 1,†
+
+Abstract —Navigating quadruped robots in unstructured 3D environments poses significant challenges, requiring goal-directed motion, effective exploration to escape from local minima, and posture adaptation to traverse narrow, height-constrained spaces. Conventional approaches employ a sequential mapping–planning pipeline but suffer from accumulated perception errors and high computational overhead, restricting their applicability on resource-constrained platforms. To address these challenges, we propose Hierarchical Posture-Adaptive Navigation (HiPAN), a framework that operates directly on onboard depth images at deployment. HiPAN adopts a hierarchical design: a high-level policy generates strategic navigation commands—planar velocity and body posture—which are executed by a low-level, posture-adaptive locomotion controller. To mitigate myopic behaviors and facilitate long-horizon navigation, we introduce Path-Guided Curriculum Learning, which progressively extends the navigation horizon from reactive obstacle avoidance to strategic navigation. In simulation, HiPAN achieves higher navigation success rates and greater path efficiency than classical reactive planners and end-to-end baselines, while real-world experiments further validate its applicability across diverse, unstructured 3D environments. Videos of the experiments are available at project page. 
+
+Index Terms —Reinforcement Learning, Legged Robots, Vision-Based Navigation 
+
+I. I NTRODUCTION 
+
+# QUADRUPED robots are increasingly deployed in un-structured three-dimensional (3D) environments—such as disaster zones and inspection sites—where dead-ends, cluttered layouts, and limited horizontal or vertical clearance are common [1], [2]. Navigating these environments demands not only strategic, goal-directed movement but also adaptive body posture adjustment, such as crouching or tilting, to traverse confined spaces and reach goal locations. While recent advances have demonstrated posture-adaptive locomotion for handling spatial constraints, most methods remain focused on reactive obstacle avoidance [3]–[5] or rely on manual commands [6], [7], limiting their autonomy in unseen environments. For autonomous navigation, traditional approaches integrate mapping and path planning to generate locomotion commands for low-level controllers [1], [2]. However, explicit 3D mapping imposes computational and memory overhead on resource-constrained robotic platforms, requiring trade-offs between accuracy and real-time performance [8]–[10]. Alternatively, navigation strategies based on immediate local perception and relative goal position, such as Wall-Following [11] and BUG al-gorithms [12]–[14], offer computational and memory efficiency. 
+
+> ∗
+
+These authors contributed equally to this work. 1All authors are with School of Computing, KAIST, South Korea. †S. Yoon is a corresponding author; sungeui@kaist.edu. 
+
+Fig. 1. Our HiPAN framework enables long-horizon navigation in unstructured 3D environments, allowing a quadruped robot to backtrack after entering a dead-end corridor (A, B) and adaptively adjust its posture to pass under a height-constrained passage (C), relying solely on onboard depth perception during deployment. The green curve indicates the robot’s trajectory, with corresponding depth images from key moments (A,B,C) on the right. A voxel map is shown to illustrate the navigation scenario. 
+
+However, their heuristic nature often produces inefficient paths and fails in cluttered, unstructured environments. Reinforcement Learning (RL) has emerged as a promising approach for goal-directed navigation based on local perception, reducing the reliance on hand-crafted rules [15]–[19]. However, in the absence of structured guidance during training, agents often exhibit myopic behavior, becoming trapped in local minima such as dead-end corridors or enclosed rooms [20]– [23]. Meanwhile, existing methods with structured learning schemes mainly focus on planar navigation, limiting their applicability in unstructured 3D environments where body posture adaptation is required to traverse confined spaces. To address these limitations, we propose the Hierarchical Posture-Adaptive Navigation (HiPAN) framework that enables long-horizon navigation in unstructured 3D environments, as illustrated in Fig. 1. Our main contributions are as follows:  
+
+> •
+
+We introduce the HiPAN framework, in which a high-level policy processes depth images to generate navigation commands—planar velocity and body posture—executed by a low-level locomotion policy.  
+
+> •
+
+We present Path-Guided Curriculum Learning (PGCL), which progressively extends the horizon during high-level policy training to mitigate myopic behavior and induce effective exploration strategies for long-horizon navigation.  
+
+> •
+
+We validate the HiPAN framework through extensive simula-tion experiments, achieving consistently high average success rates and path efficiency (96 .5% , 88 .7) compared to classical 
+
+(56 .1% , 41 .7) and end-to-end baselines (53 .7% , 48 .4) . 
+
+> •
+
+We demonstrate the robustness and practical applicability of our approach through real-world deployments across diverse obstacle configurations and lighting conditions. 
+
+> arXiv:2604.26504v1 [cs.RO] 29 Apr 2026 2
+
+II. R ELATED WORKS 
+
+A. Posture-Adaptive Locomotion of Quadruped Robots 
+
+Reinforcement learning (RL) has advanced quadrupedal locomotion over complex terrains [24]–[27]. To enhance control flexibility, recent studies have expanded the conventional command space beyond the forward, lateral, and yaw velocities to include postural parameters like body height, roll, and pitch [6], [7]. Exteroceptive inputs like depth images have been incorporated to adapt these parameters autonomously, enabling robots to traverse narrow passages and pass under overhanging obstacles [3]–[5]. However, these methods remain focused on immediate obstacle avoidance or traversal, while navigation-level velocity commands still depend on manual input or pre-defined paths, thereby limiting their autonomy in dynamic or previously unseen environments. To address this, our HiPAN framework employs a high-level policy that autonomously generates both velocity and postural commands directly from local perception and goal information. These commands are then executed by a posture-adaptive low-level locomotion policy, enabling robust, goal-directed traversal through confined spaces in unstructured 3D environments. 
+
+B. Policy Learning for Long-Horizon Navigation 
+
+Conventional navigation systems rely on environment map-ping, path planning, and trajectory tracking via a locomotion controller [8]–[10]. To simplify this pipeline, recent RL-based approaches employ policies that directly infer navigation commands from goal locations and local sensory inputs [15]– [17]. However, relying solely on local observations renders these policies short-sighted. Consequently, when optimized solely with distance-to-goal rewards, they often exhibit myopic behavior that prioritizes immediate progress, thereby becoming trapped in local minima—particularly in dead-end corridors or enclosed rooms common in unstructured environments. State-based intrinsic rewards [28], [29], such as novelty, encourage broad exploration and help escape local minima, but lack the task-specific guidance required for long-horizon navigation in unstructured environments. To address this, recent studies decompose the navigation problem into a sequence of short-horizon subproblems defined by intermediate subgoals de-rived from graph search or expert policies, directing exploration toward goals [20]–[23]. Building on this, we combine intrinsic rewards and subgoal-based exploration as learning strategies to develop an effective high-level policy for long-horizon navigation. Combined with posture adaptability, we extend prior studies limited to 2D floor plans into unstructured 3D environments, thereby enabling robots to escape local minima and safely traverse confined spaces using local perception. 
+
+C. Hierarchical Frameworks 
+
+Hierarchical frameworks decompose complex robotic tasks into modular sub-tasks, allowing each layer to be optimized using domain-specific knowledge [30]–[32]. In navigation, the high-level policy processes sensory inputs to generate velocity commands that remain within the control capabilities of the low-level policy, which translates them into executable motor actions [15], [16]. This modular design offers key advantages:    
+
+> Fig. 2. Representative examples of unstructured 3D environments generated via the Wave Function Collapse (WFC) algorithm. See Sec. IV-A for details.
+
+the low-level policy can be robustly pre-trained and reused across tasks, while the separation improves training efficiency and the interpretability of each component [19], [32]. Therefore, we adopt a hierarchical framework to address complex naviga-tion challenges in unstructured 3D environments, utilizing the posture-adaptive capabilities of quadruped robots. III. V ARIABLE NOTATION 
+
+We represent Cartesian position, linear velocity, and linear acceleration as p, v, and ˙v ∈ R3, respectively. Orientation is denoted by XYZ Euler angles θ, with angular velocity ω in 
+
+R3. The quadruped robot has twelve joints, whose position, velocity, acceleration, and torque are denoted by q, ˙q, ¨q, and 
+
+τ ∈ R12 , respectively. Each foot Fi (i ∈ { 0, 1, 2, 3}) has a contact state represented by a binary indicator Ii ∈ { 0, 1}. For clarity, superscripts denote reference frames (world W or body 
+
+B), and subscripts indicate entities, components, or time; for example, vW 
+
+> B,z,t
+
+denotes the z-component of the robot’s body (B) velocity in the world frame at time step t. The component and time index are omitted when unnecessary for brevity. IV. M ETHODOLOGY 
+
+We propose the Hierarchical Posture-Adaptive Navigation (HiPAN) framework, which employs a two-level hierarchy of reinforcement learning policies optimized in a stage-wise manner. The high-level policy processes local perception to generate strategic navigation commands, enabling the robot to escape local minima ( e.g. , dead-end corridors) and traverse confined spaces. The low-level policy executes these commands via coordinated joint motions, adaptively adjusting body posture. The subsequent sections describe the task and environment formulation, policy architectures and training paradigms at each level, and implementation details. 
+
+A. Task and Environment Formulation 
+
+We formulate the task as navigating a quadruped robot to a goal position g ∈ R3 within an unstructured 3D environment. The environment presents challenges such as uneven surfaces, overhanging structures requiring posture adaptation, and local trap regions ( e.g. , dead-end corridors, semi-enclosed rooms) that demand non-greedy navigation strategies. To compose such complex environments effectively, we employ the Wave Function Collapse algorithm [4], [33], a tile-based method that assembles terrain by enforcing local adjacency constraints. The tiles are comprised of flat, rough, and obstructed surfaces, stochastically arranged to create diverse layouts. In addition, we randomly place walls, tables, and floating boxes to create local trap regions and overhanging obstacles. Fig. 2 shows procedurally generated task environments. 3PD controllers 
+
+> Unstructured Environment
+> Encoder 3D CNN 2D CNN Goal position Privileged motion state Proprioceptive obs.
+
+Low-Level Locomotion Policy High-Level Navigation Policy 
+
+[Teacher Policy] Distillation  
+
+> (Eq. 6)
+> Depth image Backbone MLP MLP Backbone 2D CNN GRU Estimated motion state Goal position Proprioceptive obs. Estimator
+
+[Student Policy] 
+
+> (deployment)
+
+[Teacher Policy] [Student Policy]   
+
+> (deployment) Privileged exteroceptive state 3D map 2.5D map MLP
+> Distillation
+> (Eq. 3)
+> Navigation Command Navigation command Privileged motion state Proprioceptive obs. Random domain parameters (refer to TABLE I) 2.5D terrain heightmap x: [-2, 2] (m) y: [-2, 2] (m) Encoder 2D CNN MLP Privileged domain parameters Backbone MLP Backbone MLP MLP Proprioception history Proprioceptive obs.
+> Estimators
+> 3D Voxel Points 2.5D Height Points 0.0 4.0 [m] ↑Depth
+
+Fig. 3. Overview of the proposed HiPAN framework. Teacher policies (red) are trained with privileged inputs via Proximal Policy Optimization [34], and student policies (cyan) are distilled using Dataset Aggregation [35] with only onboard sensory data. During deployment, only student policies are used to navigate toward the goal in unstructured 3D environments. Encoders and estimators bridge the observation gap between simulation and the real world. 
+
+B. Low-Level Locomotion Policy with Posture Adaptation 
+
+As illustrated in Fig. 3, the low-level policy πL maps high-level navigation commands c into whole-body joint actions 
+
+a ∈ R12 . It serves as the physical execution layer within the HiPAN framework, ensuring that high-level decisions c are realized with robustness to physical variations ( e.g. , uneven surfaces, sim-to-real domain gaps) and external perturbations. 
+
+1) Navigation Command: The navigation command c =[vcx, v cy , ω cz , h c, θ cx] ∈ C ⊂ R5 is a five-dimensional vector, where the first three elements specify the desired forward, lateral, and yaw velocities of the body in the body frame, controlling planar motion. The last two define the target body height relative to the ground and roll angle in the world frame for postural adjustments to traverse confined spaces. This compact yet expressive interface facilitates communication between the high-level and low-level policies for long-horizon navigation in unstructured 3D environments. 
+
+2) Policy Learning: We develop the low-level locomotion policy using a two-stage teacher-student framework to enable robust sim-to-real transfer [24], [27], [36]. In the first stage, we train the teacher policy πTL : s → a via Reinforcement Learning (RL) in a fully observable Markov De-cision Process (MDP) defined by the tuple (S, A, P, R, ρ 0, γ ),which specifies state and action spaces, transition dynamics, reward function, initial state distribution, and discount factor. At the start of each episode, we sample s0 ∼ ρ0 by placing the robot on terrain in the nominal standing posture q0. We then optimize the teacher-policy parameters ϕTL to maximize the expected return over the command distribution P (c):
+
+πTL := πTL (·; ϕT∗ 
+
+> L
+
+), ϕT∗ 
+
+> L
+
+= arg max 
+
+> ϕTL
+
+J(ϕTL), (1) 
+
+J(ϕTL) = Ec∼P (c)
+
+"
+
+E(s,a)∼ρϕTL
+
+> s0∼ρ0
+
+" ∞X
+
+> t=0
+
+γtR(st, at | c)
+
+## 
+
+, (2) where ρϕTL is the state-action visitation distribution under the parameter ϕTL. To cover a broad range of the command space C,we employ the grid-adaptive curriculum [37], which gradually expands P (c) by introducing higher planar velocity commands once postural commands (hc, θ cx) are reliably tracked. In the second stage, we train the student policy πSL : o → ˆa
+
+under partial observability, using only on-board sensory inputs as observations o ∈ O ⊂ S . We distill the student πSL from the optimized teacher πT 
+
+> L
+
+via the Dataset Aggregation (DAgger) algorithm [35]. The goal is to imitate the teacher’s action a and estimate the privileged information provided by the simulator, such as domain latent vector zd and motion states xm as shown in Fig. 3. To this end, we optimize the student-policy parameters ϕSL by minimizing the following loss: 
+
+LDAgger (ϕSL) = ED
+
+ a − ˆa(ϕSL) 22 +
+
+zd − ˆzd(ϕSL) 22 + xm − ˆxm(ϕSL) 22
+
+, (3) where ˆa, ˆzd, and ˆxm are the student’s predictions, parame-terized by ϕSL. For the dataset D, we iteratively roll out the student and annotate its observations with teacher supervision. 
+
+3) Policy Architecture: Both teacher and student policies use identical backbone architectures b{T,S} 
+
+> L
+
+, which output joint displacements as actions a = ∆ q. Proportional-derivative controllers then compute torques τ to track the targets q0 +∆ q.The teacher πTL receives a 4-tuple state s = ( op, c, xm, xd)
+
+as policy inputs, consisting of: (1) a proprioceptive observation 
+
+op = [ q, ˙q, (pB 
+
+> F0
+
+, . . . , pB 
+
+> F3
+
+), (I0, . . . , I 3), θW 
+
+> B,xy
+
+, ωB 
+
+> B
+
+, at−1], in-cluding joint positions and velocities, foot positions and contact indicators, body orientation in roll and pitch, angular velocity, and the previous action; (2) the navigation command c; (3) privileged motion states xm = [ vB 
+
+> B
+
+, h B , θ W
+
+> B,x
+
+], comprising the body linear velocity in the body frame, and the body height relative to the ground and roll angle in the world frame; and (4) privileged domain parameters xd, including local terrain heightmaps and domain-randomized variables such as friction (refer to TABLE I for details). To enhance adaptability for physical variations, a domain-parameter encoder eTL,d embeds 
+
+xd into the latent vector zd ∈ R32 , which is concatenated with the other inputs and passed to bTL : op × c × xm × zd → a.On the other hand, the student policy πSL takes as inputs the observation o = [ o50  
+
+> p
+
+, c], where o50  
+
+> p
+
+= {op,t , . . . , op,t −49 }
+
+denotes a history of proprioceptive observations and c is the command. To address the absence of privileged information during deployment, we introduce two estimators: a domain estimator eSL,d : o50  
+
+> p
+
+→ ˆzd for latent domain features zd and a motion estimator eSL,m : o10  
+
+> p
+
+→ ˆxm for motion states xm. The predicted and observed features are concatenated and passed to the student backbone network bSL : op × c × ˆxm × ˆzd → ˆa.4 
+
+> Fig. 4. Path-guided curriculum learning progressively removes intermediate sub-goals along a privileged global path, gradually increasing navigation horizon and task difficulty. In the early stages, the agent sequentially reaches every sub-goal (A), enabling it to first acquire reactive obstacle avoidance skills. As the curriculum level increases, only a subset of sub-goals are provided (B, C), transitioning to direct navigation from start to goal (D).
+
+C. High-Level Navigation Policy 
+
+The high-level policy πH serves as the strategic navigation layer within our HiPAN framework. It generates the navigation commands c to guide the robot toward goals g in unstructured 3D environments by making decisions on posture adaptation for confined-space traversal, obstacle-avoidance maneuvers, and non-greedy exploration to escape local minima. 
+
+1) Policy Learning: The high-level policy πH is also trained via the teacher-student paradigm. The teacher policy πTH is first optimized with privileged information using RL, and its behavior and spatial-perceptual latent representations are distilled into the student policy πSH via the DAgger algorithm. This procedure enables the student to rely solely on onboard depth perception during deployment, eliminating the need for privileged map information, as shown in Fig. 3. We formulate the teacher’s navigation problem as a fully observable MDP represented by the tuple ( ¯S, ¯A, ¯P, ¯R, ¯ρ0, ¯γ),consisting of high-level state and action spaces, transition dy-namics, reward function, initial state distribution, and discount factor. The notation ¯(·) is used to indicate arbitrary elements specific to the high-level MDP. As illustrated by the magenta-dashed line in Fig. 3, we embed the low-level student policy 
+
+πSL into the high-level transition dynamics ¯P to reflect the hierarchical control structure, capturing closed-loop effects such as command-tracking errors and execution delays. The high-level policy πH produces the navigation commands as high-level actions ¯a = c ∈ ¯A. For navigation problems, we uniformly sample ¯s0 ∼ ¯ρ0 and g ∼ P (g) by selecting collision-free start and goal positions, placing the robot in the standing posture q0. We then optimize the teacher-policy parameters 
+
+ϕTH by maximizing the expected return under the start ¯ρ0 and goal P (g) distributions: 
+
+πTH := πTH(·; ϕT∗ 
+
+> H
+
+), ϕT∗ 
+
+> H
+
+= arg max 
+
+> ϕTH
+
+J(ϕTH), (4) 
+
+J(ϕTH) = Eg∼P (g)¯s0∼ ¯ρ0
+
+"
+
+E(¯ s, c)∼ ¯ρϕTH
+
+" ∞X
+
+> t=0
+
+¯γt ¯R(¯ st, ct | g)
+
+## 
+
+. (5) After training the teacher policy πTH, the student πSH collects depth-image observations through interaction with the envi-ronment. The teacher annotates these observations with the corresponding command c and spatial–perceptual latent feature 
+
+zs. The student is then trained on the aggregated dataset ¯D
+
+by minimizing the following regression loss, where ˆc and ˆzs
+
+denote the student’s predictions parameterized by ϕSH.
+
+LDAgger (ϕSH) = E ¯D
+
+ c − ˆc(ϕSH) 22 + zs − ˆzs(ϕSH) 22
+
+. (6) 
+
+2) Path-Guided Curriculum Learning: Learning effective navigation in complex, unstructured environments is challeng-ing, as it requires balancing goal-directed movement with exploration to escape local minima using only local perception. When policies are optimized solely on distance-to-goal rewards, they often learn a myopic behavior, greedily pursuing the goal and frequently getting trapped in local minima [20]–[23]. To mitigate this issue, we incorporate an Intrinsic Reward (IR) via a State Count mechanism [38] to encourage visiting novel states (refer to rH 
+
+> 2
+
+in TABLE II). While this promotes state exploration [29], we observe that this undirected explo-ration lacks the structured, task-specific guidance needed for efficient long-horizon navigation in unstructured environments. To introduce this structured guidance, we propose a strategy, 
+
+path-guided curriculum learning , which decomposes a naviga-tion task into progressively harder sub-goal-reaching tasks as illustrated in Fig. 4. At each level k, the agent receives a set of intermediate sub-goals between the start and goal locations: 
+
+Gk = {g(k, 1)  
+
+> s
+
+, . . . , g(k,N k −1)  
+
+> s
+
+, g(k,N k ) 
+
+> s
+
+:= g}, (7) where Nk denotes the number of sub-goals, and the last sub-goal is the original goal g. As depicted in Fig. 4, sub-goals are sampled every d meters along a global path computed with privileged map information. We begin with k = 1 and d = 1 m ,and increase level k by 1 m increments of d each time the agent sequentially reaches all Nk sub-goals. At any point during level 
+
+k, the policy’s goal observation becomes the next unreached sub-goal in the sequence Gk. This continues until d exceeds the path length, which defines the final level K where only the original goal remains: GK = {g(K, 1)  
+
+> s
+
+:= g}. Once the agent consistently succeeds at level K, we assign a new navigation problem with randomly sampled start and goal locations. This curriculum progressively expands the agent’s navigation horizon, enabling it to first acquire reactive skills—obstacle avoidance and confined-space traversal—and later develop well-balanced navigation strategies for exploration and goal-directed progress. Please note that maps and sub-goals are used only during teacher training as privileged information, while the student operates under partial observability at deployment. Formally, we extend the high-level objective function in Eq. (5) by optimizing the teacher policy to maximize the expected return over all curriculum levels k and associated sub-goals i. The extended objective JPGCL (ϕTH) is defined as: 
+
+JPGCL (ϕTH) = Eg∼P (g)¯s0∼ ¯ρ0
+
+" KX
+
+> k=1
+> Nk
+
+X
+
+> i=1
+
+Jk,i (ϕTH)
+
+#
+
+, (8) where Jk,i denotes the expected return for sub-goal i at level k:
+
+Jk,i (ϕTH) = E(¯ st,ct)∼ ¯ρ(k,i )  
+
+> ϕTH
+> ¯s(k,i )0∼¯ρ(k,i )0
+
+
+
+> Tk,i
+
+X
+
+> t=0
+
+¯γt ¯R(¯ st, ct | g(k,i ) 
+
+> s
+
+)
+
+ , (9) where ¯ρ(k,i )
+
+> ϕTH
+
+and ¯ρ(k,i )0 denote the state-action and initial state distributions of the MDP targeting the i-th sub-goal at level k.Here, ¯ρ(k,i )0 is the state distribution upon reaching g(k,i −1)  
+
+> s
+
+,and Tk,i is the first timestep the agent reaches the sub-goal: 
+
+Tk,i = min 
+
+n
+
+t : pW 
+
+> B
+
+− pW 
+
+> g(k,i )
+> s2
+
+< 0.1 m 
+
+o
+
+. (10) 5
+
+TABLE I DOMAIN RANDOMIZATION PARAMETERS 
+
+Parameter Train Distribution Test Distribution Unit 
+
+Payload U(0 .0, 3.0) U(0 .0, 5.0) kg 
+
+CoM Offset U(−0.1, 0.1) 3 U(−0.15 , 0.15) 3 m
+
+Friction Coeff. U(0 .7, 1.2) U(0 .4, 1.5) –Restitution Coeff. U(0 .0, 0.1) U(0 .0, 0.3) –Motor Torque Scale U(0 .9, 1.1) 12 U(0 .8, 1.3) 12 –• U(a, b )c: uniform distribution over [a, b ] in each of the c dimensions. 
+
+3) Policy Architecture: The high-level teacher and student policies have the same backbone architecture b{T,S} 
+
+> H
+
+, issuing navigation commands ¯a = c as actions, as shown in Fig. 3. The teacher πTH takes a 4-tuple state ¯s = (¯ xM, ¯op, xm, pB 
+
+> gs
+
+)
+
+as input, where (1) ¯xM = ( M 3D ∈ R14 ×11 ×11 , M 2.5D ∈
+
+R31 ×21 ) are the privileged 3D occupancy and 2.5D elevation local maps around the robot, sampled at 0.1 m resolution; (2) 
+
+¯op = [ op, ct−1] is the high-level proprioceptive observation, consisting of the low-level’s op and the previous command 
+
+ct−1; (3) xm is the privileged motion state; and (4) pB 
+
+> gs
+
+is the relative sub-goal position. We represent ¯xM using a dual-map design, where the 3D map captures local volumetric occupancy for posture adjustment, while the 2.5D map provides a wider spatial context for navigation. This design improves training efficiency compared to a single 3D map M single  
+
+> 3D
+
+∈ R31 ×21 ×11 
+
+at the same resolution, achieving comparable performance with approximately half wall-clock training time. Then, a spatial-perception encoder eTH,s maps ¯xM into a latent embedding 
+
+zs ∈ R32 , which is concatenated with other inputs and passed to the teacher’s actor backbone bTH : zs × ¯op × xm × pB 
+
+> gs
+
+→ c.The student policy πSH is distilled from the fully-converged teacher policy. It takes as input a 4-tuple observation ¯o =(¯ oD , ¯op, ˆxm, pB 
+
+> g
+
+), encompassing (1) ¯oD ∈ R180 ×320 , a depth image captured by an onboard front-facing camera; (2) ¯op is the high-level proprioceptive observation; (3) ˆxm, the motion state estimated by the low-level motion estimator eSL,m; and (4) pB 
+
+> g
+
+,the relative goal information. A spatial-perception estimator eSH,s
+
+encodes ¯oD into the latent vector ˆzs using internal recurrent memory, which is also fed to the student’s backbone with other elements: bSH : ˆ zs × ¯op × ˆxm × pB 
+
+> g
+
+→ ˆc.
+
+D. Implementation Details 
+
+We use the Unitree Go1 robot [39] and the Isaac Gym simulator [40] for large-scale parallel data collection. Experi-ments are conducted on a desktop with an Intel Core i7-13700 CPU and an NVIDIA RTX 4090 GPU. We briefly depict the network composition in Fig. 3. At each level, the teacher policy is optimized using Proximal Policy Optimization (PPO) [34] and distilled into the student policy via the DAgger algorithm. The high-level policy πH runs at 10 Hz. The teacher policy is trained for 18 hours with 1,024 simulated robots across six 
+
+20 × 20 m unstructured environments described in Sec. IV-A ,followed by 6 hours of student training with 128 robots. We adopt A* search over a Generalized Voronoi Diagram [41] to generate intermediate sub-goals detailed in Sec. IV-C 2. TABLE II enumerates the high-level reward function ¯R =¯RH 
+
+> task
+
++ ¯RH
+
+> reg
+
+. To minimize the perceptual sim-to-real gap, the simulated depth images ¯oD are augmented with random erasing, Gaussian blur, and additive noise, and the camera 
+
+TABLE II HIGH -L EVEL NAVIGATION POLICY REWARDS ¯R
+
+Reward Term Expression 
+
+Task Rewards : ¯RH 
+
+> task
+
+= P3 
+
+> k=1
+
+rHk
+
+Goal Arrival ( rH 
+
+> 1
+
+) wH 
+
+> 1
+
+1goal 
+
+State Count ( rH 
+
+> 2
+
+) wH 
+
+> 2
+
+1/pη(pB,xy )
+
+Desired Speed ( rH 
+
+> 3
+
+) wH 
+
+> 3
+
+exp( −| vdes − ∥ vB 
+
+> B,xy
+
+∥2|/0.3) 
+
+Regularization Rewards : ¯RH 
+
+> reg
+
+= P10  
+
+> k=4
+
+rHk
+
+Command Rate ( rH 
+
+> 4
+
+) wH 
+
+> 4
+
+∥ct − ct−1∥22
+
+Smooth Command ( rH 
+
+> 5
+
+) wH 
+
+> 5
+
+∥ct − 2ct−1 + ct−2∥22
+
+Tracking Error ( rH 
+
+> 6
+
+) wH 
+
+> 6
+
+∥c − [vB
+
+> B,x
+
+, v B 
+
+> B,y
+
+, ω B 
+
+> B,z
+
+, h B , θ W
+
+> B,x
+
+]∥2
+
+Body Velocity ( rH 
+
+> 7
+
+) wH 
+
+> 7
+
+(|vB 
+
+> B,z
+
+|2 + ∥ωB 
+
+> B,xy
+
+∥22)
+
+Nominal Posture ( rH 
+
+> 8
+
+) wH 
+
+> 8
+
+∥q − q0∥22
+
+Command limit ( rH 
+
+> 9
+
+) wH 
+
+> 9
+
+1command limit 
+
+Collision ( rH
+
+> 10
+
+) wH 
+
+> 10
+
+1col 
+
+Reward Weights                  
+
+> wH
+> 1=5.0wH
+> 2=0.5wH
+> 3=0.25 wH
+> 4=-0.1wH
+> 5=-0.1
+> wH
+> 6=-0.2wH
+> 7=-0.1wH
+> 8=-4e-2wH
+> 9=-2.5wH
+> 10 =-2.5
+
+• 1goal returns 1 if ∥pW 
+
+> gs
+
+− pW 
+
+> B
+
+∥ < 0.1 m , 0 otherwise. • 1col returns 1 if the robot collides with the environment, and 0 otherwise. • 1command limit returns 1 if any command exceeds its limit, 0 otherwise. • vdes is the desired linear speed, sampled uniformly from [ 0.3, 1.2] m/s.• η(pB,xy ) is the discretized-state visitation count for the current position. TABLE III LOW -L EVEL LOCOMOTION POLICY REWARDS R
+
+Task Rewards : RL 
+
+> task
+
+= P4 
+
+> k=1
+
+rLk
+
+Velocity Tracking ( rL 
+
+> 1
+
+) wL 
+
+> 1
+
+exp( −∥ [vcx, v cy ] − vB 
+
+> B,xy
+
+∥2/0.25) 
+
+Yaw-Rate Tracking ( rL 
+
+> 2
+
+) wL 
+
+> 2
+
+exp( −| ωcz − ωB 
+
+> B,z
+
+|/0.25) 
+
+Height Tracking ( rL 
+
+> 3
+
+) wL 
+
+> 3
+
+exp( −| hc − hB |/0.0025) 
+
+Roll Tracking ( rL 
+
+> 4
+
+) wL 
+
+> 4
+
+exp( −| θcx − θW
+
+> B,x
+
+|/0.05) 
+
+Regularization Rewards : RL 
+
+> reg
+
+= P12  
+
+> k=5
+
+rLk
+
+Action Rate ( rL 
+
+> 5
+
+) wL 
+
+> 5
+
+∥at − at−1∥22
+
+Smooth Action ( rL 
+
+> 6
+
+) wL 
+
+> 6
+
+∥at − 2at−1 + at−2∥22
+
+Body Orientation ( rL 
+
+> 7
+
+) wL 
+
+> 7
+
+|θW 
+
+> B,y
+
+|
+
+Body Velocity ( rL 
+
+> 8
+
+) wL 
+
+> 8
+
+|vB 
+
+> B,z
+
+|2 + wL 
+
+> 9
+
+∥ωB 
+
+> B,xy
+
+∥22
+
+Smooth Joint ( rL 
+
+> 9
+
+) wL 
+
+> 10
+
+∥ ˙q∥22 + wL 
+
+> 11
+
+∥¨q∥22
+
+Torque Usage ( rL
+
+> 10
+
+) wL 
+
+> 12
+
+∥τ ∥22
+
+Joint Limit ( rL
+
+> 11
+
+) wL 
+
+> 13
+
+1joint limit 
+
+Collision ( rL
+
+> 12
+
+) wL 
+
+> 14
+
+1col 
+
+Reward Weights                      
+
+> wL
+> 1=0.4wL
+> 2=0.2wL
+> 3=0.2wL
+> 4=0.2wL
+> 5=-1e-2wL
+> 6=-0.1wL
+> 7=-5e-1
+> wL
+> 8=-0.2wL
+> 9=-1e-3wL
+> 10 =-1e-4wL
+> 11 =-2e-7wL
+> 12 =-1e-4wL
+> 13 =-10 wL
+> 14 =-10
+
+• 1col returns 1 if the robot collides with the environment, and 0 otherwise. • 1joint limit returns 1 if any joint exceeds its limit, 0 otherwise. 
+
+pose is randomized by applying translational and pitch offsets, 
+
+∆p ∼ U (−0.05 m , 0.05 m) 3 and ∆θy ∼ U (−2.5◦, 2.5◦),to the nominal pose pB 
+
+> Cam
+
+= [0 .25 , 0.0, 0.12] ⊤m with zero tilting, followed by clipping at 4 m and normalization to [0 , 1] .The low-level policy πL operates at 50 Hz and is trained for 12 hours using 4,096 robots on a rough terrain comprising stairs, discrete holes, slopes, and flat surfaces, followed by 2 hours of student training with 300 robots. To narrow the sim-to-real gap, we apply domain randomization to intrinsic robot parameters xd, as detailed in TABLE I, and inject random body-force impulses every 10 s. The command c is sampled from the ranges: vcx ∈ [−1.5, 1.5] m /s, vcy ∈ [−1.0, 1.0] m /s, ωcz ∈
+
+[−1.5, 1.5] rad /s, hc ∈ [0 .1, 0.4] m , and θcx ∈ [−1.0, 1.0] rad .TABLE III details the low-level reward R = RL 
+
+> task
+
++ RL
+
+> reg
+
+.6                                                                                                                                                
+
+> TABLE IV NAVIGATION PERFORMANCE IN SIMULATION ENVIRONMENTS . F OR DETAILS OF EXPERIMENTAL SETUPS , P LEASE REFER TO SEC . V-A & S EC . V-B
+> Environment Complexity (Low →High )
+> Groups Methods Corridor Room Complex-1 Complex-2
+> SR( %,↑)SPL(- , ↑)SR( %,↑)SPL(- , ↑)SR( %,↑)SPL(- , ↑)SR( %,↑)SPL(- , ↑)-HiPAN ( Ours ) ( Sec. IV) 98.5 ±1.1 93.2 ±1.3 98.4 ±0.9 88.8 ±1.2 94.4 ±1.0 89.3 ±1.2 94.7 ±1.3 83.6 ±1.2
+> G1 HiPAN w/o Pos. Adjustment 98.4 ±0.8 93.1 ±1.0 94.5 ±1.4 74.1 ±1.3 74.2 ±1.8 69.1 ±2.0 73.1 ±1.6 66.2 ±2.2
+> Bug [12]–[14] 91.1 ±1.9 58.9 ±0.8 88.1 ±1.2 67.4 ±1.2 23.8 ±1.4 20.1 ±1.2 21.4 ±1.5 20.4 ±1.4
+> Wall-Following [11] 51.9 ±2.6 31.7 ±2.8 84.5 ±1.3 59.1 ±1.4 22.4 ±1.5 19.8 ±1.6 20.2 ±1.4 19.7 ±1.1
+> G2 HiPAN w/o IR 99.0 ±0.3 93.2 ±0.8 96.2 ±1.5 86.2 ±2.0 90.8 ±1.4 81.3 ±0.8 90.7 ±1.8 82.1 ±1.4 HiPAN w/o PGCL 97.8 ±1.4 88.7 ±1.3 76.9 ±1.8 69.0 ±1.5 78.1 ±1.8 68.0 ±1.4 74.5 ±1.8 66.5 ±1.7 HiPAN w/o IR, PGCL 96.6 ±1.4 87.3 ±1.0 53.0 ±0.8 43.5 ±1.9 50.5 ±1.6 42.8 ±1.3 50.1 ±1.3 43.6 ±1.2
+> G3 Flat-RL [18] 82.0 ±1.4 71.5 ±0.9 43.8 ±5.6 39.7 ±4.4 45.3 ±1.0 42.1 ±0.8 43.7 ±0.8 40.1 ±1.1
+> G4
+> HiPAN w/ RPL [3] 98.3 ±1.3 93.2 ±1.3 98.2 ±0.8 86.8 ±1.2 90.2 ±1.4 85.6 ±1.4 90.6 ±1.5 80.5 ±1.6
+> ,→w/o PGCL 97.7 ±1.3 88.7 ±1.4 76.2 ±1.7 68.8 ±1.4 75.7 ±1.5 66.4 ±1.6 71.4 ±1.7 65.3 ±1.5 HiPAN w/ MoE-Loco [42] 98.4 ±1.3 93.1 ±1.2 97.0 ±1.4 88.5 ±1.4 85.3 ±1.6 80.1 ±1.7 85.5 ±1.8 75.6 ±1.6
+> ,→w/o PGCL 97.2 ±1.4 88.0 ±1.4 76.0 ±1.9 68.7 ±1.6 70.7 ±1.8 62.3 ±1.7 67.5 ±1.8 61.5 ±1.7
+
+V. E XPERIMENTAL RESULTS 
+
+We conducted extensive experiments in both simulation and real-world environments to validate the effectiveness of the proposed Hierarchical Posture-Adaptive Navigation (HiPAN) framework. We designed the experiments to answer three key questions: (1) Does the posture adaptation improve navigation efficiency in unstructured 3D environments? (2) How effective is path-guided curriculum learning for long-horizon navigation? (3) Can the framework trained in simulation transfer robustly to physical quadruped robots using only onboard perception? 
+
+A. Benchmark Environments and Performance Metrics 
+
+We evaluated our framework in procedurally generated un-structured 3D environments, encompassing dead-end corridors, semi-enclosed rooms, and complex layouts with overhanging obstacles. Fig. 5 illustrates four benchmarking environments: 
+
+Corridor , Room , Complex-1 , and Complex-2 . Corridor exam-ines the agent’s basic ability to navigate towards the goal when the direct path is obstructed by walls. Room evaluates the ability to employ posture adjustment for efficient traversal under overhanging obstacles—placed at the center of the map—and to escape semi-enclosed spaces using a non-greedy navigation strategy. Complex-1 and Complex-2 assess overall navigation performance in unstructured 3D environments, requiring posture adaptation and long-horizon traversal through densely cluttered obstacles and intricate layouts. For each environment, we generated 300 navigation tasks by randomly sampling 100 collision-free start–goal pairs for each distance range: [5 , 10] , [10 , 20] , and [20 , 30] m . Mean and standard deviation are measured over 10 different seeds. We employ two standard metrics for quantitative evaluation: Success Rate (SR) assesses the proportion of navigation tasks in which the agent reaches the goal within a 0.2 m threshold, while Success weighted by Path Length (SPL) [43] quantifies path efficiency as the success rate weighted by the ratio of the shortest feasible to the actual traversed path length [41]. 
+
+B. Baselines and Ablation Methods 
+
+We organize a variety of baselines and ablated variants of HiPAN ( Ours ) into four groups, as enumerated in TABLE IV. Vertical obstacles (Wall & Pillar) Overhanging obstacles            
+
+> Corridor
+> Room Wall-Following Flat-RL HiPAN ( Ours )Bug
+> Start Goal
+> Complex-2 Complex-1
+> Fig. 5. Four benchmark environments and qualitative navigation results.
+> For each environment, trajectories are visualized as discrete arrows sampled every 0.5 m , indicating the robot’s position and heading orientation under a fixed start–goal setting. The proposed HiPAN (red) reliably reaches the goal, whereas Bug (green), Wall-Following (blue), and Flat-RL (magenta) often take inefficient detours or become trapped, failing to complete the task.
+
+Group G1 consists of classical local navigation strategies, Bug -Algorithm [12]–[14] and Wall-Following [11], along with a HiPAN variant, HiPAN w/o Pos. Adjustment, that omits the postural commands (hc, θ cx) from the navigation command c.This group compares classical rule-based and learning-based navigation strategies excluding posture adjustment and also highlights the role of posture adaptation through comparison with HiPAN ( Ours ). G2 comprises HiPAN variants, designed to evaluate the contributions of the Intrinsic Reward (IR) and Path-Guided Curriculum Learning (PGCL) introduced in Sec. IV-C 2. 
+
+G3 encompasses a Flat-RL baseline [18], which employs a single end-to-end policy mapping observations directly to joint actions. This baseline serves to validate the effectiveness of our overall system architecture against the alternative end-to-end approach without hierarchy. Finally, G4 presents implicit posture-adaptive locomotion policies as low-level controllers within our framework, where the high-level policy outputs only velocity commands and posture is autonomously adapted at the low level using either exteroceptive perception (HiPAN w/ 
+
+RPL [3]) or solely proprioception (HiPAN w/ MoE-Loco [42]), to examine alternative design choices for posture adaptation. 
+
+C. Evaluation Results 
+
+TABLE IV shows the quantitative results. HiPAN ( Ours )achieves the highest success rate (SR) and path efficiency (SPL), outperforming the classical baselines in G1 and the end-to-end RL policy in G3 . Fig. 5 provides qualitative results on representative scenarios, showing that Ours reliably reaches the goal, whereas baselines often take detours or become trapped. 7robot trajectory    
+
+> start goal
+> ABCD
+> 3m
+
+Scenario #1 (total distance: 15.7 m) 
+
+A B
+
+C D
+
+> E F GH
+> 3m
+
+Scenario #2 (total distance: 34.3 m) 
+
+E F
+
+G H
+
+> Dead-end area
+
+I J
+
+K L 
+
+> IJKL
+
+Scenario #3 (total distance: 54.5 m) 
+
+> 5m
+> MNOP
+
+Scenario #4 (total distance: 64.9 m) 
+
+> 5m
+
+M N
+
+O P  
+
+> Dead-end area
+> Fig. 6. Real-world navigation experiments in unstructured environments. For each scenario, the left panel shows the robot trajectory (cyan arrows) from the start (circle) to the goal (star), overlaid on LiDAR-based reconstructed maps provided solely for visualization. The right panels present representative robot behaviors with depth-image insets. Scenario 1 demonstrates posture-adaptive navigation in a cluttered indoor environment. Scenario 2 highlights recovery from local minima by backtracking from a dead-end corridor and continuing toward the goal. Scenario 3 validates robustness to abrupt illumination changes. Scenario 4 illustrates outdoor navigation under direct sunlight, including dead-end recovery and avoidance of diverse obstacles not encountered during training.
+
+Among G1 baselines, HiPAN w/o Pos. Adjustment surpasses classical Bug and Wall-Following methods by achieving higher success rates and more efficient paths. However, as shown in the Room , the absence of posture adaptation leads to lower SPL compared to Ours due to detours around overhanging obstacles. Moreover, as illustrated in Fig. 5, classical methods deteriorate in Complex-1 and -2 , where dense obstacles and irregular layouts often entrap the agent. Furthermore, we examine the contributions of the Intrinsic Reward (IR) and Path-Guided Curriculum Learning (PGCL) to navigation performance. IR promotes state exploration by providing auxiliary incentives to novel states. While PGCL reshapes the task into a sequence of subproblems aligned with agent proficiency, providing structured guidance for effective exploration. As shown in G2 in TABLE IV, removing PGCL leads to greater performance degradation than removing IR, indicating that structured guidance is particularly beneficial in unstructured environments. Moreover, these two methods are complementary: IR provides a general incentive to visit any novel state, while PGCL prioritizes task-relevant states. This synergy allows Ours to achieve superior performance in all environments except the simple Corridor environment. The Flat-RL in G3 suffers from a high learning burden, as it must learn locomotion, posture adjustment, and navigation strategies simultaneously. Early in training, traversing confined spaces with immature locomotion leads to frequent collisions and penalties, causing Flat-RL to develop a bias for detouring. This results in less efficient paths and causes the agent to get stuck if a detour is unavailable, as shown in Complex-1 of Fig. 5. Furthermore, its myopic navigation strategy prioritizing goal proximity prevents the agent from escaping local minima, causing it to remain trapped as depicted in Room of Fig. 5. Consequently, its performance is markedly lower than Ours .Lastly, HiPAN w/ RPL and w/ MoE-Loco in G4 demonstrate slightly degraded performance compared to Ours . Their reliance on a prefixed low-level policy prevents joint exploration of velocity and posture at the navigation level, constraining the solution space for traversing irregular obstacles and narrow passages. HiPAN w/ RPL further experiences distributional shift HiPAN (Ours) HiPAN w/ MoE-Loco        
+
+> HiPAN w/ RPL
+> Fig. 7. Collision statistics across benchmark environments. Box plots compare HiPAN ( Ours ) with the G4 baselines listed in Sec. V-B , showing per-episode collision distributions; numerical labels denote the mean values.
+
+when high-level velocity commands drive the agent into states insufficiently covered by the low-level controller. Meanwhile, HiPAN w/ MoE-Loco , which relies solely on proprioception for posture adaptation, requires physical contact to trigger adjustment. These factors lead to increased collisions, as shown in Fig. 7, indicating reduced stability. Importantly, orthogonal to the choice of low-level baselines, our PGCL remains essential for effective long-horizon navigation by promoting a well-balanced exploration–exploitation behavior. 
+
+D. Real-World Experiments 
+
+We validated HiPAN on a Unitree Go1 robot [39] equipped with a RealSense D435i camera, using an Intel NUC for onboard computation and ROS for inter-module communication. To mitigate the domain gaps described in Sec. IV-D , the captured depth images ¯oD were clipped, normalized, and processed with a hole-filling filter to suppress sensor noise. Fig. 6 illustrates four real-world navigation experiments. For indoor evaluations (Scenarios 1–3), we constructed unstructured 3D environments by randomly placing tables, ladders, and box piles in spaces with enclosed rooms, doors, and dead-end corridors. Scenario 4 extends the evaluation to an outdoor environment featuring direct sunlight, uneven and sloped terrain, and obstacles unseen during training (e.g., bicycles and traffic cones). These scenarios require recovery from local minima, posture adaptation, and robustness to lighting variations. Despite these challenges, HiPAN successfully guided the robot to the goal position. The supplementary video provides an intuitive visual understanding of these navigation examples in unstructured 3D environments. 8
+
+VI. C ONCLUSION AND FUTURE WORK 
+
+We introduce the Hierarchical Posture-Adaptive Navigation (HiPAN) framework, which enables quadruped robots to robustly navigate unstructured 3D environments relying solely on onboard depth perception without explicit map reconstruc-tion. Simulation experiments show that HiPAN consistently outperforms conventional and end-to-end baselines in both success rate and path efficiency, while ablation studies confirm the contributions of the Path-Guided Curriculum Learning (PGCL) and the hierarchical system design with the explicit navigation command for safe and long-range navigation. Real-world experiments further validate the practical applicability of HiPAN across diverse unstructured environments. However, during real-world deployments, we observed that transparent or specular surfaces (e.g., glass walls and doors) are challenging to perceive accurately using infrared/stereo-based depth sensors, which may cause the robot to misinterpret them as traversable space. As future work, we plan to incorporate semantic awareness to recognize transparent obstacles and signage, including exit indicators, thereby further improving navigation effectiveness and robustness. REFERENCES [1] D. D. Fan et al. , “Step: Stochastic traversability evaluation and planning for risk-aware off-road navigation,” arXiv preprint arXiv:2103.02828 ,2021. [2] A. Agha et al. , “Nebula: Quest for robotic autonomy in challenging environments; team costar at the darpa subterranean challenge,” arXiv preprint arXiv:2103.11470 , 2021. [3] Z. Zhuang et al. , “Robot parkour learning,” in Conference on Robot Learning . PMLR, 2023, pp. 73–92. [4] T. Miki et al. , “Learning to walk in confined spaces using 3d representa-tion,” in International Conference on Robotics and Automation (ICRA) .IEEE, 2024, pp. 8649–8656. [5] L. Han et al. , “Lifelike agility and play in quadrupedal robots using reinforcement learning and generative pre-trained models,” Nature Machine Intelligence , vol. 6, no. 7, pp. 787–798, 2024. [6] G. B. Margolis and P. Agrawal, “Walk these ways: Tuning robot control for generalization with multiplicity of behavior,” in Conference on Robot Learning . PMLR, 2023, pp. 22–31. [7] X. Miao et al. , “Palo: Learning posture-aware locomotion for quadruped robots,” arXiv preprint arXiv:2503.04462 , 2025. [8] R. Buchanan et al. , “Perceptive whole-body planning for multilegged robots in confined spaces,” Journal of Field Robotics , vol. 38, no. 1, pp. 68–84, 2021. [9] Z. Li et al. , “Autonomous navigation of underactuated bipedal robots in height-constrained environments,” The International Journal of Robotics Research , vol. 42, no. 8, pp. 565–585, 2023. [10] Z. Xu et al. , “Dexterous legged locomotion in confined 3d spaces with reinforcement learning,” in International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 11 474–11 480. [11] S. Alamri et al. , “An autonomous maze-solving robotic system based on an enhanced wall-follower approach,” Machines , vol. 11, no. 2, p. 249, 2023. [12] M. Zohaib et al. , “An improved algorithm for collision avoidance in environments having u and h shaped obstacles,” Studies in Informatics and Control , vol. 23, no. 1, pp. 97–106, 2014. [13] M. Abafogi et al. , “A new approach to mobile robot navigation in unknown environments,” in International Conference on Electronics, Computers and Artificial Intelligence (ECAI) . IEEE, 2018, pp. 1–5. [14] K. N. McGuire et al. , “A comparative study of bug algorithms for robot navigation,” Robotics and Autonomous Systems , vol. 121, p. 103261, 2019. [15] D. Hoeller et al. , “Learning a state representation and navigation in cluttered and dynamic environments,” IEEE Robotics and Automation Letters , vol. 6, no. 3, pp. 5081–5088, 2021. [16] S. Kareer et al. , “Vinl: Visual navigation and locomotion over obstacles,” in International Conference on Robotics and Automation (ICRA) . IEEE, 2023, pp. 2018–2024. [17] T. He, C. Zhang, W. Xiao, G. He, C. Liu, and G. Shi, “Agile but safe: Learning collision-free high-speed legged locomotion,” arXiv preprint arXiv:2401.17583 , 2024. [18] N. Rudin et al. , “Advanced skills by learning locomotion and local navigation end-to-end,” in International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2022, pp. 2497–2503. [19] J. Lee et al. , “Learning robust autonomous navigation and locomotion for wheeled-legged robots,” Science Robotics , vol. 9, no. 89, p. eadi9641, 2024. [20] S. Ao et al. , “Co-pilot: Collaborative planning and reinforcement learning on sub-task curriculum,” Advances in Neural Information Processing Systems , vol. 34, pp. 10 444–10 456, 2021. [21] Y. Jang, J. Baek, and S. Han, “Hindsight intermediate targets for mapless navigation with deep reinforcement learning,” IEEE Transactions on Industrial Electronics , vol. 69, no. 11, pp. 11 816–11 825, 2021. [22] Y. Gao et al. , “Efficient hierarchical reinforcement learning for mapless navigation with predictive neighbouring space scoring,” IEEE Transac-tions on Automation Science and Engineering , 2023. [23] J. Gao et al. , “Hierarchical reinforcement learning for safe mapless navigation with congestion estimation,” arXiv preprint arXiv:2503.12036 ,2025. [24] J. Lee et al. , “Learning quadrupedal locomotion over challenging terrain,” 
+
+Science robotics , vol. 5, no. 47, p. eabc5986, 2020. [25] T. Miki et al. , “Learning robust perceptive locomotion for quadrupedal robots in the wild,” Science robotics , vol. 7, no. 62, p. eabk2822, 2022. [26] S. Choi et al. , “Learning quadrupedal locomotion on deformable terrain,” 
+
+Science Robotics , vol. 8, no. 74, p. eade2256, 2023. [27] A. Kumar et al. , “Rma: Rapid motor adaptation for legged robots,” 
+
+Robotics: Science and Systems , 2021. [28] H. Tang et al. , “# exploration: A study of count-based exploration for deep reinforcement learning,” Advances in neural information processing systems , vol. 30, 2017. [29] A. Kayal et al. , “The impact of intrinsic rewards on exploration in reinforcement learning,” arXiv preprint arXiv:2501.11533 , 2025. [30] Y. Feng et al. , “Learning multi-agent loco-manipulation for long-horizon quadrupedal pushing,” arXiv preprint arXiv:2411.07104 , 2024. [31] C. Zhang et al. , “Resilient legged local navigation: Learning to traverse with compromised perception end-to-end,” in International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 34–41. [32] M. Seo et al. , “Learning to walk by steering: Perceptive quadrupedal locomotion in dynamic environments,” in International Conference on Robotics and Automation (ICRA) . IEEE, 2023, pp. 5099–5105. [33] M. Gumin, “Wave Function Collapse Algorithm,” Sep. 2016. [Online]. Available: https://github.com/mxgmn/WaveFunctionCollapse [34] J. Schulman et al. , “Proximal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 , 2017. [35] S. Ross et al. , “A reduction of imitation learning and structured prediction to no-regret online learning,” in International conference on artificial intelligence and statistics . JMLR Workshop and Conference Proceedings, 2011, pp. 627–635. [36] D. Chen et al. , “Learning by cheating,” in Conference on Robot Learning .PMLR, 2020, pp. 66–75. [37] G. B. Margolis et al. , “Rapid locomotion via reinforcement learning,” The International Journal of Robotics Research , vol. 43, no. 4, pp. 572–587, 2024. [38] A. L. Strehl and M. L. Littman, “An analysis of model-based interval estimation for markov decision processes,” Journal of Computer and System Sciences , vol. 74, no. 8, pp. 1309–1331, 2008. [39] Unitree, “Go1,” https://www.unitree.com/go1, 2021. [40] V. Makoviychuk et al. , “Isaac gym: High performance gpu-based physics simulation for robot learning,” arXiv preprint arXiv:2108.10470 , 2021. [41] L. Yang et al. , “Path planning in complex environments with superquadrics and voronoi-based orientation,” arXiv preprint arXiv:2411.05279 , 2024. [42] R. Huang et al. , “Moe-loco: Mixture of experts for multitask locomotion,” 
+
+arXiv preprint arXiv:2503.08564 , 2025. [43] P. Anderson et al. , “On evaluation of embodied navigation agents,” arXiv preprint arXiv:1807.06757 , 2018.
