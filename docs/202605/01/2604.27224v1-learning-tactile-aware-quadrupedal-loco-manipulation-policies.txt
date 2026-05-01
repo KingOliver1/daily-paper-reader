@@ -1,0 +1,320 @@
+Title: Learning Tactile-Aware Quadrupedal Loco-Manipulation Policies
+
+URL Source: https://arxiv.org/pdf/2604.27224v1
+
+Published Time: Fri, 01 May 2026 00:15:32 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Learning Tactile-Aware Quadrupedal Loco-Manipulation Policies 
+
+Pokuang Zhou 1, Yuhao Zhou 1, Quan Luu 1, Seungho Han 1, Heng Zhang 1,2,Binghao Huang 3, Yunzhu Li 3, Arash Ajoudani 2, Zhengtong Xu 1,†, and Yu She 1,†
+
+Abstract —Quadrupedal loco-manipulation is commonly built on visual perception and proprioception. Yet reliable contact-rich manipulation remains difficult: vision and proprioception alone cannot resolve uncertain, evolving interactions with the environment. Tactile sensing offers direct contact observability, but scalable tactile-aware learning framework for quadrupedal loco-manipulation is still underexplored. In this paper, we present a tactile-aware loco-manipulation policy learning pipeline with a hierarchical structure. Our approach has two key components. First, we leverage real-world human demonstrations to train a tactile-conditioned visuotactile high-level policy. This policy predicts not only end-effector trajectories for manipulation, but also the evolving tactile interaction cues that characterize how contact should develop over time. Second, we perform large-scale reinforcement learning in simulation to learn a tactile-aware whole-body control policy that tracks diverse commanded trajectories and tactile interaction cues, and transfers zero-shot to the real world. Together, these components enable coordinated locomotion and manipulation under contact-rich scenarios. We evaluate the system on real-world contact-rich tasks, including in-hand reorientation with insertion, valve tightening, and delicate object manipulation. Compared to vision-only and visuotactile baselines, our method improves performance by 28.54% on average across these tasks. 
+
+I. INTRODUCTION Loco-manipulation based on quadrupedal mobile manipu-lators substantially expands a robot’s operational workspace and task repertoire, making these platforms promising for real-world deployment in inspection, maintenance, and field robotics applications [1], [2]. Recent quadrupedal loco-manipulation systems are commonly built on vision and pro-prioception, learning coordinated base–arm behaviors from data. However, reliable and generalizable contact-rich manip-ulation remains challenging: vision and proprioception lack direct access to the rich, precise contact information needed to infer evolving interaction dynamics at the interface, and vision is further degraded by occlusion and partial observability. A growing body of evidence shows that tactile feedback substantially improves precision and robustness during phys-ical interaction [3]–[5]. However, making quadrupedal loco-manipulation tactile-aware at scale remains challenging: tactile signals are high-dimensional and strongly coupled with whole-body dynamics, and contact-rich tasks require reasoning over how interaction evolves over time while the robot simultane-ously maintains stable locomotion. This creates a mismatch between where tactile information is most valuable (contact evolution and manipulation intent) and where it must be re-alized (whole-body, contact-constrained execution), making it difficult to learn policies that are both reliable and transferable.     
+
+> 1Purdue University, West Lafayette, IN, USA. 2Istituto Italiano di Tecnolo-gia, Genoa, Italy. 3Columbia University, New York, NY, USA. †indicates equal advising.
+
+Human Demonstration  Robot Deployment 
+
+> Quadruped Robot
+> Robotic Arm
+> Fish-Eye Camera
+> Tactile Sensor
+> Array
+> Visuo-Tactile Gripper
+> Visuo-Tactile
+> Gripper
+
+Fig. 1: We achieve fully autonomous real-world tactile-aware quadrupedal loco-manipulation by learning from demonstrations collected with a hand-held, tactile-instrumented UMI gripper. Our approach enables learning and deployment across tasks and objects, supporting contact-rich manipulation (e.g., in-hand reorientation with insertion and valve tightening) as well as damage-free handling of delicate items such as fragile chips and fruits. 
+
+In this paper, we propose a tactile-aware hierarchical loco-manipulation learning framework that integrates tactile sensing into both high-level planning and low-level whole-body con-trol. Our primary contributions are: 1. A deployable, end-to-end visuotactile framework for quadrupedal loco-manipulation . We design a hierarchical learning architecture that leverages both vision and tactile sensing to enable real-world, contact-rich loco-manipulation on quadrupedal mobile manipulators. We evaluate the system on diverse contact-intensive tasks, including in-hand marker reorientation with subsequent insertion, valve tightening, and delicate object manipulation, and achieve a 28.54% average performance improvement over visuomotor and visuotactile baselines. 2. A tactile-aware hierarchical policy learning that bridges contact evolution and whole-body execution. We propose a tactile-aware hierarchical loco-manipulation frame-work that integrates tactile sensing into both the manipulation policy and the whole-body control policy. At the high level, we train a tactile-conditioned diffusion model that predicts not only end-effector pose trajectories but also future tactile interaction cues, explicitly modeling the evolution of contact. At the low level, we use large-scale reinforcement learning in simulation to train a tactile-aware whole-body policy that tracks these commands under contact constraints while main-taining stable and efficient locomotion, and transfers zero-shot to the real world. This paper is structured as follows. Section II reviews related work on loco-manipulation. Section III presents our method, including high-level tactile-aware imitation learning and a low-level policy that tracks pose and tactile commands. 
+
+> arXiv:2604.27224v1 [cs.RO] 29 Apr 2026
+
+Section IV reports real-world experimental results and ana-lyzes key factors affecting performance. Section V concludes the paper and outlines future directions. II. R ELATED WORKS 
+
+To enable low-cost and portable demonstration collection in diverse real-world settings, recent work has adopted UMI-style handheld gripper interfaces [6]. This paradigm supports in-the-wild data collection and enables hardware-agnostic diffusion policies that transfer across robot embodiments [7]. Building on the same interface, [8] further incorporates tactile arrays into the gripper to capture vision and touch simultaneously. A growing body of work has shown that tactile feedback is particularly valuable for contact-rich manipulation, support-ing tasks such as power-plug insertion [9]–[11], light-bulb screwing [12], cable untangling [13], and peeling [3]. For quadrupedal robots, [14] presents a system that mounts tactile sensors on the robot’s back to stabilize a cylindrical object during balancing. By combining the mobility of the quadruped base with the dexterity of the manipulator, whole-body control (WBC) enables integrated loco-manipulation with substantially ex-panded reach and task versatility [15]–[18]. With the grow-ing use of end-to-end reinforcement learning (RL), learning-based low-level policies for tracking dense reference motions have become increasingly prevalent. Early work introduced an RL-based regularized online adaptation framework and demonstrated successful sim-to-real transfer for quadruped loco-manipulation [1]. Building on this line of research, later studies further improved manipulation accuracy and overall performance through optimized command sampling [18], arm inverse kinematics (IK) for more precise end-effector control [19], and two-stage policy architectures that decouple locomo-tion and manipulation objectives [20]. More recently, hierarchical RL frameworks have been intro-duced to incorporate active perception into high-level decision making. These methods integrate visual perception either through jointly trained RL policies or separate perception models [19], [21]. In parallel, semantically grounded large language model-based planners have been explored for task-level reasoning and command generation [22], [23]. Human-demonstration-based imitation learning, especially diffusion policy methods, has also been used to produce high-level commands that guide the underlying whole-body controller [24], [25]. However, these methods remain limited for contact-rich manipulation, where successful execution requires iterative ad-justment of an object’s pose while maintaining stable contact. In such settings, vision alone is often insufficient to capture the fine-grained contact state needed for reliable control [12]. To address this limitation, we propose a tactile-aware policy learning framework for quadrupedal loco-manipulation. III. M ETHOD 
+
+In this section, we introduce the overall framework, in-cluding the high-level policy and the tactile-aware low-level policy, to enable visuotactile contact-rich loco-manipulation. The whole pipeline of is shown in Fig 2. 
+
+A. Tactile-Aware Diffusion Policy 
+
+We collect teleoperated demonstrations using a UMI grip-per [8]. We represent the UMI gripper state as a 6-DoF end-effector pose expressed in the robot base (arm-base) frame. At each time step t, the policy observes an on-wrist RGB image, UMI gripper pose, and low-dimensional tactile features. Concretely, we define the observation as 
+
+ot =
+
+
+
+it, x t, w t, s t
+
+
+
+,
+
+where it is the RGB image, xt is the UMI gripper pose, 
+
+wt is the gripper width, and st = (mt, θ t, c t) is a low-dimensional tactile descriptor consisting of contact area mt,contact orientation θt, and contact center ct ∈ R2 (in the tactile image or gripper frame). The tactile signals are obtained from the 12 × 32 tactile sensors [8]. We encode the RGB image it with a CLIP-pretrained ViT that is fine-tuned on our task [8], and concatenate it with the normalized low-dimensional signals (xt, w t, s t) to form a compact observation. The resulting visual embedding is concatenated with the normalized signals to form the conditioning input to the diffusion policy [26]. Following common practice, the policy is conditioned on a short history of the past observations to capture immediate temporal context. Rather than predicting only the UMI gripper pose, the diffusion policy predicts a short-horizon sequence of low-dimensional targets that includes both end-effector pose com-mands and tactile targets with horizon length H:
+
+at:t+H−1 = {at, a t+1 , . . . , a t+H−1},at =  xdt+1 , w dt+1 , s dt+1 
+
+.
+
+Here, xdt+1 is the target end-effector pose for the next con-trol step, wdt+1 is the target gripper width, and sdt+1 =(mdt+1 , θ dt+1 , c dt+1 ) is a desired tactile target. For the diffusion model, the denoiser is parameterized with a U-Net backbone, with conditioning injected via FiLM [27]. We use DDIM [28] for inference and perform rollout with receding-horizon control [26]. The predicted pose and tactile targets are then tracked by the proposed tactile-aware low-level policy. 
+
+B. Tactile-Aware Low-level Policy 
+
+This section describes how we design the low-level policy to execute the position- and tactile-based commands produced by the high-level policy. We use a two-stage curriculum: train stable locomotion and command tracking in simplified environments, then train in task-specific scenes that match the real setup for efficient sampling and robust contact-rich execution. Diffusion 
+
+Policy 
+
+Low-Level 
+
+Policy 
+
+Tactile-Aware Imitation Learning  Tactile-Based and Position Tracking Policy 
+
+UMI Gripper 
+
+Proprioception 
+
+Tactile Feedback 
+
+Camera RGB 
+
+Robot 
+
+Proprioception 
+
+Action 
+
+Arm 
+
+Leg Robot State 
+
+> History
+> Relative EE Pose Gripper Width
+
+Tactile Feedback 
+
+Tactile-Based 
+
+Cmd 
+
+Position 
+
+Cmd Fig. 2: Pipeline of our proposed visuotactile loco-manipulation policy learning framework. The high-level policy, trained from human demonstrations via imitation learning, predicts position and tactile commands. The low-level controller, trained in simulation with RL, takes the robot state, tactile feedback, and action history as input to track the position and tactile commands generated by the high-level policy. EE denotes end-effector. Left Finger Right Finger 
+
+Fig. 3: Low-level policies are trained in simulation. Top: stable locomotion with pose-tracking training. Bottom: tactile-aware loco-manipulation policy training built on top of the pose-tracking policy. 
+
+1) Stable Locomotion Policy: In this stage, we train a low-level policy for stable locomotion while tracking randomly sampled trajectories. The quadruped is trained to track ran-domly sampled base velocity commands. We generate end-effector targets by sampling waypoint sequences in spherical coordinates centered at the arm base. Following the low-level goal-reaching formulation in Visual Whole-Body Control (VBC) [19], the policy is conditioned on base-motion com-mands together with an end-effector pose target, and observes a compact proprioceptive state (base/arm/leg kinematics, pre-vious action, and phase/timing signals) for robust tracking. For precise arm control, we realize the end-effector waypoints via IK, converting each waypoint into joint-position targets. We train the low-level policy in Isaac Gym using mas-sively parallel simulated environments, with a Trimesh terrain curriculum and extensive domain randomization (as detailed in the Table I). All command randomization is defined in the quadruped base frame. In addition, we inject external perturbations by periodically applying random planar velocity pushes to the base, with a maximum magnitude of 0.5 m/s every 3 s. These randomizations are applied to reduce the sim-to-real gap and improve locomotion robustness. We adopt a reward design following prior work [1], [15], [19] and tune the weights (Table II, Table III). For brevity, we omit some 
+
+TABLE I: Domain randomization ranges used in simulation.                           
+
+> Randomization item Range
+> Ground friction coefficient [0 .3,3.0]
+> Base mass offset (kg) [0 .0,2.5]
+> Base CoM shift per axis (m) [−0.15 ,0.15]
+> Motor-strength scaling (legs & arm) [0 .7,1.3]
+> Gripper mass offset (kg) [0 ,0.3]
+> Linear velocity command vx, v y(m/s) [−0.8,0.8]
+> Yaw rate command ωz(rad/s) [−0.8,0.8]
+> Initial base position perturbation (m) within 0.5
+> Initial yaw perturbation (rad) ±π/ 2
+> Initial base velocity perturbation (m/s) within 0.1
+> Initial joint-angle scaling [0 .8,1.2]
+
+stability, safety, and regularization terms, all other settings primarily follow Walk Those Ways [16], as well as VBC [19] and UMI on Legs [15]. This stage is critical because arm motion continuously shifts the robot’s center of mass while tracking commanded linear and angular velocities, requiring robust balance and stable whole-body coordination. 
+
+2) Tactile-Aware Loco-Manipulation Policy: In the second stage, we train a tactile-aware low-level policy on top of the first-stage policy. Simulation scenes are constructed to closely match the real setup (as shown in Fig. 3), such that contacts between the quadruped and the object generate physically realistic interactions. For trajectory sampling, spherical-coordinate trajectories centered at the arm base are used in the previous stage. This simplified setting allows the policy to learn coordinated quadruped–arm control based on position tracking. In this stage, we focus on precise tracking of both position- and tactile-based commands. To better match the relative UMI gripper pose commands and improve sampling efficiency, we switch to Cartesian coordinates for trajectory representation. We sample UMI gripper trajectories from demonstration data and use a heuristic reachability function to generate quadruped base velocity commands. For a sequence of future end-effector targets, the function evaluates whether the predicted trajectory extends beyond a conservative boundary of the current arm workspace. If so, the exceedance errors of the future targets are accumulated and linearly mapped to the quadruped base motion, producing forward and lateral velocity commands. The generated linear velocities are bounded within 0.3–0.8 m/s. Based on the sampling method in [18], we define the arm TABLE II: Definition of symbols.                 
+
+> Name Symbol
+> Leg joint positions qleg
+> Default joint positions qdefault
+> Leg joint velocities ˙qleg
+> Joint torques τ
+> Base linear velocity vb
+> Base angular velocity ωb
+> Base linear velocity command v∗
+> x
+> Base yaw velocity command ω∗
+> yaw
+> Feet contact force ffoot
+> Feet velocity vfoot
+> Feet air time tair
+> Desired contact state ccmd foot (θcmd , t )
+> Gait phase / timing offset θcmd
+> Default hung-up leg joint positions qhung leg
+
+TABLE III: Key reward functions.                                                             
+
+> Name Definition Weight
+> Command-Following Rewards
+> Linear velocity tracking (x) φ v∗
+> x−vb,x
+> 2.0
+> Yaw velocity tracking φ ω∗
+> yaw −ωb, yaw
+> 0.5
+> Gait & Contact Rewards
+> Feet air time P4
+> i=1 (tair ,i −0.5) 1[first contact ]2.0
+> Feet height clamp
+> 
+> ∥hfoot ∥ − htarget foot ,0
+> 
+> 1.0
+> Swing phase tracking (force) P
+> foot
+>  1−ccmd foot
+>   1−exp  −∥ ffoot ∥2/σ cf
+>  −2.0
+> Stance phase tracking (velocity) P
+> foot ccmd foot
+>  1−exp  −∥ vfoot ∥2/σ cv
+>  −2.0
+> Regularization Rewards
+> Joint torques −∥ τ∥2−2.5×10 −5
+> Joint acceleration − ∥ ( ˙ qt−˙qt−1)/∆t∥2−7.5×10 −7
+> Action rate −∥ at−at−1∥2
+> leg −0.015
+> Feet jerk −P
+> i∥ffoot ,i −fprev foot ,i ∥−2.0×10 −4
+> Feet drag −P
+> iccontact ,i ∥vfoot ,i ∥1−0.08
+
+workspace accordingly. Considering the need for the end-effector to maintain a suitable orientation, we further re-duce the workspace to 70% of its original size and define this boundary as dthresh , which represents the reachability boundary of the arm workspace. For the vertical direction, by adjusting the weights of the existing reward terms (see Table III), the robot learns to adopt a tilted posture to enlarge the reachable workspace of the arm. Considering fine-manipulation tasks, we additionally in-clude a balance reward to constrain the quadruped’s base motion once the arm starts fine manipulation, which improves the stability of the arm base (see the additional reward terms in Table IV). Overall, this setting is different from the previously described case where forward and lateral base velocities are generated. Here, when the forward and lateral velocities are set to zero, the quadruped does not translate but instead adjusts its posture, such as the base inclination, to better support fine arm manipulation while remaining as stable as possible. This is important because, during contact-rich fine manipulation, large quadruped base motions can negatively affect manipulation performance. The reward terms for tracking relative position commands and tactile-based commands are summarized in Table IV, where σtac and σpos denote the tolerance param-eters in the exponential tracking rewards. The corresponding reward weights are tuned to balance tracking performance and stability. IV. E XPERIMENTS AND RESULTS 
+
+In this section, we introduce a set of experiments for quan-titative analysis to validate the effectiveness of our method. First, we present the overall system setup and implementation details. We evaluate the effectiveness and motivation of our method through three components: task design, baseline de-sign, and experimental evaluation. Finally, we compare against baseline approaches and discuss why our method achieves better performance on these tasks. 
+
+TABLE IV: Details of assistance rewards. scmd ∈ R4 and s ∈ R4 are the commanded and measured tactile signals, respectively.                           
+
+> Name Definition Weight
+> Balance Rewards
+> rbase-stable − 0.2∥vb,xy ∥2+ 0 .5∥ωb∥20.02
+> rleg-posture −
+> 
+> ∥qleg −qhung leg ∥2+ 0 .1∥∆qleg ∥2
+> 
+> 0.005
+> rsmooth − ∥∆vb,xy ∥2+∥∆ωb∥20.1
+> Track Rewards
+> rtac exp  −∥ scmd −s∥2/σ tac
+> 0.1
+> rpos exp  −∥ pcmd −p∥2/σ pos
+> 0.06
+
+A. Experimental Setups 1) System Setup and Implementation Details: The robot system is shown in Fig. 1, which consists of a 12-DOF Unitree Go2 quadruped robot and a 6-DOF D1 robot arm, both powered by the battery of Go2. We customize the D1 arm with UMI grippers with tactile array sensor and a GoPro camera. We deploy FlexiTac tactile sensor array [8], [29], [30] with a spatial resolution of 32 × 12 taxels over a sensing area of 66 mm × 25 mm . It operates by converting pressure-induced changes in electrical resistance into measurable elec-trical signals. This corresponds to an effective resolution of approximately 2 × 2mm 2 per taxel. Our policy runs on a separate desktop’s RTX 4070 Ti via a direct cable connection. High-level policies are trained on NVIDIA A100 GPUs. Task 1 contains two atomic subtasks, reorientation and inser-tion, for which we collect demonstrations and train/evaluate separate policies. Similar to Task 2, each subtask policy is trained for 300 epochs using 100 demonstrations. For the full Task 1 long-horizon sequence, we collect 200 demonstrations and train for 400 epochs. And we set the planning horizon to 
+
+H=16 and run the diffusion policy at 2 Hz .Low-level policies are trained on a workstation equipped with an RTX 4070 Ti GPU and a Ryzen 9 7900 CPU; each training run takes approximately 40 hours. Since the Unitree D1 arm only accepts joint-position com-mands at 10 Hz, the low-level policy runs at 200 Hz and outputs joint targets for both the quadruped and the arm. During real-world deployment, we downsample the outputs by taking every 4th step for the quadruped (50 Hz) and every 20th step for the arm (10 Hz), enabling synchronized execution with a shared representation that couples motion targets with tactile outcomes. 
+
+2) Task Suites: In this section, inspired by prior studies showing that vision-only policy is often insufficient for some contact-rich manipulation [4], [12], [31]–[33], and to support a comprehensive evaluation, we introduce a task suite as following: 
+
+Task 1: Extrinsic-Contact-Based Reorientation and In-sertion. For the first task set, we consider a long-horizon manipulation scenario consisting of three stages. In the initial stage, the quadruped robot grasps a marker and performs in-hand reorientation via extrinsic contacts to adjust the marker’s orientation for a subsequent insertion. This reorientation is necessary because an improper orientation prevents successful insertion in a confined workspace [34], [35]. In our setup, a vertical whiteboard limits the arm’s forward reach, and the socket’s tight, vertically aligned hole requires in-hand rotation. In next stage, the robot walks to the socket location. In final stage, since the socket height is low and outside the reachable workspace in the hung-up posture, the quadruped performs a lean-down motion to extend its operational workspace. and then execute the insertion. After completing the task, the robot returns to the hung-up posture, and exits the task area. 
+
+Task 2: Valve Tightening. For the quadrupedal valve-tightening task, we design a set of challenging scenarios. Starting from the hung-up posture, the valve is initially out-side the end-effector workspace for direct manipulation. The quadruped therefore needs to execute a lean-down motion to bring the EE into a feasible operating region, after which the end-effector grasps the valve and performs tightening. During tightening, it is critical to maintain an approximately perpendicular contact between the gripper and the valve. This contact configuration yields clearer and more informative tac-tile feedback. The tightening procedure follows a cyclic pattern of grasp–twist–release, repeated until the valve reaches the fully tightened state. With tactile feedback enabled, we observe an asymmetric two-finger contact pattern during tightening: one finger exhibits a larger contact area than the other. We attribute this to gripper compliance, which leads to uneven normal-force distribution across the two tactile pads under near-perpendicular contact. 
+
+Task 3: Delicate Object Interaction. Compared to wheeled robots, quadruped robots have better mobility, such as on uneven ground and grass [36], [37]. For bruise-prone fruits, end-effector grasping must maintain an appropriate contact force to avoid damage. Beyond testing with a variety of fruits, including bruise, e.g. prone kiwifruit and nectarines, we further demonstrate our capability with a more extreme example: grasping fragile potato chips that can easily crumble. In outdoor environments, we showcase fruit grasping and Tactile         
+
+> Fig. 4: Picnic plating task demonstration. The quadruped robot performs a lean-down motion and executes damage-free grasping of a kiwi, followed by organizing and arranging the items on the plate.
+
+harvesting capabilities (Fig. 4). We further conduct controlled lab evaluations and compare against a tactile-free baseline on delicate handling tasks with nectarines, kiwi, and potato chips. Due to the lack of specialized equipment for detecting fruit bruising, we report quantitative results only for chip manipulation and present the fruit tasks qualitatively. 
+
+3) Baseline Design: We design these baselines to answer three questions: (a) how much tactile feedback contributes to performance? (b) Is our tactile-aware diffusion policy (DP) more effective than a vanilla visuotactile DP? and (c) how much the tactile-aware low-level policy contributes to overall performance? As shown in Table V, we design following methods to answer the above questions: 
+
+Visuomotor Policy (P1). The entire system does not use tactile feedback. The high-level policy is conditioned only on vision and proprioception and outputs position-only command sequences, which are tracked by a position-tracking low-level controller, same as UMI on legs [15]. 
+
+Vanilla Visuotactile DP + Vanilla Low-Level Policy (P2). 
+
+We additionally provide tactile observations as conditioning inputs to the high-level policy, but the high-level policy still outputs position-only command sequences. The low-level controller remains position-tracking. 
+
+Tactile-Aware DP + Vanilla Low-Level Policy (P3). The high-level policy is a tactile-aware diffusion policy that outputs both position commands and tactile command sequences. However, the low-level controller does not use the tactile commands and tracks only the position commands. 
+
+Tactile-Aware DP + Tactile-Aware Low-Level Policy (Ours, P4). Our full method uses a tactile-aware diffusion policy at the high level to output position and tactile command sequences, and a low-level policy that takes both position-and tactile-based commands as inputs and tracks them jointly Table V. 
+
+B. Experimental Results and Analyze 
+
+Fig. 5 and Fig. 6 show the commanded (Cmd.) and tracked (Track) trajectories, where Track denotes the measured value; position on the y-axis is in meters and defined as displacement relative to the initial pose. For visualization, we normalize all plotted signals to the range [0 , 1] ; tactile signals are normalized using min–max scaling. For position tracking, the UMI gripper trajectory is defined in terms of relative motion. We use the Tactile based Cmd. Position Cmd. 
+
+Start  Re-orientation  Walk to target  Lean down and insert 
+
+Time 
+
+area_cmd 
+
+centroid_x_cmd 
+
+centroid_y_cmd 
+
+angle_cmd 
+
+area_track 
+
+centroid_x_track 
+
+centroid_y_track 
+
+angle_track 
+
+Time(s) 
+
+X_axis_cmd 
+
+Y_axis_cmd 
+
+Z_axis_cmd 
+
+X_axis _track 
+
+Y_axis _track 
+
+Z_axis _track 
+
+> Tactile
+
+Fig. 5: Representative successful autonomous rollout for Task 1 (Extrinsic-Contact-Based Reorientation and Insertion). The robot starts from the reorientation stage (light blue background), then moves toward the target socket (light red background), performs a lean-down motion and completes the insertion task (light green background). The middle time interval is compressed by 4×.TABLE V: Comparison of P4 (ours) and baseline variants P1–P3 with respect to the components included in the high-level and low-level policies.                         
+
+> Policy High-Level Policy Low-Level Policy Visuomotor Observation Tactile Observation Tactile Prediction Vanilla Tactile-Aware P1 ✓✗✗✓✗
+> P2 ✓✓✗✓✗
+> P3 ✓✓✓✓✗
+> P4 ✓✓✓✗✓
+
+TABLE VI: Success rates on 20 rollouts. Task 1 is long-horizon, and we evaluate re-orientation, insertion, and the full sequence independently under identical initial conditions across methods.                       
+
+> Task 1 Re-orientation Task 1 Insertion Task 1 Whole Task 2 Task 3 P1 0.35 0.15 0.05 0.35 0.20 P2 0.95 0.70 0.55 0.80 1.00 P3 1.00 0.70 0.60 0.80 1.00
+> P4 1.00 0.85 0.80 0.85 1.00
+
+UMI gripper’s initial pose as the reference (initial) position. During locomotion, we estimate the traveled distance based on the velocity measured by the quadruped’s IMU sensor. In all other cases, we compute the end-effector position using the arm base as the origin. As a result, the displacement induced by base tilting is not reflected in this position measurement chart. As shown in Fig. 5, the policy tracks the commanded motion accurately and makes adjustments to successfully complete the task, as illustrated in the insertion stage. From the results in Table VI, introducing tactile feedback leads to substantial performance gains over the no-tactile baseline. Moreover, by comparing Baseline 2 (P2) and Baseline 3 (P3), we verify that using a tactile-aware diffusion policy at the high level does not degrade the position-based command sequence: both methods achieve comparable performance. Finally, comparing Baseline 3 (P3) with our full method demonstrates the benefit of incorporating tactile commands into the low-level policy: our method further increases the success rate from 0.70 to 0.85 on Task 1 insertion (+0.15), from 0.60 to 0.80 on Task 1 whole (+0.20), and from 0.80 to 0.85 on Task 2 (+0.05), and achieves 1.00 on Task 3 (compared to 0.20 for P1). In Task 1, during re-orientation, the GoPro camera view-point cannot reliably capture the marker’s orientation, leading the tactile-free policy to a low success rate (0.35). A typical failure is incomplete re-orientation, where the marker is not brought to an approximately vertical pose relative to the gripper for subsequent insertion. During insertion, without a low-level controller that tracks tactile-based commands, online adjustment of the marker pose and position becomes difficult, leading to incomplete insertion. In contrast, our method con-tinuously adjusts the pose and successfully completes the task. In Task 2, policies without tactile feedback cannot reliably infer from vision alone whether the valve is fully tight-Start  Lean down and grasp  Tighten the valve  Repeat to finish  Side view    
+
+> Tactile based Cmd.
+> Time (s)
+> Position Cmd.
+> Time
+> Tactile
+> area_cmd
+> centroid_x_cmd
+> centroid_y_cmd
+> angle_cmd
+> area_track
+> centroid_x_track
+> centroid_y_track
+> angle_track
+> X_axis_cmd
+> Y_axis_cmd
+> Z_axis_cmd
+> X_axis _track
+> Y_axis _track
+> Z_axis _track Fig. 6: Representative successful autonomous rollout for Task 2 (Valve Tightening). The robot leans down and grasps the valve (light-blue background), maintains a near-vertical grasp to tighten (light-red background), and repeats the tightening cycle until completion (light-green background). Pick up chip Pick up nectarine Pick up kiwi Side view
+> Fig. 7: Demonstration of Task 3 (Delicate Object Interaction). The learned policies successfully manipulate a variety of fruits and chips, requiring careful control of grasp force.
+
+ened, leading to more failures. Valve tightening also requires maintaining vertical contact while continuously adjusting the gripper pose during rotation. Baseline 3 (P3), whose low-level controller does not track tactile-based commands, performs slightly worse than our approach (5% lower success rate). Fig. 7 illustrates our Task 3 evaluation on common food items, including bruise-prone nectarines and kiwifruit, as well as highly fragile potato chips. Since we lack specialized equip-ment to reliably measure fruit bruising, we report quantitative success rates only for the chip interaction task (as shown in Table VI. With tactile feedback enabled, our method achieves a 100% success rate on potato chip handling. Applying inappro-priate contact forces can easily fracture or crumble the chips, highlighting the necessity of tactile feedback for damage-free interaction. V. D ISCUSSION AND LIMITATION 
+
+Our results demonstrate that tactile-aware hierarchical learn-ing can improve quadrupedal loco-manipulation. Nevertheless, our current framework still has several limitations. First, tactile observations are not yet encoded in a fully integrated manner, and the current representation may not capture the most compact and informative structure of raw tactile signals. A promising direction for future work is therefore to explore integrated tactile representation learning, for example by com-pressing raw tactile signals into low-dimensional targets with a tactile variational autoencoder (VAE) encoder to better distill task-relevant information [38]. Second, the current low-level control framework still has limited capability for fine-grained, precise contact-rich loco-manipulation, especially when both whole-body balance and manipulation accuracy must be maintained under environmen-tal uncertainty. Future work should develop a stronger low-level framework that relaxes constraints on the quadruped body. Such a framework could further expand the robot’s effective workspace and enable contact-rich manipulation in more challenging environments, such as sand or soft grass, where the quadruped must continuously adjust its footholds to remain balanced while still maintaining a stable end-effector for precise manipulation. REFERENCES [1] Z. Fu, X. Cheng, and D. Pathak, “Deep whole-body control: learning a unified policy for manipulation and locomotion,” in Conference on Robot Learning . PMLR, 2023, pp. 138–149. [2] Y. Gong, G. Sun, A. Nair, A. Bidwai, R. CS, J. Grezmak, G. Sartoretti, and K. A. Daltorio, “Legged robots for object manipulation: A review,” 
+
+Frontiers in Mechanical Engineering , vol. 9, p. 1142421, 2023. [3] Z. Zhang, J. Ma, X. Yang, X. Wen, Y. Zhang, B. Li, Y. Qin, J. Liu, C. Zhao, L. Kang et al. , “Touchguide: Inference-time steering of visuo-motor policies via touch guidance,” arXiv preprint arXiv:2601.20239 ,2026. [4] Z. Xu, R. Uppuluri, X. Zhang, C. Fitch, P. G. Crandall, W. Shou, D. Wang, and Y. She, “UniT: Data efficient tactile representation with generalization to unseen objects,” 2025. [5] Z. Hu, L. Lin, W. Lin, Y. Xu, X. Xia, Z. Peng, Z. Sun, and Z. Wang, “Machine learning for tactile perception: advancements, challenges, and opportunities,” Advanced Intelligent Systems , vol. 5, no. 7, p. 2200371, 2023. [6] C. Chi, Z. Xu, C. Pan, E. Cousineau, B. Burchfiel, S. Feng, R. Tedrake, and S. Song, “Universal manipulation interface: In-the-wild robot teach-ing without in-the-wild robots,” arXiv preprint arXiv:2402.10329 , 2024. [7] H. Gupta, X. Guo, H. Ha, C. Pan, M. Cao, D. Lee, S. Scherer, S. Song, and G. Shi, “Umi-on-air: Embodiment-aware guidance for embodiment-agnostic visuomotor policies,” arXiv preprint arXiv:2510.02614 , 2025. [8] X. Zhu, B. Huang, and Y. Li, “Touch in the wild: Learning fine-grained manipulation with a portable visuo-tactile gripper,” arXiv preprint arXiv:2507.15062 , 2025. [9] K. Yu, Y. Han, Q. Wang, V. Saxena, D. Xu, and Y. Zhao, “Mimictouch: Leveraging multi-modal human tactile demonstrations for contact-rich manipulation,” arXiv preprint arXiv:2310.16917 , 2023. [10] W. Xie and N. Correll, “Towards forceful robotic foundation models: a literature survey,” arXiv preprint arXiv:2504.11827 , 2025. [11] L. Fu, H. Huang, L. Berscheid, H. Li, K. Goldberg, and S. Chitta, “Safe self-supervised learning in real of visuo-tactile feedback policies for industrial insertion,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2023, pp. 10 380–10 386. [12] Q. K. Luu, P. Zhou, Z. Xu, Z. Zhang, Q. Qiu, and Y. She, “Mani-feel: Benchmarking and understanding visuotactile manipulation policy learning,” arXiv preprint arXiv:2505.18472 , 2025. [13] Y. Zhou, P. Zhou, S. Wang, and Y. She, “In-hand singulation and scooping manipulation with a 5 dof tactile gripper,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) .IEEE, 2024, pp. 5238–5243. [14] C. Lin, Y. R. Song, B. Huo, M. Yu, Y. Wang, S. Liu, Y. Yang, W. Yu, T. Zhang, J. Tan et al. , “Locotouch: Learning dynamic quadrupedal transport with tactile sensing,” arXiv preprint arXiv:2505.23175 , 2025. [15] H. Ha, Y. Gao, Z. Fu, J. Tan, and S. Song, “Umi on legs: Making manipulation policies mobile with manipulation-centric whole-body controllers,” arXiv preprint arXiv:2407.10353 , 2024. [16] G. B. Margolis and P. Agrawal, “Walk these ways: Tuning robot control for generalization with multiplicity of behavior,” in Conference on Robot Learning . PMLR, 2023, pp. 22–31. [17] P. Zhi, P. Li, J. Yin, B. Jia, and S. Huang, “Learning a unified policy for position and force control in legged loco-manipulation,” in Conference on Robot Learning . PMLR, 2025, pp. 652–669. [18] T. Portela, A. Cramariuc, M. Mittal, and M. Hutter, “Whole-body end-effector pose tracking,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025, pp. 11 205–11 211. [19] M. Liu, Z. Chen, X. Cheng, Y. Ji, R.-Z. Qiu, R. Yang, and X. Wang, “Vi-sual whole-body control for legged loco-manipulation,” arXiv preprint arXiv:2403.16967 , 2024. [20] G. Pan, Q. Ben, Z. Yuan, G. Jiang, Y. Ji, S. Li, J. Pang, H. Liu, and H. Xu, “Roboduet: Learning a cooperative policy for whole-body legged loco-manipulation,” IEEE Robotics and Automation Letters , vol. 10, no. 5, pp. 4564–4571, 2025. [21] J. Wang, J. Rajabov, C. Xu, Y. Zheng, and H. Wang, “Quadwbg: Gener-alizable quadrupedal whole-body grasping,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025, pp. 11 675–11 682. [22] H. Zhang, H. Yu, L. Zhao, A. Choi, Q. Bai, Y. Yang, and W. Xu, “Learning multi-stage pick-and-place with a legged mobile manipulator,” 
+
+IEEE Robotics and Automation Letters , vol. 10, no. 11, pp. 11 419– 11 426, 2025. [23] K. Wang, L. Lu, M. Liu, J. Jiang, Z. Li, B. Zhang, W. Zheng, X. Yu, H. Chen, and C. Shen, “Odyssey: Open-world quadrupeds exploration and manipulation for long-horizon tasks,” arXiv preprint arXiv:2508.08240 , 2025. [24] X. Liu, B. Ma, C. Qi, Y. Ding, N. Xu, G. Zhang, P. Chen, K. Liu, Z. Jia, C. Guan et al. , “Mlm: Learning multi-task loco-manipulation whole-body control for quadruped robot with arm,” IEEE Robotics and Automation Letters , vol. 11, no. 1, pp. 81–88, 2025. [25] H. Ha, Y. Gao, Z. Fu, J. Tan, and S. Song, “UMI on legs: Making manipulation policies mobile with manipulation-centric whole-body controllers,” in Proceedings of the 2024 Conference on Robot Learning ,2024. [26] C. Chi, Z. Xu, S. Feng, E. Cousineau, Y. Du, B. Burchfiel, R. Tedrake, and S. Song, “Diffusion policy: Visuomotor policy learning via action diffusion,” The International Journal of Robotics Research , vol. 44, no. 10-11, pp. 1684–1704, 2025. [27] E. Perez, F. Strub, H. De Vries, V. Dumoulin, and A. Courville, “Film: Visual reasoning with a general conditioning layer,” in Proceedings of the AAAI conference on artificial intelligence , vol. 32, no. 1, 2018. [28] J. Song, C. Meng, and S. Ermon, “Denoising diffusion implicit models,” 
+
+arXiv preprint arXiv:2010.02502 , 2020. [29] B. Huang, J. Xu, I. Akinola, W. Yang, B. Sundaralingam, R. O’Flaherty, D. Fox, X. Wang, A. Mousavian, Y.-W. Chao et al. , “Vt-refine: Learning bimanual assembly with visuo-tactile feedback via simulation fine-tuning,” arXiv preprint arXiv:2510.14930 , 2025. [30] I. Akinola, J. Xu, J. Carius, D. Fox, and Y. Narang, “Tacsl: A library for visuotactile sensor simulation and learning,” IEEE Transactions on Robotics , 2025. [31] S. Dong, D. K. Jha, D. Romeres, S. Kim, D. Nikovski, and A. Rodriguez, “Tactile-rl for insertion: Generalization to objects of unknown geome-try,” in 2021 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2021, pp. 6437–6443. [32] H. Zhang, R. Dai, G. Solak, P. Zhou, Y. She, and A. Ajoudani, “Safe learning for contact-rich robot tasks: A survey from classical learning-based methods to safe foundation models,” arXiv preprint arXiv:2512.11908 , 2025. [33] Q. Ye, Q. Liu, S. Wang, J. Chen, Y. Cui, K. Jin, H. Chen, X. Cai, G. Li, and J. Chen, “Visual-tactile pretraining and online multitask learning for humanlike manipulation dexterity,” Science Robotics , vol. 11, no. 110, p. eady2869, 2026. [34] C. Zhao, L. Xie, B. Huang, S. Wang, and D. Ma, “Tactile-driven dexterous in-hand writing via extrinsic contact sensing,” IEEE Robotics and Automation Letters , 2025. [35] A. Bronars, S. Kim, P. Patre, and A. Rodriguez, “Texterity: Tactile extrinsic dexterity,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 7976–7983. [36] Y. Xiong, Y. Ge, L. Grimstad, and P. J. From, “An autonomous strawberry-harvesting robot: Design, development, integration, and field evaluation,” Journal of Field Robotics , vol. 37, no. 2, pp. 202–224, 2020. [37] L. Droukas, Z. Doulgeri, N. L. Tsakiridis, D. Triantafyllou, I. Kleitsiotis, I. Mariolis, D. Giakoumis, D. Tzovaras, D. Kateris, and D. Bochtis, “A survey of robotic harvesting systems and enabling technologies,” Journal of Intelligent & Robotic Systems , vol. 107, no. 2, p. 21, 2023. [38] H. Van Hoof, N. Chen, M. Karl, P. Van Der Smagt, and J. Peters, “Stable reinforcement learning with autoencoders for tactile and visual data,” in 2016 IEEE/RSJ international conference on intelligent robots and systems (IROS) . IEEE, 2016, pp. 3928–3934.

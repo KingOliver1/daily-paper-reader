@@ -1,0 +1,406 @@
+Title: RAY-TOLD: Ray-Based Latent Dynamics for Dense Dynamic Obstacle Avoidance with TDMPC
+
+URL Source: https://arxiv.org/pdf/2604.27450v1
+
+Published Time: Fri, 01 May 2026 00:35:23 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# RAY-TOLD: Ray-Based Latent Dynamics for Dense Dynamic Obstacle Avoidance with TDMPC 
+
+Seungho Han 1, Seokju Lee 2, and Jeonguk Kang 3
+
+Abstract — Dense, dynamic crowds pose a persistent challenge for autonomous mobile robots. Purely reactive planning meth-ods, such as Model Predictive Path Integral (MPPI) control, often fail to escape local minima in complex scenarios due to their limited prediction horizon. To bridge this gap, we propose Ray-based Task-Oriented Latent Dynamics (RAY-TOLD), ahybrid control architecture that integrates obstacle information into latent dynamics and utilizes the robustness of physics-based MPPI with the long-horizon foresight of reinforcement learning. RAY-TOLD leverages a LiDAR-centric latent dynamics model to encode high-dimensional sensor data into a compact state representation, enabling the learning of a terminal value func-tion and a policy prior. We introduce a policy mixture sampling strategy that augments the MPPI candidate population with trajectories derived from the learned policy, effectively guiding the planner towards the goal while maintaining kinematic feasibility. Extensive tests in a stochastic environment with high-density dynamic obstacles demonstrate that our method outperforms the MPPI baseline, reducing the collision rate. The results confirm that blending short-horizon physics-based rollouts with learned long-horizon intent significantly enhances navigation reliability and safety. 
+
+I. I NTRODUCTION 
+
+Navigating through dense crowds of dynamic obstacles (Fig. 1) remains a formidable challenge for autonomous mobile robots. Real-world deployment in human-centric en-vironments requires navigation systems capable of rapidly anticipating environmental changes, avoiding unpredictable dynamic agents, and strictly adhering to kinematic con-straints [1]. While classical optimization-based methods pro-vide reliable collision avoidance, the exponential growth of complexity in highly dynamic environments often necessi-tates a trade-off between computational efficiency and long-term foresight. Model Predictive Path Integral (MPPI) control has emerged as a powerful sampling-based method for handling non-linear vehicle dynamics in uncertain environments [2]. By leveraging parallel trajectory rollouts, MPPI achieves robust short-term collision avoidance and kinematic feasi-bility. However, purely reactive planners like standard MPPI suffer from a critical limitation: the computational cost of                       
+
+> *This work was not supported by any organization (Corresponding Author: Jeonguk Kang)
+> 1Seungho Han is with the School of Electrical Engineering, Hanyang University, Ansan 15588, South Korea. (email:
+
+seunghohan@hanyang.ac.kr ) 
+
+> 2Seokju Lee is with the Mechatronics, Systems and Control Lab (MSC Lab), Department of Mechanical Engineering, Korea Advanced Institute of Science and Technology (KAIST), Yuseong-gu, Daejeon 34141, South Korea. (email:
+
+dltjrwn0322@kaist.ac.kr ) 
+
+> 3Jeonguk Kang is with the Samsung Research, Samsung Electronics, Seoul, South Korea. (email:
+
+kju8765@gmail.com )(b) (a) 
+
+Fig. 1: (a) An environment with dense dynamic obstacles and (b) the corresponding bird’s-eye view. simulating forward dynamics curtails the feasible prediction horizon [3]. Consequently, these methods lack long-term spatial awareness, frequently causing the robot to become trapped in local minima such as U-shaped obstacles [4] or dense crowd formations, where short-term safe paths fail to align with the global navigation goal. Reinforcement learning (RL), on the other hand, excels in consolidating long-horizon reasoning directly from environ-mental interactions. By learning a value function that approx-imates the infinite-horizon cost-to-go, RL provides agents with an intuitive foresight that helps avoid myopic decisions and local minima [5]. Furthermore, recent advancements in world models and latent dynamics have enabled agents to acquire structured and predictive representations of the environment, facilitating planning through learned internal models rather than relying solely on high-dimensional raw observations [6], [7]. Despite these advances in model-based and representation-driven RL, many practical robotic systems still rely on end-to-end model-free RL policies due to their simplicity and scalability. However, such approaches often struggle to enforce hard safety constraints during learning and tend to suffer from inefficient or unsafe exploration, particularly in environments with complex or dynamic obstacles. These limitations pose significant challenges for the reliable de-ployment of RL policies in safety-critical physical robotic systems [8]. To bridge the gap between the constraint-satisfying robust-ness of physics-based MPC and the long-horizon foresight of learning-based models, this paper proposes Ray-based Task-Oriented Latent Dynamics (RAY-TOLD) . Built upon the principles of temporal-difference learning for model predic-tive control [9], [10], RAY-TOLD introduces a hybrid control 
+
+> arXiv:2604.27450v1 [cs.RO] 30 Apr 2026
+
+architecture tailored for LiDAR-equipped autonomous robots navigating in dynamic crowds. Our approach encodes high-dimensional obstacle information from LiDAR scans into a low-dimensional latent representation. Within this latent space, a transition dynamics model, a terminal value func-tion, and an action policy are jointly trained. During online execution, RAY-TOLD resolves the local minima problem inherent to MPPI by introducing a policy mixture sampling strategy. Instead of relying entirely on unbiased Gaussian noise for trajectory generation, RAY-TOLD augments the MPPI candidate population with tra-jectories proposed by the learned policy prior. The sampled trajectories are then evaluated using the learned terminal value function, which encapsulates the long-term intent of the navigation task. This allows the MPPI planner to effec-tively look beyond its limited short-horizon rollout, securely guiding the robot around complex dynamic obstacles while guaranteeing kinematic feasibility. The main contributions of this work are summarized as follows:  
+
+> •
+
+We present RAY-TOLD, a hybrid architecture that seamlessly integrates LiDAR-centric latent dynamics modeling with sampling-based MPPI to tackle naviga-tion in dense dynamic environments.  
+
+> •
+
+We introduce a policy mixture sampling technique cou-pled with a learned terminal value function, effectively eliminating the vulnerability of MPPI to local minima without requiring explicitly handcrafted heuristics.  
+
+> •
+
+We conduct extensive tests in highly stochastic en-vironments, demonstrating that blending short-horizon physics-based rollouts with long-horizon learned intent significantly reduces collision rates and outperforms standard MPPI baselines in safety and reliability. The remainder of the paper is organized as follows. Section II reviews the related literature on MPC and RL-based collision avoidance. Section III presents the detailed methodology of RAL-TOLD, including the mathematical formulations. Section IV provides test validation of RAL-TOLD in environments with dense dynamic obstacles. Fi-nally, Section V concludes the paper. II. R ELATED WORK 
+
+MPC and MPPI are widely used since they explic-itly handle system dynamics and constraints [3]. To ex-tend their prediction horizons, hierarchical approaches like PRM-RL [11] pair probabilistic roadmaps with RL. Recent MPPI variants integrate perceptive dynamics for off-road tasks [12] and distributed frameworks for scalable multi-robot coordination [13]. Additionally, TD-CD-MPPI [2] em-beds temporal-difference learning into MPPI to approximate infinite-horizon costs. Building on these, RAY-TOLD utilizes MPPI as the core planner but explicitly steers the sampling using a LiDAR-trained task-oriented latent model. Combining RL’s long-term reasoning with MPC’s safety has inspired various hybrid models. AC-MPC [8] embeds a differentiable MPC within an RL actor, while DR-MPC [1] adds residual RL corrections to nominal MPC commands. MPC-inspired RL [5] parameterizes controllers like QP solvers, and Meta-RL frameworks use MPC to adapt dy-namically to changing environments [14]. Unlike residual or differentiable combinations, our method injects RL guidance directly into MPPI’s proposal distribution, ensuring all ac-tions remain grounded in physics-based rollouts. World models [15] improve sample efficiency by en-abling latent imagination. Architectures like DreamerNav [6] merge depth and occupancy maps for indoor navigation, while iQRL [7] prevents representation collapse via implicit quantization. For more complex settings, DAWM [16] uses Transformers to predict state increments at intersections, and Performer-MPC [17] applies real-time attention for dynamic spatial encoding. RAY-TOLD adapts these concepts specifi-cally for sparse 2D LiDAR streams, crafting representations optimized for local motion prediction of dense crowds. TD-MPC [9] jointly learns latent dynamics and terminal values for fast planning. TD-MPC2 [10] scales this for multi-task continuous control, and D-MPC [18] incorporates diffusion models for multi-step action proposals. To mitigate value overestimation from out-of-distribution rollouts, TD-M(PC) 2 [19] introduces policy constraints during value learn-ing. For hierarchical reasoning, IQL-TD-MPC [20] sets sub-goals via Implicit Q-Learning, while QT-TDM [21] uses an autoregressive Q-Transformer over a sequence model. Fur-thermore, SOMBRL [22] demonstrates scalable optimistic exploration in model-based RL. RAY-TOLD extends this TD-MPC lineage to dense robotic navigation using policy mixture sampling to overcome dynamic obstacle stochastic-ity. III. M ETHODOLOGY 
+
+We present RAY-TOLD, a hybrid control framework that couples the robustness of physics-based model predictive control (MPC) with the long-horizon foresight of model-based reinforcement learning (MBRL). Our approach builds upon the conceptual foundation of task-oriented latent dy-namics (TOLD) [10], developing a LiDAR-centric latent model that incorporates physics-based rollout for short-horizon interactions while leveraging a learned value func-tion and policy prior to guide long-term decision-making. 
+
+A. Problem Formulation 
+
+We consider a discrete-time formulation of the optimal control problem. Let st ∈ S denote the state and at ∈ A the action at time t, evolving according to the system dynamics 
+
+st+1 = f (st, a t). The objective is to maximize the expected cumulative reward: 
+
+J(π) = Eπ
+
+" ∞X
+
+> t=0
+
+γtr(st, a t)
+
+#
+
+, (1) where r(st, a t) is the reward function and γ ∈ [0 , 1) is the discount factor. The r(st, a t) is designed to encourage efficient navigation while ensuring safety. It is composed of six terms: 
+
+r = rdist + rcoll + rside + rvel + rprog + rgoal (2) *𝛼 : mixture ratio                                    
+
+> 𝐳 𝑡 Latent
+> rollout
+> using 𝑑 𝜙
+> Policy
+> prior
+> 𝜙 𝜉
+> Policy
+> actions
+> 𝑢 𝜙 [0:𝐻 −1]
+> Previous mean action
+> 𝜇 𝑡 −1
+> Vehicle
+> Kinematics ( 𝑠 𝑡 )
+> Relative
+> Goal Position ( 𝑠 𝑔𝑜𝑎𝑙 ,𝑡 )
+> LiDAR
+> Measurements ( 𝑠 𝑟𝑎𝑦 ,𝑡 )
+> State Vector ( 𝒙 𝒕 )Action Sampling Strategy
+> Guided by 𝜋 𝜉
+> 𝑎 ∼𝒩 (𝑢 𝜙 ,Σ)
+> Guided by
+> previous mean
+> 𝑎 ∼𝒩 (𝜇 𝑡 −1,Σ)
+> MPPI -Policy Mixture
+> 𝜶 ×𝑲 𝒔𝒂𝒎𝒑𝒍𝒆𝒔
+> (𝟏 −𝜶 )×𝑲 𝒔𝒂𝒎𝒑𝒍𝒆𝒔
+> 𝑅 𝑘 =෍
+> 𝜏 =0
+> 𝐻 −1
+> 𝛾 𝜏 𝑟 𝑠 𝑘 ,𝜏 ,𝑎 𝑘 ,𝜏 +𝛾 𝐻 𝐶 𝜔 (𝑧 𝑘 ,𝐻 ,𝑎 𝑡𝑒𝑟𝑚 )
+> Immediate reward:
+> 𝛾 𝜏 𝑟 𝑠 𝑘 ,𝜏 ,𝑎 𝑘 ,𝜏
+> Value function:
+> 𝐶 𝜔 (𝑧 𝑘 ,𝐻 ,𝑎 𝑡𝑒𝑟𝑚 )
+> Rollout & Evaluation
+> Encoder
+> ℎ𝜃 (𝑥 𝑡 )
+
+Fig. 2: Overall architecture of the proposed RAY-TOLD model.  
+
+> •
+
+rdist = −∥ pt − g∥2: Negative Euclidean distance to the goal g. 
+
+> •
+
+rcoll = −120 · I(dobs < 0.1) : Heavy penalty for collision, where dobs is the distance to the nearest obstacle surface.  
+
+> •
+
+rside = −15 · exp( −4 · dobs ): Soft clearance penalty to encourage keeping a safe distance from obstacles.  
+
+> •
+
+rvel : Velocity incentive ( 0.5v) when far from the goal, switching to a braking penalty, i.e., −v when within 2.0
+
+m.  
+
+> •
+
+rprog = 5 · (ht · dgoal ) · v: Progress reward based on alignment between heading ht and goal direction dgoal . 
+
+> •
+
+rgoal = 300 ·I(∥pt −g∥2 < 0.7) : Sparse terminal reward for reaching the goal region. 
+
+Notation: pt ∈ R2 denotes the ego position, g ∈ R2 the goal position, and I(·) the indicator function. We define the goal-direction unit vector dgoal = ( g − pt)∥g − pt∥−12 and the heading unit vector ht = [cos θt, sin θt]⊤. dobs is computed as the minimum LiDAR ray intersection distance to obstacle boundaries (i.e., truncated at the first hit), consistent with the occlusion-aware sensing model in Sec. IV. Our proposed architecture integrates two complementary prediction modalities, which address the primary limitations of the standard MPPI: 1) Policy-Guided Rollouts ( t ∼ t+H−1): Unlike stan-dard MPPI which relies solely on random noise per-turbations, we perform H-step rollouts using a dif-ferentiable kinematic bicycle model where a fraction of the sampled actions are guided by a learned latent policy πθ . This mixture sampling explicitly biases the search space toward goal-directed, kinematically feasi-ble trajectories while evaluating short-horizon collision outcomes. 2) Latent Terminal Value Estimation ( ≥ t+H): Stan-dard MPPI typically ignores the long-term conse-quences beyond the planning horizon H. Instead, we augment the finite-horizon objective with a learned terminal value. We encode the final state of the rollout into a compact latent representation zt+H = hθ (xt+H )
+
+and use the learned value function Qθ to approximate the expected return beyond the rollout horizon, effec-tively preventing the planner from being trapped in local minima. 
+
+Algorithm 1 Planning algorithms using RAY-TOLD model 
+
+1: Input: Augmented state xt, Policy prior πξ , Value function Cω , Encoder hθ , Latent Dynamics dϕ
+
+2: Hyperparameters: Horizon H, Samples K, Mixture ratio α, Temp λ, Iterations M
+
+3: Initialize mean action sequence μ0: H−1 ← shift (μt−1)
+
+4: uπ 
+
+> 0: H−1
+
+← Rollout πξ in latent space using dϕ from 
+
+hθ (xt)
+
+5: for m = 1 to M do 
+
+6: Sample ϵk,τ ∼ N (0 , Σ) for k = 1 . . . K, τ =0 . . . H − 1
+
+7: for k = 1 to K do 
+
+8: if k ≤ αK then 
+
+9: ak, 0: H−1 ← clip (uπ 
+
+> 0: H−1
+
++ ϵk, 0: H−1)
+
+10: else 
+
+11: ak, 0: H−1 ← clip (μ0: H−1 + ϵk, 0: H−1)
+
+12: end if 
+
+13: sk, 0 ← st, R k ← 0
+
+14: for τ = 0 to H − 1 do 
+
+15: sk,τ +1 ← f (sk,τ , a k,τ )
+
+16: Rk ← Rk + γτ r(sk,τ , a k,τ )
+
+17: end for 
+
+18: zk,H ← hθ (xk,H )
+
+19: aterm ← πξ (zk,H )
+
+20: Φterm ← Cω (zk,H , a term )
+
+21: Rk ← Rk + γH Φterm 
+
+22: end for 
+
+23: Ω ← PKk=1 exp( 1 
+
+> λ
+
+Rk), w k ← 1Ω exp( 1 
+
+> λ
+
+Rk)
+
+24: μτ ← PKk=1 wkak,τ for τ = 0 . . . H − 1
+
+25: end for 
+
+26: Return: mean action μ0
+
+B. RAY-TOLD Model 
+
+Parallel to the physics-based planner, we train a RAY-TOLD model to learn a compact latent representation zt
+
+and associated value dynamics, where the overall schematic is shown in Fig. 2. We define an augmented state vector 
+
+xt = [ st, s goal t , s ray t ], where st is the vehicle kinematics, 
+
+sgoal t is the relative goal position, and sray t comprises the 
+
+Nrays range measurements and obstacle velocities. The encoder hθ (xt) compresses this high-dimensional input into a low-dimensional latent state zt. The individual components of the RAY-TOLD model are parameterized by separate neural networks: 
+
+zt = hθ (xt) (Encoder) (3) 
+
+zt+1 = dϕ(zt, a t) (Latent Dynamics) (4) 
+
+ˆrt = Rψ (zt, a t) (Reward Predictor) (5) 
+
+Q(zt, a t) = Cω (zt, a t) (Value Function) (6) 
+
+ˆat ∼ πξ (zt) (Policy Prior) (7) Here, the reward predictor Rψ and the value function Cω
+
+serve complementary but distinct roles. The reward predictor 
+
+Rψ (zt, a t) ≈ r(st, a t) is a neural network that estimates the immediate, single-step reward directly from the latent state and action, without requiring access to the full physics engine. This is essential during training, where multi-step imagined rollouts are performed entirely within the learned latent space using the latent dynamics model dϕ: since these rollouts do not pass through the true environment, the ground-truth reward function r(st, a t) is unavailable, and Rψ
+
+serves as its differentiable surrogate. The reward predictor thus enables end-to-end gradient-based optimization of the latent representation by providing the reward signal needed to train the value function and policy prior through temporal difference (TD) learning. In contrast, the value function Cω (zt, a t) ≈ Qπ (st, a t)
+
+serves as the critic, approximating the infinite-horizon dis-counted return from a given latent state-action pair. During evaluation, Cω is used exclusively at the terminal state of each MPPI rollout (i.e., at time t+H) to estimate the ex-pected future return beyond the finite planning horizon. This terminal value estimation is the key mechanism by which RAY-TOLD overcomes the myopic limitation of standard MPPI. 
+
+C. Model Training 
+
+The RAY-TOLD model is trained end-to-end using trajec-tories collected in the environment. Following the TD-MPC2 framework [10], the training objective minimizes a combined loss function: 
+
+L = λ1Lreward + λ2Lvalue + λ3Lpolicy + λ4Llatent (8) where Lreward trains Rψ to predict ground-truth single-step rewards, Lvalue trains Cω via Temporal Difference (TD) learning, and Lpolicy optimizes the actor network πξ to maximize the Q-value. Finally, Llatent enforces consistency between the state transitions predicted by the Latent Dy-namics dϕ and the actual encoded future states, ensuring the latent space accurately captures the underlying transition physics. Model Predictive Path Integral (MPPI) control is de-ployed for trajectory optimization. Standard MPPI draws action perturbations around the previous solution, which yields a unimodal proposal distribution. In dense, multimodal interaction scenarios, this often under-explores alternative homotopy classes and leads to local-minima. TABLE I: Hyperparameters for RAY-TOLD Training and Evaluation                   
+
+> Parameter Value
+> Horizon ( H)30 Evaluation Steps 300 MPPI samples ( K)256 MPPI optimization iterations ( M)3Softmax temperature for MPPI weighting ( λ)1.0 Discount factor ( γ)0.99 Lidar Rays ( Nrays )60 Obstacle Radius 0.4 m Map Size 20 m ×10 m
+> Batch Size 256 Learning Rate 1×10 −4
+> Replay Buffer Size 50,000
+
+Thus, we introduce a policy mixture sampling strategy, originally introduced in TD-MPC2 [10]. The MPPI popula-tion is augmented by seeding a fraction α of the samples with trajectories derived from the learned policy πξ . Specifically, let uπt:t+H−1 be the action sequence generated by recursively unrolling the policy πξ using the Latent Dynamics network 
+
+dϕ. This allows generating multi-step future actions in the compact latent space without repeatedly invoking the expen-sive physics engine. The sampling distribution for the k-th candidate trajectory is given by: 
+
+a(k) 
+
+> t
+
+∼
+
+(
+
+N (aπt , Σ) if k < αN 
+
+N (aM P P I t , Σ) otherwise (9) This mechanism injects global knowledge from the learned policy into the local optimization process of MPPI, effec-tively guiding the planner towards long-term objectives while retaining the reactivity of the physics-based model. The corresponding objective function is formulated by         
+
+> J(at:t+H−1) = E
+> hPH−1
+> k=0 γkr(st+k, a t+k) + γHCω(zt+H, π ξ(zt+H))
+> i
+> ,
+
+(10) where zt+H = hθ (xt+H ) is the latent representation of the terminal state, and Cω evaluates its expected return following the policy prior πξ .IV. V ERIFICATIONS 
+
+A. Test Setup 
+
+Ego agent: Our test platform is designed to rigorously evaluate the robustness of hybrid control in high-density, unpredictable environments. The primary evaluation arena is a 20 m × 10 m bounded physical space. The ego vehicle, modeled as a kinematic bicycle with a 2.5 m wheelbase, is tasked with traversing from the coordinate (1 , 0) to the goal region centered at (19 , 0) . To support the computational demands of this hybrid approach, we implemented a highly parallelized custom continuous-space physics simulation en-vironment. This architecture supports simulating N = 256 
+
+independent environments with K = 256 rollout samples each, enabling real-time planning at 50 Hz without CPU-GPU data transfer bottlenecks. A vectorized benchmark is TABLE II: Performance comparison. The proposed method achieves an improvement in success rate and reduction in collision rate compared to the MPPI baseline, demonstrating the benefit of RAY-TOLD model in complex scenarios. 
+
+Method Success Rate Improv. Collision Rate Improv. Safety Margin Improv. 
+
+MPPI (Baseline) 89.0% - 11.0% - 0.19m -RAY-TOLD ( α=0 ) 89.0% 0.0% 11.0% 0.0% 0.17m 10.53% 
+
+RAY-TOLD ( α=0 .1) 94.0% 5.62% 6.0% 45.45% 0.18m 5.26% RAY-TOLD ( α=0 .2) 91.0% 2.25% 9.0% 18.18% 0.18m 5.26% 0.0 2.5 5.0 7.5 10.0 12.5 15.0 17.5 20.0 
+
+> X (m)
+> −6
+> −4
+> −2
+> 0
+> 2
+> 4
+> 6
+> Y (m)
+> Goal Area
+> Walls
+> Obstacle Paths
+> MPPI
+> RAY-TOLD (0%)
+> RAY-TOLD (10%)
+> RAY-TOLD (20%)
+
+(a) 0.0 2.5 5.0 7.5 10.0 12.5 15.0 17.5 20.0  
+
+> X (m)
+> −6
+> −4
+> −2
+> 0
+> 2
+> 4
+> 6
+> Y (m)
+> Goal Area
+> Walls
+> Obstacle Paths
+> MPPI
+> RAY-TOLD (0%)
+> RAY-TOLD (10%)
+> RAY-TOLD (20%)
+
+(b) 0.0 2.5 5.0 7.5 10.0 12.5 15.0 17.5 20.0 
+
+> X (m)
+> −6
+> −4
+> −2
+> 0
+> 2
+> 4
+> 6
+> Y (m)
+> Goal Area
+> Walls
+> Obstacle Paths
+> MPPI
+> RAY-TOLD (0%)
+> RAY-TOLD (10%)
+> RAY-TOLD (20%)
+
+(c) 0.0 2.5 5.0 7.5 10.0 12.5 15.0 17.5 20.0  
+
+> X (m)
+> −6
+> −4
+> −2
+> 0
+> 2
+> 4
+> 6
+> Y (m)
+> Goal Area
+> Walls
+> Obstacle Paths
+> MPPI
+> RAY-TOLD (0%)
+> RAY-TOLD (10%)
+> RAY-TOLD (20%)
+
+(d) 
+
+Fig. 3: Four representative results from 100 test scenarios comparing trajectories in challenging dynamic environments. (a) Baseline failure, where MPPI fails to predict converging obstacles. (b) RAY-TOLD ( α=0 .2), where stronger policy guidance yields more efficient paths. (c) RAY-TOLD ( α=0 .1, 0.2), which successfully anticipates obstacle reflections. (d) Only RAY-TOLD ( α=0 .1) avoids collision in this scenario. conducted over 100 episodes. Success is defined as reaching the goal without collision within the time limit. The ego vehicle’s state st = [x, y, θ, v ]T is updated at 10Hz. The action space is constrained to acceleration 
+
+a ∈ [−3, 3] m/s 2 and steering angle δ ∈ [−45 ◦, 45 ◦]. For environment sensing, the agent is equipped with a 360-degree LiDAR system providing Nrays = 60 distance measurements. This sensor is occlusion-aware; rays are truncated upon the first intersection with an obstacle boundary, simulating realistic line-of-sight constraints. 
+
+Obstacle: As shown in Fig. 1, where orange and red obstacles represent detected and undetected by ray beams, respectively, the environment contains a dynamic population of 40 to 60 obstacles, each with a radius of 0.4 m . The obstacles are spawned at random positions with random velocity for each test scenario. Their behavior is governed by a modified Social Force Model (SFM). The movement of each obstacle i is driven by three primary force components: 1) Attractive Force: A force pulling the obstacle towards a randomly assigned local waypoint, ensuring purposeful motion. 2) Boundary Repulsion: A repulsive potential that pre-vents obstacles from leaving the map, forcing them to turn back into the navigable space. 3) Inter-Obstacle Repulsion: Repulsive forces between obstacles that prevent unrealistic overlaps and simulate basic collective avoidance behavior. A core design tenet of our benchmark is the prevention of environmental memorization. At the start of every train-ing and evaluation episode, the obstacle positions, target waypoints, and velocities are completely randomized. This ensures that the global layout of safe zones changes contin-uously. The inherent randomness of the SFM-driven trajectories means that even if the agent encounters a similar starting configuration, the temporal evolution of the obstacle field is non-deterministic from the agent’s perspective. This high degree of stochasticity forces the Reinforcement Learning (RL) component to learn generalized features of the value landscape rather than memorizing specific evasion paths. By mastering this environment, the agent demonstrates that its terminal value function Qθ and policy prior πθ have captured the universal principles of dynamic avoidance and long-term goal seeking. We perform a comparative analysis against a state-of-the-art Model Predictive Path Integral (MPPI) baseline: 1) MPPI (Baseline): A purely physics-based reactive controller. It relies on a 3-second constant-velocity prediction model for dynamic obstacles. Crucially, it lacks a learned value function to evaluate the terminal state ( H-step horizon), making it prone to local minima in dense clusters where the instantaneous gradient towards the goal is blocked. 2) RAY-TOLD ( α=0 ): The proposed architecture with-out policy mixture sampling. It generates candidate trajectories using the same random noise as the MPPI baseline, but uniquely utilizes the learned value func-tion Cω to evaluate the long-term cost of the terminal latent state. This isolates the performance gain pro-vided strictly by the terminal value estimation. 3) RAY-TOLD (α=0 .1): The proposed configuration with moderate policy guidance. 4) RAY-TOLD (α=0 .2): The proposed configuration with stronger policy guidance. We constrained the policy mixture ratio α to the range 
+
+[0 , 0.2] to preserve the reactive, physics-based collision avoidance capabilities of MPPI for the majority of the sampling population, while injecting just enough learned prior to guide the planner out of local minima. The detailed parameters are given in Table I. 
+
+B. Results 
+
+We configure 100 different test scenarios in which the ob-stacles’ initial positions and velocities are randomly assigned for each scenario. The test results are listed in Table II, where the RAY-TOLD models are compared with the baseline method, i.e., MPPI. The evaluation metrics include success rate, collision rate, and the corresponding improvement for each metric. In addition, a safety margin is reported, defined as the closest distance between the ego agent and the ob-stacle, averaged over the entire test duration. Representative results comparing the ego trajectories are shown in Fig. 3. According to Table II, the MPPI baseline demonstrates sufficient collision avoidance performance across all test scenarios, which involve highly dense dynamic obstacles re-sulting in intractable configurations. MPPI achieves an 89% success rate out of 100 scenarios, with a safety margin of 0.19 m. Collisions occur due to the unpredictable movements of obstacles, such as abrupt changes in direction caused by reflections from other obstacles or pop-up obstacles hidden behind detected ones. This infeasibility of accurately model-ing obstacle motion underlies the necessity of the proposed RAY-TOLD model, which leverages latent dynamics. In practice, the RAY-TOLD models exhibit comprehensive improvements across all metrics. Specifically, RAY-TOLD (α=0 ) achieves an identical success rate to the baseline, while improving the safety margin, thereby validating its effectiveness in collision avoidance. Meanwhile, RAY-TOLD (α=0 .1, 0.2) demonstrates significant improvements in nav-igation reliability. RAY-TOLD ( α=0 .1) achieves the highest success rate of 94.0%, surpassing both the MPPI baseline and the value-only variant ( α=0 ) by +5.0%. The collision rate is reduced by nearly half (from 11.0% to 6.0%), indicating that moderate policy guidance effectively helps the agent navigate tight clusters of dynamic obstacles, where purely reactive or value-based methods may fail. Interestingly, increasing the mixture ratio to 20% results in a slight performance drop to 91.0%, suggesting that over-reliance on the policy prior may introduce suboptimal biases in highly stochastic scenarios. Therefore, a balanced mixture ( α=0 .1) provides the optimal trade-off between long-horizon intent and short-horizon safety. As shown in Fig. 3(a), a failure case of the algorithm is illustrated, highlighting its inability to account for the com-plex nonlinear dynamics of converging obstacles. Although MPPI relies on stochastic sampling to explore the control space, scenarios in which obstacles close in on the agent’s predicted path suffer from severe sample sparsity, where the density of valid, collision-free trajectories decreases drastically. Without an informed prior to guide the sampling process, the random exploration fails to identify feasible gaps between the converging obstacles. Fig. 3(b) shows RAY-TOLD ( α=0 .2) produces stronger policy guidance leading to more efficient paths. In contrast, it demonstrates that the proposed RAY-TOLD framework, with the policy guidance parameter α set to 0.2, generates highly efficient trajectories even in densely populated dynamic envi-ronments. By incorporating a learned policy as a strong prior for the MPPI planner, the algorithm effectively shifts the sampling mean toward promising regions of the action space. This policy-informed initialization significantly reduces the effective search space, enabling the agent to proactively identify and commit to optimal evasive maneuvers amid converging threats. Fig. 3(c) highlights the advanced predictive capabilities of the RAY-TOLD framework, particularly its ability to antici-pate obstacle reflections from environmental boundaries. In dynamic settings where obstacles bounce off walls or other constraints, traditional reactive planners often fail because they typically assume constant-velocity motion. However, by leveraging a latent-space world model integrated with informed policy priors, RAY-TOLD (with α=0 .1 and α=0 .2)effectively captures environmental transition dynamics and boundary interactions. This foresight enables the agent to −40 −20 0 20 40 60       
+
+> t-SNE Dimension 1
+> −40
+> −20
+> 0
+> 20
+> 40
+> t-SNE Dimension 2
+> Risk ( ≤0.4m) 0.6m Safe ( ≥0.8m)
+> Distance to Nearest Obstacle (m)
+
+Fig. 4: t-SNE visualization of the 128-dimensional latent space zt, colored by the distance to the nearest obstacle. The smooth topological transition from dangerous (red) to safe (blue) states demonstrates that the RAY-TOLD learns a physically meaningful representation of collision risk rather than memorizing raw sensor data. execute preemptive maneuvers based on the obstacles’ future reflected trajectories, maintaining a safe distance even before a change in obstacle direction occurs. In accordance with Fig. 3(d), only RAY-TOLD ( α=0 .1)avoids collision in this scenario. It presents a critical corner case in which only the RAY-TOLD configuration with a spe-cific guidance strength ( α=0 .1) successfully avoids collision. In this highly congested and complex scenario, the trade-off between exploiting the learned policy and exploring through the MPPI stochastic search becomes paramount. A higher α
+
+may overemphasize the policy prior, which can be slightly imprecise in extreme edge cases, while the baseline MPPI lacks sufficient guidance to discover the narrow escape route. In contrast, the α=0 .1 setting provides an effective balance. To further validate the representations learned by the RAY-TOLD architecture, we conducted a t-SNE dimensionality reduction analysis on the 128-dimensional latent state vectors 
+
+zt generated sequentially during the evaluation rollouts. As shown in Fig. 4, the data points are colored according to the agent’s distance to the nearest dynamic obstacle at that timestep. The visualization reveals a highly structured latent manifold: states corresponding to imminent collision risk (red) cluster distinctly away from safe, open-space states (blue), with a smooth topological transition between them. This strongly implies that the encoder network hθ is not merely memorizing the high-dimensional, 186-element raw observation vector, but is fundamentally abstracting the phys-ical geometry and local interaction risks. Consequently, this contiguous and physically meaningful latent space provides a robust foundation for both the Value Function Cω to forecast long-term safety and the policy prior πξ to smoothly guide the MPPI sampling process. V. C ONCLUSION 
+
+While the baseline MPPI struggles with converging obsta-cles due to sample sparsity and the lack of an informed prior, RAY-TOLD mitigates these limitations by incorporating a learned policy into the sampling process. With stronger guidance ( α=0 .2), it generates efficient, goal-directed trajec-tories by focusing exploration on promising regions of the action space. The latent-space world model further enables anticipation of complex dynamics, such as obstacle reflec-tions, supporting proactive and safe maneuvers. Notably, a balanced guidance strength ( α=0 .1) achieves the most robust performance by effectively trading off policy exploitation and stochastic exploration, highlighting the importance of integrating predictive modeling with tunable policy-guided search. ACKNOWLEDGEMENT 
+
+This work was supported by the research fund of Hanyang University (HY-2025-3158) REFERENCES [1] J. R. Han, H. Thomas, J. Zhang, N. Rhinehart, and T. D. Barfoot, “Dr-mpc: Deep residual model predictive control for real-world social navigation,” IEEE Robotics and Automation Letters , 2025. [2] P. N. Crestaz, L. De Matteis, E. Chane-Sane, N. Mansard, and A. Del Prete, “Td-cd-mppi: Temporal-difference constraint-discounted model predictive path integral control,” IEEE Robotics and Automation Letters , vol. 11, no. 1, pp. 498–505, 2025. [3] Z. Wen, M. Dong, and X. Chen, “Collision-free robot navigation in crowded environments using learning based convex model predictive control,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2024, pp. 5452–5459. [4] S. Han, S. Yang, and M. Choi, “Fast superquadric potential function for collision avoidance of autonomous vehicle,” IEEE Access , vol. 14, pp. 6635–6646, 2026. [5] Y. Lu, Z. Li, Y. Zhou, N. Li, and Y. Mo, “Mpc-inspired reinforcement learning for verifiable model-free control,” in 6th Annual Learning for Dynamics & Control Conference . PMLR, 2024, pp. 399–413. [6] S. Shanks, J. Embley-Riches, J. Liu, A. M. Delfaki, C. Ciliberto, and D. Kanoulas, “Dreamernav: Learning-based autonomous navigation in dynamic indoor environments using world models,” Frontiers in Robotics and AI , vol. 12, p. 1655171, 2025. [7] A. Scannell, K. Kujanp¨ a¨ a, Y. Zhao, M. Nakhaei, A. Solin, and J. Pajarinen, “iqrl–implicitly quantized representations for sample-efficient reinforcement learning,” arXiv preprint arXiv:2406.02696 ,2024. [8] A. Romero, E. Aljalbout, Y. Song, and D. Scaramuzza, “Actor–critic model predictive control: Differentiable optimization meets reinforce-ment learning for agile flight,” IEEE Transactions on Robotics , vol. 42, pp. 673–692, 2025. [9] N. Hansen, X. Wang, and H. Su, “Temporal difference learning for model predictive control,” arXiv preprint arXiv:2203.04955 , 2022. [10] N. Hansen, H. Su, and X. Wang, “Td-mpc2: Scalable, robust world models for continuous control,” arXiv preprint arXiv:2310.16828 ,2023. [11] A. Faust, K. Oslund, O. Ramirez, A. Francis, L. Tapia, M. Fiser, and J. Davidson, “Prm-rl: Long-range robotic navigation tasks by combining reinforcement learning and sampling-based planning,” in 
+
+2018 IEEE international conference on robotics and automation (ICRA) . IEEE, 2018, pp. 5113–5120. [12] P. Roth, J. Frey, C. Cadena, and M. Hutter, “Learned perceptive for-ward dynamics model for safe and platform-aware robotic navigation,” 
+
+arXiv preprint arXiv:2504.19322 , 2025. [13] X. Zhang, W. Pan, C. Li, X. Xu, X. Wang, R. Zhang, and D. Hu, “Toward scalable multirobot control: Fast policy learning in distributed mpc,” IEEE Transactions on Robotics , vol. 41, pp. 1491–1512, 2025. [14] J. Shin, A. Hakobyan, M. Park, Y. Kim, G. Kim, and I. Yang, “Infusing model predictive control into meta-reinforcement learning for mobile robots in dynamic environments,” IEEE Robotics and Automation Letters , vol. 7, no. 4, pp. 10 065–10 072, 2022. [15] D. Ha and J. Schmidhuber, “World models,” arXiv preprint arXiv:1803.10122 , 2018. [16] X. Zhang, Z. Wu, H. Hu, J. Yang, and P. Wang, “Integrating driving-aware world model with mpc for autonomous driving at unsignalized t-intersections,” IEEE Transactions on Intelligent Transportation Sys-tems , 2025. [17] X. Xiao, T. Zhang, K. Choromanski, E. Lee, A. Francis, J. Varley, S. Tu, S. Singh, P. Xu, F. Xia et al. , “Learning model predictive controllers with real-time attention for real-world navigation,” arXiv preprint arXiv:2209.10780 , 2022. [18] G. Zhou, S. Swaminathan, R. V. Raju, J. S. Guntupalli, W. Lehrach, J. Ortiz, A. Dedieu, M. L´ azaro-Gredilla, and K. Murphy, “Diffusion model predictive control,” arXiv preprint arXiv:2410.05364 , 2024. [19] H. Lin, P. Wang, J. Schneider, and G. Shi, “Td-m(pc) 2: Improving temporal difference mpc through policy constraint,” arXiv preprint arXiv:2502.03550 , 2025. [20] R. Chitnis, Y. Xu, B. Hashemi, L. Lehnert, U. Dogan, Z. Zhu, and O. Delalleau, “Iql-td-mpc: Implicit q-learning for hierarchical model predictive control,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 9154–9160. [21] M. Kotb, C. Weber, M. B. Hafez, and S. Wermter, “Qt-tdm: Planning with transformer dynamics model and autoregressive q-learning,” 
+
+IEEE Robotics and Automation Letters , vol. 10, no. 1, pp. 112–119, 2024. [22] B. Sukhija, L. Treven, C. Sferrazza, F. D¨ orfler, P. Abbeel, and A. Krause, “Sombrl: Scalable and optimistic model-based rl,” arXiv preprint arXiv:2511.20066 , 2025.
