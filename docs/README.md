@@ -6,34 +6,31 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-01
-- 运行时间：2026-05-01 19:55:48 UTC
+- 最新运行日期：2026-05-02
+- 运行时间：2026-05-02 19:36:52 UTC
 - 运行状态：成功
-- 本次总论文数：4
+- 本次总论文数：3
 - 精读区：1
-- 速读区：3
+- 速读区：2
 
 ### 今日简报（AI）
-今日深挖四项机器人前沿成果，重点突破了四足机器人的触觉感知与复杂环境下的动态导航。
-满分论文揭示了触觉反馈在四足机器人操控中的核心作用，而动态避障与社交导航则让机器人更具“人情味”。
-推荐优先研读触觉感知策略，了解机器人如何通过“摸索”实现更精准的复杂任务处理。
-- 详情：[/202605/01/README](/202605/01/README)
+今日聚焦通过第三人称视频生成实现通用人形机器人控制，并深入探讨了基于语义图匹配的鲁棒定位技术。
+重点推荐 ExoActor 提出的交互式控制新范式，以及利用层次化场景图提升复杂环境下机器人定位的准确性。
+建议关注“视频生成驱动控制”的前沿趋势，并尝试将语义关系建模应用于提升 SLAM 系统的环境适应力。
+- 详情：[/202605/02/README](/202605/02/README)
 
 ### 精读区论文标签
-1. [Learning Tactile-Aware Quadrupedal Loco-Manipulation Policies](/202605/01/2604.27224v1-learning-tactile-aware-quadrupedal-loco-manipulation-policies)  
-   标签：评分：10.0/10、query:robot
-   evidence：触觉感知的四足机器人运动与传感策略
+1. [ExoActor: Exocentric Video Generation as Generalizable Interactive Humanoid Control](/202605/02/2604.27711v1-exoactor-exocentric-video-generation-as-generalizable-interactive-humanoid-control)  
+   标签：评分：9.0/10、query:robot
+   evidence：用于交互式人形机器人控制的视频生成
 
 ### 速读区论文标签
-1. [Robot Planning and Situation Handling with Active Perception](/202605/01/2604.26988v1-robot-planning-and-situation-handling-with-active-perception)  
+1. [Robust Graph Matching through Semantic Relationship Generation for SLAM](/202605/02/2604.25404v1-robust-graph-matching-through-semantic-relationship-generation-for-slam)  
    标签：评分：7.0/10、query:robot
-   evidence：规划执行过程中的主动感知与情境处理
-2. [RAY-TOLD: Ray-Based Latent Dynamics for Dense Dynamic Obstacle Avoidance with TDMPC](/202605/01/2604.27450v1-ray-told-ray-based-latent-dynamics-for-dense-dynamic-obstacle-avoidance-with-tdmpc)  
+   evidence：用于SLAM和定位的语义增强图匹配
+2. [Learning-Based Hierarchical Scene Graph Matching for Robot Localization Leveraging Prior Maps](/202605/02/2604.27821v1-learning-based-hierarchical-scene-graph-matching-for-robot-localization-leveraging-prior-maps)  
    标签：评分：7.0/10、query:robot
-   evidence：基于LiDAR的潜空间动力学用于避障和状态表示
-3. [Walk With Me: Long-Horizon Social Navigation for Human-Centric Outdoor Assistance](/202605/01/2604.26839v1-walk-with-me-long-horizon-social-navigation-for-human-centric-outdoor-assistance)  
-   标签：评分：6.0/10、query:robot
-   evidence：基于指令的长程导航与环境感知
+   evidence：室内环境下的机器人定位与场景图匹配
 
 
 <div class="dpr-home-promo-card">
