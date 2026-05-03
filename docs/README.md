@@ -6,31 +6,31 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-02
-- 运行时间：2026-05-02 19:36:52 UTC
+- 最新运行日期：2026-05-03
+- 运行时间：2026-05-03 19:49:31 UTC
 - 运行状态：成功
 - 本次总论文数：3
-- 精读区：1
-- 速读区：2
+- 精读区：0
+- 速读区：3
 
 ### 今日简报（AI）
-今日聚焦通过第三人称视频生成实现通用人形机器人控制，并深入探讨了基于语义图匹配的鲁棒定位技术。
-重点推荐 ExoActor 提出的交互式控制新范式，以及利用层次化场景图提升复杂环境下机器人定位的准确性。
-建议关注“视频生成驱动控制”的前沿趋势，并尝试将语义关系建模应用于提升 SLAM 系统的环境适应力。
-- 详情：[/202605/02/README](/202605/02/README)
+今日聚焦机器人学习前沿，涵盖高通量光影仿真、物理推理基准及居家移动操作框架。
+重点关注
+- 详情：[/202605/03/README](/202605/03/README)
 
 ### 精读区论文标签
-1. [ExoActor: Exocentric Video Generation as Generalizable Interactive Humanoid Control](/202605/02/2604.27711v1-exoactor-exocentric-video-generation-as-generalizable-interactive-humanoid-control)  
-   标签：评分：9.0/10、query:robot
-   evidence：用于交互式人形机器人控制的视频生成
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Robust Graph Matching through Semantic Relationship Generation for SLAM](/202605/02/2604.25404v1-robust-graph-matching-through-semantic-relationship-generation-for-slam)  
+1. [GS-Playground: A High-Throughput Photorealistic Simulator for Vision-Informed Robot Learning](/202605/03/2604.25459v1-gs-playground-a-high-throughput-photorealistic-simulator-for-vision-informed-robot-learning)  
    标签：评分：7.0/10、query:robot
-   evidence：用于SLAM和定位的语义增强图匹配
-2. [Learning-Based Hierarchical Scene Graph Matching for Robot Localization Leveraging Prior Maps](/202605/02/2604.27821v1-learning-based-hierarchical-scene-graph-matching-for-robot-localization-leveraging-prior-maps)  
+   evidence：用于机器人学习和运动模拟的视觉感知范式
+2. [KinDER: A Physical Reasoning Benchmark for Robot Learning and Planning](/202605/03/2604.25788v1-kinder-a-physical-reasoning-benchmark-for-robot-learning-and-planning)  
    标签：评分：7.0/10、query:robot
-   evidence：室内环境下的机器人定位与场景图匹配
+   evidence：机器人学习与运动规划的物理推理基准
+3. [ANCHOR: A Physically Grounded Closed-Loop Framework for Robust Home-Service Mobile Manipulation](/202605/03/2604.25323v1-anchor-a-physically-grounded-closed-loop-framework-for-robust-home-service-mobile-manipulation)  
+   标签：评分：6.0/10、query:robot
+   evidence：移动机器人的环境感知与物理一致性
 
 
 <div class="dpr-home-promo-card">
