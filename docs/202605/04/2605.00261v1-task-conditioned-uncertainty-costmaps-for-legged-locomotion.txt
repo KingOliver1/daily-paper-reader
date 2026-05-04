@@ -1,0 +1,502 @@
+Title: Task-Conditioned Uncertainty Costmaps for Legged Locomotion
+
+URL Source: https://arxiv.org/pdf/2605.00261v1
+
+Published Time: Mon, 04 May 2026 00:22:11 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# Task-Conditioned Uncertainty Costmaps for Legged Locomotion 
+
+Kartikeya Singh 1, Christo Aluckal 1, Romeo Orsolino 2, and Karthik Dantu 1 
+
+> 1
+
+DRONES Lab, University at Buffalo, NY, USA, 
+
+ksingh35@buffalo.edu , 
+
+> 2
+
+Ocado Technology, UK 
+
+Abstract. Legged robots maintain dynamic feasibility through multi-contact interactions with terrain. Learned foothold prediction can pro-vide feasibility-aware costs for motion planning and path selection, but accurately predicting future contacts from perceptual inputs such as height scans remains challenging on highly unstructured terrain, even with a repetitive gait cycle. In this work, we show that modeling epis-temic uncertainty in predicted footholds, conditioned on terrain obser-vations and commanded motion, distinguishes in-distribution from out-of-distribution operating regimes in simulation and real-world settings. This allows a single learned model, trained on limited data distributions, to express uncertainty caused by missing training coverage. We use this learned uncertainty to detect OOD regions and incorporate them into a unified costmap-generation framework for uncertainty-aware path plan-ning. Using these uncertainty-aware costmaps, we evaluate feasibility er-ror across in-distribution and OOD terrains in simulation and real-world settings. The results show improved OOD detection, up to a 37% reduc-tion in simulation feasibility error, and more reliable planning behavior than geometry-only baselines. 
+
+Keywords: Foothold Uncertainty, Uncertainty-Aware Planning, Dynamic Feasibility 
+
+1 Introduction 
+
+Legged robots are increasingly deployed in unstructured environments for tasks such as payload delivery [13], search and rescue [2], and environmental inspec-tion [15]. However, autonomy stacks designed for wheeled robots typically do not reason about whether a planned trajectory will induce unstable or infea-sible contact configurations for a legged robot. Learning-based planners face a related limitation: training data rarely covers the range of terrain geometry and commanded motion encountered during deployment. A common heuristic is to treat terrain roughness as a proxy for locomotion risk [26, 24]. Roughness-based costs are useful, but they do not capture the task-dependent nature of legged locomotion. The same terrain patch may be feasible under slow, conservative motion and infeasible under faster or more dynamic  
+
+> arXiv:2605.00261v1 [cs.RO] 30 Apr 2026 2Singh et al.
+
+commanded motion. Thus, geometric roughness alone cannot distinguish terrain that is intrinsically hard from terrain that becomes risky only under a particular locomotion command. In this work, we address this gap by learning task-conditioned epistemic un-certainty [12, 6] for future foothold prediction and using that uncertainty as a planning cost. Our model predicts future foothold positions from terrain obser-vations and commanded base velocities while estimating epistemic uncertainty through stochastic inference. This uncertainty reflects limited support in the learned input–output mapping and is intended to increase when the model ex-trapolates to out-of-distribution terrain or motion regimes. To evaluate whether uncertainty-aware planning improves dynamic feasibility, we use feasibility mar-gins derived from actuation-aware stability analysis [18, 17, 9]. In simulation and real-world experiments, task-conditioned uncertainty correlates with future foothold error and feasibility degradation, enabling more reliable path selection than geometry-only baselines. Our main contributions are as follows: 
+
+– We develop a foothold prediction model that conditions epistemic uncer-tainty on both height scans and commanded base velocities, allowing the same architecture to distinguish in-distribution (ID) and out-of-distribution (OOD) operating regimes. 
+
+– We train the uncertainty-aware foothold predictor in IsaacSim and deploy it on a quadruped robot in the real world without retraining. 
+
+– We use uncertainty-based foothold predictions to build ID/OOD costmaps and evaluate approximate future feasibility with legged-robot feasibility mar-gins [19]. 
+
+– We integrate the uncertainty costmap with a custom MPPI planner and the NAV2 navigation stack, and evaluate planning performance in simulation and real-world experiments against geometry-only baselines. 
+
+2 Related Work 
+
+The primary challenge in using legged robots for off-road navigation is to in-corporate adequate stability while locomoting. With the advancement in both hardware and software modules of legged robots, researchers have been adapt-ing various measures to determine stability, either by inducing accurate ter-rain information for efficient path/motion planning [10] or by addressing low-level optimization for dynamic stability [18] [19] [14] of the robot on any given terrain. High-dimensionality of these multi-limbed floating-base systems makes it extremely complex to account for the dynamic locomotion and its stabil-ity in complex terrains. In order to evaluate the static or quasi-static stability of legged robots, [18] provides a robust solution. Generally, model-based ap-proaches present optimally controlled TO methods [16]. These approaches are able to capture the simplified dynamics of the robot, but don’t consider feasibil-ity constraints such as torque constraints and friction constraints as presented Task-Conditioned Uncertainty Costmaps for Legged Locomotion 3
+
+in [18]. The significance of these simplified methods can be seen in [18] for the stability estimation of the legged robot. Prior work in legged locomotion has explored predicting or reasoning about footholds using perceptual inputs [3], primarily to enable terrain-aware motion planning. [28] predict viable foothold locations directly from visual observations using convolutional networks, demonstrating that future foot placements can be inferred from perception alone. Uncertainty in such predictions, however, is rarely modeled, leaving planners blind to the reliability of the inferred contacts. Vision-based terrain-aware locomotion systems such as ViTAL [11] further inte-grate perception with foothold and body pose planning to traverse rough terrain. Complementary to foothold selection, [8] [21] proposes foothold evaluation crite-ria that assess the dynamic feasibility of future steps based on robot and terrain properties. Other approaches, like [23] [27], learn foothold adaptation policies that adjust foot placements online in response to visual feedback. While these methods explicitly predict, plan, or adapt footholds, they typically assume in-distribution operating conditions and do not model epistemic uncertainty associ-ated with future foothold predictions. In contrast, our work focuses on estimating task-conditioned uncertainty in predicted future footholds and leveraging this uncertainty to identify unreliable regions and inform feasibility-aware planning under distribution shift. Accurate estimation of future stability and feasibility requires integrating perceptual inputs (e.g., RGB-D or LiDAR) with predictions of the robot’s fu-ture whole-body dynamics. Doing this is highly complicated, given that these quadruped robots are highly nonlinear and mechanically complex. Given a flat surface and a periodic gait cycle, we can design a foothold estimator by either manually supervising the foothold labels [25] [1] or labeling a convex hull repre-sentation using template learning [24] [26]. In the case of non-coplanar surfaces and disturbances in the gait pattern, approximating footholds are extremely un-certain. We use these feasibility estimations to obtain the traversability cost for path planning while modeling for the uncertainty arising in the foothold predic-tions being used for the feasibility estimation due to a lack of training data. [20] remains closest to our work, in which authors model the epistemic uncertainty induced into the controller due to the complexity of the terrain. The IN/OOD detection helps them to utilize a robust adaptation module at the OOD stances. Our work lies in the same domain but accounts for the uncertainty elevated due to the unseen terrains and motion (Commanded Velocities), and not just accounts for terrain observation-based uncertainty. 
+
+3 Uncertainty Approximation for Foothold Prediction on Uneven Terrain 
+
+Given an unstructured scene, our objective is to approximate epistemic un-certainty in quadruped foothold prediction and provide it to a planner for uncertainty-aware planning. Section 3.1 describes the terrain representation, and Section 3.2 describes foothold estimation with uncertainty. 4 Singh et al. 
+
+3.1 Grid Representation for Terrain Characterization 
+
+We use a forward-facing LiDAR to perceive terrain in 3D, using only a frontal slice as shown in Figure 1. This region directly influences upcoming footholds and is encoded using a compact grid-based representation. Quadruped robot Predicted footholds+ uncertainty σ²cmd vel c ₜ             
+
+> Encoding Training Outputs Losses
+> Height scan hₜ→f_grid ∈ℝ¹² MLP predictor MCD+ ensemble Foothold mean
+> μₜ ∈ℝ¹² Concat u ₜ
+> [c ₜ; f_grid] shared Epistemic var.
+> σ²ₑ,ₜ∈ℝ¹²
+> ℒ_pose Foothold regression
+> ℒ_epi Epistemic
+> ℒ_cal Error-uncertainty corr.
+> ℒ= w ₁ℒ_pose + w ₂ℒ_epi + w ₃ℒ_cal
+> LiDAR
+
+Fig. 1: Overview of the training pipeline 
+
+Input Representation : At each timestep, the terrain geometry is rep-resented as a 6 × 17 grid of ele-vation values over a 0.6 m × 1.6 m frontal region, sampled at 0 .1 m res-olution, yielding 102 height measure-ments ( zi,j ). 
+
+Grid Pooling : The frontal height grid is processed via non-overlapping average pooling into a compact ter-rain descriptor fgrid ∈ R12 , capturing coarse frontal terrain structure relevant for uncertainty estimation. 
+
+3.2 Training with Epistemic Uncertainty 
+
+We learn a supervised predictor mapping terrain observations at time t to future foothold positions over horizon H. The supervision target is the stacked 3D positions of four feet in the robot base frame ( yt ∈ R12 ). Training rollouts are generated using a fixed pretrained locomotion policy [22] in IsaacSim. Epistemic uncertainty is estimated via stochastic inference combining ensemble methods with Monte Carlo (MC) dropout [6]. 
+
+Input : Two inputs are constructed: (i) a main input xt for footprint mean prediction, and (ii) uncertainty-only input ut:
+
+ut =
+
+h
+
+ct
+
+|{z} 
+
+vel cmd (3) 
+
+; fgrid (ht)
+
+| {z }
+
+pooled height scan 
+
+i
+
+, (1) where ct ∈ R3 is the commanded base velocity and fgrid (ht) is the grid-pooled height scan defined in subsection 3.1. 
+
+Training: A distributional mean–variance representation is consistent with the law-invariance principle (A6) in [29], which states that risk depends only on the distribution of outcomes. Here, the model learns the predictive distribution and its epistemic uncertainty rather than defining a risk metric directly. The network predicts a footprint mean and epistemic variance: (μt, σ2
+
+e,t ) = fθ (xt, ut), μt ∈ R12 , σ2
+
+e,t ∈ R12 + . (2) Using K = 3 ensemble members and M = 20 MC dropout samples (60 stochastic forward passes), the predictive mean and epistemic variance are: ¯μt = 1
+
+KM 
+
+X
+
+k,m 
+
+μ(k,m )
+
+t , σ2
+
+e,t = 1
+
+KM − 1
+
+X
+
+k,m 
+
+
+
+μ(k,m )
+
+t − ¯μt
+
+⊙2
+
+, (3) Task-Conditioned Uncertainty Costmaps for Legged Locomotion 5
+
+where ⊙ denotes elementwise multiplication and σ2 
+
+> e,t
+
+is clamped to a safe numeric range during training. 
+
+Loss : We optimize three terms: 
+
+L = wpose Lpose + wepi Lepi + wcal Lcal , (4) 
+
+Lpose = 112 ∥ ¯μt − yt∥22, Lepi = 112 12 X
+
+> j=1
+
+h
+
+(yt,j − ¯μt,j )2 − σ2
+
+> e,t,j
+
+i
+
+> +
+
+, (5) where [ z]+ = max(0 , z ) penalizes overconfidence. For calibration, we compute per-sample mean position error et = 14
+
+P4 
+
+> i=1
+
+∥ ¯μt,i −yt,i ∥2 and scalar uncertainty summary ¯ st = 112 
+
+P 
+
+> j
+
+σ2 
+
+> e,t,j
+
+. Within each minibatch, errors are linearly mapped to a target uncertainty band [ smin , s max ]: 
+
+s⋆t = smin + ( smax − smin ) · et − emin 
+
+(emax − emin ) + ϵ , (6) and the calibration loss enforces both absolute alignment and positive rank cor-relation: 
+
+Lcal = E[|¯st − s⋆t |] + λ (1 − ρ(e, ¯s)) , (7) where ρ(e, ¯s) is the Pearson correlation over minibatch vectors e = {et}Bt=1 and ¯s = {¯st}Bt=1 , and λ controls the correlation regularizer strength. 
+
+Inference Output : At each timestep, the network outputs a 12-D foothold mean and a 12-D epistemic variance vector. 
+
+4 Uncertainty-Aware Planning 
+
+This section describes the uncertainty costmap derived from the learned uncer-tainty in Section 3.2 and its integration into two motion planning frameworks. In simulation, we use a custom MPPI planner that directly optimizes trajec-tory costs using learned uncertainty. For real-world deployment, we integrate the costmap into the navigation stack from [7] on the Unitree Go1. 
+
+4.1 Uncertainty Costmap Generation 
+
+Per-leg epistemic uncertainty ¯ σ2 
+
+> e,i
+
+is obtained by averaging the three per-coordinate variances from σ2 
+
+> e,t
+
+(from eq. (3)): ¯ σ2 
+
+> e,i
+
+= 13
+
+P 
+
+> j∈leg i
+
+σ2 
+
+> e,t,j
+
+, i = 1 , . . . , 4,. This value is converted to a cost ci = min(100 , α ¯σ2
+
+> e,i
+
+) where α is a tunable scaling factor (for better thresholding). A Gaussian blob centered at each predicted foot location ( xi, y i) encodes spatial uncertainty decay: 
+
+C(x, y ) = max 
+
+> i
+
+
+
+ci exp 
+
+
+
+− ∥(x, y ) − (xi, y i)∥2
+
+2σ2
+
+> b
+
+ 
+
+, (8) where σb is derived from a defined blob radius. 6 Singh et al. 
+
+4.2 MPPI-Based Navigation Planner 
+
+We employ an MPPI planner to generate high-level velocity commands for the Go1 in rough terrain, operating in a receding-horizon fashion. At each step, K
+
+control sequences are sampled, rolled out via a discrete-time unicycle model, scored by a terrain-aware cost, and combined via a softmin-weighted update. 
+
+Kinematic model: xt+1 =
+
+xt + vt cos ψt ∆t yt + vt sin ψt ∆t ψt + ωt∆t 
+
+ , τ (k) 
+
+> t
+
+= ¯ τ t + ϵ(k) 
+
+> t
+
+, ϵ(k) 
+
+> t
+
+∼ N (0 , Σ ), (9) where τ (k) 
+
+> t
+
+denotes the k-th sampled control sequence and ¯ τ t is the nominal control. 
+
+Terrain-aware cost: 
+
+J(k) =
+
+> H
+
+X
+
+> t=1
+
+
+
+λg ∥pt−pgoal ∥+ λobs cobs (pt)
+
+| {z }
+
+> Obstacle baseline
+
++ λr crough (pt)
+
+| {z }
+
+> Roughness baseline
+
++ λuC(pt)
+
+| {z }
+
+> proposed
+
++λctrl ∥τ (k) 
+
+> t
+
+∥2
+
+,
+
+(10) where λg encourages goal progress and λctrl penalizes control effort (both active in all configurations). Exactly one of the three middle terms is active per plan-ning run: baseline (i) uses only λobs cobs (pt), a fixed height-threshold obstacle cost; baseline (ii) uses only λr crough (pt), a height-scan variance roughness cost; and the proposed method uses only λuC(pt), the learned epistemic uncertainty costmap from section 4.1. The remaining two weights are set to zero accordingly. 
+
+Control update: 
+
+w(k) = exp( −J(k)/β )
+
+P 
+
+> i
+
+exp( −J(i)/β ) , ¯τ t ← X
+
+> k
+
+w(k)τ (k) 
+
+> t
+
+, (11) where β is the temperature parameter. The first control is executed, and the horizon shifts forward. The controller update naturally generates the rollouts with velocities outside the training distribution that we utilize in the ID/OOD detection during our real-world experiments. 
+
+5 Feasibility Evaluation Using Proposed Uncertainty 
+
+To evaluate robot feasibility while traversing the planned path in both MPPI and NAV2 runs, we adapt stability margins from [18, 19] as the metric. We compare predicted vs. actual footholds. At each timestep t, predicted footholds ˆpt ∈ R4×3 are transformed to world frame and compared against simulator contact positions pt. For real robot, we obtain actual footholds via forward kinematics. Margins are computed via the iterative projection (IP) method: 
+
+mpred  
+
+> t
+
+= IP(ˆ pt), mactual  
+
+> t
+
+= IP( pt), (12) Task-Conditioned Uncertainty Costmaps for Legged Locomotion 7
+
+where m > 0 indicates feasibility and m < 0 infeasibility. Margins are mapped to scalar costs: 
+
+c(m) = 
+
+
+
+1
+
+m + ϵ , m > 0,
+
+|m| + 1 , m ≤ 0,
+
+(13) with ϵ = 0 .01. The per-step feasibility error et = |c(mpred  
+
+> t
+
+)−c(mactual  
+
+> t
+
+)| is averaged over each trajectory; lower values indicate better alignment with true robot stability. 
+
+6 Ablation 
+
+In this section, we analyze how different input sources affect predicted uncer-tainty and its correlation with foothold prediction error. Figure 2 shows the t-SNE distribution shift between training and three OOD conditions: same fea-tures as training (left), OOD terrain with ID velocity (middle), and OOD terrain with varying velocities (right). The rightmost plot shows the additional shift in-duced by OOD velocities, which this work intends to account for. 
+
+Fig. 2: t-SNE of terrain input distribu-tion shift: training (red) vs. OOD test (blue). Left: ID features. Middle: OOD terrain, ID velocity. Right: OOD ter-rain, OOD velocities. Figure 3 shows the learned uncertainty– foothold error correlation on OOD inputs: our terrain+cmd formulation (right column) shows a steeper pos-itive slope and a tighter linear fit than the terrain-only baseline (left column), confirming that conditioning on commanded velocity, along with the terrain roughness, improves cal-ibration. A key distinction between our approach and heuristic OOD detectors based on height-scan variance [24, 26] is what uncertainty represents. Height-variance methods operate purely in in-put space, which remains agnostic to the downstream task and insensitive to whether geometric deviations actually degrade prediction accuracy. In contrast, our epistemic uncertainty is task-conditioned and calibrated to prediction error: trained only on flat terrain with a limited range of commanded velocities, the model yields low uncertainty in-distribution and naturally elevated uncertainty under distribution shift from unseen terrain or velocities. 
+
+7 Experiments 
+
+7.1 Experiment Setup 
+
+The IsaacSim-trained model is deployed to simulation and the real world with-out retraining. Training uses the Unitree Go1 with a height scanner on flat terrain at constant velocity. For real-world deployment, a downward-facing Li-DAR on the robot head replaces the simulated scanner. Given point cloud 8 Singh et al. 
+
+P = {(xk, y k, z k)} in robot frame, we synthesize a 6 ×17 height-scan grid over window x ∈ [0 , S x], y ∈ [−Sy /2, S y /2], flattened row-major to form the frontal height-scan vector. We evaluate the ID/OOD uncertainty across six terrain con-figurations: three simulation terrains (wavy, stepped, spiked rough) each re-peated over three runs from different starting points, and three real-world plat-forms (5 cm raised, 10 cm raised, and a variable-height ramp of 0–15 cm). How-ever, the planner terrain setup had mixed terrains and is shown in fig. 6 as a colored heightmap. 0.44 0.46 0.48 0.50 0.52 0.54                  
+
+> Pose Error
+> 0.106
+> 0.107
+> 0.108
+> 0.109
+> 0.110
+> 0.111
+> Epistemic Uncertainty
+> Terrain-only
+> Samples
+> Linear fit 0.44 0.46 0.48 0.50 0.52 0.54
+> Pose Error
+> 0.106
+> 0.107
+> 0.108
+> 0.109
+> 0.110
+> 0.111
+> Epistemic Uncertainty (terrain + cmd)  Terrain + Command
+> Samples
+> Linear fit 0.400 0.425 0.450 0.475 0.500 0.525 0.550
+> Pose Error
+> 0.106
+> 0.107
+> 0.108
+> 0.109
+> 0.110
+> 0.111
+> 0.112
+> 0.113
+> Epistemic Uncertainty
+> Terrain-only Epistemic Uncertainty
+> Samples
+> Linear fit 0.400 0.425 0.450 0.475 0.500 0.525 0.550
+> Pose Error
+> 0.106
+> 0.108
+> 0.110
+> 0.112
+> 0.114
+> 0.116
+> 0.118
+> 0.120
+> 0.122
+> Epistemic Uncertainty (terrain + cmd)  Terrain + Command Epistemic Uncertainty
+> Samples
+> Linear fit
+
+Fig. 3: Uncertainty–error correlation: terrain-only (left) vs. Proposed (right). 
+
+We train a single model in Isaac-Sim on flat terrain with constant velocities (ID set). Conditions in-ducing distribution shift constitute OOD; elevated uncertainty under OOD is enforced via Lcal (Equa-tion (7)). Baselines: (i) Terrain-only uncertainty (Roughness) : height-scan-variance OOD detection treat-ing high-variance regions as lethal, independent of commanded motion. 
+
+(ii) Obstacle-only : avoids obstacles via a fixed height threshold, without uncertainty modeling. “Baseline Uncertainty” refers to (i) unless stated other-wise. 
+
+7.2 ID–OOD Distinction Time  Time 
+
+Fig. 4: Terrain-only vs Proposed uncer-tainty. Darker shade = uncertainty spike. 
+
+We assess whether the proposed epistemic uncertainty reliably distin-guishes ID from OOD terrain re-gions, and whether detected OOD re-gions correspond to genuinely harder footholds. At each timestep t, the pro-posed method computes the scalar epistemic summary ¯ st (from eq. (3)) and the terrain-only baseline com-putes height-scan variance Var( ht). Each method’s base threshold is the mean of its signal over ID training trajectories: θprop = EID [¯ st] , θterrain =
+
+EID [Var( ht)] . Contiguous runs exceeding the threshold are grouped into can-didate OOD segments. The top-K segments by mean uncertainty are labeled OOD and the remaining segments ID, where K equals the number of distinct terrain transitions in the test environment. A well-calibrated signal yields lower error in ID and higher error in OOD regions producing a larger ID ↓/OOD ↑ gap. Figure 4 shows the two signals over a real-world traversal; the proposed un-certainty spikes at multiple transitions caused by terrain variation and varying velocities, while the terrain-only signal responds mainly near the raised platform. Task-Conditioned Uncertainty Costmaps for Legged Locomotion 9
+
+Table 1: Foothold error (cm) in ID/OOD regions across terrains. Our method consistently achieves a larger ID ↓/OOD ↑ gap.                                                                                   
+
+> Simulation —Real-world
+> Wavy Step Spike ID OOD ID OOD ID OOD Base 18 20 18 20 18 20 Ours 17 21 17 21 17 21
+> Base 16 18 16 19 17 19 Ours 16 19 16 19 17 19
+> Base 17 14 17 19 17 20 Ours 17 19 17 20 17 27
+> 5cm 10cm Ramp ID OOD ID OOD ID OOD Base 15 27 12 09 13 06 Ours 16 34 12 12 13 13
+> Base 16 11 18 14 28 12 Ours 16 26 18 16 23 15
+> Base 18 13 13 12 13 11 Ours 18 16 13 18 28 21
+
+Fig. 5: KDE of goal-progress across 20 different MPPI planning runs. 
+
+Table 1 reports foothold prediction er-ror within detected ID and OOD regions. Our method consistently achieves a larger ID ↓/OOD ↑ gap across all three simulation terrains (wavy, stepped, spiked), confirm-ing that detected OOD regions correspond to genuinely harder footholds. Lower OOD error in baseline-detected regions suggests missed detections, with difficult footholds incorrectly classified as ID segments. 
+
+7.3 Feasibility and Costmap Evaluation Cavity  Flat  Raised Depression   
+
+> 12
+> 34
+
+Fig. 6: Progressive effect of uncertainty weighting on planning. From (1) to (4), increasing uncertainty cost shifts the planner from aggressive, risk-prone trajectories to conservative paths that avoid uncertain terrain. We evaluate the feasibility of the path traversed by the robot as ex-plained in Section 5. In this experiment, we compare our proposed path with two baselines: (i) obstacle-only, which uses a fixed height threshold, and (ii) roughness-only, which uses height-scan variance as a lethal cost. Evaluation is conducted in both simulation, using the mixed terrain shown in Figure 6, and in the real world on the Unitree Go1 via NAV2 as shown in Figure 7. We run 10 independent MPPI plan-ning experiments per costmap formula-tion, each from a randomized start configuration on the mixed simulation ter-rain. Feasibility error et = |c(mpred  
+
+> t
+
+)−c(mactual  
+
+> t
+
+)| is averaged over each trajectory (from Section 5), and reported as mean ± std across timesteps. Lower feasibility error indicates better alignment between the planned path and true robot stabil-ity.Table 2 reports feasibility error across 10 planning experiments on the mixed simulation terrain shown in Figure 6. Each experiment corresponds to an inde-10 Singh et al. 
+
+pendent planning run from a randomized start configuration. Our uncertainty-based costmap achieves the lowest mean feasibility error, with a 37% lower mean error, outperforming both the obstacle-only and roughness-only baselines. SHeight  Proposed  Obstacle  Roughness  G
+
+Fig. 7: Planning results using NAV2 on Unitree Go1 robot. The purple patch marks the anomaly induced by the OOD velocity and roughness, created by plac-ing a 5cm board along the path. 
+
+Figure 6 shows the progressive ef-fect (from 1 to 4 in increasing order of uncertainty threshold) of uncertainty weighting on planning paths for all three methods across representative terrain configurations containing flat regions, depressions, raised terrain, and pits. The proposed cost (blue path) consis-tently routes through lower-uncertainty regions, while the obstacle-only baseline (red path) takes a shorter but riskier paths, and the roughness baseline (pur-ple path) is overly conservative on geo-metrically rough but dynamically feasi-ble terrain. Figure 5 shows the distribution of goal-progress scores across 20 MPPI planning runs under each costmap for-mulation. The proposed uncertainty-based costmap achieves the highest median progress and the tightest distribution, indicating more consistent goal-directed behavior. The roughness baseline shows the widest spread, reflecting its ten-dency to block feasible paths by treating geometrically rough but dynamically traversable terrain as lethal. The obstacle-only baseline achieves competitive median progress but at the cost of higher feasibility error, as shown in Table 2. Table 2: Feasibility error (Mean ± Std) for 10 MPPI runs.                                                                                             
+
+> Exp Obs Rough Ours 116 .2±29 .121 .7±27 .715 .2±22 .3
+> 217 .0±31 .717 .3±31 .215 .2±22 .3
+> 315 .9±28 .121 .0±29 .914 .6±21 .1
+> 426 .8±38 .418 .4±32 .212 .7±20 .2
+> 524 .75 ±35 .930 .0±41 .220 .1±35 .7
+> 616 .03 ±30 .619 .9±32 .914 .7±28 .7
+> 721 .41 ±33 .913 .1±22 .714 .4±35 .3823 .62 ±35 .021 .3±33 .415 .3±24 .3
+> 981 .18 ±247 .7 75 .3±242 .523 .0±40 .6
+> 10 20 .99 ±28 .712 .0±23 .520 .7±34 .2
+
+Figure 7 shows real-world Nav2 in-tegration. The proposed costmap in-creases cost near the small 2cm ramp placed as an anomaly within the lookahead horizon, while the terrain-only roughness baseline fails to reflect the motion-induced uncertainty at the same location, and the obstacle-only Baseline does not register the ramp as a hazard. 
+
+8 Conclusion and Future Work 
+
+We presented a feasibility-aware navigation cost for legged robots based on task-conditioned epistemic uncertainty in future foothold prediction. By jointly predicting footholds and their uncertainty from terrain observations and com-manded motion, the approach identifies ID and OOD operating regimes without explicit terrain classification or retraining. Experiments across simulation and real-world terrains show that uncertainty-based costmaps achieve up to 37% lower feasibility error than geometry-only baselines and support zero-shot sim-to-real deployment from a single trained model. The current system incorporates uncertainty at the planning level without modifying the low-level controller, which keeps the method controller agnostic and straightforward to integrate. Future work will use the feasibility cost for closed-loop gait adaptation and extend training to dynamic velocity commands to further reduce the sim-to-real gap. 
+
+# Bibliography 
+
+[1] Max Asselmeier, Ye Zhao, and Patricio A Vela. Steppability-informed quadrupedal contact planning through deep visual search heuristics. arXiv preprint arXiv:2501.00112 , 2024. [2] C Dario Bellicoso, Marko Bjelonic, Lorenz Wellhausen, Kai Holtmann, Fabian G¨ unther, Marco Tranzatto, Peter Fankhauser, and Marco Hutter. Advances in real-world applications for legged robots. Journal of Field Robotics , 35(8):1311–1326, 2018. [3] Dominik Belter, Jakub Bednarek, Hsiu-Chin Lin, Guiyang Xin, and Michael Mistry. Single-shot foothold selection and constraint evaluation for quadruped locomotion. In 2019 International Conference on Robotics and Automation (ICRA) , pages 7441–7447. IEEE, 2019. [4] Xiaoyi Cai, Siddharth Ancha, Lakshay Sharma, Philip R Osteen, Bernadette Bucher, Stephen Phillips, Jiuguang Wang, Michael Everett, Nicholas Roy, and Jonathan P How. Evora: Deep evidential traversability learning for risk-aware off-road autonomy. IEEE Transactions on Robotics ,40:3756–3777, 2024. [5] Xiaoyi Cai, James Queeney, Tong Xu, Aniket Datar, Chenhui Pan, Max Miller, Ashton Flather, Philip R Osteen, Nicholas Roy, Xuesu Xiao, et al. Pietra: Physics-informed evidential learning for traversing out-of-distribution terrain. IEEE Robotics and Automation Letters , 10(3):2359– 2366, 2025. [6] Matthew Chan, Maria Molina, and Chris Metzler. Estimating epistemic and aleatoric uncertainty with a single model. Advances in Neural Information Processing Systems , 37:109845–109870, 2024. [7] Pangcheng David Cen Cheng, Marina Indri, Fiorella Sibona, Matteo De Rose, and Gianluca Prato. Dynamic path planning of a mobile robot adopting a costmap layer approach in ros2. In 2022 IEEE 27th International Conference on Emerging Technologies and Factory Automation (ETFA) ,pages 1–8. IEEE, 2022. [8] Luca Clemente, Octavio Villarreal, Angelo Bratta, Michele Focchi, Victor Barasuol, Giovanni Gerardo Muscolo, and Claudio Semini. Foothold eval-uation criterion for dynamic transition feasibility for quadruped robots. In 
+
+2022 International Conference on Robotics and Automation (ICRA) , pages 4679–4685. IEEE, 2022. 12 Singh et al. 
+
+[9] Andrea Del Prete, Steve Tonneau, and Nicolas Mansard. Fast algorithms to test robust static equilibrium for legged robots. In Proceedings of the IEEE International Conference on Robotics and Automation (ICRA) , 2016. [10] Mohamed Elnoor, Adarsh Jagan Sathyamoorthy, Kasun Weerakoon, and Dinesh Manocha. Pronav: Proprioceptive traversability estimation for legged robot navigation in outdoor environments. IEEE Robotics and Au-tomation Letters , 9(8):7190–7197, 2024. [11] Shamel Fahmi, Victor Barasuol, Domingo Esteban, Octavio Villarreal, and Claudio Semini. Vital: Vision-based terrain-aware locomotion for legged robots. IEEE Transactions on Robotics , 39(2):885–904, 2022. [12] Alec Farid, Sushant Veer, and Anirudha Majumdar. Task-driven out-of-distribution detection with statistical guarantees for robot learning. In 
+
+Conference on Robot Learning , pages 970–980. PMLR, 2022. [13] Miguel Figliozzi and Dylan Jennings. Autonomous delivery robots and their potential impacts on urban freight energy consumption and emissions. 
+
+Transportation research procedia , 46:21–28, 2020. [14] Siddhant Gangapurwala, Mathieu Geisert, Romeo Orsolino, Maurice Fal-lon, and Ioannis Havoutis. Rloc: Terrain-aware legged locomotion using re-inforcement learning and optimal control. IEEE Transactions on Robotics ,38(5):2908–2927, 2022. [15] Hendrik Kolvenbach, Christian B¨ artschi, Lorenz Wellhausen, Ruben Grandia, and Marco Hutter. Haptic inspection of planetary soils with legged robots. IEEE Robotics and Automation Letters , 4(2):1626–1632, 2019. [16] Vivian S Medeiros, Edo Jelavic, Marko Bjelonic, Roland Siegwart, Marco A Meggiolaro, and Marco Hutter. Trajectory optimization for wheeled-legged quadrupedal robots driving in challenging terrain. IEEE Robotics and Au-tomation Letters , 5(3):4172–4179, 2020. [17] Romeo Orsolino, Michele Focchi, Carlos Mastalli, Hongkai Dai, Darwin G. Caldwell, and Claudio Semini. Application of wrench-based feasibility anal-ysis to the online trajectory optimization of legged robots. IEEE Robotics and Automation Letters , 3(4):3363–3370, 2018. [18] Romeo Orsolino, Michele Focchi, St´ ephane Caron, Gennaro Raiola, Victor Barasuol, Darwin G Caldwell, and Claudio Semini. Feasible region: An actuation-aware extension of the support region. IEEE Transactions on Robotics , 36(4):1239–1255, 2020. [19] Romeo Orsolino, Siddhant Gangapurwala, Oliwier Melon, Mathieu Geisert, Ioannis Havoutis, and Maurice Fallon. Rapid stability margin estimation for contact-rich locomotion. In 2021 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pages 8485–8492. IEEE, 2021. [20] James Queeney, Xiaoyi Cai, Alexander Schperberg, Radu Corcodel, Mouhacine Benosman, and Jonathan P How. Gram: Generalization in deep rl with a robust adaptation module. IEEE Robotics and Automation Letters ,2025. [21] Junli Ren, Yingru Dai, Bowen Liu, Pengwei Xie, and Guijin Wang. Hierar-chical vision navigation system for quadruped robots with foothold adap-tation learning. Sensors , 23(11):5194, 2023. Task-Conditioned Uncertainty Costmaps for Legged Locomotion 13 
+
+[22] Nikita Rudin, David Hoeller, Philipp Reist, and Marco Hutter. Learning to walk in minutes using massively parallel deep reinforcement learning. In 
+
+Conference on robot learning , pages 91–100. PMLR, 2022. [23] Vassilios Tsounis, Mitja Alge, Joonho Lee, Farbod Farshidian, and Marco Hutter. Deepgait: Planning and control of quadrupedal gaits using deep reinforcement learning. IEEE Robotics and Automation Letters , 5(2):3699– 3706, 2020. [24] Lorenz Wellhausen and Marco Hutter. Rough terrain navigation for legged robots using reachability planning and template learning. In 2021 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pages 6914–6921. IEEE, 2021. [25] Lorenz Wellhausen, Alexey Dosovitskiy, Ren´ e Ranftl, Krzysztof Walas, Ce-sar Cadena, and Marco Hutter. Where should i walk? predicting terrain properties from images via self-supervised learning. IEEE Robotics and Automation Letters , 4(2):1509–1516, 2019. [26] Martin Wermelinger, P´ eter Fankhauser, Remo Diethelm, Philipp Kr¨ usi, Roland Siegwart, and Marco Hutter. Navigation planning for legged robots in challenging terrain. In 2016 IEEE/RSJ International Conference on In-telligent Robots and Systems (IROS) , pages 1184–1189. IEEE, 2016. [27] Jiyu Yu, Dongqi Wang, Zhenghan Chen, Ci Chen, Rong Xiong, and Yue Wang. Foothold-based planning for legged robot autonomous navigation over uneven terrain. IEEE/ASME Transactions on Mechatronics , 2025. [28] Wuming Zhang and Kris Hauser. Single-image footstep prediction for versa-tile legged locomotion. In 2018 IEEE International Conference on Robotics and Automation (ICRA) , pages 4407–4413. IEEE, 2018. [29] Anirudha Majumdar and Marco Pavone. How should a robot assess risk? Towards an axiomatic theory of risk in robotics. In Robotics Research: The 18th International Symposium (ISRR) , pages 75–84. Springer, 2019.

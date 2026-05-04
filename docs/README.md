@@ -6,31 +6,31 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-03
-- 运行时间：2026-05-03 19:49:31 UTC
+- 最新运行日期：2026-05-04
+- 运行时间：2026-05-04 20:04:46 UTC
 - 运行状态：成功
 - 本次总论文数：3
-- 精读区：0
-- 速读区：3
+- 精读区：1
+- 速读区：2
 
 ### 今日简报（AI）
-今日聚焦机器人学习前沿，涵盖高通量光影仿真、物理推理基准及居家移动操作框架。
-重点关注
-- 详情：[/202605/03/README](/202605/03/README)
+今日聚焦足式机器人运动规划，深度解析任务条件下的不确定性代价地图。
+重点推荐 9.0 分佳作，其通过任务感知的代价地图显著提升了足式机器人的鲁棒性，并同步梳理了机器人世界模型的前沿综述。
+建议优先研读高分论文以掌握不确定性建模技巧，同时通过综述快速
+- 详情：[/202605/04/README](/202605/04/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Task-Conditioned Uncertainty Costmaps for Legged Locomotion](/202605/04/2605.00261v1-task-conditioned-uncertainty-costmaps-for-legged-locomotion)  
+   标签：评分：9.0/10、query:robot
+   evidence：足式机器人运动中落脚点预测的不确定性代价地图
 
 ### 速读区论文标签
-1. [GS-Playground: A High-Throughput Photorealistic Simulator for Vision-Informed Robot Learning](/202605/03/2604.25459v1-gs-playground-a-high-throughput-photorealistic-simulator-for-vision-informed-robot-learning)  
-   标签：评分：7.0/10、query:robot
-   evidence：用于机器人学习和运动模拟的视觉感知范式
-2. [KinDER: A Physical Reasoning Benchmark for Robot Learning and Planning](/202605/03/2604.25788v1-kinder-a-physical-reasoning-benchmark-for-robot-learning-and-planning)  
-   标签：评分：7.0/10、query:robot
-   evidence：机器人学习与运动规划的物理推理基准
-3. [ANCHOR: A Physically Grounded Closed-Loop Framework for Robust Home-Service Mobile Manipulation](/202605/03/2604.25323v1-anchor-a-physically-grounded-closed-loop-framework-for-robust-home-service-mobile-manipulation)  
+1. [World Model for Robot Learning: A Comprehensive Survey](/202605/04/2605.00080v1-world-model-for-robot-learning-a-comprehensive-survey)  
    标签：评分：6.0/10、query:robot
-   evidence：移动机器人的环境感知与物理一致性
+   evidence：机器人学习与规划的世界模型综述
+2. [Stereo Multistage Spatial Attention for Real-Time Mobile Manipulation Under Visual Scale Variation and Disturbances](/202605/04/2605.00471v1-stereo-multistage-spatial-attention-for-real-time-mobile-manipulation-under-visual-scale-variation-and-disturbances)  
+   标签：评分：6.0/10、query:robot
+   evidence：自主机器人运动的机载视觉感知
 
 
 <div class="dpr-home-promo-card">
