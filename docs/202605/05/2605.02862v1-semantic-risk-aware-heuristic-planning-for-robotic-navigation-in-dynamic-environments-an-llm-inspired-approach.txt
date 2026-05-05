@@ -1,0 +1,189 @@
+Title: Semantic Risk-Aware Heuristic Planning for Robotic Navigation in Dynamic Environments: An LLM-Inspired Approach
+
+URL Source: https://arxiv.org/pdf/2605.02862v1
+
+Published Time: Tue, 05 May 2026 02:22:03 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+# Semantic Risk-Aware Heuristic Planning for Robotic Navigation in Dynamic Environments: An LLM-Inspired Approach 
+
+Hamza Ahmed Durrani Sejong University, Computer Science Engineering 
+
+hamzadurrani30@gmail.com 
+
+Rafay Suleman Durrani Technische Universität Ilmenau, Computer Engineering 
+
+rafaysuleman19@gmail.com 
+
+April 2026 
+
+# Abstract 
+
+The integration of Large Language Model (LLM) reason-ing principles into classical robot path planning represents a rapidly emerging research direction. In this paper, we propose a Semantic Risk-Aware Heuristic (SRAH) planner that en-codes LLM-inspired cost functions penalising geometrically cluttered or high-risk zones into an A ∗ search framework, augmented with closed-loop replanning upon dynamic ob-stacle detection. We evaluate SRAH against two established baselines Breadth-First Search (BFS) with replanning and a Greedy heuristic without replanning across 200 randomised trials in a 15 ×15 grid-world with 20% static obstacle density and stochastic dynamic obstacles. SRAH achieves a task suc-cess rate of 62.0%, outperforming BFS (56.5%) by 9.7% rel-ative improvement and Greedy (4.0%) by a large margin. We further analyse the trade-off between planning overhead, path efficiency, and failure-recovery count, and demonstrate via an obstacle-density ablation that semantic cost shaping con-sistently improves navigation across environments of varying difficulty. Our results suggest that even lightweight, LLM-inspired heuristics provide measurable safety and robustness gains for autonomous robot navigation. 
+
+Keywords: robot task planning, LLM-heuristic, A ∗ search, dynamic obstacles, semantic cost function, failure recovery, autonomous navigation. 
+
+# 1 Introduction 
+
+Autonomous robot navigation in unstructured environments is a long-standing challenge in robotics [ 1]. Classical planners such as Dijkstra’s algorithm and A ∗ are well-studied and provably optimal under static conditions, yet they are brittle in the face of dynamic obstacles, partial observability, and semantically complex task specifications [2]. The recent proliferation of Large Language Models (LLMs) has sparked interest in leveraging their broad world knowl-edge and commonsense reasoning to guide robotic be-haviour [ 3 , 4]. Approaches such as SayCan [ 4], RT-2 [ 5 ], and PaLM-E [ 6 ] demonstrate that grounding language models in physical actions substantially improves task success rates. However, these methods typically require either large-scale model inference at each planning step which is computation-ally prohibitive on edge hardware or curated robot-specific training data. We address this gap by distilling a key LLM principle semantic risk assessment into a lightweight, interpretable cost function that can be computed in microseconds with zero model inference at runtime. Our core insight is: LLMs reason about spatial risk by identifying geometrically constrained zones with limited escape options. We operationalise this as a local obstacle-adjacency score and embed it into A ∗ as an additive heuristic penalty, yielding the Semantic Risk-Aware Heuristic (SRAH) planner. Concretely, this paper makes the following contributions: 1. We propose a novel LLM-inspired semantic cost function for grid-based robot navigation. 2. We integrate closed-loop dynamic replanning into SRAH. 3. We conduct a rigorous empirical evaluation across 200 tri-als comparing SRAH to BFS and Greedy baselines under dynamic obstacle conditions. 4. We present an obstacle-density ablation study across five density levels ( ρ ∈ { 0.10 , . . . , 0.30 }). 
+
+# 2 Related Work 
+
+2.1 Classical Robot Planning 
+
+Classical planning methods including BFS, Dijkstra, and A ∗
+
+remain foundational in robotics [ 7]. A ∗ with an admissible 1
+
+> arXiv:2605.02862v1 [cs.RO] 4 May 2026
+
+heuristic guarantees optimality and completeness in finite graphs. Variants such as D ∗ Lite [ 8 ] and ARA ∗ [ 9] extend these properties to dynamic and anytime settings. However, these methods treat all free cells as equivalent and lack se-mantic reasoning about cell riskiness [15]. 
+
+2.2 LLM-Based Task Planning for Robots 
+
+Inner Monologue [ 10 ] and ProgPrompt [ 11 ] use LLMs as closed-loop planners that re-generate plans based on envi-ronment feedback. SayPlan [ 12 ] decomposes long-horizon tasks into subtask graphs guided by GPT-4. A comprehen-sive survey of LLMs for multi-robot systems is provided by 
+
+(author?) [16] . While powerful, these methods introduce high latency (typically 1 10 seconds per planning step) due to LLM inference. In contrast, our approach distils LLM reasoning patterns offline into a cost function that requires zero inference overhead at deployment. 
+
+2.3 Semantic Cost Functions 
+
+Cost-sensitive planning with semantic terrain maps has been studied in outdoor navigation [ 13 ] and indoor service robotics [ 14 ]. Our work is closest in spirit to these approaches but differs in that our cost function is derived from structural geometry (local obstacle density) rather than labelled terrain categories, making it applicable without semantic segmenta-tion. 
+
+# 3 Methodology 
+
+3.1 Environment Model 
+
+We model the environment as a discrete N ×N grid G,where each cell s ∈ G is either free ( G[s]=0 ) or blocked (G[s]=1 ). The robot occupies a single cell and moves with 4-connectivity (up, down, left, right). Static obstacles are placed uniformly at random with density ρ ∈ [0 .10 , 0.30] . Dynamic obstacles appear stochastically in cells adjacent to the agent at each timestep with probability pdyn = 0 .06 , simulating real-world moving objects or sensor noise. 
+
+3.2 Semantic Risk-Aware Heuristic (SRAH) 
+
+The key innovation of SRAH is the semantic cost function 
+
+φ(s). For each free cell s, we compute the number of adja-cent blocked cells A(s) in its 8-neighbourhood and assign an additive traversal penalty: 
+
+φ(s) = 
+
+
+
+2.0 if A(s) ≥ 3 (bottleneck) 
+
+0.8 if A(s) = 2 (moderate risk) 
+
+0.0 otherwise (open corridor) (1) 
+
+Algorithm 1 SRAH Planner 
+
+Require: Grid G, start s0, goal sg , pdyn  
+
+> 1:
+
+Compute φ(s) for all s via Eq. (1)  
+
+> 2:
+
+π ← A∗(s0, s g , G, φ, w =1 .2)  
+
+> 3:
+
+s ← s0, steps ← 0 
+
+> 4:
+
+while s̸ = sg and steps < T max do  
+
+> 5:
+
+Update G with dynamic obstacles near s 
+
+> 6:
+
+if next step of π is blocked then  
+
+> 7:
+
+Recompute φ on updated G 
+
+> 8:
+
+π ← A∗(s, s g , G, φ, w =1 .2)  
+
+> 9:
+
+end if  
+
+> 10:
+
+s ← π. next() ; steps += 1  
+
+> 11:
+
+end while  
+
+> 12:
+
+return s=sg (success), steps, replan count This function encodes the LLM principle that narrow, obstacle-surrounded passages carry higher operational risk they offer fewer recovery options if a dynamic obstacle materialises. SRAH then runs A ∗ with total edge cost 
+
+c(s, s ′) = 1 + φ(s′) and heuristic weight w = 1 .2 (weighted A∗, trading a small optimality bound for speed). Replanning is triggered whenever the next planned step is blocked by a newly appeared dynamic obstacle. Algorithm 1 summarises the procedure. 
+
+3.3 Baseline Planners 
+
+BFS with replanning. Standard breadth-first search finds a shortest unweighted path. It replans on dynamic obstacle detection using the same trigger as SRAH. BFS treats all free cells as equal cost, with no semantic bias. 
+
+Greedy (no replanning). Pure best-first search using Man-hattan distance as the sole heuristic. It commits to its initial plan and does not replan when dynamic obstacles appear, representing a fixed-policy baseline. This simulates systems with no online adaptation capability a scenario well-known to fail in dynamic settings [8]. 
+
+3.4 Evaluation Protocol 
+
+Each trial samples a new random grid (seed = trial index). All three planners operate on identical grids and face the same sequence of dynamic obstacle events. We measure: 1. Task Success Rate fraction of 200 trials where the agent reaches the goal within Tmax = 300 steps. 2. Steps to Completion path length for successful trials only. 3. Total Planning Time cumulative A ∗/BFS time including all replan events (milliseconds). 4. Replan Count number of times replanning was triggered per trial. 2Figure 1: Task success rate across all three planners over 200 dynamic-obstacle trials. SRAH achieves the highest success rate at 62.0%. 
+
+# 4 Results 
+
+4.1 Main Comparison (200 Trials) 
+
+Table 1 summarises results at ρ = 0 .20 with dynamic ob-stacles ( pdyn = 0 .06 ). SRAH achieves 62.0% task success, outperforming BFS by 5.5 pp (9.7% relative) and Greedy by 58.0 pp. The Greedy planner’s 4.0% success rate in dynamic settings is consistent with the theoretical expectation: with a 30-step path and pdyn = 0 .06 per adjacent cell per step, the probability of encountering at least one blocking obsta-cle without any replanning mechanism is very high. This replicates the failure mode that motivated D ∗ Lite [ 8] and confirms the necessity of closed-loop replanning. 
+
+Table 1: Main results: 200 trials, N =15 , ρ=0 .20 , pdyn =0 .06 .Steps: mean ±std (successful trials only). Best result bold.                             
+
+> Planner Success (%) Steps Time (ms) Replans
+> BFS + Replan 56.5 31 .9±5.30.84 ±0.70 1.66 Greedy (no replan) 4.0 30 .3±1.90.17 ±0.54 0.00 SRAH (ours) 62.0 32 .3±6.22.61 ±2.06 1.80
+
+4.2 Planning Overhead vs. Recovery Capabil-ity 
+
+Figure 3 illustrates the trade-off between planning time and recovery (replan count). SRAH incurs a mean planning time of 2.61 ms approximately 3× higher than BFS due to se-mantic bias computation and weighted A ∗ overhead. This overhead is negligible for real-time systems operating at stan-dard control rates (e.g., 10 50 Hz) and is orders of magnitude below LLM inference times (typically 500 5000 ms [ 16 ]). The higher replan count of SRAH (1.80 vs. 1.66 for BFS) reflects more proactive route revision when semantic risk is high, rather than committing to a risky path. 
+
+Figure 2: Violin plot of steps to completion for successful trials. SRAH and BFS show similar median path lengths, indicating that semantic cost shaping does not significantly elongate paths. 
+
+Figure 3: Planning time (ms) versus mean replan count. SRAH occupies a unique operating point higher recovery than BFS at modest overhead, while Greedy avoids all replanning at the cost of near-total task failure in dynamic settings. 
+
+4.3 Qualitative Path Analysis 
+
+Figure 4 provides a representative 12 ×12 grid-world exam-ple. Orange shading indicates cells with φ(s) > 0. SRAH routes around these regions, preferring open corridors even at marginally greater path length. This behaviour emerges purely from the geometric cost signal no explicit obstacle-type labelling is required. 
+
+4.4 Ablation: Obstacle Density 
+
+Figure 5 shows success rates across five static obstacle den-sities (80 trials each, no dynamic obstacles) to isolate the semantic heuristic’s effect from replanning. SRAH consis-tently outperforms BFS at all densities above 10%, with the advantage widening at 25 30% where narrow corridors be-come prevalent. Greedy maintains moderate performance at low density but degrades substantially as density increases. 3Figure 4: Example 12 ×12 grid-world paths. Orange cells indicate SRAH’s semantic risk zones (high obstacle adjacency). BFS routes through risky corridors; SRAH avoids them, improving resilience to dynamic obstacles.  
+
+> Figure 5: Task success rate vs. static obstacle density (no dynamic obstacles, 80 trials each). SRAH outperforms BFS at all densities above 10%, with increasing advantage at higher clutter levels.
+
+# 5 Discussion 
+
+Our results demonstrate that distilling LLM-inspired semantic reasoning into a lightweight cost function yields consistent im-provements over classical planners in dynamic environments. The core contribution is a principled way to encode “soft” semantic knowledge into a form that is fast, interpretable, and deployable on resource-constrained hardware without any LLM inference at runtime. 
+
+Limitations. The current evaluation is confined to grid-world domains with discrete 4-connectivity. Real robotic systems operate in continuous spaces with non-holonomic dy-namics, sensor noise, and partial observability. The semantic cost function relies on static obstacle geometry and does not account for agent velocity, object semantics (e.g., humans vs. furniture), or long-range scene understanding. Additionally, the dynamic obstacle model (uniform random adjacency) is simplified compared to real pedestrian motion patterns. 
+
+Future Work. Promising extensions include: (i) replacing the handcrafted adjacency cost with a neural network trained on LLM-annotated risk scores; (ii) extending SRAH to 3D volumetric maps and continuous motion planning (e.g., RRT ∗
+
+or MPPI); and (iii) integration with vision-language models for real-time semantic labelling (e.g., detecting “doorway”, “staircase”) to sharpen the risk signal. 
+
+# 6 Conclusion 
+
+We presented SRAH, a Semantic Risk-Aware Heuristic plan-ner that encodes LLM-inspired spatial risk reasoning into an efficient A ∗ cost function, augmented with dynamic replan-ning. In a controlled 200-trial evaluation, SRAH achieves 62.0% task success in dynamic environments, outperforming BFS (56.5%) and Greedy (4.0%) baselines. An obstacle-density ablation confirms consistent benefits across vary-ing environment complexities. This work establishes a lightweight and interpretable bridge between LLM-level rea-soning and classical robotic planning, contributing toward more robust autonomous navigation systems. 
+
+# References 
+
+[1] S. M. LaValle. Planning Algorithms . Cambridge Uni-versity Press, 2006. [2] S. Thrun, W. Burgard, and D. Fox. Probabilistic Robotics . MIT Press, 2005. [3] W. Huang, P. Abbeel, D. Pathak, and I. Mordatch. Lan-guage models as zero-shot planners: Extracting action-able knowledge for embodied agents. In ICML , 2022. [4] M. Ahn et al. Do as I can, not as I say: Grounding language in robotic affordances. In CoRL , 2022. [5] B. Zitkovich et al. RT-2: Vision-language-action models transfer web knowledge to robotic control. In CoRL ,2023. [6] D. Driess et al. PaLM-E: An embodied multimodal language model. In ICML , 2023. [7] P. E. Hart, N. J. Nilsson, and B. Raphael. A formal basis for the heuristic determination of minimum cost paths. 
+
+IEEE Transactions on Systems Science and Cybernetics ,4(2):100 107, 1968. [8] S. Koenig and M. Likhachev. D* lite. In AAAI , 2002. [9] M. Likhachev, G. Gordon, and S. Thrun. ARA*: Any-time A* with provable bounds on sub-optimality. In 
+
+NeurIPS , 2003. [10] W. Huang et al. Inner monologue: Embodied reasoning through planning with language models. In CoRL , 2022. [11] I. Singh et al. ProgPrompt: Generating situated robot task plans using large language models. In ICRA , 2023. 4[12] K. Rana et al. SayPlan: Grounding large language models using 3D scene graphs for scalable robot task planning. In CoRL , 2023. [13] M. Wermelinger et al. Navigation planning for legged robots in challenging terrain. In IROS , 2016. [14] K. Konolige et al. Efficient navigation in unknown environments. In IROS , 2010. [15] Bhat et al. Grounding large language models for robot task planning using closed-loop state feedback. Ad-vanced Robotics Research , 2025. [16] P. Li et al. Large language models for multi-robot sys-tems: A survey. arXiv:2502.03814 , 2025. 5

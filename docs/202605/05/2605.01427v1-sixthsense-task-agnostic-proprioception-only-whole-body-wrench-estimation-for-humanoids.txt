@@ -1,0 +1,579 @@
+Title: SixthSense: Task-Agnostic Proprioception-Only Whole-Body Wrench Estimation for Humanoids
+
+URL Source: https://arxiv.org/pdf/2605.01427v1
+
+Published Time: Tue, 05 May 2026 00:54:57 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# SixthSense: Task-Agnostic Proprioception-Only Whole-Body Wrench Estimation for Humanoids 
+
+Xingzhou Chen 1,∗, Xiayan Xu 1,∗, Yan Ning 1, Ling Shi 1, Jiyu Yu 2,Yizheng Zhang 3, Siyi Qian 3, Lingzhu Xiang 3, Jiahao Chen 3, Yuquan Wang 3,†, and Haodong Zhang 3,†
+
+Abstract —Humanoid robots are entering our physical world at scale, yet as oversized toys—good at singing and dancing, but short on force-interaction capabilities for practical tasks. Bridg-ing this gap necessitates prioritizing reliable contact perception as a fundamental requirement. Estimating external wrenches in humanoids is complicated by floating-base dynamics and indeter-minate contact locations. Existing analytical frameworks require idealistic assumptions and hard-to-obtain measurements, which are often unavailable in practice. To bridge this gap, we propose SixthSense, a task-agnostic approach that infers whole-body contact timing, location, and wrenches from proprioception and IMU data alone. To capture the multi-modal dynamics between unstructured contact inputs and the uncertain motion outputs, we employ conditional flow matching to tokenize proprioceptive histories and estimate a spatiotemporally sparse contact-event flow. SixthSense serves as a plug-and-play perception module for applications including collision detection, physical human– robot interaction, and force-feedback teleoperation. Experiments across standing, walking, and whole-body motion-tracking poli-cies showcased unprecedented performance in diverse behaviors. 
+
+Index Terms —humanoid robots, whole-body wrench estima-tion, proprioception, conditional generative model 
+
+I. I NTRODUCTION 
+
+Humanoid robots are increasingly capable of executing complex motions in the wild, from agile locomotion to ex-pressive whole-body tracking [16, 22, 29, 24, 37]. In these examples, robots treat physical contact—collisions, pushes and pulls, or carried loads—as disturbances to be rejected, rather than phenomena to be perceived and understood. As a result, robots remain unaware of when, where, and how forces are applied to their bodies. This lack of force-level interaction understanding limits their ability to engage in realistic physical contact [31], fueling skepticism about the practical utility of humanoids beyond polished demonstrations. This limitation stems from the fact that current reinforce-ment learning-based controllers [16, 20, 39] do not explicitly estimate contacts. Rather, contact information is entangled with specific objectives, limiting generality across tasks and in-teraction regimes [39]. A few recent learning-based approaches begin to explicitly estimate contact forces, but primarily focus on end-effector control with known contact interfaces [41]. 
+
+> ∗
+
+Equal contribution. 
+
+> †
+
+Corresponding authors. 
+
+> 1
+
+Xingzhou Chen, Xiayan Xu, Yan Ning, and Ling Shi are with The Hong Kong University of Science and Technology, Hong Kong SAR, China. 
+
+> 2
+
+Jiyu Yu is with Zhejiang University, Hangzhou, China. 
+
+> 3
+
+Yizheng Zhang, Siyi Qian, Lingzhu Xiang, Jiahao Chen, Yuquan Wang, and Haodong Zhang are with Tencent Robotics X, Shenzhen, China. 
+
+Fig. 1: SixthSense : Inferring whole-body contact wrench fields via proprioception. This task-agnostic, plug-and-play module provides a robust perception foundation for diverse downstream control and decision-making applications. While external wrench estimation for fixed-base manipula-tors is largely a solved problem, extending these methods to whole-body humanoid interaction is fundamentally different. The presence of a floating base and numerous potential contact locations renders the problem physically under-determined and nearly unobservable [8]. Consequently, analytical solutions of-ten adopt oversimplified dynamics or highly restricted contact assumptions [6, 11, 10, 30], making them impractical for general purposes. To the best of our knowledge, achieving robust analytical estimation of whole-body external wrenches from proprioception remains an open challenge. Alternative to previous work, we formulate whole-body contact perception as an inference problem over a spatiotem-poral distribution of external wrenches. Inspired by human sensorimotor experience, we refer to this form of bodily awareness of interaction phenomena as SixthSense, beyond classical visual or tactile sensing. Building on this perspective and without requiring force, vision, or tactile sensors, we propose SixthSense, a task-agnostic approach that enables humanoid robots to perceive whole-body external wrenches, including (i) whether non-foot 
+
+> arXiv:2605.01427v1 [cs.RO] 2 May 2026
+
+contact occurs, (ii) where it happens, (iii) when it happens, and (iv) what impulse is applied. SixthSense adopts a generative inference framework that models external contact wrenches as a stochastic spatiotem-poral process conditioned on closed-loop proprioceptive sig-nals [19, 32]. It combines a unified whole-body contact rep-resentation for joint contact-likelihood and wrench estimation, temporally aligned proprioceptive inputs from contact-resilient controllers, and probabilistic contact inference via conditional flow matching [25] to predict sparse contact impulses. We evaluate SixthSense across different tasks, demonstrat-ing consistent and accurate wrench inference under diverse behaviors. By providing explicit, reusable whole-body wrench estimates without additional sensors, SixthSense enables force-aware reasoning beyond contactless shows, supporting forceful and diverse interactions. To summarize, the main contributions are twofold:  
+
+> •
+
+Formulating contact perception as a flow matching-based generative problem, modeling external wrenches as a sparse spatiotemporal field and enabling distributional inference under ambiguity.  
+
+> •
+
+A task-agnostic plug-and-play perception module for whole-body external contact that can infer contact timing, location, and wrenches directly from proprioception and IMU signals. II. R ELATED WORK 
+
+A. Implicit Contact-Aware Humanoid Motion Control 
+
+Conventionally, accurate and timely contact information is essential for balancing humanoid robots for locomotion or multi-contact manipulation [4, 14, 9], enabling locomotion in uneven terrain [27, 9] or contact-rich industrial workshop [18]. The emerging deep reinforcement learning-based controllers embed the floating-base state estimation in a learned network, significantly improving the locomotion policy’s robustness [17]. Merely employing IMU and joint motor feedback, locomotion policies achieve stable foothold behaviors and disturbance recovery without explicit contact-force handling. In humanoid motion tracking, imitation-based approaches induce physically consistent contacts and recovery behaviors through dense tracking objectives, while more recent systems scale interaction diversity via diffusion-based motion synthesis or large-scale whole-body teleoperation [29, 24, 37, 13]. In parallel, disturbance-aware tracking methods treat external in-teractions as latent disturbances to be compensated online, us-ing history-conditioned representations for adaptation [20, 39]. Related ideas also appear in end-effector manipulation, where joint torque feedback is incorporated into Vision-Language-Action models to improve performance in contact-rich tasks without dedicated force sensing [40]. Despite promising task performance, contact information in these approaches remains tightly coupled to specific tasks and controllers, limiting reusability and generalization when control objectives or interaction regimes change. 
+
+B. Sensor-Based Contact-Rich Control 
+
+Direct force and tactile sensing provides explicit access to contact information and has been extensively studied in dex-terous manipulation. High-resolution tactile and force sensors enable accurate estimation of contact location, geometry, and force, supporting grasp stability and fine interaction control in robotic hands [36, 35, 21]. However, scaling dense force sensing to whole-body humanoids remains challenging due to hardware cost and calibration complexity. Similar in spirit to visuotactile perception in manipulation [2, 33, 23], some humanoid control pipelines exploit visual cues to anticipate contact geometry in task space [22, 38], but such cues do not capture body-level force interaction during execution. 
+
+C. Sensorless Contact Force Estimation 
+
+When force-torque or tactile sensors are absent, model-based observers can infer external wrenches from dynamics residuals for fixed-base manipulators [5, 6, 10, 8, 11, 26]. A representative family is the generalized momentum observer (GMO), which avoids direct acceleration measurements and detects external generalized forces through momentum resid-uals [11]. Probabilistic extensions like the contact particle filter (CPF) further represent multi-contact as probabilistic hypotheses and infer their likelihood with a particle filter [26]. However, these model-based methods rest on idealized assumptions that limit humanoid deployment. GMO requires accurate rigid-body models and well-conditioned Jacobians, yet the floating base’s unactuated degrees of freedom corrupt momentum residuals and multiple contact configurations pro-duce ambiguous proprioceptive signatures [11]. CPF elegantly frames multi-contact as probabilistic inference, but still de-pends on precise foot-force models and accurate whole-body Jacobians. Adjacent model-based work—e.g., multi-momentum foot-contact observers [28], probabilistic foot-contact estima-tion [15, 3], and Kalman-filter-based legged state estima-tion [1, 12]—improves locomotion or base state estimation but outputs foot contact modes or odometry rather than whole-body external wrenches. Meanwhile, learning-based sensorless approaches remain scarce; among them, [41] estimates contact forces from his-torical states but is limited to pre-defined end-effector contact. As a result, task-agnostic whole-body contact perception from proprioception—explicitly estimating contact timing, location, and wrenches—remains largely underexplored. III. P ROBLEM STATEMENT 
+
+We introduce the mathematical preliminaries, explain issues associated with the well-established analytical approaches, and motivate the problem of interest. 
+
+A. Dynamics of Humanoid Robots 
+
+A floating-base robot has generalized coordinates q =[q⊤ 
+
+> b
+
+q⊤ 
+
+> j
+
+]⊤, where qb ∈ SE (3) denotes the base pose and qj ∈ Rn collects the n joint angles. Neglecting joint friction, the rigid-body dynamics writes 
+
+H(q)¨q + C(q, ˙q) ˙q + g(q) = S⊤τm +
+
+> Nc
+
+X
+
+> e=1
+
+Je(q)⊤fe, (1) where H(q) is the inertia matrix, C(q, ˙q) ˙q and g(q) col-lect Coriolis/centrifugal and gravity terms, respectively. The selection matrix S = [ 0n×6 In ] maps joint torques τm to generalized forces. Each contact wrench fe ∈ R6 contributes linearly through the corresponding contact Jacobian Je(q).Adopting the base–joint block form [7], we partition the base and joint accelerations ¨q = [ a⊤ 
+
+> b
+
+¨q⊤ 
+
+> j
+
+]⊤, the contact Jacobian: Je = [ Je, b Je, j ], and re-write (1) as: 
+
+Hbb Hbj 
+
+H⊤ 
+
+> bj
+
+Hjj 
+
+  ab
+
+¨qj
+
+
+
++
+
+hb
+
+hj
+
+
+
+− S⊤τm =
+
+> Nc
+
+X
+
+> e=1
+
+J⊤
+
+> e, b
+
+J⊤
+
+> e, j
+
+
+
+fe, (2) where Hbb ∈ R6×6, Hbj ∈ R6×n, and Hjj ∈ Rn×n are the base–joint blocks of H(q). The vectors hb and hj denote the corresponding blocks of C(q, ˙q) ˙q + g(q).
+
+B. Problem of Interest 
+
+Let ot denote the proprioceptive observation at time t, and 
+
+Ot:t+T −1 = {ot}t+T −1 
+
+> t
+
+denote an observation window of length T . In (2), the left-hand side is fully determined by 
+
+Ot:t+T −1 and a known rigid-body model, whereas the right-hand side depends on a latent contact configuration through the unknown external wrenches. Analytical approaches typically localize contacts to con-struct Je(q) and then solve for fe via inverse dynamics or residual-based formulations. When contact information is uncertain, the mapping from contact wrenches to joint- and base-level dynamics residuals becomes non-injective, admit-ting multiple solutions in the nullspace and rendering wrench recovery structurally non-identifiable under contact uncer-tainty [8]. Moreover, even when inertia inversion is avoided, modeling errors and sensor noise can be significantly ampli-fied through ill-conditioned contact Je(q). Existing analytical formulations have been demonstrated primarily in simulation, highlighting the fragility of idealized assumptions for real-world whole-body contact interpretation. Motivated by these limitations, rather than selecting an explicit contact set, we lift contacts to N potential sites dis-tributed over the body surface and approximate the generalized contact wrench as 
+
+> Nc
+
+X
+
+> e=1
+
+J⊤ 
+
+> e
+
+fe ≈ J⊤ 
+
+> ext
+
+fext , (3) where J⊤ 
+
+> ext
+
+= [ J(1) ⊤, . . . , J (N )⊤] ∈ R(6+ n)×6N and fext ∈
+
+R6N stacks the corresponding candidate wrenches. Removing explicit contact-set selection reframes whole-body wrench perception as a set of open questions rather than a closed-form estimation problem:  
+
+> •
+
+When multi-point contacts occur across the entire body, how should such spatiotemporally sparse and uncertain external wrenches be represented?  
+
+> •
+
+When external contacts are only indirectly observed through proprioceptive signals, and different contacts can produce nearly identical proprioceptive responses, how should external wrenches be inferred under this fundamentally non-identifiable mapping?  
+
+> •
+
+When dominant dynamics change across tasks and mo-tion phases, including variations in foot support and contact regimes, how can whole-body external wrench estimation remain task-agnostic and generalizable? In this work, we answer these questions by casting whole-body wrench perception as a distributional conditional inference problem and learning a generative model over spatiotemporal wrench fields. IV. M ETHOD 
+
+We formulate the whole-body contact detection as a proba-bilistic problem in Sec. IV-A, detail the learning objectives in Sec. IV-B, and explain contact inference via conditional flow matching in Sec. IV-C. 
+
+A. Contact Representation and Learning Objective 
+
+Existing analytical contact estimation [11] typically applies a sequential three-step pipeline: (1) detecting a binary contact state, (2) identifying the contact location, and (3) computing the corresponding external wrench. While this modularity simplifies the estimation process, its reliance on heuristic-based logic often fails to account for real-world physical complexities and lacks robustness in multi-contact scenarios. Alternatively, we represent the entire robot surface as a single interaction entity, allowing us to simultaneously esti-mate contact likelihood and external wrenches at any potential contact region. We divide the robot surface into N sub-regions. At each time step t, we predict (i) a probabilistic contact mask Mt ∈ [0 , 1] N and (ii) a per-subregion 6-D wrench field 
+
+Ft ∈ RN ×6. Under this representation, we leverage the contact mask to detect contacts and corroborate the wrench in the following way: 
+
+˜F(i) 
+
+> t
+
+= 1
+
+h
+
+M(i) 
+
+> t
+
+> δ 
+
+i
+
+⊙ F(i) 
+
+> t
+
+, i = 1 , . . . , N. (4) where ⊙ denotes the Hadamard product with row-wise broad-casting, and δ is the threshold. F(i) 
+
+> t
+
+and M(i) 
+
+> t
+
+denote the wrench (with the application point at the center of mass of the sub-region) and contact probability associated with region 
+
+i, respectively. 
+
+Remark 1. A contact force f applied at point p, which is associated to a sub-region i on the robot surface, is equivalent to F(i) 
+
+> t
+
+in (4) as: 
+
+F(i) 
+
+> t
+
+=
+
+ f
+
+(p − c(i)) × f
+
+
+
+, (5) 
+
+where c(i) denotes the center of mass of the sub-region. Example 1. The discretization of the robot’s surface is adaptable to specific application requirements; specifically, the number of candidate contact regions, N in (4) , is configured per robot and use case. Employing the Unitree G1 as an example (Fig. 2), its official URDF defines 30 distinct links. We can intuitively choose N = 30 ,which maps the robot surface for a per-link wrench field 
+
+F ∈ R30 ×6 and a contact mask M ∈ [0 , 1] 30 , as illustrated in Fig. 3. 
+
+Fig. 2: Mapping whole-body surface contact force to wrench at sub-region’s center of mass 
+
+B. Proprioceptive Signal Construction and Alignment 
+
+In practice, contacts are inherently sparse in both time and space, leading to highly imbalanced data distributions. To learn whole-body contact under severe spatio-temporal sparsity, we minimize a composite loss that couples contact presence prediction with wrench estimation: 
+
+L = Lmask + Lwrench + Lconsistency + Lsparsity . (6) Here, Lmask is a binary cross-entropy loss for the predicted contact mask. Lwrench is a mask-aware regression loss for wrench estimation, prioritizing errors on contact regions while lightly regularizing non-contact regions. In addition, we use two lightweight priors: Lconsistency suppresses spurious forces when no contact is predicted, and Lsparsity encourages sparsity in the predicted contact. The proprioceptive observation at time t includes: 
+
+ot = { qt, ˙qt, τt, Rbase ,t , ωbase ,t }, (7) where joint positions qt, velocities ˙qt, and torques τt are read from the actuators, base orientation Rbase ,t and angular velocity ωbase ,t are obtained from the IMU. To capture tem-poral dynamics, we tokenize each proprioceptive observation 
+
+ot and stack H consecutive tokens to form an observation window c = {ot, . . . , ot+H−1}. During training, we pair c
+
+with a corresponding contact chunk x = {Ft, . . . , Ft+H−1},where ground truth labels are acquired via simulation or high-fidelity force-torque sensors. This sequence-to-sequence formulation leverages temporal correlations within the pro-prioceptive stream, yielding more consistent predictions and improved data efficiency for sparse or ambiguous contact events. We argue that the observation window c not only encodes rich information about the robot’s motion, but also implicitly carries sufficient information about external contacts. This intuition is further supported by evidence from proprioception-only controllers:  
+
+> •
+
+Proprioception-only control. Beyond high-level com-mands, many RL-based controllers can operate reliably using proprioceptive observations alone.  
+
+> •
+
+Implicit foot-contact sensing. Stable walking across diverse terrains suggests that the controller implicitly infers and regulates foot–ground contacts.  
+
+> •
+
+Implicit body-contact awareness. When the robot is pushed during motion, it can recover balance smoothly, indicating that the controller implicitly detects and reacts to external disturbances applied to body parts. Motivated by this empirical evidence, we posit the following working hypotheses: 
+
+Hypothesis 1: If a humanoid remains stable under external contacts, the contact information is (at least) weakly observable to the controller. It can be interpreted through the lens of system theory. External contacts induce distinct subsequent observations, which a stable controller must exploit in closed loop to compensate for the disturbance. 
+
+Hypothesis 2: Greater robustness to external contacts makes contact cues more readily observable to the con-troller. It can be understood through information theory using entropy. A more robust controller tends to yield a more consistent proprioceptive response to external disturbances. Therefore, it reduces the uncertainty of the latent contact variable given the observations. 
+
+Building on the above hypotheses, we obtain aligned propri-oceptive signals by first training a contact-resilient controller (Fig. 3). To improve the controller’s robustness to external contacts, we adopt domain randomization and curriculum learning. By training a policy to stabilize smoothly under contacts, we obtain an aligned proprioceptive stream from the controller’s input, in which contacts leave strong and informative temporal signatures that are easy to decode. 
+
+C. CFM-Based Contact Inference 
+
+Conditional flow matching (CFM) [34] learns a time-dependent velocity field that transports a noisy sample toward a target conditional data distribution. We employ CFM to recover the multi-modal nature of contact events. We initialize a contact chunk x ∈ RH×N ×6 with Gaussian noise x0 ∼ N (0, I), and discretize the entire training pro-cedure as t ∈ [0 , 1] . At a training step k, the contact chunk evolves as: 
+
+ˆxk+1 = ˆ xk + ∆ t vθ (xk, t k; c), k = 0 , . . . , K − 1, (8) where x = ˆ xK is a sampled contact estimate conditioned on proprioceptive observation c, and vθ (·) is a time-dependent Fig. 3: Overview: Given a contact-resilient control policy, we use its rollouts to train a conditional flow-matching model that outputs a whole-body external contact wrench field over the discretized robot surface. velocity field parameterized by θ to be learned from the data. 
+
+Remark 2. The discrete evolution (8) can be interpreted as an iterative solver for the Euler–Lagrange equation, which can infer ˆx from the proprioceptive observation window c.In this view, ∆t corresponds to a step size and vθ (xk, t k; c)
+
+is a learned gradient surrogate that updates ˆxk to satisfy the physical constraint implied by c. Intuitively, vθ measures the inconsistency of the current (xk, c) pair and provides a correction direction to reduce it. At convergence, the update magnitude diminishes and vθ (xk, t k; c) → 0, indicating that 
+
+ˆxk becomes locally compatible with the condition. 
+
+We adopt a shared-backbone, dual-head design for joint mask and wrench prediction. Specifically, a single CFM back-bone encodes the conditioning context and captures shared contact semantics, while two lightweight attention heads sep-arately decode per-link contact probabilities (mask) and per-link wrenches. This structure maximizes feature reuse with minimal overhead, improves generalization, and promotes coherent mask–wrench outputs by learning both tasks from a common latent representation. V. E XPERIMENT 
+
+We validate SixthSense with the Unitree G1, utilizing the surface discretization illustrated in Fig. 2. Evaluations in both simulation and real-world environments demonstrate 
+
+Fig. 4: Overview of information flow: Tokenized proprioceptive observations are streamed into iterative CFM refinement modules to progressively infer whole-body contact masks and external wrench fields the framework’s robustness and its effectiveness in enabling downstream interactive tasks. 
+
+A. Results on the Simulation Contact Dataset 
+
+In simulation, we construct contact datasets for training with three representative controllers and settings:  
+
+> •
+
+Balancing: the controller (our customized static-standing policy) balances the robot with sustained non-coplanar contacts.  
+
+> •
+
+Locomotion: an RL policy 1 guides the robot according to a base command.  
+
+> •
+
+Motion tracking: a whole-body tracker 2 follows diverse reference trajectories. In all the situations, the robot balances itself against non-foot impacts. These external disturbances manifest as transient deviations from the nominal dynamics, requiring the estimator to isolate subtle contact signatures during motion. This is particularly challenging during motion tracking, where diverse reference trajectories induce large, non-stationary propriocep-tive variations. Hence, we collect 10,000 contact rollouts for static-standing and walking settings, and construct a larger dataset for tracking by injecting contacts into 31,961 TWIST2 reference trajecto-ries, resulting in a total of 1,000,000 contact rollouts. The successful recovery of contact events across these regimes demonstrates the robustness and generalization of our ap-proach. 
+
+(a) Standing (b) Walking (c) Tracking 
+
+Fig. 5: Contact dataset collection across behaviors in MuJoCo We actively apply and log impulsive interactions that cause noticeable state deviations in real-world operation. Specifi-cally, we sample a contact force with magnitude in [30 , 100] N, with a random direction, and a duration within [0 .1, 0.4] s. Both proprioceptive signals and contact labels are recorded at 
+
+50 Hz. We convert contacts applied at surfaces into equivalent wrenches at a link’s CoM according to (5) in the robot base frame. The estimator consumes a 50-frame proprioceptive window and predicts the corresponding 50-step contact sequence over the same horizon. During training, we enforce a 1:4 positive-to-negative ratio over the clips, where a clip is labeled positive if it contains any non-zero contact within the horizon.     
+
+> 1Unitree’s official walking policy (https://github.com/unitreerobotics/ unitree rl lab) with randomized speed commands.
+> 2The open-source TWIST2 [38] motion-tracking policy with diverse refer-ence trajectories (https://github.com/amazon-far/TWIST2).
+
+We report contact awareness success rates based on the predicted contact masks across three dimensions in Table I: (i) whether any non-foot contact occurs , (ii) where the contact occurs , and (iii) when the contact happens . Since small temporal or spatial errors are often tolerable in practice, we compute both strict success rates and tolerant success rates. TABLE I: Contact awareness performance across tasks                          
+
+> Task Metric (%) Standing Walking Tracking (i)whether detection rate 84.2 85.5 78.1 false alarm rate 0.4 1.9 15.2
+> (ii)where target link 61.7 58.0 36.9 tolerant ±1 link 76.4 72.8 70.7
+> (iii)when target timestamp 77.3 33.6 75.9 tolerant ± 0.1s 98.1 85.5 93.3
+
+We care about an additional dimension (iv) what wrench is applied , and decompose it into force and torque in both magnitude and direction. Table II summarizes the mean estimation errors for contact timing, location, and wrench magnitude, conditioned on the predicted contact mask and estimated wrench. While classifi-cation accuracy and estimation precision naturally decrease with increased task complexity, our framework maintains performance comparable to low-cost force-torque sensors. To the best of our knowledge, this work is the first to quanti-tatively characterize the ’joint-torque-to-contact’ mapping for humanoid robots across diverse, whole-body interactions. TABLE II: Mean contact estimation errors across tasks                         
+
+> Task Errors Standing Walking Tracking (ii) where distance (links) 0.9 0.6 1.2
+> (iii) when interval (ms) 10 24 35
+> (iv) what
+> force mag (N) 2.1 1.9 1.7 force direction(deg) 28.7 17.0 25 torque mag(N ·m) 0.4 0.7 0.3 torque direction(deg) 33.2 24.2 35
+
+B. Cross-Task Generalization 
+
+Different controllers take unique observations; naively col-lecting controller-specific inputs for training would result in fragmented datasets and task-specific estimators. We define a unified proprioceptive representation that decouples the perception layer from the underlying control logic, enabling a cross-task contact estimator. For a humanoid robot, the available proprioceptive obser-vation typically includes o = { q, ˙q, τ , Rbase , ωbase }. In contrast, the policy input used by many controllers is often 
+
+{ cmd , q, ˙q, action , Rbase , ωbase }, which differs in three aspects:  
+
+> •
+
+High-level commands: Controllers consume commands in different formats (e.g., walking velocity vs. trajectory segments). Since closed-loop proprioception implicitly reflects the command over time, we omit explicit com-mand inputs to the estimator.  
+
+> •
+
+Previous action: The action-to-torque mapping is controller-dependent and varies with stiffness and damp-ing, so actions are not comparable across tasks. Following BeyondMimic [24], we use normalized torques as a task-consistent surrogate for actions.  
+
+> •
+
+Per-signal weights: While controllers may use different weighting schemes, the raw signal scales are largely consistent; thus we fix a single set of weights across tasks. We standardize the estimator input using only proprio-ceptive signals shared across controllers, forming a unified observation vector 
+
+ot =  wq ˜qt, w ˙q ˙qt, w ω ωbase ,t , w g g(Rbase ,t ), w τ ˆτt
+
+, (9) where ˜qt = qt − qdefault denotes the joint position offset from the default posture, and g(Rbase ) maps the base rotation to the gravity direction expressed in the robot frame. The normalization weights rescale observations for stable training (wq,g,τ = 1 , w ˙q = 0 .05 , w ω = 0 .2). For torques, we adopt an impedance-aware normalization: for each joint i,
+
+ˆτi,t = τi,t 
+
+ki∆qref + di∆ ˙ qref + ϵ , (10) where ki and di are the joint stiffness (position gain) and damping (velocity gain), and the denominator provides an impedance-motivated torque scale. 
+
+> (a) Evaluation in the standing scenario
+> (b) Evaluation in the walking scenario
+> (c) Evaluation in the tracking scenario
+
+Fig. 6: Comparison of success rates across tasks: task-agnostic vs. task-specific vs. baseline estimators As shown in Fig. 6, we compare the task-specific estimator, the task-agnostic estimator, and a baseline estimator that uses cross-task data but is trained on a single task. The results indicate that the performance gap is mainly due to remov-ing controller command/reference information, which makes contact inference harder—especially for tracking where the reference provides strong disambiguating context. Meanwhile, multi-task training is beneficial: compared to the single-task baseline, the task-agnostic model’s higher data diversity par-tially mitigates the absence of command inputs. 
+
+C. Zero-Shot Generalization to Multi-Contact Estimation 
+
+This test evaluates the scalability of the proposed pipeline when extending from single-contact to multi-contact wrench estimation. In particular, our experiments show that an es-timator trained solely on single-contact data can zero-shot generalize to scenarios with simultaneous contacts at multiple locations. We further clarify why the estimator is not trained directly on a multi-contact dataset:  
+
+> •
+
+First, constructing and covering multi-contact configura-tions is prohibitively expensive: the dataset size grows exponentially with the number of concurrent contact points.  
+
+> •
+
+Second, multi-contact interactions can be viewed as com-positions of single-contact events; hence, the key chal-lenge is to learn contact-relevant proprioceptive features at the level of individual contacts, rather than enumerating all combinations.  
+
+> •
+
+Third, CFM is well-suited for modeling highly non-uniform distributions, which makes it a natural choice for extrapolating beyond the training support and enables generalization to multi-contact cases. In our evaluation, we apply two simultaneous external forces to the left and right wrists of the robot (link indices 21 and 28), as shown in Fig. 7a. Each contact lasts 0.2 s with around 50 N and an arbitrary direction, and we visualize the ground-truth contact by taking the per-link norm of the corresponding 6D wrench, yielding the contact intensity map in Fig. 7b.  
+
+> (a) Bilateral wrist contacts (b) Real contact wrench
+
+Fig. 7: An example multi-point contact scenario We then test a contact estimator trained on the single-contact dataset only, which has never observed any multi-contact sample during training. Fig. 8 shows the predicted contact mask and corresponding wrench estimated purely from proprioceptive signals. The results indicate that, in a subset of challenging scenes, the estimator can perform zero-shot multi-contact inference, highlighting a key advantage of the CFM-based formulation: it learns transferable contact signatures from sparse supervision and remains robust as contact patterns become more complex than those seen during training.  
+
+> (a) Contact mask prediction (b) Contact wrench estima-tion
+
+Fig. 8: Zero-shot multi-contact inference To verify that this zero-shot generalization stems from CFM’s distributional modeling rather than network capacity alone, we compare against an MLP baseline with hidden size 
+
+[512 , 512 , 512] trained on the same single-contact locomotion data. The MLP achieves 99 .69% detection on single-contact testing—comparable to CFM—but is evaluated on three si-multaneous contacts that induce overlapping proprioceptive effects. We report Top-1 (dominant contact) and Top-3 (multi-contact ambiguity) metrics: TABLE III: Contact detection metrics under Top-1 and Top-3 settings                                
+
+> CFM MLP
+> Top-1 Metrics (%) (i) whether detection rate 89.31 17.24 false alarm rate 3.06 0.15 (ii) where target link 24.86 9.40 tolerant ±1 link 50.00 11.29 (iii) when target timestamp 30.06 0.00 tolerant ±0.1 s 89.02 17.24 Top-3 Metrics (%) (i) whether any exact hit@3 7.80 0.40 (ii) where target link@3 26.80 21.50 tolerant ±1 link@3 33.80 29.90 (iii) when tolerant ±0.1 s@3 31.70 9.00
+
+As shown in Table III, CFM dominates across all metrics. The MLP, despite near-perfect single-contact accuracy, col-lapses under multi-contact ambiguity—its deterministic map-ping cannot represent the multi-modal posterior over overlap-ping contacts. CFM’s flow-based sampling naturally maintains diverse hypotheses, confirming that distributional modeling is essential for zero-shot multi-contact generalization. 
+
+D. Comparison with Model-based Approaches 
+
+Despite using carefully grid-searched parameters and be-ing provided with noise-free foot contact measurements in simulation, GMO [11] and CPF [26] remain less robust to sensor noise and less accurate in multi-contact and challenging scenarios. In contrast, SixthSense relies only on proprioceptive and IMU inputs. 
+
+Case 1: Sensitivity to observation noise in single-contact localization . As shown in Fig. 9, when noise assumptions become less accurate and Gaussian noise increases, baselines degrade significantly, while SixthSense maintains localization accuracy. 
+
+> (a) Contact localization accuracy
+> (b) Wrench estimation error
+
+Fig. 9: Sensitivity to observation noise under single-contact localization 
+
+Case 2: Contact disambiguation under multi-contact uncertainty (GMO not applicable). CPF assumes known con-tact cardinality, while SixthSense generalizes zero-shot from single-contact training without such prior. Although slower than CPF, SixthSense achieves higher detection and lower false alarm rates. Its performance also degrades more gracefully as contact number increases, indicating better scalability. TABLE IV: Performance comparison under multi-contact points                                       
+
+> Metric Number of Contact Points 12345Time (ms) CPF 56.9 85.5 111.4 133.3 151.7 SixthSense 370 367 365 373 368 Det. Rate (%) CPF 45.3 22.7 17.1 13.2 16.9 SixthSense 60.0 35.2 21.3 19.5 17.9 FA Rate (%) CPF 12.6 38.7 65.1 79.8 85.8 SixthSense 1.9 26.6 23.5 37.5 17.0
+
+Case 3: Robustness to challenging cases . SixthSense (blue) better matches the ground truth (red) than GMO (or-ange) and CPF (green) in selected cases (a)-(c). The reasons are three-fold: (1) leveraging pre- and post-contact context; (2) learning implicit dynamics from data; and (3) capturing complex posterior distributions via CFM. 
+
+(a) Non-identifiability: ambiguous solutions 
+
+(b) Rapid motions: error amplification 
+
+(c) Ill-conditioning: noise sensitivity 
+
+E. Ablation Study on Controllers with Different Robustness Levels 
+
+This ablation study provides empirical evidence for the hypotheses in Sec. IV-B by evaluating how controller robust-ness affects the observability and estimation performance of external contacts. We quantify the controller’s robustness by running 10,000 randomized rollouts across both standing and walking tasks, and use the following metrics to describe their robustness:  
+
+> •
+
+Success Rate (SR). Fraction of rollouts that do not fall: 
+
+SR = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+I[¬ fall i] . (11)  
+
+> •
+
+Integral of Time-weighted Absolute Error (ITAE mean ). Time-weighted tracking error (discrete): 
+
+ITAE mean = 1
+
+N
+
+> N
+
+X 
+
+> i=1
+> T−1
+
+X
+
+> k=0
+
+(k∆t) ei(k) ∆ t. (12)  
+
+> •
+
+Constraint Violation Magnitude (VioMag mean ). Mean violation magnitude over time and rollouts: 
+
+VioMag mean = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+T 
+
+> T−1
+
+X
+
+> k=0
+
+vi(k). (13)  
+
+> •
+
+Recovery Valid Rate (RVR). Let T (i)rec = min {k :
+
+ei(j) ≤ ε, ∀j ∈ [k, k + H − 1] }, and T (i)rec = ∞ if not recovered. We report: 
+
+RVR = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+I
+
+h
+
+T (i)rec < ∞
+
+i
+
+. (14) As shown in Tab. V, across different tasks, our experiments show that robot motions generated by more robust controllers make contact information easier to infer, consistent with the hypotheses in Sec. IV-B. With stronger controller robustness, we observe only minor changes in detection rate and contact timing (i.e., when contact occurs), but marked improvements in the false-alarm rate, contact location accuracy, and contact force estimation. These findings also provide an indirect explanation for the inferior performance on the tracking task: the tracking controller used in our paper is less robust, which likely degrades the quality and informativeness of the collected data compared to other tasks. TABLE V: Effect of controller robustness on contact estima-tion                                                                           
+
+> Walking Tracking Controller Robustness good fair poor fair
+> Robustness Metric SR(%) 99.1 97.4 58.8 80.0 ITAE mean 10.8 14.5 21.3 25.3 VioMag mean 0.02 0.21 0.87 0.37 RVR 0.1 0.07 0.06 0.03 Contact Detection Rate (%) (i)whether detection rate 85.5 86.3 89.3 78.1 false alarm rate 1.9 11.0 14.1 15.2 (ii)where target link 58.0 54.3 52.1 36.9 tolerant ±1 link 72.8 72.6 71.2 70.7 (iii)when target timestamp 73.6 67.4 66.9 75.9 tolerant ± 0.1s 85.5 89.1 89.0 93.3 Contact Estimation Errors (ii)where distance (links) 0.6 0.67 0.70 1.2 (iii)when interval (ms) 24 16 17 35 (iv) what force mag (N) 1.9 2.1 2.4 1.7 force dir(deg) 17.0 29.4 32.7 25 torque mag(N·m) 0.7 0.7 0.85 0.3 torque dir(deg) 24.2 29.9 37.1 35
+
+F. Real-World Validation and Sim-to-Real Transfer 
+
+We validate the contact estimator on real hardware and demonstrate its plug-and-play and real-time performance. 
+
+Fig. 11: Contact data collection on real Unitree G1 Before deployment, we improve sim-to-real robustness in two complementary ways. During data collection, we apply domain randomization by varying link mass and inertia, joint damping and friction, actuator strength, and ground friction. During training, we further augment proprioceptive inputs with injected noise to account for sensor noise and residual modeling errors. Our real-robot estimator contains ∼100M parameters and performs CFM with 10 refinement steps, resulting in an inference time of 0.5 s per forward pass. As shown in Fig. 11, we attach force sensors to the robot surface to obtain ground-truth contact measurements, which are converted into link-level CoM-equivalent wrenches. We then apply instrumented (a) Predicted contact mask chunk 
+
+> (b) Estimated wrench field chunk
+> (c) Contact inference through masks and wrench chunk
+
+Fig. 12: Spatiotemporally sparse contact wrench field estima-tion pushes and stream proprioceptive signals to the estimator in real time. The estimator outputs two physical quantities over the discretized body surface: a probabilistic contact mask chunk 
+
+M ∈ [0 , 1] 50 ×30 and a wrench field chunk W ∈ R50 ×30 ×6.For visualization in Fig. 12, we report the wrench magnitude by taking the ℓ2 norm of the 6-D wrench at each cell; note that each grid cell still represents a full 6-D wrench vector in the underlying prediction. Given the predicted mask in Fig. 12a and wrench field in Fig. 12b, we then apply Eq. (4) to select the most likely contact location(s) and the corresponding contact force magnitude(s) in Fig. 12c. Real-time contact estimates capture the applied forces on the target link, with correlated responses on neighboring links that reflect the robot’s kinematic connectivity. 
+
+G. Applications: Physical Human–Robot Interaction 
+
+Whole-body contact perception is a key enabler for physical human–robot interaction (pHRI). Because physical contacts convey immediate and meaningful information about inter-actions, inferring contacts from proprioception adds a new interaction channel beyond vision, language, and teleoperation. Fig. 13 highlights three practical benefits. 
+
+Safety. Improved whole-body contact perception enables earlier identification of hazardous situations, reducing both self-damage and risk to humans, as shown in Case 4. This addresses the limited contact awareness of many humanoids over the torso and other non-manipulating regions. 
+
+Contact as command. When contact is reliably estimated and interpreted, it can serve as a direct and intuitive command channel. As shown in Case 1, a user can pull the robot’s arm 
+
+Fig. 13: Physical human–robot interaction cases with Sixth-Sense contact estimation to convey the intention to stand up, and the robot responds naturally without relying on speech or handheld controllers. 
+
+Feedback for planning. Our per-step output (a per-region contact mask with a wrench field) forms a structured, high-dimensional feedback signal that can be consumed by high-level planners to support environment-aware decision-making in pHRI. All the cases serve as simple examples of state-machine triggering. VI. C ONCLUSION 
+
+We propose a task-agnostic approach that infers humanoid whole-body external contact wrenches from proprioception using conditional flow matching. By casting contact estimation as a spatiotemporal sequence inference problem, we lift fixed-point contacts to a whole-body contact wrench field over the discretized robot surface, and infer sparse, time-varying contact events as a distribution rather than point estimates. Simulations and real-robot experiments across diverse tasks demonstrate its practical value as a plug-and-play, task-agnostic module that can be readily integrated into existing controllers. As one of the first works to study whole-body external wrench perception on real humanoid robots, our approach demonstrates promising results but still faces several limita-tions:  
+
+> •
+
+The real-robot data collection in this work remains lim-ited. Acquiring dense, whole-body contact wrench mea-surements on real humanoids is a major open challenge.  
+
+> •
+
+The current framework relies exclusively on propriocep-tion. Extending the observation to multiple modalities, e.g., vision, language, and high-level context, is a neces-sary step toward general contact-aware humanoid control.  
+
+> •
+
+We discretize the robot surface at a relatively coarse spatial resolution. While sufficient for locomotion and tracking, finer-grained wrench estimation will be required to support dexterous manipulation and physical human– robot interaction. Future research will target these limitations, providing the next-generation humanoid robot with a sixth sense of contact. REFERENCES 
+
+[1] Michael Bloesch, Marco Hutter, Mark A Hoepflinger, Stefan Leutenegger, Christian Gehring, C David Remy, and Roland Siegwart. State estimation for legged robots—consistent fusion of leg kinematics and IMU. 
+
+Robotics , 17:17–24, 2013. [2] Roberto Calandra, Andrew Owens, Dinesh Jayaraman, Justin Lin, Wenzhen Yuan, Jitendra Malik, Edward H Adelson, and Sergey Levine. More than a feeling: Learning to grasp and regrasp using vision and touch. 
+
+IEEE Robotics and Automation Letters , 3(4):3300–3307, 2018. [3] Marco Camurri, Maurice Fallon, St´ ephane Bazeille, An-dreea Radulescu, Victor Barasuol, Darwin G. Caldwell, and Claudio Semini. Probabilistic contact estimation and impact detection for state estimation of quadruped robots. 
+
+IEEE Robotics and Automation Letters , 2(2):1023–1030, 2017. [4] St´ ephane Caron, Adrien Escande, Leonardo Lanari, and Bastien Mallein. Capturability-based pattern generation for walking with variable height. IEEE Transactions on Robotics , 36(2):517–536, 2019. [5] Alessandro De Luca and Raffaella Mattone. Sensorless robot collision detection and hybrid force/motion control. In Proceedings of the IEEE International Conference on Robotics and Automation , pages 999–1004. IEEE, 2005. [6] Alessandro De Luca, Alin Albu-Schaffer, Sami Had-dadin, and Gerd Hirzinger. Collision detection and safe reaction with the DLR-III lightweight manipulator arm. In IEEE/RSJ international conference on intelligent robots and systems , pages 1623–1630. IEEE, 2006. [7] Roy Featherstone. Rigid body dynamics algorithms .Springer, 2008. [8] Fabrizio Flacco, Antonio Paolillo, and Abderrahmane Kheddar. Residual-based contacts estimation for hu-manoid robots. In IEEE-RAS International Conference on Humanoid Robots , pages 409–415, 2016. [9] Yukai Gong, Ross Hartley, Xingye Da, Ayonga Hereid, Omar Harib, Jiunn-Kai Huang, and Jessy Grizzle. Feed-back control of a Cassie bipedal robot: Walking, stand-ing, and riding a Segway. In 2019 American control conference , pages 4559–4566. IEEE, 2019. [10] Sami Haddadin, Alin Albu-Schaffer, Alessandro De Luca, and Gerd Hirzinger. Collision detection and reaction: A contribution to safe physical human-robot interaction. In IEEE/RSJ International Conference on Intelligent Robots and Systems , pages 3356–3363. IEEE, 2008. [11] Sami Haddadin, Alessandro De Luca, and Alin Albu-Sch¨ affer. Robot collisions: A survey on detection, isola-tion, and identification. IEEE Transactions on Robotics ,33(6):1292–1312, 2017. [12] Ross Hartley, Maani Ghaffari, Ryan M. Eustice, and Jessy W. Grizzle. Contact-aided invariant extended Kalman filtering for robot state estimation. The Inter-national Journal of Robotics Research , 39(4):402–430, 2020. [13] Tairan He, Zhengyi Luo, Wenli Xiao, Chong Zhang, Kris Kitani, Changliu Liu, and Guanya Shi. Learning human-to-humanoid real-time whole-body teleoperation. In 
+
+IEEE/RSJ International Conference on Intelligent Robots and Systems , pages 8944–8951. IEEE, 2024. [14] Ayonga Hereid, Omar Harib, Ross Hartley, Yukai Gong, and Jessy W Grizzle. Rapid trajectory optimization using C-FROST with illustration on a Cassie-series dynamic walking biped. In IEEE/RSJ International Conference on Intelligent Robots and Systems , pages 4722–4729, 2019. [15] Jemin Hwangbo, Carmine Dario Bellicoso, P´ eter Fankhauser, and Marco Hutter. Probabilistic foot contact estimation by fusing information from dynamics and dif-ferentialforward kinematics. In IEEE/RSJ International Conference on Intelligent Robots and Systems , pages 3872–3878. IEEE, 2016. [16] Jemin Hwangbo, Joonho Lee, Alexey Dosovitskiy, Dario Bellicoso, Vassilios Tsounis, Vladlen Koltun, and Marco Hutter. Learning agile and dynamic motor skills for legged robots. Science Robotics , 4(26):eaau5872, 2019. [17] Gwanghyeon Ji, Juhyeok Mun, Hyeongjun Kim, and Jemin Hwangbo. Concurrent training of a control policy and a state estimator for dynamic and robust legged locomotion. IEEE Robotics and Automation Letters , 7 (2):4630–4637, 2022. [18] Abderrahmane Kheddar, St´ ephane Caron, Pierre Ger-gondet, Andrew Comport, Arnaud Tanguy, Christian Ott, Bernd Henze, George Mesesan, Johannes Englsberger, M´ aximo A Roa, et al. Humanoid robots in aircraft manufacturing: The airbus use cases. IEEE Robotics & Automation Magazine , 26(4):30–45, 2019. [19] Diederik P Kingma and Max Welling. Auto-encoding variational Bayes. arXiv preprint arXiv:1312.6114 , 2013. [20] Ashish Kumar, Zipeng Fu, Deepak Pathak, and Jitendra Malik. RMA: Rapid motor adaptation for legged robots. 
+
+arXiv preprint arXiv:2107.04034 , 2021. [21] Mike Lambeta, Po-Wei Chou, Stephen Tian, Brian Yang, Benjamin Maloon, Victoria Rose Most, Dave Stroud, Raymond Santos, Ahmad Byagowi, Gregg Kammerer, et al. DIGIT: A novel design for a low-cost compact high-resolution tactile sensor with application to in-hand manipulation. IEEE Robotics and Automation Letters , 5 (3):3838–3845, 2020. [22] Joonho Lee, Jemin Hwangbo, Lorenz Wellhausen, Vladlen Koltun, and Marco Hutter. Learning quadrupedal locomotion over challenging terrain. Science Robotics , 5 (47):eabc5986, 2020. [23] Michelle A Lee, Yuke Zhu, Peter Zachares, Matthew Tan, Krishnan Srinivasan, Silvio Savarese, Li Fei-Fei, Animesh Garg, and Jeannette Bohg. Making sense of vision and touch: Learning multimodal representations for contact-rich tasks. IEEE Transactions on Robotics ,36(3):582–596, 2020. [24] Qiayuan Liao, Takara E Truong, Xiaoyu Huang, Yu-man Gao, Guy Tevet, Koushil Sreenath, and C Karen Liu. BeyondMimic: From motion tracking to versatile humanoid control via guided diffusion. arXiv preprint arXiv:2508.08241 , 2025. [25] Yaron Lipman, Ricky TQ Chen, Heli Ben-Hamu, Maxim-ilian Nickel, and Matt Le. Flow matching for generative modeling. arXiv preprint arXiv:2210.02747 , 2022. [26] Lucas Manuelli and Russ Tedrake. Localizing external contact using proprioceptive sensors: The contact particle filter. In IEEE/RSJ International Conference on Intelli-gent Robots and Systems , pages 5062–5069. IEEE, 2016. [27] George Mesesan, Johannes Englsberger, Gianluca Garo-falo, Christian Ott, and Alin Albu-Sch¨ affer. Dynamic walking on compliant and uneven terrain using dcm and passivity-based whole-body control. In 2019 IEEE-RAS 19th International Conference on Humanoid Robots ,pages 25–32, 2019. [28] J. Joe Payne, Daniel A. Hagen, Denis Garagi´ c, and Aaron M. Johnson. Multi-momentum observer con-tact estimation for bipedal robots. arXiv preprint arXiv:2412.03462 , 2024. [29] Xue Bin Peng, Pieter Abbeel, Sergey Levine, and Michiel Van de Panne. DeepMimic: Example-guided deep re-inforcement learning of physics-based character skills. 
+
+ACM Transactions On Graphics , 37(4):1–14, 2018. [30] C David Remy. Ambiguous collision outcomes and sliding with infinite friction in models of legged systems. 
+
+The International Journal of Robotics Research , 36(12): 1252–1267, 2017. [31] Bruno Siciliano, Oussama Khatib, and Torsten Kr¨ oger. 
+
+Springer handbook of robotics , volume 200. Springer, 2008. [32] Yang Song, Jascha Sohl-Dickstein, Diederik P Kingma, Abhishek Kumar, Stefano Ermon, and Ben Poole. Score-based generative modeling through stochastic differential equations. arXiv preprint arXiv:2011.13456 , 2020. [33] Sudharshan Suresh, Haozhi Qi, Tingfan Wu, Taosha Fan, Luis Pineda, Mike Lambeta, Jitendra Malik, Mrinal Kalakrishnan, Roberto Calandra, Michael Kaess, et al. NeuralFeels with neural fields: Visuotactile perception for in-hand manipulation. Science Robotics , 9(96): eadl0628, 2024. [34] Alexander Tong, Kilian Fatras, Nikolay Malkin, Guil-laume Huguet, Yanlei Zhang, Jarrid Rector-Brooks, Guy Wolf, and Yoshua Bengio. Improving and generalizing flow-based generative models with minibatch optimal transport. arXiv preprint arXiv:2302.00482 , 2023. [35] Youcan Yan, Zhe Hu, Zhengbao Yang, Wenzhen Yuan, Chaoyang Song, Jia Pan, and Yajing Shen. Soft magnetic skin for super-resolution tactile sensing with force self-decoupling. Science Robotics , 6(51):eabc8801, 2021. [36] Wenxuan Yuan, Siyuan Dong, and Edward H Adelson. GelSight: High-resolution robot tactile sensors for esti-mating geometry and force. Sensors , 17(12):2762, 2017. [37] Yanjie Ze, Zixuan Chen, Joao Pedro Ara´ ujo, Zi-ang Cao, Xue Bin Peng, Jiajun Wu, and C Karen Liu. TWIST: Teleoperated whole-body imitation system. 
+
+arXiv preprint arXiv:2505.02833 , 2025. [38] Yanjie Ze, Siheng Zhao, Weizhuo Wang, Angjoo Kanazawa, Rocky Duan, Pieter Abbeel, Guanya Shi, Ji-ajun Wu, and C Karen Liu. TWIST2: Scalable, portable, and holistic humanoid data collection system. arXiv preprint arXiv:2511.02832 , 2025. [39] Zhikai Zhang, Jun Guo, Chao Chen, Jilong Wang, Chenghuai Lin, Yunrui Lian, Han Xue, Zhenrong Wang, Maoqi Liu, Huaping Liu, et al. Track any motions un-der any disturbances. arXiv preprint arXiv:2509.13833 ,2025. [40] Zongzheng Zhang, Haobo Xu, Zhuo Yang, Chenghao Yue, Zehao Lin, Huan-ang Gao, Ziwei Wang, and Hao Zhao. Elucidating the design space of torque-aware vision-language-action models. In 9th Annual Confer-ence on Robot Learning , 2025. [41] Peiyuan Zhi, Peiyang Li, Jianqin Yin, Baoxiong Jia, and Siyuan Huang. Learning unified force and position control for legged loco-manipulation. arXiv preprint arXiv:2505.20829 , 2025.

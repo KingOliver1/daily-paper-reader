@@ -1,0 +1,1812 @@
+Title: Change-Robust Online Spatial-Semantic Topological Mapping
+
+URL Source: https://arxiv.org/pdf/2605.02227v1
+
+Published Time: Tue, 05 May 2026 01:53:45 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# Change-Robust Online Spatial-Semantic Topological Mapping 
+
+Jiaming Wang ∗, Chen Jizhuo ∗, Liu Diwen ∗, Atharva Ajay Ghotavadekar, Da Jiaxuan, Linh K¨ astner, Harold Soh 
+
+National University of Singapore (C) 
+
+(B) (A)  Navigation success 
+
+> Target location
+
+(D)  
+
+> Camera reconnected Camera disconnected
+> Language goal
+> Robot dog navigation
+> Dynamic environment Mapping session
+> Relocalization session
+
+(E) 
+
+> Mapping session
+> Robot dog
+
+(G)       
+
+> T = t
+> T = t + a
+> T = t + b
+> Loop closure
+> T = t
+> T = t + a
+> T = t + b
+> Rejected hypothesis
+
+(F1)  (F2) 
+
+> Relocalization session
+
+Fig. 1: Our Change-Robust Online Spatial–Semantic (CROSS) representation enables robust language-goal navigation (A) under substantial appearance and scene changes, including lighting variation (C), object rearrangement, dynamic pedestrians (B,E), and unexpected sensor failures (D). CROSS constructs a pose-aware topological graph and explicitly reasons over ambiguity via sequential hypothesis testing in continuous SE(3) . Persistent multi-modal hypotheses (ellipses in (F)) are identified as loop-closure candidates and merged (F1), while transient or flickering hypotheses are rejected (F2). As a result, CROSS is robust to appearance and object change (B,C,E) and provides principled handling of perceptual aliasing (F2), loop closure (F1), kidnapped-robot scenarios, and sensor failures (D). 
+
+Abstract —Autonomous robots require change–robust spatial– semantic reasoning : using spatial and semantic knowledge to decide where to go, how to get there, and where the robot is de-spite environmental change. Existing approaches typically attach semantics to SLAM-built metric maps, but these pipelines are brittle under appearance shifts and scene dynamics, where data association and relocalization degrade. We propose a Change-Robust Online Spatial-Semantic (CROSS) representation that replaces a globally consistent metric substrate with an online, pose-aware topological graph of RGB-D keyframes. The system explicitly reasons over perceptual ambiguity using sequential hypothesis testing in continuous SE(3) . Our estimator maintains a bounded Gaussian-mixture belief over poses, enabling prin-cipled handling of loop closures and kidnapped-robot events. Experiments under severe appearance change, including real-robot object-goal navigation with lighting shifts and furniture rearrangement, demonstrate improved robustness over SLAM-based and topological baselines while remaining safe under perceptual aliasing. 
+
+> ∗
+
+Equal contribution. Emails: jiaming@comp.nus.edu.sg, jzchen@nus.edu.sg, e0905370@u.nus.edu, atharva@nus.edu.sg, e1297764@u.nus.edu, linhdoan@nus.edu.sg, harold@comp.nus.edu.sg .
+
+I. I NTRODUCTION 
+
+Robots require more than semantic understanding from VLMs [1, 9]; they need a spatial–semantic representation 
+
+that enables spatial–semantic reasoning —deciding where to go , how to get there , and where they are while acting in the physical world. This capability underlies everyday behaviors such as language navigation and object search. In real-world deployments, such representations must be change-robust ,allowing robots to localize and reuse prior experience in the same environment despite variations in illumination, season, object arrangement, and dynamic agents (Fig. 1). A common approach is to construct a spatial-semantic representation by layering semantics on top of a SLAM-based metric map [8, 7, 13, 15, 36]. While effective in controlled or mostly static settings, this pipeline can be brittle under change. Many systems rely on a pre-built map or only slowly update it, and when appearance deviates from mapping time the underlying SLAM back-end may fail to relocalize due to unreliable data association and stale map priors. When the metric substrate breaks, the attached semantic layer becomes  
+
+> arXiv:2605.02227v1 [cs.RO] 4 May 2026 Place Recognition
+> BoQ
+> INPUTS
+> Odometry
+> RGB -D
+> Relative Pose Est
+> Xfeat + E -PnP
+> Multi frame marginalization
+> Compose with existing map keyframes
+> Motion prediction
+> SE(3) push -forward
+> Belief Update (Message Fusion )
+> Motion –measurement fusion with hypothesis management
+
+State estimation 
+
+> DBSCAN Clustering
+> reduce number of modes
+> Fusion + Pruning
+> New / refined hypothesis
+
+Map management             
+
+> Node Creation
+> RGBD + SE(3) pose
+> Edge Creation
+> Odometry / Proximity Smoothing
+> Loop Closure
+> Detection
+> Pose aware topological map G = (V, E)
+> Each vertex stores RGB -D frame + SE(3) pose
+> Hypothesis management H(0)
+> Active
+> Proximity edge
+> Odometry edge
+> Odometry edges
+> Session A
+> Session B
+> Odometry edges (solid) encode actual motion. Proximity edges (dashed) link physically close nodes.
+> CROSS allows seamless multi session mapping (indicated by nodes with different shades)
+> 2D projection of hypothesis with uncertainty
+> ellipses .
+> H(0): active hypothesis
+> H(1): persistent hypothesis under continued
+> tracking; potential loop -closure candidate
+> H(2): spurious hypothesis to be pruned
+> Joint Pose Graph
+> Optimization
+> H(2)
+> Pruning
+> H(1)
+> Fusion
+
+Fig. 3: Change-Robust Online Spatial-Semantic (CROSS) Topological System Overview. Given an RGB-D frame and odometry, the online tracking module (orange) performs sequential hypothesis testing in continuous SE(3) . Motion updates are propagated via SE(3) push-forward, while measurement updates are constructed through VPR-based keyframe retrieval. Competing hypotheses are efficiently managed using Gaussian-mixture clustering, pruning, and fusion (see Section IV-A). The map-management module (blue) uses the estimated state from the tracking module to create nodes and edges, detect loop closures, and perform pose-graph optimization and smoothing, yielding a consistent pose-aware topological map (see Section IV-B). 
+
+difficult to use, so the overall stack tends to work best in static scenes and degrades in dynamic, evolving environments. An alternative paradigm for spatial–semantic representa-tion is to use a sparse topological graph , in which nodes store visual observations and edges encode navigational adja-cency [16, 34, 24, 31]. This formulation aligns naturally with modern visual foundation models and VLMs, as stored RGB observations can be directly processed by visual foundation models. Moreover, graph-based representations are lightweight and inherently tolerant to moderate geometric drift. However, sparse topological graphs introduce inherent chal-lenges for localization and loop closure. Existing approaches rely on engineered features or learned visual place recognition (VPR) models [2, 5] to associate incoming observations with stored nodes. Engineered features degrade under appearance change, while VPR models, though more robust, suffer from 
+
+perceptual aliasing , producing high-confidence matches be-tween visually similar but spatially distinct locations. As a re-sult, high-recall retrieval risks false relocalization and spurious graph connectivity, whereas conservative thresholds improve precision at the cost of missed relocalization under severe appearance change. This precision–recall trade-off remains a key obstacle to long-term use of sparse, image-based spatial– semantic representations. This paper introduces CROSS , a Change-Robust Online 
+
+Spatial-Semantic representation, that integrates seamlessly with state-of-the-art (SOTA) off-the-shelf VPR models. We represent the environment as a sparse graph of posed RGB-D keyframes, where each node stores a raw visual observa-tion and an uncertainty-aware pose estimate. The graph is constructed and updated online , forming a lightweight spatial scaffold that does not require a full SLAM system or global metric consistency, while remaining compatible with VPR back-ends. The core insight is that robustness under severe appearance change and self-similar structure requires explicit reasoning over ambiguity . We formulate relocalization as sequential hy-pothesis testing (SHT) directly in continuous SE(3) , maintain-ing and propagating multiple pose hypotheses instead of com-mitting to a single retrieved match. Hypotheses are updated using a global measurement message and pruned or merged only after sufficient temporal evidence is accumulated. Loop closures and kidnapped-robot events are handled naturally as hypotheses that become consistent with previously visited regions. Experiments on indoor and outdoor benchmarks and real-robot deployments support this core idea and show that our approach substantially improves robustness to appearance change while remaining safe under perceptual aliasing. In summary, our contributions are: 
+
+• A pose-aware, online topological representation enabling change-robust spatial–semantic reasoning via sequential hypothesis testing in continuous SE(3) .
+
+• Experiments on public datasets and real-world experi-ments demonstrating strong performance over SLAM-based and topological baselines, with code to be released. II. R ELATED WORK 
+
+A. Metric–Semantic Representations. 
+
+Existing approaches typically layer semantic information onto a SLAM-based metric substrate. This ranges from 2D occupancy grids with object-class layers [8, 7, 21, 36] to hier-archical 3D scene graphs and object-centric maps [40, 13, 14]. While effective for structured environments, these methods often rely on closed-set detectors; this limits their ability to handle open-vocabulary or fine-grained queries. Although dense embedding-based representations [15] provide greater flexibility, they scale poorly in large environments due to their reliance on voxelized structures. Crucially, all these metric-semantic pipelines are fundamentally constrained by the un-derlying SLAM system; when the environment’s appearance deviates from mapping time, unreliable data association leads to relocalization failure, which can break the semantic layer. A related line of work employs 3D Gaussian Splatting for dense semantic mapping [42, 19, 41]. Although these methods capture richer geometric and semantic detail, they remain difficult to scale and are sensitive to appearance changes induced by lighting variation or object rearrangement. 
+
+B. Topological Representations 
+
+We focus on topological localization systems that do not rely on an underlying metric map constructed by SLAM. Such representations are lightweight and flexible, allowing seman-tic information to be stored directly at nodes as raw RGB observations or higher-level textual abstractions. The primary challenge in these systems is perceptual aliasing —visually similar but spatially distinct locations that can induce spurious loop closures [38]. To address this issue, probabilistic approaches typically construct a discrete topological graph and perform Bayesian inference over place hypotheses [34, 16, 10, 23]. Related work leverages bio-inspired pose-cell dynamics to filter place-recognition proposals [25], or applies heuristic temporal con-straints such as sliding windows to improve match confi-dence [31, 24]. However, as demonstrated in our experiments (Section V), these strategies remain brittle under severe ap-pearance change and in highly aliased environments. III. P ROBLEM FORMULATION 
+
+We aim to construct a spatial–semantic environment rep-resentation that supports robust navigation in real-world set-tings subject to natural and often substantial change. Such a representation should satisfy three desiderata: (i) VLM com-patibility , enabling semantic reasoning directly over stored observations; (ii) change robustness , allowing the robot to localize and reuse a single map despite significant appearance variation without remapping; and (iii) local navigability , pro-viding sufficient spatial structure to support short-horizon pose estimation and goal-directed motion. Guided by these requirements, we represent the environment as a sparse, pose-aware topological graph G = ( V, E). Each node vi ∈ V stores an RGBD keyframe zi and an associated camera pose ci ∈ SE(3) . The robot pose at time t is represented by a random variable xt ∈ SE(3) , and the robot state is summarized as (xt, n t), where nt indexes the current (or nearest) keyframe. Importantly, both xt and {ci} are treated as random variables and are modeled using finite Gaussian mixtures on SE(3) (Section IV-A), which enables a compact representation of multi-modal pose uncertainty. Given observations z1: t and control inputs u1: t−1, our goal is to maintain the joint posterior over the robot trajectory and the topological map, 
+
+p(x1: t, G | z1: t, u 1: t−1). (1) The current node index nt is inferred from a pose estimate ˆxt
+
+as nt = arg min vi∈V d(ˆ xt, ˆci), where d(·) denotes a pose dis-tance on SE(3) and ˆci denotes a representative estimate of the keyframe pose (e.g., the highest-weight mixture component). This formulation resembles SLAM but differs in several ways. First, rather than enforcing global metric consistency, we target topological consistency [38], so pose estimates are locally meaningful but need not be globally consistent. Second, we do not maintain dense 3D map points, instead operating directly on a sparse pose-aware topological graph. Third, unlike SLAM systems that maintain a single MAP estimate [26, 22] or methods that rely on discrete topological hypotheses to handle ambiguity [4, 16], we explicitly maintain and filter a multi-modal belief over poses in continuous SE(3) ,allowing motion cues to disambiguate appearance-induced uncertainty. IV. M ETHOD : CROSS In this section, we provide a description of our CROSS system (overview in Fig. 3). At a high-level, our system is organized into two main modules: state estimation and map management. This design follows from the intractability of directly inferring the joint posterior in Eq. (1) due to the coupling between the trajectory and the map. Hence, we adopt the standard conditional factorization,             
+
+> p(x1: t,G | z1: t, u 1: t−1) = p(x1: t|z1: t, u 1: t−1,G)
+> |{z }
+> state estimation
+> ·
+> p(G | z1: t, u 1: t−1)
+> |{z }
+> map management
+> .(2)
+
+Due to space constraints, we focus on the key ideas in each module and relegate details to Appendix C. 
+
+A. State Estimation: Approximate Inference and Hypothesis Management 
+
+To represent multi-modal pose uncertainty while keeping computation bounded, we model both the robot pose xt and keyframe poses {ci} as finite Gaussian mixtures on SE(3) .Since SE(3) is a nonlinear manifold, we define each Gaussian in the local tangent space se (3) of its mean using the logarithm map, and reconstruct poses via the exponential map,           
+
+> p(xt)≈
+> KX
+> k=1
+> w(k)
+> tNse (3)
+> 
+> log  (μ(k)
+> t)−1xt
+> ;0,Σ(k)
+> t
+> 
+> ,p(ci)≈
+> KX
+> k=1
+> w(k)
+> iNse (3)
+> 
+> log  (μ(k)
+> i)−1ci
+> ;0,Σ(k)
+> i
+> 
+> ,
+> (3)
+
+where each component specifies a local distribution around its mean on SE(3) :
+
+x(k) 
+
+> t
+
+= μ(k) 
+
+> t
+
+exp( ξ), c (k) 
+
+> i
+
+= μ(k) 
+
+> i
+
+exp( ξ), ξ ∼ N (0 , Σ(k)).
+
+The residual form log  (μ)−1(·) ensures that uncertainty is expressed in the tangent space where linearization is valid. We perform inference over the current pose by forward message passing on the factor graph (Fig. 11 in Appendix) induced by the motion and measurement factors. Let mmot  
+
+> t
+
+(xt)
+
+and mmeas  
+
+> t
+
+(xt) denote the motion and measurement messages arriving at node xt. The belief is given by the product of these two messages:             
+
+> p(xt|z1: t, u 1: t−1,G)∝mmeas
+> t(xt)
+> |{z }
+> measurement message
+> mmot
+> t(xt)
+> |{z }
+> motion message
+> .(4)
+
+Eq. (4) is evaluated in closed-form using the approxima-tions below; our formulation is closely-related to the classic Gaussian-sum filter (GSF) [30, 3] (Appendix C-A), but differs in how the measurement message is constructed. 
+
+Forward motion message. The motion factor is 
+
+ϕmot  
+
+> t
+
+(xt−1, x t, u t) ≜ p(xt | xt−1, u t), (5) and its forward message to xt is the Bayes prediction 
+
+mmot  
+
+> t
+
+(xt) = 
+
+Z
+
+p(xt | xt−1, u t) p(xt−1 | z1: t−1, u 1: t−1) dx t−1.
+
+Let {w(k)
+
+> t−1
+
+, μ (k)
+
+> t−1
+
+, Σ(k)
+
+> t−1
+
+}Kk=1 denote the weights, means, and covariances of the mixture at time t−1. We approximate the pushed-forward mixture at time t as 
+
+mmot  
+
+> t
+
+(xt) ≈
+
+> K
+
+X
+
+> k=1
+
+w(k) 
+
+> t−1
+
+Nse (3) 
+
+
+
+log  (μ(k)
+
+> t|t−1
+
+)−1xt
+
+; 0 , Σ(k)
+
+> t|t−1
+
+
+
+,
+
+where each mixand is mapped to a new Gaussian with mean μ(k) 
+
+> t|t−1
+
+= μ(k) 
+
+> t−1
+
+ut and covariance Σ(k) 
+
+> t|t−1
+
+≈
+
+Ad u−1
+
+> t
+
+Σ(k) 
+
+> t−1
+
+Ad ⊤
+
+> u−1
+> t
+
++ Qt. Here, ut is the odometry input, and 
+
+Qt is the process-noise covariance in se (3) , capturing uncer-tainty from ut. The mixture weights are preserved ( w(k) 
+
+> t|t−1
+
+=
+
+w(k)
+
+> t−1
+
+) because the motion kernel is probability-preserving. This formulation corresponds to a first-order approximation of Gaussian transport on Lie groups (See Appendix C-B). 
+
+Measurement Message. A key limitation of the conventional GSF is its inability to naturally handle loop closures or the kidnapped-robot scenario, since the measurement update can only refine existing mixture components (see Appendix C-A). To overcome this limitation, we introduce a global measure-ment message. We begin with a local measurement model between the current RGB-D observation zt and node i. The relative pose can be estimated using standard PnP methods [18, 29, 35]: 
+
+Ti,t = fPnP (zt, z i),
+
+where zt and zi denote the RGBD observations from the current step t and node i, respectively. In our implementation, 
+
+fPnP (·) first extracts and matches features using XFeat [28] and LightGlue [20] to obtain 2D-3D correspondences. We adopt this combination primarily for its efficiency, as both methods provide fast and reliable feature processing. The resulting correspondences are then passed to an E-PnP [18] solver to estimate the relative pose. Given this relative measurement, we obtain an estimate of the robot’s global pose by composing the keyframe pose 
+
+ci with the relative transform, i.e., xt ≈ ci Ti,t . Since each keyframe pose is represented as a Gaussian mixture (Eq. (3)), the distribution of the composed pose is obtained by pushing forward each mixture component by Ti,t , analogous to the operation used in the motion factor. The resulting global pose distribution conditioned on keyframe i is therefore a Gaussian mixture over the K components of ci:
+
+p(xt | vi) ≈
+
+> K
+
+X
+
+> k=1
+
+w(k) 
+
+> i
+
+Nse (3) 
+
+
+
+log  (μ(k) 
+
+> i
+
+Ti,t )−1xt
+
+; 0 , Σ(k)
+
+> i,t
+
+
+
+,
+
+(6) where Σ(k) 
+
+> i,t
+
+≈ Ad T −1
+
+> i,t
+
+Σ(k) 
+
+> i
+
+Ad ⊤ 
+
+> T−1
+> i,t
+
+. Eq. (6) describes the pose likelihood conditioned on a specific keyframe i. However, mul-tiple keyframes may be visually compatible with the current observation, making data association an inherent component of the measurement update. To model this uncertainty, we introduce a discrete latent variable Yt ∈ { 1, . . . , N t} indi-cating which keyframe explains zt. Marginalizing over this association yields a mixture-form measurement message: 
+
+Ht(xt) = 
+
+> Nt
+
+X
+
+> i=1
+
+p(xt | zt, Y t=i, G) p(Yt=i | zt, G),
+
+subject to PNt 
+
+> i=1
+
+p(Yt=i | zt, G) = 1 . The term p(Yt=i | zt, G)
+
+represents the probability that keyframe i is the correct asso-ciation for the current observation. This quantity reflects two complementary sources of evidence: (i) the place-recognition confidence (i.e., how likely keyframe i is co-visible with the current view), and (ii) the reliability of the relative-pose esti-mation obtained from PnP. In our system, place recognition is performed by a visual place recognition (VPR) model BoQ [2], while relative pose estimation is obtained via RANSAC E-PnP [18]. We compute an association probability P (i) that combines these two sources, 
+
+P (i) = softmax 
+
+
+
+π(i) inlier( i)
+
+M
+
+
+
+where π(i) is the VPR retrieval score, inlier( i) denotes the PnP inlier count, and M is the maximum number of detected features used for normalization. Using P (i), the global mea-surement message takes the mixture form: 
+
+Ht(xt) = 
+
+> Nt
+
+X
+
+> i=1
+
+P (i)
+
+> K
+
+X
+
+> k=1
+
+w(k) 
+
+> i
+
+Nse (3) 
+
+
+
+log  (μ(k) 
+
+> i
+
+Ti,t )−1xt
+
+; 0 , Σ(k)
+
+> i
+
+
+
+.
+
+(7) 
+
+In contrast to conventional GSFs, which apply per-component EKF-style measurement updates, this global measurement message Ht aggregates evidence over all retrieved keyframes and enables the filter to naturally handle tracking loss, and loop closures, since the measurement update is not restricted to refining only the currently dominant mixands. 
+
+Hypothesis Management. One challenge that arises from the above message passing is that the direct product produces up to 
+
+NtK2 mixture terms. Such quadratic growth quickly becomes impractical in long sequences. Rather than computationally-expensive EM-style reduction [12], we adopt an explicit hy-pothesis management strategy. Let w(i) 
+
+> mot
+
+and w(j) 
+
+> meas
+
+be the weights of the i-th motion and j-th measurement components, respectively. The product component (i, j ) has weight 
+
+w(i,j ) 
+
+> t
+
+∝ w(i) 
+
+> mot
+
+w(j) 
+
+> meas
+
+Cij ,
+
+where Cij is their Gaussian overlap. Most pairs have negligible overlap because they are far apart in SE(3) .To control the growth in mixture size, we maintain asmall set of physically meaningful hypotheses. Each surviving mixture component in p(xt | z1: t, u 1: t−1, G) is interpreted as a hypothesis h(l) representing a distinct, dynamically consistent trajectory. We summarize 
+
+h(l) 
+
+> t
+
+= x(l)1: t, Σ(l)1: t, ¯w(l) 
+
+> t
+
+, E(l) 
+
+> vis
+
+,
+
+where x(l)1: t are the node poses along the trajectory, Σ(l)1: t are their covariances, ¯w(l) 
+
+> t
+
+is the normalized hypothesis weight, and E(l) 
+
+> vis
+
+is the set of visual constraints (further described in the smoothing step in Section IV-B). In brief, we manage hypotheses in two stages (complete details in Appendix C-C): 1) Measurement Clustering , which clusters the all mea-surement components on SE(3) into a small number of dominant modes using an SE(3) -aware DBSCAN method; 2) Fusion, Birth, and Pruning , whereby we fuse these modes with the motion mixture, updating existing hy-potheses and spawning new ones if needed. In addition, we prune hypotheses whose weights or overlaps are too small. In practice, we do not duplicate node poses; each hypothesis 
+
+h(l) is represented solely by its component index l at every node, and under the motion model this component evolves continuously in SE(3) , so the index l is preserved over time (the l-th component of mmot  
+
+> t
+
+is the propagation of the l-th component at time t−1). New hypotheses are created only when the global measurement message proposes a mode that does not overlap with any existing motion component, at which point a new component index, and thus a new hypothesis, is branched out. 
+
+B. Topological Map Management 
+
+Given the state estimates, we maintain a topological map. This involves creating new nodes, adding edges, and perform-ing pose-graph optimization (PGO) to smooth past trajectories. 
+
+Node Creation. At each timestep, we first perform vi-sual place recognition (VPR) to retrieve keyframe candidates whose appearances match the current observation. We create a new node whenever the maximum similarity score falls below a threshold β, using the current RGB-D frame and its pose estimate (e.g., the robot visits a previously unseen location or when a known location exhibits a substantially different appearance due to time-of-day). Since the current pose estimate is represented as a Gaussian mixture on SE(3) ,the newly added node inherits the same mixture structure; we store a set of mixture components {(μ(k)
+
+> new
+
+, Σ(k)
+
+> new
+
+, w (k)
+
+> new
+
+)}Kk=1 ,where each component is parameterized by a pose mean 
+
+μ(k) 
+
+> new
+
+∈ SE(3) and diagonal covariance Σ(k) 
+
+> new
+
+defined in the tangent space se (3) .
+
+Edge Creation. Whenever a new keyframe is created, we add two types of edges:  
+
+> •
+
+Odometry edge: connecting the new node to the previous node, induced by the physical motion between timesteps.  
+
+> •
+
+Proximity edge: connecting the new node to nearby existing nodes within a spatial radius d. This helps ensure that multiple nodes representing the same physical place (e.g., under different appearances) remain connected in the topological graph. In principle, a learned traversability model [37] could be used to validate whether two nodes should be connected, but in practice we find that asimple distance threshold (e.g., d = 0 .5 m ) is reliable and lightweight. 
+
+Smoothing. While our representation is intentionally topo-logical, we periodically refine node poses to support accurate sequential hypothesis testing. This refinement is computa-tionally inexpensive because the map contains no explicit point landmarks. We estimate node poses by optimizing the posterior: 
+
+p({ci} | E odo , Evis , z 1: t, u 1: t−1) , (8) where Eodo is the set of odometry edges and Evis is the set of visual constraints. Each edge encodes a noisy relative pose in SE(3) ; under a Gaussian noise model, the negative log-posterior is a sum of squared residuals in se (3) . Because each node pose ci is represented as a Gaussian mixture in SE(3) ,a visual constraint between two nodes does not uniquely specify which mixture components it connects. Introducing explicit discrete association variables would lead to an EM-like formulation that is expensive. Instead, we exploit the hypothesis structure from the filtering stage. For each hypothesis h(l) we maintain E(l) 
+
+> vis
+
+= { (i, j ) },
+
+where (i, j ) denotes a visual constraint between node i and node j for hypothesis l. Under our hypothesis management policy, all visual constraints in E(l) 
+
+> vis
+
+implicitly connect com-ponent l at both endpoints. Conditioning on h(l) therefore fixes the component identities, and the continuous part of the problem reduces to a standard pose-graph optimization (PGO) over the node means. Thus, we minimize the negative log posterior p({c(l) 
+
+> i
+
+} | E odo , E(l) 
+
+> vis
+
+, z 1: t, u 1: t−1),
+
+{ˆc(l) 
+
+> i
+
+} = arg min  
+
+> {μ(l)
+> i}
+
+" X
+
+> (i,j )∈E odo
+
+log   ˆT −1 
+
+> ij
+
+(μ(l) 
+
+> i
+
+)−1μ(l)
+
+> j
+
+ 2Σ−1
+
+> ij
+
++ X
+
+> (i,j )∈E (l)
+> vis
+
+log   ˜T −1 
+
+> ij
+
+(μ(l) 
+
+> i
+
+)−1μ(l)
+
+> j
+
+ 2Λ−1
+
+> ij
+
+#
+
+,
+
+(9) where ˆTij and ˜Tij are the measured relative poses from odometry and vision, and Σij , Λij are their covariances in 
+
+se (3) . We solve (9) independently for each hypothesis h(l)
+
+using GTSAM [11] to obtain the optimized poses {ˆc(l) 
+
+> i
+
+}.Hypotheses whose optimized pose graphs are inconsistent with odometry or other constraints naturally receive lower posterior weight and are subsequently pruned. When multiple high-probability hypotheses survive this step, they correspond to distinct yet plausible trajectories and map configurations, forming candidate loop closures. 
+
+Loop Closure. Loop closure detection in our system arises naturally from the sequential hypothesis testing (SHT) for-mulation: a revisit, whether a standard loop closure or a Rover (Campus) 
+
+OpenLORIS (Corridor) 
+
+Fig. 4: Appearance change at the same physical locations for the two benchmarks. The top row shows Rover (Campus) across different months/times, while the bottom row shows OpenLORIS (Corridor) across different times of day. 
+
+kidnapped-robot event, appears as an additional hypothesis whose trajectory becomes consistent with an older region of the map. After the SHT step, we retain a small set of hypotheses {h(l) 
+
+> t
+
+}L−1 
+
+> l=0
+
+with normalized weights { ¯w(l) 
+
+> t
+
+}L−1 
+
+> l=0
+
+,where h(0)  
+
+> t
+
+is the currently tracked branch. For each alternative hypothesis l > 0, we compute a log posterior odds against the null hypothesis h(0) : ℓ(l) 
+
+> t
+
+= log ¯ w(l) 
+
+> t
+
+/ ¯w(0)  
+
+> t
+
+. A positive ℓ(l)
+
+> t
+
+indicates that, at time t, hypothesis h(l) is more likely than the no-loop hypothesis h(0) . Rather than accepting a loop closure from a single frame, we accumulate evidence over a sliding window of length W by counting how many times ℓ(l) 
+
+> τ
+
+> 0
+
+for τ ∈ { t − W + 1 , . . . , t }. A loop closure for hypothesis h(l)
+
+is declared only when this count exceeds a threshold r. This suppresses spurious place-recognition outliers and ensures that only hypotheses with sustained support are promoted. Once a loop closure between h(0) and h(l) is accepted, we perform a joint PGO analogous to the smoothing pro-cedure, but over both hypotheses simultaneously. For each node index i in the temporal overlap of the two trajectories, we introduce a loop-closure residual log(( μ(0)  
+
+> i
+
+)−1μ(l) 
+
+> i
+
+), with a small covariance, enforcing consistency between the two pose estimates that correspond to the same physical location. We then construct an augmented PGO whose variables are the union of node poses {μ(0)  
+
+> i
+
+} ∪ { μ(l) 
+
+> i
+
+}, and whose factors include: (i) the odometry and visual constraints from each hypothesis, and (ii) the identity loop-closure constraints E(0 ,l )
+
+> lc
+
+linking corresponding nodes. Solving this joint optimization aligns the two branches and yields a single, globally consistent trajectory in which duplicated node copies agree. After optimization, we collapse the merged pair into a single hypothesis by retaining index 0 with updated poses and aggregated weight ¯w(0)  
+
+> t
+
+← ¯w(0)  
+
+> t
+
++ ¯ w(l) 
+
+> t
+
+, and removing 
+
+h(l) from the mixture. In this way, loop closures and tracking losses are realized as hypothesis mergers driven by the same SHT machinery, yielding a unified and robust treatment of revisits under strong perceptual aliasing. V. E XPERIMENTAL EVALUATION 
+
+CROSS is designed to be change-robust , i.e., capable of localizing and reusing prior spatial experience in the same physical environment despite substantial changes in appear-ance and scene content. We focus on three common sources of condition shift that challenge real-world robotic deploy-ment: (i) illumination variation due to time of day, (ii) long-term appearance change across months or seasons, and (iii) object-level change caused by rearrangement or motion in the environment. We evaluate CROSS on public benchmarks and real-robot deployments, and compare against representative SLAM-based and topological localization systems. 
+
+A. Appearance Change Across Time 
+
+Datasets. We evaluate change-robustness under appearance variation using two public datasets (Figure 4). The Open-LORIS [33] Corridor scene is an indoor dataset with re-peated traversals captured at different times of day, exhibit-ing substantial illumination variation along an approximately 80 m corridor. The Rover [32] Campus scene is an outdoor dataset comprising repeated traversals collected across dif-ferent months and times of day, covering an approximately 270 m route and capturing long-term appearance changes due to lighting, weather, and seasonal effects. 
+
+Methods. We compare our approach against representative and state-of-the-art SLAM systems, including ORB-SLAM3 (RGBD) [6], RTAB-Map [17], and MASt3R-SLAM [27]. In addition, we evaluate common topological localization baselines: Greedy Matching (GM), Sequence Matching (SM), Probabilistic Belief Update (PBU), and Appearance-based Mapping [16]. GM, SM, and PBU represent widely used strategies for online topological mapping and localization [31, 24, 34]. Several methods are not publicly available, so we reimplement all baselines using the same VPR models and comparable hyperparameters to ensure a fair comparison (see Appendix A-A). 
+
+Setup and Metrics. We evaluate all methods under amap–query protocol. A single traversal is first designated as Fig. 5: Multi-session relocalization results on the Rover [32] Campus scene. Left: Relocalization outcomes across different locations. Each row corresponds to a mapping trajectory (indicated by different colors), while columns show relocalization attempts at the same physical locations captured at different times or months, as illustrated in the top image. Empty space indicates relocalization failed at that specific location. The compared methods are: (a) ORB-SLAM3, (b) RTAB-Map, (c) MASt3R-SLAM, and (d) Ours. Most baseline methods struggle under significant lighting and appearance changes, whereas our approach consistently relocalizes despite substantial visual variation. Right: 
+
+A compact summary view, where each grid cell reports the relocalization success rate for a given mapping–testing sequence pair. Due to space constraints, we report only the four best-performing methods; full results and additional analysis are provided in Section V-A. 
+
+the mapping sequence , during which the system incremen-tally constructs its spatial representation online. Relocaliza-tion performance is then evaluated on a separate traversal recorded under different environmental conditions (the testing sequence ). The testing sequence is partitioned into fixed-length subsequences of 200 frames, each treated as an independent relocalization trial. This protocol results in 745 trials and 1,232 trials for OpenLORIS and Rover, respectively. We report the relocalization success (RS) rate as the primary evaluation metric. For methods that output a discrete topolog-ical estimate (e.g., node or place ID), a trial is considered successful if the predicted location lies within a distance threshold rD of the ground-truth position. For metric SLAM systems that output a full pose estimate, success is defined as the estimated pose lying within the same threshold rD
+
+of the ground-truth pose. We set rD = 2 m for indoor en-vironments and rD = 5 m for outdoor environments across all experiments. We distinguish between two evaluation settings: 
+
+with self-mapping , where the mapping and testing sequences are identical, and cross-sequence , where relocalization is per-formed using maps built from different sequences. 
+
+Results. ORB-SLAM performs poorly on this benchmark, as its hand-crafted features are brittle under low-light conditions and in scenes with limited texture. RTAB-Map and other topo-logical methods perform better, benefiting from more modern learned feature detection and matching pipelines. Mast3R exhibits strong tracking performance but remains weak in relocalization. Overall, CROSS achieves the highest relocaliza-tion success rates across both indoor and outdoor benchmarks (Table I), indicating improved robustness to appearance change compared to existing SLAM-based and topological methods. TABLE I: Relocalization success rate (RS) under appearance change on indoor (OpenLORIS) and outdoor (Rover) bench-marks, without vs. with self mapping.                                                    
+
+> cross-sequence w. self mapping Method RS ↑
+> (OLS) RS ↑
+> (Rover) RS ↑
+> (All) RS ↑
+> (OLS) RS ↑
+> (Rover) RS ↑
+> (All)
+> SLAM Systems ORB3 [6] 0.032 0.005 0.013 0.003 0.048 0.040 RTAB [17] 0.292 0.158 0.198 0.438 0.275 0.336 MASt3R [27] 0.173 0.014 0.062 0.226 0.024 0.094 Topological Methods GM 0.080 0.064 0.069 0.483 0.263 0.345 SM 0.073 0.152 0.128 0.479 0.333 0.387 PBU 0.080 0.063 0.068 0.482 0.262 0.344 ABM [16] 0.231 0.020 0.090 0.569 0.229 0.356
+> CROSS (Ours) 0.353 0.397 0.384 0.478 0.494 0.488
+
+Nevertheless, absolute performance remains limited under se-vere condition shifts: even for CROSS, success rates in cross-sequence settings are around 40%. Performance degrades substantially under large appearance gaps, such as day-to-night transitions or long-term seasonal changes (e.g., January to September). While non-perfect success rates are acceptable in practice due to repeated relocalization opportunities as the robot moves, higher success rates directly translate to greater tolerance to appearance change and faster recovery. Together, these results highlight both the benefits of our approach and the inherent difficulty of long-term relocalization under extreme appearance variation, which remains an open challenge. 
+
+B. Object Navigation on a Real Quadruped Robot 
+
+To further evaluate the practical effectiveness of our pro-posed spatial-semantic representation, we deployed the system Fig. 6: Example illustrations of the three evaluation settings for the real quadruped-robot experiment. Each image shows the envi-ronment before (top) and after (bottom) the change. Left: Lighting Change (LC). Middle: Object Rearrangement (OR). Right: Com-bined Change (LC+OR). 
+
+on a quadruped robot operating in a changing indoor environ-ment. These experiments are designed to assess the robustness of our spatial–semantic reasoning under conditions commonly encountered in real-world deployment. In particular, we con-sider two prevalent sources of change: (i) object-level change caused by furniture/object rearrangement or object motion, and (ii) varying lighting conditions. 
+
+Task and Setup. During an initial mapping session , the robot constructs our spatial–semantic map. In a subsequent 
+
+query session , the robot is initialized at a random location within the same environment and tasked with navigating to a specified target object (e.g., a bin, plant, or coke bottle) that was previously observed. We evaluate three experimental settings that capture com-mon sources of environmental change. Lighting Change (LC) 
+
+considers only appearance variation induced by different times of day between the mapping and query sessions. Object Rear-rangement (OR) evaluates robustness to object-level changes, where furniture and objects are moved while lighting con-ditions remain similar. Combined Change (LC+OR) includes both time-of-day variation and object rearrangement simul-taneously. Figure 6 illustrates representative examples of the LC, OR, and LC+OR settings. For each setting, we conduct 10 independent trials with different scene configurations and target objects. A trial is considered successful if the robot reaches the specified target object within a distance of 1 m. 
+
+Methods. We compare CROSS against the commonly used 
+
+metric map + semantic layer paradigm, which augments a metric SLAM map with an additional semantic layer, as adopted in prior work such as [8, 7, 13]. We implement two variants of this baseline, using ORB-SLAM3 [6] and RTAB-Map [17] for localization and mapping. Implementation details for both variants are provided in Appendix A-B. 
+
+Results. Across all three settings, CROSS consistently achieves a higher task success rate than the baseline (Table II), which demonstrates that the proposed representation can ef-fectively support object-goal navigation under both appearance and object-level changes. While performance degrades when both types of change are present, our approach remains substantially more reliable than the comparison method. TABLE II: Task success rate (%) in real-robot object-goal navigation under different environmental changes.             
+
+> Method LC OR LC+OR Metric+Semantic (ORB-SLAM3) 30.0 30.0 20.0 Metric+Semantic (RTAB-Map) 40.0 60.0 30.0 CROSS (Ours) 70.0 80.0 80.0
+
+We additionally conducted a qualitative real-robot experi-ment to examine if CROSS remains reliable in the presence of dynamic agents (i.e., moving pedestrians) across different times of the day (Fig. 1). We performed a mapping session over a roughly 170 m trajectory covering walk-ways and a university canteen. We then ran a query session during mealtime when the same area was crowded with different lighting conditions, and commanded the robot to navigate to a target specified by language (security post). Despite substantial scene changes, the robot was able to re-localize and complete the navigation task. 
+
+C. Further Experiments: Runtime Analysis 
+
+We have conducted further analysis on our system, with results in the Appendix B. To summarize:  
+
+> •
+
+Perceptual Aliasing. We evaluate robustness to percep-tual aliasing using Topo-Bench [38] and find our approach to be more robust than existing methods in environments with strong perceptual aliasing, i.e., revisits to previously mapped regions where a strong distractor (another loca-tion) closely resembles the true location.  
+
+> •
+
+Fast motions and Occlusions. We find our system is robust to fast motion and camera occlusion; the states are propagated when image matching is not possible, and corrected by the global measurement message once image observations became available.  
+
+> •
+
+Noisy Odometry. CROSS exhibits robustness to local odometry noise, maintaining stable localization perfor-mance even under substantial perturbations.  
+
+> •
+
+Runtime Analysis. The complete pipeline requires ap-proximately 28 ms per step on an RTX 4000 GPU work-station. This enables real-time operation at over 30 Hz. In practical deployments with more limited computational resources, the system need not be executed at such a high frequency; local odometry can be used to propagate the robot state at high rate between slower global updates. VI. C ONCLUSION AND FUTURE WORK 
+
+We presented CROSS, a change-robust spatial-semantic representation for long-term robot operation that is naturally compatible with modern VLMs. By maintaining an online, lightweight topological graph of posed RGB-D keyframes— rather than a globally consistent metric map—and performing relocalization via sequential hypothesis testing in continu-ous SE(3) , our system handles perceptual ambiguity while leveraging motion to disambiguate self-similar places. Ex-periments on public indoor/outdoor benchmarks and real-robot deployments under substantial appearance and object-level change show improved robustness over SLAM-based and topological baselines, supporting reliable reuse of a single spatial memory. We also demonstrated downstream spatial-semantic applications in the form of object-goal navigation. 
+
+Limitations and Future Work. Looking ahead, an important direction is to broaden the set of spatial–semantic tasks sup-ported by this representation and to strengthen the perception front-end, in particular by improving relative pose estimation under severe appearance shift and noisy depth, which currently limits relocalization in the hardest conditions. Relative pose es-timation currently relies on a classical keypoint-based pipeline (keypoint detection, feature matching, and PnP), which can become a bottleneck under severe appearance change. Asecond failure mode stems from the depth measurements re-quired to form 2D-3D correspondences for RGB-D PnP. When depth is noisy or contains significant outliers, the estimated relative pose can be inaccurate, which may introduce incorrect measurement modes and degrade filtering performance. We are currently working on addressing these issues. REFERENCES 
+
+[1] Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 , 2023. [2] Amar Ali-Bey, Brahim Chaib-draa, and Philippe Giguere. Boq: A place is worth a bag of learnable queries. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 17794–17803, 2024. [3] D. L. Alspach and H. W. Sorenson. Nonlinear bayesian estimation using gaussian sum approximations. 
+
+IEEE Transactions on Automatic Control , 17(4):439– 448, 1972. doi: 10.1109/TAC.1972.1100034. [4] Adrien Angeli, David Filliat, St´ ephane Doncieux, and Jean-Arcady Meyer. Fast and incremental method for loop-closure detection using bags of visual words. IEEE transactions on robotics , 24(5):1027–1037, 2008. [5] Gabriele Berton and Carlo Masone. Megaloc: One re-trieval to place them all. In Proceedings of the Computer Vision and Pattern Recognition Conference , pages 2861– 2867, 2025. [6] Carlos Campos, Richard Elvira, Juan J G´ omez Rodr´ ıguez, Jos´ e MM Montiel, and Juan D Tard´ os. Orb-slam3: An accurate open-source library for visual, visual–inertial, and multimap slam. IEEE transactions on robotics , 37(6):1874–1890, 2021. [7] Matthew Chang, Theophile Gervet, Mukul Khanna, Sri-ram Yenamandra, Dhruv Shah, So Yeon Min, Kavit Shah, Chris Paxton, Saurabh Gupta, Dhruv Batra, Roozbeh Mottaghi, Jitendra Malik, and Devendra Singh Chaplot. GOAT: GO to any thing. In Proceedings of Robotics: Science and Systems (RSS) , 2024. doi: 10.15607/RSS. 2024.XX.073. [8] Devendra Singh Chaplot, Dhiraj Prakashchand Gandhi, Abhinav Gupta, and Russ R Salakhutdinov. Object goal navigation using goal-oriented semantic exploration. 
+
+Advances in Neural Information Processing Systems , 33: 4247–4258, 2020. [9] Gheorghe Comanici, Eric Bieber, Mike Schaekermann, Ice Pasupat, Noveen Sachdeva, Inderjit Dhillon, Marcel Blistein, Ori Ram, Dan Zhang, Evan Rosen, et al. Gem-ini 2.5: Pushing the frontier with advanced reasoning, multimodality, long context, and next generation agentic capabilities. arXiv preprint arXiv:2507.06261 , 2025. [10] Mark Cummins and Paul Newman. Appearance-only slam at large scale with fab-map 2.0. The International Journal of Robotics Research , 30(9):1100–1123, 2011. doi: 10.1177/0278364910385483. [11] Frank Dellaert and GTSAM Contributors. borglab/gtsam, May 2022. URL https://github.com/borglab/gtsam). [12] M.A.T. Figueiredo and A.K. Jain. Unsupervised learning of finite mixture models. IEEE Transactions on Pattern Analysis and Machine Intelligence , 24(3):381–396, 2002. doi: 10.1109/34.990138. [13] Qiao Gu, Alihusein Kuwajerwala, Sacha Morin, Kr-ishna Murthy Jatavallabhula, Aditya Sen, Aditya Agar-wal, Corban Rivera, William Knudson, Erik Sudderth, Oscar Beijbom, et al. ConceptGraphs: Open-vocabulary 3D scene graphs for perception and planning. In Proceed-ings of the IEEE International Conference on Robotics and Automation (ICRA) , 2024. [14] N. Hughes, Y. Chang, and L. Carlone. Hydra: Areal-time spatial perception system for 3D scene graph construction and optimization. 2022. [15] Krishna Murthy Jatavallabhula, Alihusein Kuwajerwala, Qiao Gu, Mohd Omama, Tao Chen, Alaa Maalouf, Shuang Li, Ganesh Iyer, Soroush Saryazdi, Nikhil Keetha, et al. ConceptFusion: Open-set multimodal 3D mapping. In Proceedings of Robotics: Science and Systems (RSS) , 2023. [16] Mathieu Labbe and Francois Michaud. Appearance-based loop closure detection for online large-scale and long-term operation. IEEE Transactions on Robotics , 29 (3):734–745, 2013. [17] Mathieu Labb´ e and Franc ¸ois Michaud. Rtab-map as an open-source lidar and visual simultaneous localization and mapping library for large-scale and long-term online operation. Journal of field robotics , 36(2):416–446, 2019. [18] Vincent Lepetit, Francesc Moreno-Noguer, and Pascal Fua. Ep n p: An accurate o (n) solution to the p n p problem. International journal of computer vision , 81 (2):155–166, 2009. [19] Mingrui Li, Shuhong Liu, Heng Zhou, Guohao Zhu, Na Cheng, Tianchen Deng, and Hongyu Wang. Sgs-slam: Semantic gaussian splatting for neural dense slam. In European Conference on Computer Vision , pages 163– 179. Springer, 2024. [20] Philipp Lindenberger, Paul-Edouard Sarlin, and Marc Pollefeys. Lightglue: Local feature matching at light speed. In Proceedings of the IEEE/CVF international conference on computer vision , pages 17627–17638, 2023. [21] Peiqi Liu, Yaswanth Orru, Jay Vakil, Chris Paxton, Nur Muhammad Mahi Shafiullah, and Lerrel Pinto. OK-Robot: What really matters in integrating open-knowledge models for robotics. In Proceedings of Robotics: Science and Systems (RSS) , 2024. doi: 10. 15607/RSS.2024.XX.091. [22] Andr´ ea Macario Barros, Maugan Michel, Yoann Moline, Gwenol´ e Corre, and Fr´ ed´ erick Carrel. A comprehensive survey of visual slam algorithms. Robotics , 11(1):24, 2022. [23] Will Maddern, Michael Milford, and Gordon Wyeth. CAT-SLAM: Probabilistic localisation and mapping us-ing a continuous appearance-based trajectory. The In-ternational Journal of Robotics Research (IJRR) , 31(4): 429–451, 2012. doi: 10.1177/0278364912438273. [24] Xiangyun Meng, Nathan Ratliff, Yu Xiang, and Dieter Fox. Scaling local control to large-scale topological navigation. In 2020 IEEE International Conference on Robotics and Automation (ICRA) , pages 672–678. IEEE, 2020. [25] Michael J Milford and Gordon F Wyeth. Mapping a suburb with a single camera using a biologically inspired slam system. IEEE Transactions on Robotics , 24(5): 1038–1053, 2008. [26] Raul Mur-Artal, Jose Maria Martinez Montiel, and Juan D Tardos. Orb-slam: A versatile and accurate monocular slam system. IEEE transactions on robotics ,31(5):1147–1163, 2015. [27] Riku Murai, Eric Dexheimer, and Andrew J Davison. Mast3r-slam: Real-time dense slam with 3d reconstruc-tion priors. In Proceedings of the Computer Vision and Pattern Recognition Conference , pages 16695–16705, 2025. [28] Guilherme Potje, Felipe Cadar, Andr´ e Araujo, Renato Martins, and Erickson R Nascimento. Xfeat: Accelerated features for lightweight image matching. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 2682–2691, 2024. [29] Long Quan and Zhongdan Lan. Linear n-point camera pose determination. IEEE Transactions on pattern anal-ysis and machine intelligence , 21(8):774–780, 1999. [30] Branko Ristic, Sanjeev Arulampalam, and Neil Gordon. 
+
+Beyond the Kalman Filter: Particle Filters for Track-ing Applications . Artech House Radar Library. Artech House, Boston, London, 2004. ISBN 9781580536318. [31] Nikolay Savinov, Alexey Dosovitskiy, and Vladlen Koltun. Semi-parametric topological memory for nav-igation. In International Conference on Learning Repre-sentations , 2018. [32] Fabian Schmidt, Julian Daubermann, Marcel Mitschke, Constantin Blessing, Stephan Meyer, Markus Enzweiler, and Abhinav Valada. Rover: A multi-season dataset for visual slam. IEEE Transactions on Robotics , 2025. [33] Xuesong Shi, Dongjiang Li, Pengpeng Zhao, Qinbin Tian, Yuxin Tian, Qiwei Long, Chunhao Zhu, Jingwei Song, Fei Qiao, Le Song, Yangquan Guo, Zhigang Wang, Yimin Zhang, Baoxing Qin, Wei Yang, Fangshi Wang, Rosa H. M. Chan, and Qi She. Are we ready for ser-vice robots? the OpenLORIS-Scene datasets for lifelong SLAM. In 2020 International Conference on Robotics and Automation (ICRA) , pages 3139–3145, 2020. [34] Lauri Suomela, Jussi Kalliola, Harry Edelman, and Joni-Kristian K¨ am¨ ar¨ ainen. Placenav: Topological navigation through place recognition. In 2024 IEEE International Conference on Robotics and Automation (ICRA) , pages 5205–5213. IEEE, 2024. [35] S Urban, J Leitloff, and S Hinz. Mlpnp–a real-time maximum likelihood solution to the perspective-n-point problem. ISPRS Annals of the Photogrammetry, Remote Sensing and Spatial Information Sciences , 3:131–138, 2016. [36] Jiaming Wang and Harold Soh. Probable object location (polo) score estimation for efficient object goal naviga-tion. In 2024 IEEE International Conference on Robotics and Automation (ICRA) , pages 5221–5227. IEEE, 2024. [37] Jiaming Wang, Diwen Liu, Jizhuo Chen, Jiaxuan Da, Nuowen Qian, Minh Man Tram, and Harold Soh. Genie: A generalizable navigation system for in-the-wild envi-ronments. IEEE Robotics and Automation Letters , 2025. [38] Jiaming Wang, Diwen Liu, Jizhuo Chen, and Harold Soh. Topo-bench: An open-source topological mapping eval-uation framework with quantifiable perceptual aliasing. 
+
+arXiv preprint arXiv:2510.04100 , 2025. [39] Jianyuan Wang, Minghao Chen, Nikita Karaev, Andrea Vedaldi, Christian Rupprecht, and David Novotny. Vggt: Visual geometry grounded transformer. In Proceedings of the Computer Vision and Pattern Recognition Confer-ence , pages 5294–5306, 2025. [40] Abdelrhman Werby, Chenguang Huang, Martin B¨ uchner, Abhinav Valada, and Wolfram Burgard. Hierarchi-cal Open-Vocabulary 3D Scene Graphs for Language-Grounded Robot Navigation. In Proceedings of Robotics: Science and Systems , Delft, Netherlands, July 2024. doi: 10.15607/RSS.2024.XX.077. [41] Shijie Zhou, Haoran Chang, Sicheng Jiang, Zhiwen Fan, Zehao Zhu, Dejia Xu, Pradyumna Chari, Suya You, Zhangyang Wang, and Achuta Kadambi. Feature 3dgs: Supercharging 3d gaussian splatting to enable distilled feature fields. In Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition , pages 21676–21685, 2024. [42] Siting Zhu, Guangming Wang, Hermann Blum, Jiuming Liu, Liang Song, Marc Pollefeys, and Hesheng Wang. Sni-slam: Semantic neural implicit slam. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 21167–21177, 2024. APPENDIX AEXPERIMENT DETAILS 
+
+A. Topological Localization Baselines 
+
+This appendix describes the topological localization base-lines used in our experiments. All methods operate on the same topological graph and use the same underlying VPR model [2] for computing visual similarity scores, differing only in how temporal information and motion constraints are incorporated. 
+
+1) Greedy Matching (GM): The greedy matching baseline localizes by selecting the node with the highest similarity score to the current observation. If the maximum similarity exceeds a fixed threshold τ , the corresponding node is selected as the localization result; otherwise, the localization estimate remains unchanged. This baseline reflects a common retrieval-based relocalization strategy without temporal reasoning. 
+
+2) Sequence Matching (SM): Instead of matching a single observation, sequence matching aggregates similarity scores over a short temporal window to improve robustness against perceptual aliasing and viewpoint variation. A candidate match between nodes (vi, v j ) is accepted if the aggregated similarity over a window of size 2h+1 satisfies 
+
+f sim( zvi−h, z vj −h), . . . , sim( zvi+h, z vj +h) ≥ τ, 
+
+where sim( ·, ·) denotes the visual similarity score and f( ·) is an aggregation function. In our implementation, we use the median of the similarity scores within the window, which provides robustness to outliers. This baseline is inspired by prior work on sequence-based place recognition [31, 24]. 
+
+3) Probabilistic Belief Update (PBU): The probabilistic belief update baseline maintains a discrete posterior belief 
+
+bt(v) = P (vt = v | z1: t) over the topological nodes v ∈ V at time t. Given the belief at the previous timestep, the state is first propagated via a motion model P (vt | vt−1) that constrains allowable transitions based on the graph topology: 
+
+P (vt | vt−1) ∝
+
+(
+
+α if dist G(vt, v t−1) ≤ wu,β otherwise ,
+
+where dist G(·, ·) denotes the hop distance in the graph, wu is the maximum allowed movement per timestep, and α, β are constants controlling transition likelihoods. The predicted belief is then updated using the retrieval similarity scores as the observation likelihood P (zt | vt) ∝
+
+g(sim( zt, z vt )) , where g(·) maps similarity scores to likeli-hood values. The recursive update is formulated as: 
+
+bt(vt) = η · P (zt | vt) X
+
+> vt−1∈V
+
+P (vt | vt−1)bt−1(vt−1),
+
+where η is a normalization constant. This discrete Bayesian filtering suppresses spurious matches that violate motion constraints and improves robustness to perceptual aliasing, following prior topological localization approaches [34]. TABLE III: Localization performance under perceptual alias-ing on Topo-Bench . Results are reported for: Ambiguous + Positive (A+P), Positive Only (P.O.), Ambiguous Only (A.O.) and Balanced Localization Accuracy (BLA), defined as the geometric mean over the three regimes.                                         
+
+> Method A+P P.O. A.O. BLA RTAB-Map [17] 0.059 0.433 10.301 ORB-SLAM3 [6] 0.059 0.183 10.227 ABM [16] 0.02 0.328 10.201 OpenFabmap 00.112 0.732 0.0748 Rat-Slam 0.02 0.097 0.443 0.103 GM 0.078 0.302 0.959 0.288 SM 0.118 0.187 0.959 0.281 PBU 0.078 0.302 0.959 0.288
+> CROSS (Ours) 0.275 0.336 0.99 0.452
+
+B. Real robot experiment implementation 
+
+We design the real robot experiments to test relocalization and object goal navigation, under controlled combinations of appearance change and object rearrangement. To prevent differences in environment coverage, the spatial-semantic rep-resentation for all methods is constructed from data collected along an identical mapping trajectory in each scene. The navigation policy performs local obstacle avoidance and rel-ative way-point tracking, and does not consider the down-stream impact of navigation actions on the state estimation. This setup allows us attribute success or failure rates to the robustness of the underlying representation, rather than to planning or navigation strategies. We augment the default map representation of ORB-SLAM3 [6] to include object memory by associating the recorded RGB observations to computed map poses via timestamp alignment. RTAB-MAP in its default implementation provides the associated RGB image for each map pose. Consequently, all methods considered for evaluation support semantic queries, which we use for the object navigation task. We retain the default tunable parameter values for all methods, to maintain fairness in comparison and avoid method specific tuning. APPENDIX BADDITIONAL EXPERIMENTS , R ESULTS , AND ANALYSIS 
+
+A. Topo-Bench Evaluation 
+
+We evaluate robustness to perceptual aliasing using Topo-Bench [38], which categorizes perceptual aliasing scenarios into three regimes: Ambiguous + Positive (A+P), Positive Only (P.O.), and Ambiguous Only (A.O.). A+P represents revisits to previously mapped regions where strong distractor matches closely resemble the true location; P.O. corresponds to revisits without highly similar distractors; and A.O. captures novel regions that spuriously resemble known locations. To quantify balanced performance across these regimes, Topo-Bench reports Balanced Localization Accuracy (BLA), defined as the geometric mean of accuracies on A+P, P.O., and A.O., thereby penalizing methods with imbalanced behavior. Further details regarding these scenarios and metrics can be found in [38]. (1) (2) (3) (4) (5) (6) (7) 
+
+Fig. 7: Fast-motion sequence across seven timestamps. Top row shows the online mapping trajectory of our system: yellow lines indicate the estimated trajectory; blue ellipses denote the Gaussian mixture of the measurement message, while cyan ellipses denote the Gaussian mixture of the propagated motion message. The principal axis lengths of each ellipse correspond to the estimated uncertainty (variance) along that direction. Bottom row shows the corresponding RGB observations. At timestamp (1), uncertainty is low. At (2), observation uncertainty increases significantly due to severe motion blur. At (3), the system maintains tracking with high uncertainty despite residual blur. At (4) and (5), observation uncertainty becomes very large again due to heavy blur, introducing spurious hypotheses. At (6) and (7), the system rapidly eliminates these spurious hypotheses via sequential hypothesis testing once visual observations return to normal. Quantitative results are summarized in Table III. All meth-ods exhibit low accuracy in the challenging A+P regime, but our approach achieves the highest A+P performance, demon-strating the effectiveness of the proposed SHT mechanism in resolving aliasing under appearance changes. At the same time, it maintains performance comparable to prior SOTA methods on P.O. and A.O., resulting in the best overall BLA. This indicates stronger and more balanced robustness across diverse aliasing scenarios. 
+
+B. Robustness to Odometry Noise, Occlusion, and Fast Motion 
+
+We found our system is robust to fast motion and camera occlusion: the states are propagated when image matching is not possible due to the camera blur or occlusion, but the global measurement message using VPR model can quickly retrieve the correct frame once it is available. Figure 7 and Figure 8 provides a qualitative demonstration of the our proposed system performs when fast motion and occlusion happens. Our system replies on the odometry information to high frequency updates. To test if how our system performs when the odometry is noisy, we record a trajecotries with RGBD and pose information using the ARKit API using iPhone. We then add noise to the computed delta pose between two consecutive frames as the noisy odometry information by: Given an odometry pose T ∈ SE(3) , we apply a right-multiplicative perturbation 
+
+˜T = T exp( ξ), ξ =
+
+δρ δϕ 
+
+
+
+∈ R6,
+
+where exp( ·) is the Lie exponential. The translational and rotational noises are sampled as 
+
+δρ ∼ N (0 , σ 2 
+
+> t
+
+I3), δϕ ∼ N (0 , σ 2 
+
+> r
+
+I3),
+
+with units of meters and radians, respectively. To obtain a scale-aware and interpretable noise level, we set 
+
+σt = ∥t∥
+
+snr √3 , σr = ∥ log( R)∥
+
+snr √3 ,
+
+where T =
+
+R t
+
+0 1
+
+
+
+and log( R) ∈ so (3) . Since E∥δρ ∥2 = 3 σ2
+
+> t
+
+and E∥δϕ ∥2 = 3 σ2 
+
+> r
+
+, the expected noise magnitudes scale as 
+
+∥t∥/snr and ∥ log( R)∥/snr , respectively, yielding an SNR-like control over pose perturbations. Figure 9 provides a qualitative evaluation of our system under different odometry noise levels. As the signal-to-noise ratio (SNR) decreases, the injected perturbations induce pro-gressively larger drift in the motion propagation. Despite increasingly noisy odometry, the system remains stable and is able to recover and maintain a coherent trajectory by lever-aging visual observations and sequential hypothesis filtering, demonstrating robustness to substantial odometric corruption. 
+
+C. Ablation Study 
+
+A key design choice in our system is to perform sequential hypothesis testing (SHT) directly in continuous SE(3) , rather than over a discrete topological graph. As a baseline, we compare against PBU, which implements SHT in a discrete state space. The quantitative comparison is reported in Table I. CROSS consistently achieves marginally higher performance, (1) (2) (3) (4) (5) (6) 
+
+Fig. 8: Occlusion sequence across six timestamps. Top row shows the online mapping and belief evolution of our system: the yellow line denotes the estimated trajectory; blue ellipses represent the propagated motion message, and green ellipses represent the measurement message. The lengths of the principal axes indicate the estimated uncertainty. Bottom row shows the corresponding RGB observations. At timestamp (1), with no occlusion, uncertainty is low. At (2) and (3), occlusion prevents reliable visual observations, causing the motion message to continue propagating using local odometry while the measurement message remains static. At (4), the two messages overlap, indicating successful retrieval and alignment with the stored map. At (5), occlusion occurs again and uncertainty increases as the motion message propagates. Finally, at (6), once the occlusion disappears, uncertainty rapidly decreases and the system localizes with high confidence.   
+
+> SNR=0.2 SNR=0.5 SNR=1
+
+Fig. 9: Noisy-odometry experiment under different signal-to-noise ratio (SNR) settings. Each column shows the full trajectory for the same sequence with increasing levels of odometry noise injected via right-multiplicative perturbations in SE(3) . The yellow line denotes the trajectory estimated by our system, the green line shows the reference trajectory provided by the SLAM system, and the blue line corresponds to the corrupted odometry used for motion propagation. As the SNR decreases, the odometry becomes increasingly distorted, as evidenced by the highly corrupted blue trajectories. Notably, even at SNR = 0 .2,which corresponds to very large noise relative to the true odometry measurements, our estimated trajectory remains close to the reference, demonstrating robustness to severe odometric corruption. indicating that continuous-state filtering better preserves ge-ometric consistency and enables more effective hypothesis disambiguation. Another key design choice in our system is the use of a classical PnP-based pipeline for relative pose estimation between frames. As an alternative, we evaluated a learned approach by replacing the PnP module with VGGT [39]. In practice, this variant performs poorly on our relocalization benchmarks, achieving a zero success rate. We find that VGGT predicts poses with arbitrary scale: although the scale is internally consistent within a single multi-view inference, it varies across independent predictions, which prevents reliable global pose composition. Moreover, the average runtime per forward pass is 490 ms on an RTX4000 GPU, compared to 16 ms for the PnP-based relative pose estimation, rendering the learned alternative unsuitable for real-time operation. These results justify our choice of a classical PnP-based relative pose estimation pipeline. Fig. 10: Runtime breakdown of the mapping pipeline per step, comparing relative pose estimation via PnP-RANSAC versus 
+
+VGGT [39]. Bars report the total average step time and its main components: relative pose estimation (Rel. pose), visual place recog-nition retrieval (VPR), and sequential hypothesis testing. The log-scale y-axis highlights the large disparity in pose-estimation cost. 
+
+D. Runtime Analysis 
+
+Figure 10 presents a runtime breakdown of our system mea-sured on an RTX 4000 GPU workstation, detailing the com-putation time of each major module. The complete pipeline requires approximately 28 ms per step, enabling real-time operation at over 30 Hz. In practical deployments with more limited computational resources, the full pipeline need not be executed at such a high frequency. Local odometry can propagate the robot state at high rate between global updates, while the observation mod-ule can construct observations at a lower frequency without degrading overall performance. APPENDIX CADDITIONAL METHOD DETAILS 
+
+A. Classical Gaussian–sum Filtering (GSF) 
+
+This appendix briefly summarizes the classical Gaussian– sum filter (GSF). We first present the exact linear–Gaussian case, then the standard nonlinear extension via per-component local Gaussianization (EKF/UKF/CKF). All derivations are written in a local Euclidean chart; on Lie groups (e.g., SE(3) )the same updates are applied in a consistent tangent chart. 
+
+1) Preliminaries and Notation: Let xt ∈ Rn be the (locally Euclidean) state with motion and measurement models 
+
+xt = ft(xt−1, u t−1) + qt, qt ∼ N (0 , Q t),zt = ht(xt) + rt, rt ∼ N (0 , R t), (10) where Qt, R t ≻ 0. The GSF represents the filtering density as a finite mixture 
+
+p(xt−1 | z1: t−1, u 1: t−2) = 
+
+> Kt−1
+
+X
+
+> k=1
+
+w(k) 
+
+> t−1
+
+N xt−1; μ(k)
+
+> t−1
+
+, Σ(k)
+
+> t−1
+
+,
+
+with w(k) 
+
+> t−1
+
+≥ 0 and P 
+
+> k
+
+w(k) 
+
+> t−1
+
+= 1 . On a Lie group X , one works in a fixed local chart ϕ : X → Rn (e.g., left-/right-invariant log), performs the Euclidean update on ξt = ϕ(xt),and maps back via the exponential. 
+
+2) Exact Linear–Gaussian GSF: Assume linear–Gaussian models: 
+
+xt = Ftxt−1 + Btut−1 + qt, zt = Htxt + rt.
+
+a) Prediction (per component).: For each k =1, . . . , K t−1,
+
+μ(k) 
+
+> t|t−1
+
+= Ftμ(k) 
+
+> t−1
+
++ Btut−1,
+
+Σ(k) 
+
+> t|t−1
+
+= FtΣ(k)
+
+> t−1
+
+F ⊤ 
+
+> t
+
++ Qt,w(k) 
+
+> t|t−1
+
+= w(k)
+
+> t−1
+
+.
+
+(11) Thus p(xt | z1: t−1, u 1: t−1) =
+
+P 
+
+> k
+
+w(k)
+
+> t|t−1
+
+N (xt; μ(k)
+
+> t|t−1
+
+, Σ(k)
+
+> t|t−1
+
+).
+
+b) Update (per component Kalman update).: Define, for each component, 
+
+y(k) 
+
+> t
+
+= zt − Htμ(k)
+
+> t|t−1
+
+,S(k) 
+
+> t
+
+= HtΣ(k)
+
+> t|t−1
+
+H⊤ 
+
+> t
+
++ Rt,K(k) 
+
+> t
+
+= Σ (k)
+
+> t|t−1
+
+H⊤
+
+> t
+
+ S(k)
+
+> t
+
+−1.
+
+(12) Then 
+
+μ(k) 
+
+> t
+
+= μ(k) 
+
+> t|t−1
+
++ K(k) 
+
+> t
+
+y(k) 
+
+> t
+
+,
+
+Σ(k) 
+
+> t
+
+=  I − K(k) 
+
+> t
+
+Ht
+
+Σ(k)
+
+> t|t−1
+
+. (13) Weights update by the marginal likelihood (Kalman evidence): 
+
+˜w(k) 
+
+> t
+
+= w(k) 
+
+> t|t−1
+
+N y(k) 
+
+> t
+
+; 0 , S (k)
+
+> t
+
+, w(k) 
+
+> t
+
+= ˜w(k)
+
+> t
+
+P 
+
+> j
+
+˜w(j)
+
+> t
+
+. (14) The posterior remains a mixture p(xt | z1: t) =
+
+P 
+
+> k
+
+w(k) 
+
+> t
+
+N (xt; μ(k) 
+
+> t
+
+, Σ(k) 
+
+> t
+
+).
+
+3) Nonlinear GSF via Local Gaussianization: For nonlin-ear (10), GSF applies a local Gaussian filter to each compo-nent. 
+
+a) EKF-style (per component).: Linearize around the current component mean: 
+
+ft(x, u ) ≈ ft(μ(k)
+
+> t−1
+
+, u ) + F (k) 
+
+> t
+
+(x − μ(k)
+
+> t−1
+
+),ht(x) ≈ ht(μ(k)
+
+> t|t−1
+
+) + H(k) 
+
+> t
+
+(x − μ(k)
+
+> t|t−1
+
+),
+
+where F (k) 
+
+> t
+
+, H (k) 
+
+> t
+
+are Jacobians. Then apply (11)–(14) with 
+
+(Ft, H t) replaced by (F (k) 
+
+> t
+
+, H (k) 
+
+> t
+
+) and with the corresponding affine terms. 
+
+b) UKF/CKF (per component).: Alternatively, propa-gate sigma points/quadrature points per component to obtain 
+
+(μ(k)
+
+> t|t−1
+
+, Σ(k)
+
+> t|t−1
+
+) and predicted measurement moments, then use (12)–(14). 
+
+4) Mixture Identities: Let Ni(x) = N (x; mi, S i) for i ∈{1, 2}.
+
+a) Product of Gaussians.: 
+
+N1(x)N2(x) = N (m1; m2, S 1+S2) N (x; m, S ), (15) where S = ( S−11 + S−12 )−1 and m = S(S−11 m1 + S−12 m2).
+
+b) Innovation evidence.: For predicted (μ−, Σ−) and measurement z = Hx + r, r ∼ N (0 , R ), the innovation 
+
+y = z − Hμ − satisfies y ∼ N (0 , S ) with S = HΣ−H⊤ + R,yielding the evidence term in (14). 
+
+5) Mixture Growth Control: To prevent unbounded mixture growth, GSF typically uses: a) Pruning.: Remove components with w(k) 
+
+> t
+
+< ε .
+
+b) Reduction / merging.: Iteratively merge nearby com-ponents (e.g., using a KL-based criterion) until Kt ≤ Kmax .Merging two components with weights a, b by moment match-ing gives 
+
+μ = aμ a + bμ b
+
+a + b , (16) 
+
+Σ = a Σa + ( μa − μ)( μa − μ)⊤ + b Σb + ( μb − μ)( μb − μ)⊤
+
+a + b .
+
+c) Splitting (optional).: If a component violates a consis-tency/nonlinearity test, split it into a small set whose moments match the parent, and distribute the parent weight across the children. 
+
+6) Mixture–Mixture Update (Optional): If the measurement factor is approximated by a mixture 
+
+Qt(x) = PCt 
+
+> c=1
+
+π(c) 
+
+> t
+
+N (x; ν(c) 
+
+> t
+
+, Λ(c) 
+
+> t
+
+), then the update is amixture–mixture product: 
+
+p(xt | z1: t) ∝ p−(xt) Qt(xt),
+
+with 
+
+p−(xt) = X
+
+> k
+
+w(k)
+
+> t|t−1
+
+N xt; μ(k)
+
+> t|t−1
+
+, Σ(k)
+
+> t|t−1
+
+,
+
+and 
+
+p(xt | z1: t) = 
+
+> Kt−1
+
+X
+
+> k=1
+> Ct
+
+X
+
+> c=1
+
+˜wk,c N (xt; mk,c , S k,c ). (17) Here (mk,c , S k,c ) follow (15) and 
+
+˜wk,c ∝ w(k) 
+
+> t|t−1
+
+π(c) 
+
+> t
+
+N
+
+
+
+μ(k) 
+
+> t|t−1
+
+− ν(c) 
+
+> t
+
+; 0 , Σ(k) 
+
+> t|t−1
+
++ Λ (c)
+
+> t
+
+
+
+,
+
+followed by normalization. In practice, gating and sparsification reduce the K × Ct expansion. 
+
+7) Manifold Adaptation (Lie Groups): On a Lie group X
+
+(e.g., SE(3) ), represent each mixture component as a Gaussian in a consistent tangent chart ϕ(·), apply the Euclidean GSF updates to 
+
+ξt = ϕ(xt), and reconstruct means via exp( ·). During prediction, covariances are transported through group composition using the ap-propriate adjoint (first-order), yielding the manifold GSF expressions used in the main text. 
+
+8) One-Step GSF Summary: Given {w(k)
+
+> t−1
+
+, μ (k)
+
+> t−1
+
+, Σ(k)
+
+> t−1
+
+}Kt−1 
+
+> k=1
+
+:leftmargin=1.2em,itemsep=2pt 1) Predict: propagate each component (linear (11), or EKF/UKF/CKF per component). 2) Update: apply (12)–(14) (or (17) for mixture likelihoods). 3) Control: prune/reduce (and optionally split) to enforce Kt ≤
+
+Kmax .On manifolds, perform all steps in the chosen chart and transport covariances via the adjoint during prediction. 
+
+B. Motion Message 
+
+We derive the GSF prediction for a single Gaussian mixand under a right-invariant SE(3) motion model, working in the right-invariant tangent chart ε = log( μ−1X) ∈ se (3) .
+
+1) Setup: Let Xt−1 ∈ SE(3) be distributed as Xt−1 = μ exp( ε)
+
+with ε ∼ N (0 , Σ) ⊂ se (3) . The (right-invariant) stochastic motion model is 
+
+Xt = Xt−1 ∆Tt exp( νt), νt ∼ N (0 , Q t) ⊂ se (3) ,
+
+with νt independent of ε.
+
+2) Prediction Kernel: For a single mixand, the predicted density is 
+
+¯p(xt) = 
+
+Z
+
+p(xt | xt−1) Nse (3) 
+
+
+
+log( μ−1xt−1); 0 , Σ
+
+
+
+dx t−1.
+
+3) First-Order Pushforward: Write Xt−1 = μ exp( ε). Using the group adjoint and BCH, 
+
+μ exp( ε) ∆ Tt = μ∆Tt exp 
+
+
+
+Ad ∆T −1
+
+> t
+
+ε + O(∥ε∥2)
+
+
+
+.
+
+Post-multiplying by exp( νt) and applying BCH again yields 
+
+μ∆Tt exp  Ad ∆T −1
+
+> t
+
+ε exp( νt) = μ∆Tt exp 
+
+
+
+Ad ∆T −1
+
+> t
+
+ε
+
++ νt + O(∥ε∥2 + ∥νt∥2)
+
+
+
+.
+
+Neglecting higher-order terms, the updated error in the right-invariant chart at the predicted mean μ− = μ∆Tt is 
+
+ε− ≈ Ad ∆T −1
+
+> t
+
+ε + νt,
+
+and therefore 
+
+ε− ∼ N 
+
+
+
+0, Ad ∆T −1
+
+> t
+
+ΣAd ⊤ 
+
+> ∆T−1
+> t
+
++ Qt
+
+
+
+.
+
+Equivalently, the pushforward of a single Gaussian mixand is (to first order) 
+
+¯p(xt) ≈ N se (3) 
+
+
+
+log  (μ∆Tt)−1xt
+
+; 0 , Σ−
+
+,
+
+with 
+
+Σ− = Ad ∆T −1
+
+> t
+
+ΣAd ⊤ 
+
+> ∆T−1
+> t
+
++ Qt.
+
+4) Mixtures and Weights: Since R p(xt | xt−1) dx t = 1,prediction preserves mixture weights: if p(x) = P 
+
+> k
+
+wk pk (x) then 
+
+¯p(x) = P 
+
+> k
+
+wk ¯pk (x).
+
+5) Small-Increment Approximation: If ∆Tt = exp( ξt) with 
+
+∥ξt∥ ≪ 1, then 
+
+Ad ∆T −1
+
+> t
+
+= I − ad( ξt) + O(∥ξt∥2),
+
+and the transported covariance expands as 
+
+Ad ∆T −1
+
+> t
+
+ΣAd ⊤ 
+
+> ∆T−1
+> t
+
+= Σ − ad( ξt)Σ − Σ ad( ξt)⊤
+
++ O(∥ξt∥2∥Σ∥).
+
+At high update rates (small ∥ξt∥) and when covariances are main-tained in the updated right-invariant chart, a common conservative approximation is 
+
+Σ− ≈ Σ + Qt,
+
+which we use in our implementation in practice. 
+
+C. Hypothesis Management 
+
+In the following, we provide additional details on our hypothesis management strategy. In particular, we detail how we cluster mea-surements and then fuse/prune/birth hypotheses. 
+
+Measurement Clustering. The global measurement message (7) contains NtK Gaussian components. Many of these differ only by small perturbations around the same physical location, induced by feature noise and PnP variability. We therefore first reduce this redundancy by clustering the component means on SE(3) .
+
+a) SE(3)-aware DBSCAN.: Let μa and μb denote two com-ponent means on SE(3) . We define their Lie-algebra displacement 
+
+δab = log  μ−1 
+
+> a
+
+μb
+
+ ∈ se (3) ≃ R6,
+
+and a group-aware distance 
+
+ddbscan (μa, μ b) = ∥ W δ ab ∥2 ,
+
+where W is a diagonal weighting matrix that balances translation (meters) and rotation (radians). We run DBSCAN using this distance metric, obtaining clusters Cc of component indices j.b) Cluster mean and covariance.: Each measurement com-ponent j is parameterized by a mean μj and covariance Σj in its own tangent chart. After forming a cluster Cc, we compute the Riemannian (Fr´ echet) mean μc on SE(3) as 
+
+μc = arg min  
+
+> T∈SE(3)
+
+X
+
+> j∈C c
+
+αj log  T −1μj
+
+ 2 ,
+
+where αj are the mixture weights of the original measurement components in Eq. (7). To aggregate uncertainty in a common tangent space, we transport each component covariance to the tangent at μc:
+
+Σ′ 
+
+> j
+
+= Ad μ−1  
+
+> cμj
+
+Σj Ad ⊤  
+
+> μ−1
+> cμj
+
+,
+
+and define 
+
+ξj = log  μ−1 
+
+> c
+
+μj
+
+ ∈ se (3) .
+
+The cluster covariance must capture both (i) the within-component 
+
+uncertainty and (ii) the between-components spread of means. The total covariance is therefore 
+
+Σc = 1
+
+βc
+
+X
+
+> j∈C c
+
+αj
+
+ Σ′ 
+
+> j
+
++ ξj ξ⊤
+
+> j
+
+, βc = X
+
+> j∈C c
+
+αj .
+
+The merged measurement message can then be written as 
+
+mmeas  
+
+> t
+
+(x) ≈
+
+> Ct
+
+X
+
+> c=1
+
+¯wc Nse (3) 
+
+ log  μ−1 
+
+> c
+
+x; 0 , Σc
+
+ , (18) where Ct ≪ NtK and ¯wc = βc/ P 
+
+> c′
+
+βc′ . In practice, we retain only the top K=5 highest-weight components whose normalized weight exceeds a small threshold (e.g., 10 −3), and discard the remainder to maintain computational efficiency. 
+
+Fusion and Pruning. We next compute the product of the motion message mmot  
+
+> t
+
+and the clustered measurement message (18). Each existing hypothesis (a mixand of mmot  
+
+> t
+
+) is fused with at most one measurement cluster, since only clusters within the reachable region implied by the motion model have non-negligible overlap. Let (μ(i)
+
+> mot
+
+, Σ(i)
+
+> mot
+
+, w (i)
+
+> mot
+
+) be a motion component and (μc, Σc, ¯wc)
+
+a measurement cluster. Define the relative displacement δic =log  (μ(i)
+
+> mot
+
+)−1μc
+
+ ∈ se (3) , Σ′ 
+
+> c
+
+= Ad ∆−1
+
+> ic
+
+Σc Ad ⊤
+
+> ∆−1
+> ic
+
+, where 
+
+∆ic = ( μ(i)
+
+> mot
+
+)−1μc, so that Σ′ 
+
+> c
+
+is expressed in the tangent at μ(i)
+
+> mot
+
+.The fused covariance and mean (in the tangent at μ(i)
+
+> mot
+
+) are 
+
+Σ−1 
+
+> i,c
+
+=  Σ(i)
+
+> mot
+
+−1 +  Σ′
+
+> c
+
+−1, (19) 
+
+μi,c = μ(i) 
+
+> mot
+
+exp 
+
+
+
+Σi,c 
+
+ Σ′
+
+> c
+
+−1 δic 
+
+
+
+. (20) The fused weight is proportional to the product weight times the overlap between the two Gaussians, 
+
+wi,c ∝ w(i) 
+
+> mot
+
+¯wc N
+
+
+
+δic ; 0 , Σ(i) 
+
+> mot
+
++ Σ ′
+
+> c
+
+
+
+. (21) We prune fused components whose weights wi,c fall below a small threshold (e.g. 10 −3), indicating that the motion and measurement components are too far apart to represent a physically consistent location. 
+
+Birth of new hypotheses. Some measurement clusters may have negligible overlap with all motion components (e.g., loop closure or kidnapped robot). We model this via a “restart” switch bt ∈ { 0, 1}
+
+with prior p(bt=1) = ϵ:
+
+p(xt | xt−1, u t, b t) = 
+
+(
+
+pmot (xt | xt−1, u t), bt = 0 ,pbirth (xt | Bt), bt = 1 ,
+
+where Bt ∈ C new  
+
+> t
+
+indexes the measurement cluster that initializes the new hypothesis. The birth distribution is a single Gaussian 
+
+pbirth (xt | Bt=c) = Nse (3) 
+
+ log( μ−1 
+
+> c
+
+xt); 0 , Σc
+
+,
+
+with p(Bt=c | bt=1) ∝ ¯wc.Marginalizing bt yields a mixture transition kernel 
+
+˜p(xt | xt−1, u t) = (1 − ϵ) pmot (xt | xt−1, u t) + ϵ p birth (xt). (22) 
+
+APPENDIX DADDITIONAL FIGURES AND PLOTS 
+
+Fig. 11: Factor-graph representation of our Gaussian mixture filtering model. ϕmot  
+
+> t
+
+and ϕmeas  
+
+> t
+
+are the motion and measurement factors. 
+
+xt is the current pose, ut the odometry input, and zt the RGB-D observation. Yt is a latent association variable identifying which keyframe explains zt, and G is the set of stored keyframes. Fig. 12: Multi-session relocalization results on the Rover [32] Campus scene. Left: Relocalization outcomes across different locations. Each row corresponds to a mapping trajectory (indicated by different colors), while columns show relocalization attempts at the same physical locations captured at different times or months, as illustrated in the top image. Empty space indicates relocalization failed at that specific location. The compared methods are: (a) ORB-SLAM3 [6], (b) RTAB-Map [17], (c) MASt3R-SLAM [27], (d) Greedy Matching (GM), (e) Sequence Matching (SM), (f) Probabilistic Belief Update (PBU), (g) ABM [16], and (h) Ours. Most baseline methods struggle under significant lighting and appearance changes, whereas our approach consistently relocalizes despite substantial visual variation. Right: A compact summary view, where each grid cell reports the relocalization success rate for a given mapping–testing sequence pair. Additional analysis are provided in Section V-A. Fig. 13: Multi-session relocalization results on the OpenLORIS [33] Corridor scene. Left: Relocalization outcomes across different locations. Each row corresponds to a mapping trajectory (indicated by different colors), while columns show relocalization attempts at the same physical locations captured at different times or months, as illustrated in the top image. Empty space indicates relocalization failed at that specific location. Note that the last two sequences (20:54 and 20:56) are shaded gray to indicate a lack of spatial overlap. The compared methods are: (a) ORB-SLAM3 [6], (b) RTAB-Map [17], (c) MASt3R-SLAM [27], (d) Greedy Matching (GM), (e) Sequence Matching (SM), (f) Probabilistic Belief Update (PBU), (g) ABM [16], and (h) Ours. Most baseline methods struggle under significant lighting and appearance changes, whereas our approach consistently relocalizes despite substantial visual variation. Right: A compact summary view, where each grid cell reports the relocalization success rate for a given mapping–testing sequence pair. Additional analysis are provided in Section V-A.

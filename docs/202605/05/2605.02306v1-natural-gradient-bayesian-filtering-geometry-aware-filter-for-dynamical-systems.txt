@@ -1,0 +1,2272 @@
+Title: Natural Gradient Bayesian Filtering: Geometry-Aware Filter for Dynamical Systems
+
+URL Source: https://arxiv.org/pdf/2605.02306v1
+
+Published Time: Tue, 05 May 2026 02:28:29 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+> 1
+
+# Natural Gradient Bayesian Filtering: Geometry-Aware Filter for Dynamical Systems 
+
+Chang Liu 2, Wenhan Cao 1, Zeju Sun 3, Tianyi Zhang 1, Jiayu Yuan 2, Yi Zeng 2, Ting Yuan 4, Yao Lyu 1, Wei Wu 5,Stephen Shing-Toung Yau 6, Shengbo Eben Li 1
+
+Abstract —Bayesian filtering is a cornerstone of state estimation in complex systems such as aerospace systems, yet exact solutions are available only for linear Gaussian models. In practice, nonlinear systems are handled through tractable approximations, with Gaussian filters such as the extended and unscented Kalman filters being among the most widely used methods. This tutorial revisits Gaussian filtering from an information-geometric per-spective, viewing the prediction and measurement update steps as inference procedures over state distributions. Within this framework, we introduce a geometry-aware Gaussian filtering approach that leverages natural gradient descent on the statistical manifold of Gaussian distributions. The resulting Natural Gra-dient Gaussian Approximation (NANO) filter iteratively refines the posterior mean and covariance while respecting the intrinsic geometry of the Gaussian family and preserving the positive definiteness of the covariance matrix. We further highlight fun-damental connections to the classical Kalman filtering, showing that a single natural-gradient step exactly recovers the Kalman measurement update in the linear-Gaussian case. The practical implications of the proposed framework are illustrated through case studies in representative nonlinear estimation problems, including satellite attitude estimation, simultaneous localization and mapping, and state estimation for robotic systems including quadruped and humanoid robots. 
+
+I. I NTRODUCTION 
+
+# STATE estimation concerns inferring the latent state of a dynamical system from noisy and partial observations, and it underpins a broad spectrum of modern applications ranging from astrophysics and robotics to power grids, manufactur-ing, and transportation. A principled way to formalize this inference task is sequential Bayesian estimation: at each time instant, one aims to characterize the conditional distribution of the current state given the entire measurement history, i.e., the filtering posterior. Operationally, this posterior is propa-gated in time through a recursion that alternates between (a) propagating uncertainty through the state dynamics and (b) in-corporating new information carried by measurements [1]. The first part is governed by the Chapman–Kolmogorov integral, which transports a distribution forward via the transition kernel        
+
+> Corresponding author: Shengbo Eben Li.
+> 1School of Vehicle and Mobility, Tsinghua University, China.
+> 2School of Advanced Manufacturing and Robotics, Peking University, China.
+> 3Beijing Institute of Mathematical Sciences and Applications (BIMSA), China.
+> 4School of Automation and Intelligent Sensing, Shanghai Jiao Tong Univer-sity, China.
+> 5State Key Laboratory of Intelligent Green Vehicle and Mobility, Tsinghua University.
+> 6Department of Mathematical Sciences, Tsinghua University, China. This study is supported by National Science and Technology Major Project (No 2025ZD1606200), Beijing Natural Science Foundation with L257002, and NSF China with 92582205, 92567301.
+
+describing state evolution; the second part applies Bayes’ rule to combine the predicted distribution with the measurement likelihood that encodes the observation mechanism [2]. This recursion admits a closed-form solution only in spe-cial cases. In particular, when both the dynamics and the measurement model are linear and all uncertainties are Gaus-sian, the filtering posterior remains Gaussian over time and is completely characterized by its first two moments. The resulting recursion is the Kalman filter (KF) [3], [2], whose tractability relies on Gaussian closure under linear mappings and conjugacy under conditioning. Once either nonlinearity or non-Gaussianity is present, these properties generally fail, and the exact Bayes filter becomes analytically inaccessible [4]. The practical implication is that nonlinear/non-Gaussian filtering is, in most settings, an approximation problem: one must decide how to represent and update uncertainty. Particle filtering offers a conceptually general solution by representing the posterior with a weighted ensemble of samples, yielding a discrete empirical approximation to the continuous density [5]. While such methods can be asymptotically consistent, accurate performance in challenging regimes often demands many particles, which in turn induces a computational burden that may be incompatible with real-time constraints [5]. A different and widely used compromise is to restrict the posterior family to Gaussians at each time step, giving rise to the class of Gaussian filters, which are often preferred in practice due to their favorable computational profile [6]. Many Gaussian filters can be interpreted through a com-mon construction: rather than tackling the nonlinear model directly, one first constructs a linear–Gaussian surrogate of the state-space model, which is typically an affine approximation with additive Gaussian noise, and then executes KF-style moment updates on that surrogate [4]. The essential distinction among popular Gaussian filters is therefore the linearization mechanism used to build the surrogate. The classical route is Jacobian-based local linearization via a first-order Taylor expansion, which leads to the extended Kalman filter (EKF) [7], [8]. The iterated EKF (IEKF) [9] modifies this by re-peatedly re-linearizing during the measurement update, using successive posterior-mean estimates; the resulting procedure is closely related to Gauss–Newton iterations and can be viewed as seeking a local maximum-a-posteriori solution [10]. However, point-based Taylor linearization has a structural weakness: it is driven primarily by a local mean expansion and does not preserve how covariance is transformed by nonlinear mappings. This motivates moment-based linearization, where the affine surrogate is chosen to reproduce, as closely as pos-sible, the mean and covariance of the nonlinear transformation 
+
+> arXiv:2605.02306v1 [cs.RO] 4 May 2026 2
+
+under a Gaussian input. Such constructions can be cast as sta-tistical linear regression (SLR), in which the affine parameters minimize an expected regression error [4]. Implementing SLR entails evaluating Gaussian-weighted integrals, and different numerical integration rules yield different Gaussian filters: the unscented transform underlies the UKF [11], Gauss–Hermite quadrature yields the Gauss–Hermite KF [12], and spherical cubature rules lead to the cubature KF [13]. More recently, the posterior linearization filter (PLF) applies SLR with respect to the posterior distribution during the update rather than with respect to the prior, with the goal of improving update accuracy [4]. This “linearize-then-KF” paradigm—namely, building alinear–Gaussian surrogate model so that a Kalman-style update becomes applicable—is commonly termed the enabling ap-proximation framework [4]. While enabling approximation is ubiquitous in practical Gaussian filtering, its optimality in the measurement update is questionable. In particular, a key ques-tion is whether the update obtained by enabling approximation coincides with optimal Gaussian approximation to the true Bayesian posterior. The recent result in [14], [15] clarifies that, in contrast to the prediction stage where moment-matching rules employed by UKF/Gauss–Hermite KF/cubature KF ad-mit an optimization-consistent interpretation [11], [12], [13], the update update in those methods does not generally recover the exact solution. Their argument relies on an optimization viewpoint, in which the prediction and update recursions are characterized as solutions to two different optimization problems, thereby exposing a structural mismatch introduced by the surrogate-based update. Motivated by the optimization viewpoint of Bayesian filter-ing, a natural way to construct Gaussian filters is to restrict the filtering posterior to the Gaussian family and then compute the best member of this family by solving an explicit optimization problem. Under this perspective, the measurement update is no longer implemented by surrogate linearization and a Kalman-style recursion, but instead by directly optimizing the Gaussian parameters so that the resulting approximation matches the true Bayesian posterior as closely as possible according to a chosen criterion. In fact, this idea has been implemented in a class of gradient-based Gaussian filters that use gradient descent and its variants to iteratively refine the Gaussian approximation; for example, Gultekin and Paisley [16] propose stochastic gradient schemes in which Monte Carlo sampling is used to approximate gradients that are otherwise difficult to evaluate exactly. A key challenge in this line of work is that straightforward gradient descent on Gaussian parameters is not geometry-aware. In particular, Gaussian distributions do not form a flat Euclidean parameter space; rather, they possess a natural information-geometric structure, under which the meaning of the steepest descent direction depends on the intrinsic metric of the distribution family. As a consequence, Euclidean-gradient updates can be sensitive to the chosen parameterization, may suffer from poor scaling, and often demand careful step-size tuning to achieve stable progress. These observations motivate the use of natural-gradient methods, which incorporate the geometry of the statistical manifold and produce descent directions that are invariant to reparameterization. In practice, geometry-aware updates frequently improve numerical robust-ness and convergence behavior, while offering a principled way to respect the structural constraints inherent in Gaussian approximations. Motivated by these considerations, this tutorial aims to place Gaussian filtering within a unified optimization and information-geometric framework. Its main goal is to provide an intuitive perspective on how geometry-aware updates arise naturally in approximate Bayesian filtering and how they can be translated into practical algorithms. The main contributions of this article are summarized as follows:  
+
+> •
+
+We present an information-geometric interpretation of Gaussian filtering, viewing prediction and measurement update as projection problems on the statistical manifold of Gaussian distributions. This perspective clarifies the role of approximation in nonlinear Bayesian filtering and highlights the geometric structure underlying commonly used Gaussian filters.  
+
+> •
+
+Within the proposed framework, the measurement update is interpreted as a geometry-aware optimization prob-lem. This leads to a natural gradient descent update that respects the intrinsic structure of Gaussian distribu-tions, maintains positive-definite covariance representa-tions, and remains invariant to parameterization.  
+
+> •
+
+To support practical understanding and adoption, the article presents representative case studies, including satellite attitude estimation, simultaneous localization and mapping (SLAM), and state estimation of quadruped and humanoid robot . The structure of this article is as follows. Section II presents the optimization perspective on Bayesian filtering and primer on information geometry. Section III reviews the development of NANO-filter utilizing natural gradient descent. Represen-tative case studies will be introduced in Section IV, and we finally draw conclusions in Section V. II. B ACKGROUND 
+
+A. Bayesian Filtering Recap 
+
+Consider the following nonlinear discrete-time stochastic system: 
+
+xt+1 = f (xt) + ξt,yt = g(xt) + ζt, (1) where xt ∈ Rn denotes the latent state and yt ∈ Rm is the corresponding noisy measurement. The mapping f : Rn → Rn
+
+is the transition function that governs the state evolution, while 
+
+g : Rn → Rm is the measurement function that specifies the measurement mechanism. The random terms ξt and ζt
+
+represent process noise and measurement noise, respectively. A standard assumption is that the initial state x0, the process noise sequence {ξt}, and the measurement noise sequence 
+
+{ζt} are mutually independent, and that both noise sequences are independent over time. 3
+
+An equivalent probabilistic description of (1) is given by the hidden Markov model (HMM) 
+
+x0 ∼ p(x0),xt ∼ p(xt|xt−1),yt ∼ p(yt|xt),
+
+(2) where p(xt|xt−1) and p(yt|xt) are the transition and emission densities, respectively, and p(x0) is the distribution of the initial state. In fact, (1) and (2) are different formulations that describe the same model. For example, if the transition model is 
+
+xt = Ax t−1 + ξt−1, ξt−1 ∼ N (0 , Q ),
+
+with Q denoting the process-noise covariance, then the corre-sponding transition density is 
+
+p(xt|xt−1) = N (xt; Ax t−1, Q ).
+
+The objective of state estimation is to infer xt from the noisy observations y1: t. In general, an optimal estimator is obtained in two steps: (i) compute the posterior distribution 
+
+p(xt|y1: t), and (ii) extract a point estimate ˆxt|t from this posterior according to a chosen criterion, such as minimum mean-square error (MMSE) or maximum a posteriori (MAP) estimation. A principled recursion for computing p(xt|y1: t) is provided by Bayesian filtering, which alternates between prediction and update: 
+
+p(xt|y1: t−1) = 
+
+Z
+
+p(xt|xt−1) p(xt−1|y1: t−1) d xt−1, (3a) 
+
+p(xt|y1: t) = p(yt|xt) p(xt|y1: t−1)
+
+R p(yt|xt) p(xt|y1: t−1) d xt
+
+. (3b) The prediction step (3a) uses the Chapman–Kolmogorov equa-tion to propagate the previous posterior through the transition model to form the prior p(xt|y1: t−1). The update step (3b) then incorporates the new measurement via Bayes’ rule, where 
+
+p(yt|xt) acts as the likelihood. Once the filtering posterior is available, standard decision rules can be applied to obtain the state estimate. 
+
+B. An Optimization Perspective on Bayesian Filtering 
+
+Motivated by the optimization perspective of Bayesian in-ference in [17], the prediction and update steps of Bayesian filtering also admit variational characterizations. Throughout this section, q : Rn → R+ denotes a candidate probability density. Let us first introduce the optimization perspective of the prediction step of Bayesian filtering. Recall that the prior density is 
+
+p(xt|y1: t−1) = 
+
+Z
+
+p(xt|xt−1) p(xt−1|y1: t−1) d xt−1.
+
+In fact, p(xt|y1: t−1) can be recovered from the variational problem 
+
+p(xt|y1: t−1) = arg max 
+
+> q(xt)
+
+Ep(xt−1|y1: t−1)Ep(xt|xt−1)
+
+h
+
+log q(xt)
+
+i
+
+.
+
+(4) To see why, note that adding a q-independent constant does not change the maximizer. Hence, for any constant Z > 0, we have 
+
+arg max 
+
+> q(xt)
+
+Ep(xt−1|y1: t−1)Ep(xt|xt−1)
+
+log q(xt)
+
+= arg min 
+
+> q(xt)
+
+Ep(xt−1|y1: t−1)Ep(xt|xt−1)
+
+h
+
+log Zq(xt)
+
+i
+
+.
+
+Choosing 
+
+Z =
+
+Z
+
+p(xt|xt−1) p(xt−1|y1: t−1) d xt−1,
+
+the objective becomes 
+
+Ep(xt|y1: t−1)
+
+h
+
+log p(xt|y1: t−1)
+
+q(xt)
+
+i
+
+= DKL 
+
+ p(xt|y1: t−1) ∥ q(xt),
+
+which is uniquely minimized when q(xt) = p(xt|y1: t−1). This yields the characterization in (4). We next turn to the measurement update. The posterior distribution is characterized by [18], [19] 
+
+p(xt|y1: t)= arg min 
+
+> q(xt)
+
+n
+
+Eq(xt)
+
+− log p(yt|xt) + DKL 
+
+ q(xt) ∥ p(xt|y1: t−1)o
+
+.
+
+(5) 
+
+Expanding the KL divergence shows that, up to additive constants independent of q, we have 
+
+Eq(xt)
+
+− log p(yt|xt) + DKL 
+
+ q(xt) ∥ p(xt|y1: t−1)
+
+=Eq(xt)
+
+h
+
+log q(xt)
+
+p(yt|xt) p(xt|y1: t−1)
+
+i
+
+.
+
+Then let us introduce the normalization constant 
+
+Z =
+
+Z
+
+p(yt|xt) p(xt|y1: t−1) d xt.
+
+Adding log Z inside the expectation does not change the minimizer, and the objective becomes equivalent to 
+
+Eq(xt)
+
+h
+
+log q(xt)
+
+p(yt|xt) p(xt|y1: t−1)/Z 
+
+i
+
+=DKL 
+
+
+
+q(xt) p(yt|xt) p(xt|y1: t−1)
+
+Z
+
+
+
+.
+
+Therefore, the minimizer is uniquely attained at 
+
+q⋆(xt) = p(yt|xt) p(xt|y1: t−1)
+
+R p(yt|xt) p(xt|y1: t−1) d xt
+
+= p(xt|y1: t),
+
+which coincides with the Bayesian posterior. 
+
+C. Information Geometry Primer 
+
+From the dynamical system point of view, the purpose of a filtering algorithm is to find a proper evolution strategy of con-ditional probability distributions over time, i.e., to determine a computable map: 
+
+t → μt ∈ P (Rn), (6) where P(Rn) is the set of all probability measures on Rn
+
+with positive density functions, such that in some sense, the probability measure, μt, is necessarily close to the solution of Bayesian filter, p(xt|y1: t), for each time t ∈ N.4Space: 
+
+> Tangent Space
+> Fisher Metric
+
+Fig. 1: Illustration of Fisher information metric If we think of the set P(Rn) as an infinite-dimensional manifold, then based on the optimization perspective on Bayesian filtering, the computable map (6) can be obtained and interpreted in a differential geometric approach. The studies on the geometric interpretation of Bayesian filtering belong to the subject called Information Geometry , in which all the problems involving the probability distributions are treated and solved from a geometric perspective. The study of information geometry dates back to the 1940s, when C. R. Rao first formulated the parameter space of probability distributions into a Riemannian manifold, where the Riemannian metric is defined by Fisher information matrix [20], [21]. The theory of information geometry has been comprehensively developed since 1980s. Readers who are in-terested in this subject may refer to the important monographs such as [22]. This geometric treatment of probability distributions in-spires more accurate and efficient filter designs, and also make the improvements on the filter performance more theoretically interpretable. Hence, we briefly introduce the basic ideas of information geometry first, before moving on to the design of the novel Gaussian filter. 
+
+1) Statistical Manifolds: The manifold structure of the set of probability measures, P(Rn), is rooted in the constraint that the integral of a probability density over the whole space Rn
+
+equals one. In order to avoid dealing with infinite-dimensional objects, it is common to consider a finite-dimensional subman-ifold 
+
+S = {p(·, θ ) : θ ∈ Θ}, (7) which is parameterized by θ ∈ Θ, and the parameter space 
+
+Θ ⊂ Rm is assumed to be an open set in the m-dimensional Euclidean space, Rm.Mathematically, for a given m-dimensional differential manifold, it is natural to consider its tangent space (which is an 
+
+m-dimensional Euclidean space at each point of the manifold) and define an inner product on the tangent space. The inner product on the tangent space at each point of the manifold together forms a metric on the manifold, which is called the 
+
+Riemannian metric , and a manifold with a given Riemannian metric is called a Riemannian manifold .Specifically, a well-defined metric on the tangent space of manifold of the parameterized probability densities can help us properly measure the distance between two probability distributions and construct an accessible trajectory between them. As a submanifold of the probability measures, it is also demanding that the Riemannian metric will inherit and preserve the geometric properties of P(Rn), such that the manifold will not be ‘twisted’ by the parametrization. However, it is not easy to determine a ‘natural’ inner product on P(Rn), because we only assume that the probability density functions are integrable, i.e., P(Rn) ⊂ L1(Rn), and L1(Rn)
+
+is not a Hilbert space. Fortunately, each probability density function in P(Rn) is positive, as previously assumed, and thus, for each density function p(x) ∈ P (Rn), √p ∈ L2(Rn)
+
+is square-integrable, and the space of all square-integrable functions on Rn, L2(Rn), is a Hilbert space, with inner product 
+
+⟨√p, √q⟩ =
+
+Z pp(x)pq(x)dx, (8) for each probability density functions p, q ∈ P (Rn), see Fig. 1. Moreover, corresponding to this inner product, the so-called 
+
+Hellinger metric between two probability density functions p
+
+and q can be defined as 
+
+H(p, q ) := ∥√p − √q∥L2 =
+
+q
+
+⟨√p − √q, √p − √q⟩. (9) Inspired by the above discussion, let us consider the corre-sponding set of square roots of densities: 
+
+S1/2 = {pp(·, θ ) : θ ∈ Θ} ⊂ L2(Rn). (10) Then, S1/2 can be regarded as a finite-dimensional submani-fold of the Hilbert space L2(Rn), with tangent space at each pp(·, θ ) defined by 
+
+L√p(·,θ )S1/2 := 
+
+(
+
+∂pp(·, θ )
+
+∂θ 1
+
+, · · · , ∂pp(·, θ )
+
+∂θ m
+
+)
+
+, (11) and the Riemannian metric is defined as 
+
+Iij (θ) = 4 
+
+*
+
+∂pp(·, θ )
+
+∂θ i
+
+, ∂pp(·, θ )
+
+∂θ j
+
++
+
+=
+
+Z 1
+
+p(x, θ )
+
+∂p (x, θ )
+
+∂θ i
+
+∂p (x, θ )
+
+∂θ j
+
+dx, 
+
+(12) where the scaling number 4 stems from the Fisher information matrix which we will introduce next. The manifold (S1/2, I ) of square roots of densities, together with the Riemannian metric I(θ) = (Iij (θ)) ni,j =1 defined above, is called a statistical manifold .
+
+2) Fisher Information Matrix: According to the above con-struction of a statistical manifold, we have naturally introduced the Fisher Information Matrix I as the Riemannian metric, with each entries of I defined in (12). An equivalent but more common expression of the Fisher information matrix is given by 
+
+Iij (θ) = Ep(x,θ )
+
+ ∂ log p(x, θ )
+
+∂θ i
+
+∂ log p(x, θ )
+
+∂θ j
+
+
+
+= −Ep(x,θ )
+
+ ∂2 log p(x, θ )
+
+∂θ i∂θ j
+
+
+
+,
+
+(13) 5
+
+and the equivalence between (12) and (13) can be derived from the integration-by-part formula. Another important insight is that the equivalent definition (13) of Fisher Information Matrix is the Hessian matrix of K-L divergence: 
+
+∇2 
+
+> θ′
+
+DKL (p(x, θ )∥p(x, θ ′)) θ′=θ = I(θ), (14) The K-L divergence is invariant under reparameterization, as it quantifies a difference between probability distributions in-dependently of their parametric representation. Consequently, 
+
+Iij (θ) obtained from its second-order local expansion inherits this invariance, which guarantees that the Fisher information matrix is a covariant tensor on the statistical manifold, and thus a candidate of Riemannian metric. Notice that the gradient of K-L divergence is zero. There-fore, Fisher information matrix itself describes the local be-havior of the K-L divergence, 
+
+DKL (p(x, θ )|| p(x, θ + δ)) = 12 δ⊤I(θ)δ + O(|δ|2), (15) which approximates the distance between two probability distributions in a small neighborhood on a given statistical manifold. This observation provides a principled foundation for natural gradient methods, interpretable as steepest descent directions under information-theoretic constraints, leading to parameterization-invariant, stable, and well-conditioned opti-mization algorithms. A natural question at this point is why the Fisher informa-tion metric is regarded as the canonical Riemannian metric on statistical manifolds, instead of being one choice among many. The key justification is provided by Chentsov’s theorem also spelled ˇCencov’s theorem, which characterizes Fisher information as essentially the unique Riemannian metric com-patible with the statistical notion of information loss under data processing [23], [22]. To state the idea, consider a Markov morphism (stochastic map) T that transforms an observation x into z via a Markov kernel T (z|x). This induces a push-forward of distributions, 
+
+p 7 → T p, and represents coarse-graining or randomization of data. Since such a transformation cannot increase the distin-guishability of probability distributions, it is natural to require that any statistical distance and its infinitesimal counterpart, a Riemannian metric, should be monotone under T , i.e., it should contract under Markov morphisms. 
+
+Theorem II.1. On the manifold of strictly positive probability distributions over a finite sample space, any smooth Rieman-nian metric that is monotone under all Markov morphisms is a constant multiple of the Fisher information metric. Equiv-alently, up to an overall positive scaling factor, the Fisher information metric is the unique Riemannian metric on the statistical manifold that is invariant under sufficient statis-tics and satisfies the information-processing (data-processing) principle [23], [22]. 
+
+This result explains in a precise sense why the Fisher information matrix provides a natural geometry for statis-tical models: it is the only metric (up to scale) that re-spects the fundamental statistical operation of mapping data through a stochastic transformation. Consequently, optimiza-tion methods based on this geometry—notably natural gradient descent—inherit parameterization-invariance and are aligned with information-theoretic notions of distinguishability. 
+
+3) Natural Gradient Descent: In classical optimization, gradient descent methods rely on the Euclidean geometry of the parameter space. However, when the optimization object is a parameterized probability distribution on a statistical manifold (e.g., the loss function is treated as a function of distribution parameters), the Euclidean gradient may be an inefficient or misleading direction of steepest descent, because it does not account for the intrinsic geometry of the parameter space. The natural gradient corrects this by using the Rieman-nian metric (Fisher information matrix) to define the steepest descent direction on the statistical manifold. Given a smooth function f : Θ → R to be minimized, the natural gradient 
+
+˜∇f (θ) at point θ is defined as 
+
+˜∇f (θ) = I−1(θ)∇f (θ), (16) where ∇f (θ) is the ordinary Euclidean gradient (a column vector), and I−1(θ) is the inverse of the Fisher information matrix at θ.In fact, the natural gradient ˜∇f (θ) defined in (16) is just the 
+
+gradient on the statistical manifold (S1/2, I ) and the natural gradient descent update rule is then given by 
+
+θt+1 = θt − ηt I−1(θt)∇f (θt), (17) where ηt > 0 is the learning rate. In Bayesian filtering and machine learning, natural gradient descent often leads to faster and more stable convergence when optimizing over probability distributions. Next, we will further illustrate the concepts of information geometry by a specific example: the exponential family. 
+
+4) Example: Exponential Distribution Family: A probabil-ity density p(x, θ ) belongs to the exponential family if it can be written in the form 
+
+p(x, θ ) = exp 
+
+( mX
+
+> i=1
+
+θiFi(x) − ψ(θ)
+
+)
+
+, (18) where θ = ( θ1, . . . , θ m) ∈ Θ ⊂ Rm are the parameters, 
+
+Fi(x) are the sufficient statistics, and ψ(θ) is the log-partition function ensuring normalization: 
+
+ψ(θ) = log 
+
+Z
+
+exp 
+
+( mX
+
+> i=1
+
+θiFi(x)
+
+)
+
+dx. (19) The most commonly-used Gaussian distribution family can also be viewed as an exponential distribution family. For the exponential family, the Fisher information matrix has a particularly simple form, which is stated as the following Theorem. 
+
+Theorem II.2. For an exponential family 
+
+S =
+
+(
+
+p(x, θ ) = exp 
+
+( mX
+
+> i=1
+
+θiFi(x) − ψ(θ)
+
+)
+
+: θ ∈ Θ
+
+)
+
+,
+
+(20) 6
+
+the Fisher Information Matrix (or the Riemannian metric defined by (12) ) I can be computed as 
+
+Iij (θ) = ∂2ψ(θ)
+
+∂θ i∂θ j
+
+. (21) 
+
+That is, the metric is the Hessian of the log-partition function. Remark II.3 . In the following proof of Theorem II.2, the elegant mathematical properties of the exponential distribu-tion family are revealed through the derivations. The fact that R p(x, θ )dx = 1 is repeatedly used which makes the expressions more concise. For readers who are not familiar with the concept of information geometry, it is encouraged to derive this proof line-by-line, which will provide valuable insight into how the structural properties of the exponential family facilitate analytical tractability. 
+
+Proof. For a probability density function p(x, θ ) defined by (18), we have 
+
+∂p ∂θ i
+
+(x, θ ) = p(x, θ )
+
+
+
+Fi(x) − ∂ψ ∂θ i
+
+(θ)
+
+
+
+. (22) Take integrals for both sides of (22) and notice the fact that R p(x, θ )dx = 1 . The gradient of ψ(θ) can be computed as follows: 
+
+0 = ∂∂θ i
+
+Z
+
+p(x, θ )dx =
+
+Z
+
+p(x, θ )
+
+
+
+Fi(x) − ∂ψ ∂θ i
+
+(θ)
+
+
+
+dx, 
+
+and ∂ψ ∂θ i
+
+(θ) = 
+
+Z
+
+Fi(x)p(x, θ )dx. 
+
+Therefore, 
+
+∂2ψ∂θ i∂θ j
+
+(θ) = 
+
+Z
+
+Fi(x) ∂p (x, θ )
+
+∂θ j
+
+dx. 
+
+=
+
+Z 1
+
+p(x, θ )
+
+∂p (x, θ )
+
+∂θ j
+
+(p(x, θ )Fi(x)) dx. 
+
+In the meanwhile, according to (22), 
+
+p(x, θ )Fi(x) = ∂p (x, θ )
+
+∂θ i
+
++ p(x, θ ) ∂ψ ∂θ i
+
+(θ), (23) and thus, 
+
+∂2ψ∂θ i∂θ j
+
+(θ) = 
+
+Z 1
+
+p(x, θ )
+
+∂p (x, θ )
+
+∂θ j
+
+∂p (x, θ )
+
+∂θ i
+
+dx 
+
+− ∂ψ ∂θ i
+
+(θ) ∂∂θ j
+
+Z
+
+p(x, θ )dx 
+
+=
+
+Z 1
+
+p(x, θ )
+
+∂p (x, θ )
+
+∂θ j
+
+∂p (x, θ )
+
+∂θ i
+
+dx = Iij (θ).
+
+From (23) in the proof of Theorem II.2, another set of parameters ϱ = ( ϱ1, · · · , ϱ m) ∈ Rm for the exponential family can be defined by the coordinate transformation 
+
+ϱi := ∂ψ ∂θ i
+
+(θ) = Ep(x,θ )[Fi(x)] , i = 1 , · · · , m, 
+
+which are called the expectation parameters .Moment Matching  Natural Gradient Descent 
+
+Fig. 2: Illustration of NANO filter The transformation matrix between ϱ and θ:
+
+∂ϱ ∂θ =
+
+ ∂2ψ∂θ i∂θ j
+
+
+
+> ij
+
+= I(θ),
+
+is just the Fisher information matrix. In this way, the Fisher information matrix with respect to the expectation parameters 
+
+ϱ can be written as 
+
+˜I(ϱ) = Ep(x,ϱ )
+
+∇ϱ log p(x, ϱ )∇ϱ log p(x, ϱ )⊤
+
+= Ep(x,ϱ )
+
+" ∂θ ∂ϱ 
+
+⊤
+
+∇θ log p(x, θ )∇θ log p(x, θ )
+
+ ∂θ ∂ϱ 
+
+#
+
+=
+
+ ∂θ ∂ϱ 
+
+⊤
+
+Ep(x,ϱ ) [∇θ log p(x, θ )∇θ log p(x, θ )] 
+
+ ∂θ ∂ϱ 
+
+
+
+= I(θ)−1I(θ)I(θ)−1 = I(θ)−1,
+
+which is the inverse of the Fisher information matrix with respect to the original parameters θ. The relationship between the Fisher information matrix with respect to θ and ϱ is useful in the derivation of the natural gradient Gaussian filter intro-duced in the next section, because the Gaussian distribution (as an exponential distribution family) is parameterized by the expectation parameters (i.e., the mean and covariance matrix). III. N ATURAL GRADIENT FILTERING 
+
+A. An Optimization Perspective on Gaussian Filtering 
+
+The variational characterizations (4)–(5) interpret Bayesian filtering as two optimization problems over the infinite-dimensional space of probability densities. While conceptually clean, these problems are generally intractable because the op-timizer is an arbitrary density function. Gaussian filtering can be viewed as a principled finite-dimensional relaxation: one restricts the candidate density to a parameterized family—most commonly the multivariate Gaussian family—thereby con-verting the original variational problems into optimization problems over a mean–covariance pair. Formally, define the Gaussian family 
+
+QG ≜
+
+n
+
+q(x) = N (x; ˆ x, P ) : ˆx ∈ Rn, P ∈ Sn
+
+> ++
+
+o
+
+,
+
+where Sn 
+
+> ++
+
+denotes the set of symmetric positive definite matrices. A Gaussian filter may then be interpreted as con-structing a computable trajectory 
+
+t 7 → qt(·) = N (·; ˆ xt|t, P t|t) ∈ Q G,
+
+such that qt remains “close” to the true filtering posterior 
+
+p(xt|y1: t) in an information-theoretic sense. From the opti-mization viewpoint, this “closeness” is induced by KL diver-gences embedded in the variational formulations, which leads 7
+
+naturally to projection-like and proximal-like interpretations of the prediction and update steps. Restricting the prediction variational problem (4) to the Gaussian family yields 
+
+(ˆ xt|t−1, P t|t−1)= arg max 
+
+> ˆx,P
+
+Ep(xt−1|y1: t−1)Ep(xt|xt−1)
+
+h
+
+log N (xt; ˆ x, P )
+
+i
+
+.
+
+(24) Note that since 
+
+Ept|t−1 [log N (x; ˆ x, P )] = − DKL 
+
+ pt|t−1 ∥ N (ˆ x, P ) + const ,
+
+the maximizer of (24) is the forward-KL projection of the true prior onto QG. This is a key conceptual point: the Gaussian prediction step does not simply “assume Gaussianity”; rather, it selects the Gaussian that is information-theoretically closest to the true prior under DKL (p∥q).Operationally, the projection admits a particularly simple characterization: the optimal Gaussian matches the first two moments of pt|t−1. This recovers the classical “moment prop-agation” viewpoint of many Gaussian filters. 
+
+Lemma III.1 ([14]) . Let p(x) be a density on Rn with finite second moments. Consider the maximum expected Gaussian log-likelihood problem 
+
+(μ⋆, Σ⋆) = arg max 
+
+> μ, Σ∈Sn
+> ++
+
+Ep(x)
+
+log N (x; μ, Σ) .
+
+Any stationary point satisfies 
+
+μ⋆ = Ep(x)[x],
+
+Σ⋆ = Ep(x)
+
+(x − μ⋆)( x − μ⋆)⊤ = Ep(x)[xx ⊤] − μ⋆μ⋆⊤.
+
+Applying Lemma III.1 with p(x) = p(xt|y1: t−1) yields the Gaussian prediction equations 
+
+ˆxt|t−1 = Ep(xt|y1: t−1)[xt], (26a) 
+
+Pt|t−1 = Ep(xt|y1: t−1)[xtx⊤ 
+
+> t
+
+] − ˆxt|t−1 ˆx⊤
+
+> t|t−1
+
+. (26b) For the state-space model (1) with zero-mean process noise, (26) reduces to computing Gaussian expectations of nonlinear functions, e.g., 
+
+ˆxt|t−1 = EN (xt−1;ˆ xt−1|t−1,P t−1|t−1)
+
+f (xt−1),
+
+together with the corresponding second-moment expression for 
+
+Pt|t−1. This is exactly the computational bottleneck addressed by unscented/cubature/quadrature moment transforms: they approximate integrals of the form EN [φ(x)] without requiring linearization of f .Restricting the update variational problem (5) to QG gives 
+
+(ˆ xt|t, P t|t) = arg min  
+
+> ˆx,P ∈Sn
+> ++
+
+n
+
+EN (xt;ˆ x,P )
+
+ℓ(xt, y t)
+
++ DKL 
+
+ N (xt; ˆ x, P ) ∥ N (xt; ˆ xt|t−1, P t|t−1)o
+
+,
+
+(27) where ℓ(xt, y t) ≜ − log p(yt|xt) is the measurement-dependent loss. Problem (27) makes the algorithmic role of the prior explicit: the KL term acts as an information-theoretic regularizer that keeps the updated Gaussian close to the predicted Gaussian, while the expected loss term encourages consistency with the new measurement. In this sense, the update step is a distributional proximal step: it trades off data fit against deviation from the prediction distribution. Expanding the Gaussian–Gaussian KL divergence yields an explicit finite-dimensional objective: 
+
+J(ˆ x, P ) = EN (x;ˆ x,P )
+
+ℓ(x, y t)
+
++ 12 (ˆ x − ˆxt|t−1)⊤P −1
+
+> t|t−1
+
+(ˆ x − ˆxt|t−1)+ 12 Tr 
+
+
+
+P −1
+
+> t|t−1
+
+P
+
+
+
+− 12 log |P ||Pt|t−1| − n
+
+2 .
+
+(28) Compared with prediction, the update step is harder for a fundamental reason: the expectations in J(ˆ x, P ) are taken under the unknown posterior Gaussian itself. Therefore, even when ℓ is smooth, the optimality conditions typically become implicit fixed-point equations coupling ˆxt|t and Pt|t.To state the stationary conditions cleanly, we adopt the standard smoothness assumption. 
+
+Assumption 1. For fixed yt, the loss ℓ(·, y t) is twice con-tinuously differentiable and the required expectations under Gaussian measures exist. 
+
+Under Assumption 1, one may use Stein-type identities (Bonnet’s [24] and Price’s [25] theorems) to differentiate Gaussian expectations with respect to their mean and covari-ance parameters. This produces compact expressions for the gradients of (28), and hence its stationary conditions. 
+
+Lemma III.2. Under Assumption 1, any stationary point 
+
+(ˆ xt|t, P t|t) of (27) satisfies the coupled equations 
+
+ˆxt|t = ˆ xt|t−1 − Pt|t−1 EN (xt;ˆ xt|t,P t|t)
+
+∇xt ℓ(xt, y t), (29a) 
+
+P −1 
+
+> t|t
+
+= P −1 
+
+> t|t−1
+
++ EN (xt;ˆ xt|t,P t|t)
+
+∇2 
+
+> xt
+
+ℓ(xt, y t). (29b) Equations (29) are generally not solvable in closed form because both expectations are evaluated under N (ˆ xt|t, P t|t),which is precisely the unknown to be determined. In other words, the Gaussian posterior is characterized as a fixed point of a map that depends on the score ∇ℓ and the curvature ∇2ℓ
+
+averaged under the posterior approximation. This explains why many nonlinear Gaussian filters resort to further approxima-tions: one must either (a) approximate the expectations, (b) approximate ℓ by a quadratic surrogate, or (c) solve the fixed point iteratively. 
+
+B. Natural Gradient Gaussian Approximation 
+
+The prediction step in (24) admits an exact solution within the Gaussian family: the forward-KL projection is achieved by moment matching (Lemma III.1). In contrast, the update step (27) is substantially more challenging, because the optimality conditions (29) are implicit and couple (ˆ xt|t, P t|t) through expectations taken under the unknown posterior Gaussian. Existing Gaussian filters often resolve this difficulty by lin-earization (or local quadratic surrogates), which introduces approximation errors in locating the stationary point. Moti-vated by information-geometric optimization, we instead seek to solve (27) by an iterative natural gradient scheme on the Gaussian statistical manifold. 8
+
+We stack the mean and the information-form covariance parameter into a single vector 
+
+v ≜
+
+ ˆxt|t
+
+vec( P −1 
+
+> t|t
+
+)
+
+
+
+, ∂∂v J(ˆ xt|t, P t|t) = 
+
+  
+
+> ∂∂ˆxt|t
+
+J(ˆ xt|t, P t|t)vec 
+
+ 
+
+> ∂∂P −1
+> t|t
+
+J(ˆ xt|t, P t|t)
+
+ ,
+
+(30) where we optimize over P −1 
+
+> t|t
+
+rather than Pt|t. This choice is aligned with the information-filter representation and fre-quently yields simpler expressions for update rules. Let v(i) denote the parameters at iteration i, and define 
+
+δv ≜ v(i+1) − v(i) =
+
+"
+
+ˆx(i+1)  
+
+> t|t
+
+− ˆx(i)
+
+> t|t
+
+vec  (P −1 
+
+> t|t
+
+)(i+1) − (P −1 
+
+> t|t
+
+)(i)#
+
+.
+
+The natural gradient update is 
+
+δv = −
+
+
+
+F−1
+
+> v
+
+∂∂v J(ˆ xt|t, P t|t)
+
+
+
+> v=v(i)
+
+, (31) where Fv is the Fisher information matrix of N (xt; ˆ xt|t, P t|t)
+
+under the chosen parameterization. 
+
+Proposition III.3. For N (xt; ˆ xt|t, P t|t) parameterized by v =[ˆ x⊤
+
+> t|t
+
+, vec( P −1 
+
+> t|t
+
+)⊤]⊤, the inverse Fisher information matrix is 
+
+F−1 
+
+> v
+
+=
+
+Pt|t 00 2 ( P −1 
+
+> t|t
+
+⊗ P −1 
+
+> t|t
+
+)
+
+
+
+, (32) 
+
+where ⊗ denotes the Kronecker product. 
+
+Combining (31)–(32) and rewriting the vectorized expres-sions back in matrix form yields the iterative scheme 
+
+(P −1 
+
+> t|t
+
+)(i+1) = ( P −1 
+
+> t|t
+
+)(i) − 2 ( P −1 
+
+> t|t
+
+)(i) ∂∂P −1
+
+> t|t
+
+J(ˆ xt|t, P t|t)
+
+> v(i)
+
+(P −1 
+
+> t|t
+
+)(i),
+
+(33a) 
+
+ˆx(i+1)  
+
+> t|t
+
+= ˆ x(i) 
+
+> t|t
+
+− P (i+1) 
+
+> t|t
+
+∂∂ ˆxt|t
+
+J(ˆ xt|t, P t|t)
+
+> v(i)
+
+. (33b) 
+
+Using the explicit objective (28) and the standard identities for differentiating Gaussian expectations (Bonnet’s and Price’s theorems), one obtains the following natural-gradient iteration: 
+
+(P −1 
+
+> t|t
+
+)(i+1) =P −1 
+
+> t|t−1
+
++ EN (xt;ˆ x(i)   
+
+> t|t,P (i)
+> t|t)
+
+∇2 
+
+> xt
+
+ℓ(xt, y t) , (34a) 
+
+ˆx(i+1)  
+
+> t|t
+
+=ˆ x(i) 
+
+> t|t
+
+− P (i+1)  
+
+> t|t
+
+EN (xt;ˆ x(i)   
+
+> t|t,P (i)
+> t|t)
+
+[∇xt ℓ(xt, y t)] 
+
+(34b) 
+
+− P (i+1)  
+
+> t|t
+
+P −1
+
+> t|t−1
+
+ ˆx(i) 
+
+> t|t
+
+− ˆxt|t−1
+
+. (34c) Unlike one-shot linearization updates, (34) directly targets the stationary point of (27) through a principled descent direction defined by the Fisher metric. A practical obstacle in (34) is the need to compute deriva-tives of ℓ(xt, y t). To avoid this, we invoke Stein-type identities to rewrite the required expectations in terms of loss-weighted moments under the current Gaussian iterate: 
+
+EN [∇xt ℓ(xt, y t)] = ( P −1 
+
+> t|t
+
+)(i)EN
+
+h
+
+e(i) 
+
+> t|t
+
+ℓ(xt, y t)
+
+i
+
+, (35a) 
+
+EN
+
+∇2 
+
+> xt
+
+ℓ(xt, y t) = ( P −1 
+
+> t|t
+
+)(i)EN
+
+h
+
+e(i) 
+
+> t|t
+
+(e(i) 
+
+> t|t
+
+)⊤ ℓ(xt, y t)
+
+i
+
+− (P −1 
+
+> t|t
+
+)(i)EN [ℓ(xt, y t)] ,
+
+(35b) 
+
+Algorithm 1 NANO Filter 
+
+Input: Stopping thresohold γ
+
+Initialization: State estimate ˆx0|0 and covariance P0|0
+
+for each time step t do Predict: 
+
+Calculate predicted state mean ˆxt|t−1 and covariance 
+
+Pt|t−1 using (26) 
+
+Update: 
+
+Obtain the noisy measurement yt
+
+Initialize the state estimate ˆx(0)  
+
+> t
+
+and covariance P (0) 
+
+> t
+
+for each iteration number i do 
+
+Update state estimate and covariance using (34) 
+
+end for 
+
+ˆxt|t = ˆ x(i) 
+
+> t
+
+, P t|t = P (i)
+
+> t
+
+end for 
+
+where N is shorthand for N (xt; ˆ x(i) 
+
+> t|t
+
+, P (i) 
+
+> t|t
+
+) and e(i) 
+
+> t|t
+
+= xt −
+
+ˆx(i) 
+
+> t|t
+
+. Substituting (35) into (34) yields a derivative-free update: 
+
+(P −1 
+
+> t|t
+
+)(i+1) = ( P −1 
+
+> t|t
+
+)(i)EN
+
+h
+
+e(i)
+
+> t|t
+
+ e(i)
+
+> t|t
+
+⊤ ℓ(xt, y t)
+
+i
+
+(P −1 
+
+> t|t
+
+)(i)
+
+− (P −1 
+
+> t|t
+
+)(i)EN [ℓ(xt, y t)] + P −1
+
+> t|t−1
+
+, (36a) 
+
+ˆx(i+1)  
+
+> t|t
+
+= ˆ x(i) 
+
+> t|t
+
+− P (i+1)  
+
+> t|t
+
+(P −1 
+
+> t|t
+
+)(i)EN
+
+h e(i)
+
+> t|t
+
+ ℓ(xt, y t)
+
+i
+
+− P (i+1)  
+
+> t|t
+
+P −1
+
+> t|t−1
+
+ ˆx(i) 
+
+> t|t
+
+− ˆxt|t−1
+
+. (36b) The NANO filter algorithm is summarized in Algorithm 1 and Fig. 2 respectively. 
+
+C. Connection to Kalman Filter 
+
+We now show that, for linear Gaussian measurement mod-els, one iteration of the natural-gradient Gaussian update (34) recovers exactly the Kalman filter (KF) measurement update. Consider the standard linear observation model 
+
+p(yt | xt) = N (yt; Cx t, R ),
+
+whose negative log-likelihood (up to an additive constant independent of xt) is 
+
+ℓ(xt, y t) = 12 (yt − Cx t)⊤R−1(yt − Cx t).
+
+Its first- and second-order derivatives are 
+
+∇xt ℓ(xt, y t) = C⊤R−1(Cx t − yt),
+
+∇2 
+
+> xt
+
+ℓ(xt, y t) = C⊤R−1C. 
+
+Importantly, ∇2 
+
+> xt
+
+ℓ is constant in xt, while ∇xt ℓ is affine in 
+
+xt.Substituting ∇2 
+
+> xt
+
+ℓ(xt, y t) = C⊤R−1C into the NANO covariance update (34a) shows that the expectation is trivial under any Gaussian iterate: 
+
+EN (xt;ˆ x(0)    
+
+> t|t,P (0)
+> t|t)
+
+∇2 
+
+> xt
+
+ℓ(xt, y t) = C⊤R−1C. 
+
+Therefore, after one iteration, 
+
+(P −1 
+
+> t|t
+
+)(1) = P −1 
+
+> t|t−1
+
++ C⊤R−1C. (37) 9
+
+Equation (37) is exactly the information-form KF covariance update, hence P (1)  
+
+> t|t
+
+= Pt|t regardless of the initialization P (0)  
+
+> t|t
+
+.Next, since ∇xt ℓ(xt, y t) = C⊤R−1(Cx t − yt) is affine in 
+
+xt, its expectation under N (xt; ˆ x(0)  
+
+> t|t
+
+, P (0)  
+
+> t|t
+
+) reduces to evaluat-ing at the mean: 
+
+EN (xt;ˆ x(0)    
+
+> t|t,P (0)
+> t|t)
+
+[∇xt ℓ(xt, y t)] = C⊤R−1(C ˆx(0)  
+
+> t|t
+
+− yt).
+
+Plugging this and P (1)  
+
+> t|t
+
+= Pt|t into the NANO mean update (34c) (with i = 0 ) yields 
+
+ˆx(1)  
+
+> t|t
+
+= ˆ x(0)  
+
+> t|t
+
++Pt|tC⊤R−1(yt−C ˆx(0)  
+
+> t|t
+
+)−Pt|tP −1
+
+> t|t−1
+
+(ˆ x(0)  
+
+> t|t
+
+−ˆxt|t−1).
+
+(38) Using the information-form identity implied by (37), 
+
+Pt|tP −1 
+
+> t|t−1
+
+= Pt|t
+
+ P −1 
+
+> t|t
+
+− C⊤R−1C = I − Pt|tC⊤R−1C, 
+
+one can simplify (38) and eliminate the dependence on ˆx(0)  
+
+> t|t
+
+,obtaining 
+
+ˆx(1)  
+
+> t|t
+
+= ˆ xt|t−1 + Pt|tC⊤R−1 yt − C ˆxt|t−1
+
+. (39) Finally, by the matrix inversion lemma, the factor multiplying the innovation can be rewritten as the Kalman gain: 
+
+Pt|tC⊤R−1 = Pt|t−1C⊤ CP t|t−1C⊤ + R−1 ≜ Kt.
+
+Substituting into (39) gives the standard KF mean update. For the linear Gaussian system, the natural-gradient update (34) reaches the unique stationary point of (27) in one itera-tion. Equivalently, a single NANO update (i.e., i = 0 → 1)produces exactly the KF posterior (ˆ xt|t, P t|t), independently of the initialization (ˆ x(0)  
+
+> t|t
+
+, P (0)  
+
+> t|t
+
+).
+
+D. Practical Implementation 
+
+To transition from the theoretical derivation of the NANO filter to its actual deployment in dynamical systems, several numerical aspects must be addressed. This section details the practical realization of the algorithm, focusing on two critical components: the numerical computation of Gaussian integrals in expectation calculation and the enforcement of covariance positive definiteness to ensure numerical stability during iterative updates. 
+
+1) Expectation Calculation: The moment matching (MM) technique is an important computational tool used in expecta-tion calculation. It approximates the mean μ′ and covariance 
+
+Σ′ of a random variable x ∼ N (μ, Σ) after passing through a nonlinear function f (·), which is concisely expressed as 
+
+{μ′, Σ′} = MM( μ, Σ; f (·)) . Its general computational frame-work is 
+
+μ′ = 
+
+> N−1
+
+X
+
+> i=0
+
+wim f (χi),
+
+Σ′ = 
+
+> N−1
+
+X
+
+> i=0
+
+wic[f (χi) − μ′][ f (χi) − μ′]⊤ ,
+
+where χi is the collocation point and wim and wic is the weighting coefficent. Depending on how collocation point and weighting coefficent are constructed, MM can be implemented in different forms, such as unscented transformation [11], [26], Gauss–Hermite quadrature [12] or spherical–radial cubature [13], etc. Taking the unscented transformation as a representative example, the collocation points are explicitly defined as: 
+
+χ0 = μ, χi = μ ± p(n + λ)Σ i, i = 1 , . . . , n, 
+
+and the corresponding weighting coefficients are given by 
+
+w0 
+
+> m
+
+= λn + λ , w0 
+
+> c
+
+= w0 
+
+> m
+
++ (1 − α2 + β)
+
+wim = wic = 12( n + λ) , i = 1 , . . . , 2n. 
+
+where n is the state dimension, λ is a composite scaling parameter, and p(n + λ)Σ is the Cholesky decomposition of 
+
+(n + λ)Σ . The parameters α, β, and λ control the spread and weighting of the sigma points, with common defaults being 
+
+α = 0 , β = 1 , and λ = 0 for the so-called Julier’s sigma points [11]. 
+
+2) Positive Definiteness Guarantee: During the iterative up-date process in (34a), the covariance matrix is not guaranteed to remain positive definite. This stems from the structure of the covariance update rule: while the prior covariance Pt|t−1
+
+is strictly positive definite, the Hessian term involved in the update introduces indefinite components. Specifically, the log-likelihood Hessian takes the form 
+
+∇2
+
+> x
+
+ℓ(x, y t) = G⊤R−1G − ∇ 2
+
+> x
+
+g(x)⊤R−1(yt − g(x)) , (40) where G = ∇xg(x) is the Jacobian of the measurement func-tion. The first term G⊤R−1G is always positive semi-definite. In contrast, the second term depends on the measurement residual (yt −g(x)) and the Hessian of the measurement func-tion ∇2
+
+> x
+
+g(x), which can take either positive or negative values. As a result, the full Hessian is generally indefinite. Therefore, using the iteration in (34a) may cause the covariance matrix to become non-positive definite at certain time instant, leading to the divergence of the NANO filter. To address this problem, we introduce two methods that guarantee the positive definiteness of the covariance updates [27]. 
+
+Hessian Approximation. The first approach is to directly approximate the Hessian (40) as a positive semi-definite matrix. We define the normalized measurement residual as 
+
+r(x, y t) = R−1/2(yt − g(x)) . With this representation, the log-likelihood can be transformed into a least-squares form as 
+
+ℓ(x, y t) = 12 ∥r(x, y t)∥22. Therefore, we have ℓ(x + ∆ x, y t) =  
+
+> 12
+
+∥r(x + ∆ x, y t)∥22, and then performing a Taylor expansion on both sides of the equation, we have 
+
+ℓ(x + ∆ x, y t) ≈ℓ(x, y t) + ∂ℓ ∂x 
+
+> ⊤
+
+∆x + 12 ∆x⊤ ∂2ℓ∂x 2 ∆x, 
+
+12 ∥r(x + ∆ x, y t)∥22 ≈ 12 ∥r(x, y t) + J(x)∆ x∥22
+
+= 12 ∥r(x, y t)∥22 + r(x, y t)⊤J(x)∆ x
+
++ 12 ∆x⊤J(x)⊤J(x)∆ x, 
+
+where J(x) = ∂r/∂x = −R−1/2G denote the Jacobian of r(x, y t). Meanwhile, it is easy to verify that ∂ℓ ⊤/∂x =10 
+
+r(x, y t)⊤J(x), so in the second-order Taylor sense, the log-likelihood Hessian can be approximated by the self-adjoint product of the residual’s Jacobian as 
+
+∂2ℓ(x, y t)
+
+∂x 2 ≈ J(x)⊤J(x) = G⊤R−1G. 
+
+This approximation ensures that the Hessian is positive semidefinite, which in turn guarantees that the covariance matrix remains positive definite throughout the entire iterative process. The proof is as follows: 
+
+Proof. For any non-zero vector x ∈ Rn, consider the quadratic form as 
+
+x⊤ ∂2ℓ(x, y t)
+
+∂x 2
+
+> t
+
+x ≈ x⊤G⊤R−1Gx, 
+
+= ( Gx )⊤R−1(Gx ).
+
+Since R is positive definite, (Gx )⊤R−1(Gx ) ≥ 0 for all x, with equality if and only if Gx = 0 . This confirms that the approximated Hessian is positive semi-definite. Moreover, since the MM step in (40) involves summation and P −1 
+
+> t|t−1
+
+is strictly positive definite, the iteratively obtained (P −1 
+
+> t
+
+)(k+1) 
+
+is guaranteed to be positive definite. Note that this approximation of the Hessian actually ignores the second term of the exact Hessian (40) and is equivalent to the Gauss–Newton method [10]. This is reasonable because, when the normalized residual is relatively small, such as dur-ing stable iterations where the Gaussian approximation closely matches the true posterior, the second term’s contribution to the Hessian becomes insignificant compared to the dominant positive semi-definite first term. 
+
+Cholesky Decomposition. Another approach exploits the fact that any positive-definite matrix admits a Cholesky de-composition. Before the iteration of update step at time instant t begins, the inverse covariance matrix is factorized as 
+
+(P −1 
+
+> t
+
+)(k) = (Λ (k) 
+
+> t
+
+)(Λ (k) 
+
+> t
+
+)⊤, where Λ(k) 
+
+> t
+
+is a lower-triangular matrix. Based on the conclusions in [28], [29], the original covariance iteration (34a) can be directly written as an iteration for the decomposed matrix Λ(k) 
+
+> t
+
+as 
+
+Λ(k+1) = Λ (k) exp m( 12 (Λ (k))−1(V (k) 
+
+> xx
+
++ P −1
+
+> t|t−1
+
+)(Λ (k))−⊤ ),
+
+(41) where exp m(·) is the matrix exponential function and V (k) 
+
+> xx
+
+=
+
+EN (xt;ˆ x(i)   
+
+> t|t,P (i)
+> t|t)
+
+∇2 
+
+> xt
+
+ℓ(xt, y t). To make the computation more tractable, we can further simplify (41) by using a first-order approximation of the matrix exponential map, yields 
+
+Λ(k+1) ≈ Λ(k) + 12 (V (k) 
+
+> xx
+
++ P −1
+
+> t|t−1
+
+)(Λ (k))−⊤ .
+
+During the iteration, we update Λt directly and recon-struct the inverse of covariance using (P −1 
+
+> t
+
+)(k+1) =(Λ (k+1)  
+
+> t
+
+)(Λ (k+1)  
+
+> t
+
+)⊤ + ϵI , where ϵ > 0 is a small tunable parameter. This factorization and reconstruction can ensure that the covariance matrix remains positive definite throughout. The proof is as follows: 
+
+Proof. For any non-zero vector x ∈ Rn, we have 
+
+x⊤(Λ (k+1)  
+
+> t
+
+)(Λ (k+1)  
+
+> t
+
+)⊤x = ∥(Λ (k+1)  
+
+> t
+
+)⊤x∥22 ≥ 0,
+
+so the matrix (Λ (k) 
+
+> t
+
+)(Λ (k) 
+
+> t
+
+)⊤ is positive semi-definite. Further-more, by adding a small positive definite matrix ϵI , the inverse of the covariance (P −1 
+
+> t
+
+)(k+1) becomes positive definite, which means the covariance P (k+1)  
+
+> t
+
+is positive definite. In summary, both approaches ensure that the covariance matrix remains positive definite throughout the natural gradient updates. However, the second approach involves performing Cholesky decomposition and first-order approximation at each iteration, which results in higher computational complexity and potential errors. On the other hand, the first approach offers second-order approximation accuracy and avoids re-dundant calculations. Therefore, the first approach is typically used as the primary method for the standard NANO filter. 
+
+E. NANO-filter on Manifold 
+
+Most of the filters discussed above are designed in Eu-clidean vector spaces. In practice, however, the state of an autonomous robot often evolves on smooth manifolds that admit Lie-group structure. For example, orientation lies on the special orthogonal group SO(3) , and pose lies on the special Euclidean group SE(3) [30]. Applying Euclidean filters to such non-Euclidean states ignores the underlying geometry, which can lead to singularities, constraint violations, and instability [31], [32]. Motivated by this, we can design our NANO-filter to operate directly on manifolds [33]. Let M be an n-dimensional manifold that is locally diffeo-morphic to Rn. To conveniently express state increments and measure discrepancies on M, we employ the two operators ⊞
+
+and ⊟ [34], defined as 
+
+⊞ : M × Rn → M ; ⊟ : M × M → Rn.
+
+Taking M = SO(3) as an example, for R ∈ SO(3) and 
+
+r ∈ R3, the two operators are instantiated as 
+
+R ⊞ r = R Exp( r), R1 ⊟ R2 = Log  RT 
+
+> 2
+
+R1
+
+ .
+
+where Exp( r) = I + sin( ∥r∥) 
+
+> ∥r∥
+
+[r]× + 1−cos( ∥r∥) 
+
+> ∥r∥2
+
+[r]2 
+
+> ×
+
+is the exponential map [30], and Log( ·) denotes its inverse map. Consider a dynamical system whose state x ∈ M evolves on a manifold: 
+
+xt+1 = xt ⊞  f (xt, ut, ξt)∆ t,
+
+yt = h(xt) + ζt. (42) We define the error state with respect to a noise-free nominal state ¯x ∈ M as 
+
+δx ≜ x ⊟ ¯x, (43) where δx ∈ Rn lies in a Euclidean space. The error state admits its own transition model, which is typically well approximated by a linear form: 
+
+δxt+1 = Ft δxt + Bt ξt. (44) Meanwhile, the nominal state evolves deterministically under a noise-free transition model: 
+
+¯xt+1 = ¯ xt ⊞  f ( ¯ xt, ut, 0)∆ t. (45) Consequently, manifold state estimation can be reduced to estimating the Euclidean error state δxt and then composing it back onto the manifold. 11 
+
+a) Prediction.: At the end of each time step, the estima-tor retracts the updated error into the nominal state and resets the error to zero, i.e., δ ˆxt|t ← 0. At the beginning of time step t, the nominal state ¯xt is first obtained from (45). The error-state prediction then follows the standard Kalman filter recursion: 
+
+δ ˆxt|t−1 = Ft−1 δ ˆxt−1|t−1 = 0,
+
+Pt|t−1 = Ft−1Pt−1|t−1F ⊤ 
+
+> t−1
+
++ Bt−1Qt−1B⊤
+
+> t−1
+
+. (46) 
+
+b) Update via NANO iterations.: Given ¯xt and the predicted covariance Pt|t−1, we perform natural-gradient it-erations on the error state. Specifically, for iteration index i,we update the information matrix and mean as 
+
+(P −1 
+
+> t
+
+)(i+1) = P −1 
+
+> t|t−1
+
++ EN δ
+
+∇2 
+
+> δxt
+
+ℓ( ¯ xt ⊞ δxt, yt) ,δ ˆx(i+1)  
+
+> t|t
+
+= δ ˆx(i) 
+
+> t|t
+
+− P (i+1)  
+
+> t|t
+
+EN δ [∇δxt ℓ( ¯ xt ⊞ δxt, yt)] 
+
+− P (i+1)  
+
+> t|t
+
+P −1
+
+> t|t−1
+
+δ ˆx(i) 
+
+> t|t
+
+,
+
+(47) where N δ is shorthand for N (δxt; δ ˆx(i) 
+
+> t|t
+
+, P (i) 
+
+> t|t
+
+).
+
+c) Composition and reset.: After convergence (or a fixed number of iterations), the final manifold estimate is obtained by composing the nominal state with the refined error estimate: 
+
+ˆxt|t = ¯ xt ⊞ δ ˆx(i+1)  
+
+> t|t
+
+. (48) Finally, we reset the error state δxt ← 0 and proceed to the next time step. IV. I LLUSTRATIVE EXAMPLES 
+
+In this section, we present four representative real-world applications that highlight the practical advantages of the NANO framework. The first case study considers satellite atti-tude estimation. The second presents NANO-SLAM, a variant tailored for direct deployment in vehicle SLAM. The third introduces NANO-L, a Lie-group–aware extension designed to operate on Lie group manifolds for the quadruped robot state estimation. The fourth demonstrates the application of NANO to humanoid robot state estimation. Together, these four case studies provide a comprehensive evaluation of NANO in terms of accuracy, robustness, and computational efficiency. 
+
+A. Satellite Attitude Estimation 1) System Modeling: The satellite’s attitude is described by Euler angles [35]. The state variables are defined as 
+
+θ = [ p, r, y ], where p, r, and y correspond to pitch, yaw, and roll angles, respectively. The system input is the satellite’s angular velocity, denoted as ω. The satellite is equipped with a gravimeter and a magnetometer, which measure the components of the gravitational and geomagnetic fields at the satellite’s attitude. The system’s state transition equation and observation equation are as follows: 
+
+θt+1 = θt + M (θt)ωt∆t + ξt
+
+yt =
+
+R(θt)⊤gR(θt)⊤b
+
+
+
++ ζt
+
+where ∆t = 0.01 s, g = [0 , 0, −9.81] T , and b =[27 .75 , −3.65 , 47 .21] T are the Earth’s gravitational and ge-omagnetic intensities. M (θt) and R(θt) are the transition matrices between the Earth coordinate system and the satellite body coordinate system, defined as: 
+
+M (θt) = 
+
+
+
+1 sin( p) sin( r)cos( p)cos( r) sin( p)cos( p)
+
+0 cos( r) − sin( r)0 sin( r)cos( p)cos( r)cos( p)
+
+
+
+R(θt) = RpRr Ry
+
+where Rp, Rr , and Ry are the rotation matrices defined as: 
+
+Rp =
+
+
+
+cos( p) 0 sin( p)0 1 0
+
+− sin( p) 0 cos( p)
+
+
+
+Rr =
+
+1 0 00 cos( r) − sin( r)0 sin( r) cos( r)
+
+
+
+Ry =
+
+cos( y) − sin( y) 0sin( y) cos( y) 00 0 1
+
+
+
+In this experiment, we assume that the process noise fol-lows a Laplace distribution and the observation noise follows a Gaussian distribution. Specifically, the process noise has a 10% chance of being contaminated, with ξt ∼ 0.9 ·
+
+Laplace (0 , 10 −5I3×3) + 0 .1 · Laplace (0 , 10 −2I3×3), while the observation noise has a 15% chance of being contaminated with a beta distribution, with ζt ∼ 0.85 · N (0 , 10 −4I3×3) + 0.15 · beta (1 .2, 1.5) . Such designs are used to test the perfor-mance of NANO under non-Gaussian noises. 
+
+2) Experimental Setup: We consider two angular velocity inputs: ωt = π 
+
+> 18
+
+sin(2∆ tπt ) · I3×1, and ωt = π 
+
+> 18 √2
+
+· I3×1. We also consider two initial state estimation scenarios: one with an accurate initial state and the other with a biased initial state. The initial state is set as x0 ∼ N (0 , 10 −3I3×3), while the initial state estimate ˆx0 is set to [0 , 0, 0] and [10 ◦, 10 ◦, 10 ◦],respectively. We compare the performance of the NANO, UKF, and EKF filters under these scenarios. The accuracy of the estimation is evaluated using the RMSE metric. 
+
+3) Comparison Results: The experimental results corre-sponding to the two angular velocity input conditions de-scribed in Section 2 are summarized in Table IV and Table V, respectively. It can be observed that NANO consistently achieves lower RMSE than EKF and UKF, demonstrating superior estimation accuracy under both input conditions. When the initial state estimate is accurate ( ˆx0 = [0 , 0, 0] T ), EKF and UKF exhibit nearly identical RMSE values, whereas NANO achieves significantly lower errors. This result indicates that NANO is more effective in suppressing the influence of non-Gaussian process noise and contaminated observation noise. This advantage is further illustrated in Fig. 3(a)-(c), where the time-series error curves under sinusoidal input show that NANO maintains smaller fluctuations in pitch, roll, and yaw throughout the entire time horizon. Moreover, the RMSE boxplot in Fig. 3(d) demonstrates that NANO has a lower 12 
+
+TABLE I: Comparison of RMSE and Computation Time under Sinusoidal input ωt = π 
+
+> 18
+
+sin(2∆ tπt ) · I3×1                 
+
+> ˆx0Method RMSE Time [ms]
+> [0 0 0] T
+> EKF 0.944 (0.020) 0.251 UKF 0.944 (0.020) 0.387 NANO 0.589 (0.006) 3.084
+> [π
+> 18
+> π
+> 18
+> π
+> 18 ]T
+> EKF 1.576 (0.017) 0.268 UKF 1.576 (0.017) 0.429 NANO 1.390 (0.018) 3.189
+
+TABLE II: Comparison of RMSE and Computation Time under constant input ωt = π 
+
+> 18 √2
+
+· I3×1                 
+
+> ˆx0Method RMSE Time [ms]
+> [0 0 0] T
+> EKF 0.971 (0.021) 0.262 UKF 0.971 (0.021) 0.415 NANO 0.597 (0.007) 2.946
+> [π
+> 18
+> π
+> 18
+> π
+> 18 ]T
+> EKF 1.592 (0.018) 0.248 UKF 1.592 (0.018) 0.383 NANO 1.391 (0.018) 3.093
+
+median and a more compact interquartile range, confirming its superior accuracy and estimation stability from a statistical perspective. When the initial estimate is biased ( ˆx0 = [ π 
+
+> 18
+
+, π 
+
+> 18
+
+, π 
+
+> 18
+
+]T ), the estimation errors of all filters increase. Nevertheless, NANO still maintains the lowest RMSE among the three methods, highlighting its superior robustness to initialization errors and stronger convergence capability. More importantly, under both sinusoidal and constant an-gular velocity inputs, NANO consistently preserves its per-formance advantage. This demonstrates that the improvement achieved by NANO is not dependent on a specific motion pattern, but rather reflects a fundamentally stronger estimation capability across different dynamic conditions, validating its robustness and generalization ability. 
+
+B. NANO for Vehicle SLAM 1) System Modeling: The autonomous vehicle in a 2-dimensional (2D) coordinate system is illustrated in Fig. 4. The vehicle position is denoted by (px, p y ) and its heading is 
+
+θ. The forward speed is v and the steering input is α. More-over, L denotes the wheelbase and H the track width. The discrete-time vehicle dynamics follow the standard Ackermann kinematic model: 
+
+xt+1 = xt +
+
+
+
+∆T  vt cos θt − vt 
+
+> L
+
+tan θt(αt sin θt + b cos θt)
+
+∆T  vt sin θt + vt 
+
+> L
+
+tan θt(αt cos θt + b sin θt)
+
+∆T vt 
+
+> L
+
+tan( αt)
+
+ + ξt.
+
+(49) Here, the vehicle state is x = [ px, p y , θ ]⊤ ∈ R3, and the control input is u = [ v, α ]⊤ ∈ R2. The process disturbance is modeled as zero-mean Gaussian noise, ξt ∼ N (0 , Q t) with 
+
+Qt ∈ R3×3, and ∆T is the sampling interval. Note that v
+
+corresponds to the velocity at the axle center and is not directly 
+
+(a) Mean pitch error at each time step 
+
+(b) Mean roll error at each time step 
+
+(c) Mean yaw error at each time step 
+
+(d) RMSE boxplot for each ex-periment 
+
+Fig. 3: Comparison of attitude estimation performance under Sinusoidal input and accurate initialization. observed; instead, it is computed from the wheel encoder speed 
+
+ve. In practice, we use 
+
+v = ve
+
+1 − H · tan α/ (2 L) . (50) We consider range-bearing observations between the vehi-cle and landmarks, obtained from an onboard laser range finder. At each time step, the sensor outputs K measure-ments yt = {yk,t }Kk=1 with yk,t ∈ R2. The map contains 
+
+M landmarks m1: M = {mj }Mj=1 , where each landmark is 
+
+mj = [ mx,j , m y,j ]⊤ ∈ R2. If the k-th observation at time t
+
+is associated with landmark j, the measurement model is 
+
+yk,t = g(xt, m j ) + ζk,t , (51) with 
+
+g(xt, m j ) = 
+
+"p (mx,j − px,t )2 + ( my,j − py,t )2
+
+arctan my,j −py,t   
+
+> mx,j −px,t
+
+− θt
+
+#
+
+. (52) The measurement noise is assumed Gaussian, ζk,t ∼ N (0 , R t)
+
+with covariance Rt ∈ R2×2.
+
+2) Experimental Results: We evaluate NANO-SLAM on the Sydney Victoria Park dataset to examine its behavior in a realistic, large-scale environment. The platform is equipped with wheel encoders, a laser range finder, and GPS, and it traverses the park along a trajectory longer than 3.5 km (Fig. 5). Encoder readings provide velocity and steering-related inputs, while the laser range finder scans a 180 ◦ frontal field of view and produces range–bearing measurements for landmark detection; in this dataset, nearby trees serve as natural landmarks. GPS measurements are treated as reference to compute localization error. The vehicle wheelbase is 2.83 m and the track width is 0.76 m. We compare NANO-SLAM with EKF-SLAM [36] and UFastSLAM [37], which represent a conventional 13 
+
+Fig. 4: Vehicle in the 2D coordinate system. 
+
+Fig. 5: Victoria Park map and vehicle trajectory obtained from GPS data. linearization-based SLAM approach and an RBPF-based alternative, respectively. To account for practical disturbances (e.g., wheel slip and uneven terrain), we set the standard deviations of velocity and steering noises to σv = 2 m/s and 
+
+σg = 6 ◦. The range and bearing channels use σr = 1 m and 
+
+σb = 3 ◦ to model sensing and environmental uncertainty. Both UFastSLAM and NANO-SLAM employ 10 particles. Localization accuracy is quantified using the RMSE: 
+
+RMSE = 
+
+vuut 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+∥pt − ˆpt∥22, (53) where pt and ˆpt denote the ground-truth and estimated posi-tions at time step t, and T is the total number of time steps. TABLE III: Comparison of different vehicle SLAM methods.         
+
+> Method RMSE [m] Time [ms]
+> EKF-SLAM 7.783 312.79 UFastSLAM 5.147 14.896
+> NANO-SLAM 2.538 17.692
+> (a)
+> (b)
+> (c)
+
+Fig. 6: Experimental results of the vehicle localization and landmark location estimates. (a) EKF-SLAM. (b) UFast-SLAM. (c) NANO-SLAM 14 
+
+As reported in Table III, NANO-SLAM achieves the best localization accuracy, reducing RMSE to 2.538 m, which is more than a 50% improvement over UFastSLAM (5.147 m), the next strongest baseline. This improvement is mainly at-tributed to avoiding measurement-model linearization and the resulting approximation error. The runtime remains close to UFastSLAM (17.692 ms vs. 14.896 ms), corresponding to an overhead of about 18%. Fig. 6 further visualizes the estimated trajectories and landmarks, where NANO-SLAM produces the trajectory that most closely aligns with the GPS reference. 
+
+C. Quadruped Robot State Estimation 
+
+We consider a quadruped robot state estimation problem whose state naturally evolves on a Lie group manifold [38]. This setting is practically challenging due to discontinuous foot–ground contacts and occasional outliers caused by im-perfect contact detection [39], [32]. 
+
+1) System Modeling: The robot base orientation, velocity, and position in the world frame are denoted by Rt ∈ SO(3) ,
+
+vt ∈ R3, and pt ∈ R3. To incorporate leg kinematics, we further include the world-frame position of a generic foot contact point st ∈ R3. These variables can be lifted to a compact matrix form on SE 3(3) :
+
+xt =
+
+ Rt vt pt st
+
+03×3 03×1 03×1 03×1
+
+
+
+∈ SE 3(3) . (54) The onboard IMU provides body-frame angular velocity 
+
+˜ωt and linear acceleration ˜at [30], [32]. The continuous-time dynamics admit the following Lie-group form: 
+
+ddt xt = fut (xt) + xtξ∧
+
+> t
+
+=
+
+Rt ˜ω∧ 
+
+> t
+
+Rt ˜at + g vt 03×1
+
+03×3 03×1 03×1 03×1
+
+
+
++ xtξ∧ 
+
+> t
+
+,
+
+(55) where g ∈ R3 is gravity. The process noise nt is modeled as zero-mean Gaussian with block-diagonal covariance, capturing IMU noise and contact-point perturbations [39], [32]. In practice, (55) is discretized via standard Lie-group integration over the sampling interval. Joint encoders provide leg joint angles, which are mapped through forward kinematics to obtain the foot position relative to the body. The same relative position can be computed from the state as R⊤ 
+
+> t
+
+(st − pt). This yields the leg-odometry measurement model 
+
+yt = R⊤ 
+
+> t
+
+(st − pt) + ζt, ζt ∼ N (0, Γt), (56) where Γt captures encoder and kinematic uncertainty. The above model can be written in an invariant form 
+
+yt = g(xt) + ζt, g(xt) := x−1 
+
+> t
+
+b, (57) where b is a constant vector selecting the corresponding relative-position component [31], [32]. This invariant structure also applies to other relative-position sensing modalities such as visual or LiDAR odometry [34]. Unstable Contact 
+
+> Stable Contact
+
+Fig. 7: Different environments of real-world legged robot experiments. 
+
+2) Experimental Setup: As shown in Fig. 7, two real-world test environments are used: a flat terrain as the nominal setting, and an unstable surface that induces uncertain contact conditions and challenges estimator robustness. In both environments, the robot executes a trot gait while recording multimodal onboard measurements at 200 Hz, in-cluding one IMU, 12 joint encoders, and four foot contact sensors. Ground-truth pose is provided by a NOKOV motion-capture system at 100 Hz. For each environment, five se-quences of 60 s are collected to reduce the impact of run-to-run variations. All methods are evaluated offline on the same datasets using a laptop with an Intel Core i9-14900HX CPU, and are initialized from the ground-truth state. Noise settings and algorithm hyperparameters are kept fixed across all runs, as summarized in Table IV. The comparison focuses on EKF [39] and InEKF [32], two widely adopted baselines for legged-robot state estimation. UKF-style methods are not included since they are seldom deployed on such platforms due to higher computational overhead and reduced numerical robustness. Performance is quantified using absolute trajectory error (ATE) and relative error (RE) for position, velocity, and orientation, following the definitions in [40]. ATE captures global trajectory consistency with respect to the ground truth, while RE measures local drift over a fixed interval of 3 s. TABLE IV: Noise parameters and NANO-L’s hyperparameter.             
+
+> Name Symbol Value Accelerometer σa0.2568 m /s2
+> Gyroscope σω0.00139 rad /s
+> Joint encoder σe0.3 rad
+> Slip σs0.001 m /s
+> Stopping threshold γ10 −4
+
+3) Comparison Results: Table V reports ATE and RE over both environments, showing the mean (outside parentheses) and variance (inside parentheses) computed from five trials. As expected, all filters exhibit larger errors on the unstable surface, confirming the increased difficulty under imperfect contact conditions. Across both terrains, manifold-aware es-timators provide clear gains over the standard EKF, most notably in position accuracy. Moreover, NANO-L achieves the best overall performance, outperforming InEKF on nearly all metrics while maintaining the smallest degradation when moving from flat to unstable terrain. On the unstable surface, 15 
+
+for example, NANO-L reduces the position ATE by about 41% relative to InEKF. Fig. 8 visualizes trajectories from a representative unstable-terrain run (EKF omitted for clarity). The qualitative compari-son is consistent with Table V, where NANO-L remains closer to the motion-capture reference across state components. The vertical position pz shows drift for all methods, which aligns with the limited observability of absolute height from leg odometry [41]; nevertheless, NANO-L maintains a noticeable tracking advantage. Fig. 9 further compares 2D localization on the flat terrain across runs with similar speed ( ≈ 0.2 m/s) but different travel distances and durations. The results highlight that legged-robot odometry accumulates drift over time, whereas NANO-L mitigates error growth by avoiding observation-model lin-earization, leading to markedly reduced trajectory drift. In terms of runtime, InEKF is the fastest, but NANO-L processes each step in about 3.35 ms, remaining comfortably within the 5 ms budget required for 200 Hz operation. 
+
+D. Humanoid Robot State Estimation 
+
+We consider state estimation for a humanoid robot, where the estimator takes IMU measurements and leg odometry as inputs and outputs an estimate of the torso position. We compare NANO with EKF and UKF baselines in terms of the position and velocity estimation errors. 
+
+1) System Modeling: We parameterize the base attitude by Euler angles θt := [ ϕt, ϑ t, ψ t]⊤ ∈ R3 (roll–pitch–yaw), and denote the corresponding rotation matrix by R(θt) ∈ SO(3) .The discrete-time state is 
+
+xt :=  pt, vt, θt, sLt , sRt , bat , bωt
+
+ ∈ R21 , (58) where pt, vt ∈ R3 are the base position/velocity, sLt , sRt ∈ R3
+
+are the positions of the left/right foot contact points in the world frame, and bat , bωt ∈ R3 are accelerometer and gyro-scope biases. The IMU input is ut := (˜ at, ˜ωt). With sampling interval ∆t, the IMU-driven dynamics can be written in the following discrete form 
+
+
+
+pt+1 
+
+vt+1 
+
+θt+1 
+
+sLt+1 
+
+sRt+1 
+
+bat+1 
+
+bωt+1 
+
+
+
+=
+
+
+
+pt + vt∆t
+
+vt +  R(θt) ˜at − bat
+
+ − g∆t
+
+θt + T (θt)  ˜ωt − bωt
+
+∆t
+
+sLt
+
+sRt
+
+bat
+
+bωt
+
+
+
++ ξt. (59) Here ξt ∼ N (0, Qt), and T (θ) maps body angular velocity to Euler angle rates. We model sL, sR and the IMU biases as slow random walks and absorb their discrete-time pertur-bations into ξt through Qt.Joint encoders provide joint angles qt and velocities ˙qt.Forward kinematics gives each foot position in the base frame 
+
+˜rit ∈ R3. Using the kinematic Jacobian, we also build a body-frame leg-velocity measurement ˜ℓit ∈ R3. In addition, we impose a foot-height constraint using a ground height h0.For each leg i ∈ { L, R }, the predicted measurement from the state is 
+
+ˆyit =
+
+
+
+R⊤ 
+
+> t
+
+(sit − pt)
+
+R⊤ 
+
+> t
+
+vt
+
+e⊤ 
+
+> 3
+
+sit
+
+ , yit =
+
+
+
+˜rit
+
+˜ℓit
+
+h0
+
+ = ˆ yit + ζit , (60) where e3 = [0 , 0, 1] ⊤ and ζit ∼ N (0, Γit). We stack the two legs to obtain a 14 -dimensional observation yt =[( yLt )⊤, (yRt )⊤]⊤.To reduce the impact of contact switching and outliers, we use a simple contact indicator 
+
+cit = 1
+
+
+
+piz,t < h th ∧ ∥ vixy,t ∥ < v th 
+
+
+
+, (61) computed from the kinematically reconstructed foot height and slip speed. When cit = 0 , we inflate the measurement covariance of leg i by a factor (1 + α), so that the filter downweights unreliable leg-odometry constraints during swing or slip. 
+
+2) Experimental Setup: We evaluate the estimators on a simulated humanoid trajectory containing both straight walk-ing and turning motions. For the sequence, IMU measurements and joint encoder data are recorded at 50 Hz, while the simulator provides ground-truth for evaluation. All methods are initialized from the ground-truth state at t = 0 and are run offline with fixed noise parameters throughout the sequence. For NANO, we use a learning rate of 0.4 and one inner iteration per step. The contact-aware scaling in (61) uses thresholds hth = −0.03 , vth = 0 .3, and inflation factor 
+
+α = 10 5.
+
+3) Comparison Results: We report both global and local errors for position and velocity. The quantitative results are reported in Table VI. Among the three methods, NANO achieves the best performance on all four metrics, where ATE pos and ATE vel represent ATE of position and velocity, and RE pos and RE vel represent the RE of position and velocity, respectively. Fig. 10 compares the estimated planar velocities. While the main temporal pattern is captured by all methods, EKF and UKF exhibit stronger oscillations and larger local mismatches during rapid motion transitions. In comparison, NANO tracks the reference velocity more accurately. Fig. 11 presents the estimated x–y trajectories. All three methods recover the overall motion trend, but clear differences can be observed in estimation accuracy. NANO remains closest to the ground-truth path over the entire sequence, whereas EKF and UKF show larger deviations, particularly in the turning region and the upper-left part of the trajectory. V. C ONCLUSION 
+
+This tutorial revisits Gaussian Bayesian filtering from an information-geometric perspective and presents a unified op-timization interpretation of the prediction and update steps. By viewing filtering as variational inference over probability distributions, Gaussian filters can be understood as projecting the true Bayesian posterior onto the manifold of Gaussian distributions. Within this framework, we introduced the NANO filter, which performs the measurement update through natural 16 
+
+TABLE V: Comparison of ATE, RE, and Computation Time Across Real-World Environments 
+
+Environment Method ATE pos ATE vel ATE ori RE pos RE vel RE ori Time 
+
+[m] [m /s] [rad] [m] [m /s] [rad] [ms] 
+
+Flat EKF 0.373 (0 .055) 0.122 (0 .032) 0.020 (0 .005) 0.076 (0 .010) 0.107 (0 .008) 0.017 (0 .005) 3.905 InEKF 0.281 (0 .099) 0.108 (0 .007) 0.022 (0 .004) 0.072 (0 .010) 0.106 (0 .015) 0.017 (0 .004) 0.712 
+
+NANO-L 0.212 (0 .078) 0.107 (0 .009) 0.017 (0 .005) 0.065 (0 .004) 0.093 (0 .014) 0.016 (0 .003) 3.351 Unstable EKF 0.633 (0 .200) 0.149 (0 .057) 0.021 (0 .002) 0.229 (0 .163) 0.094 (0 .014) 0.016 (0 .003) 3.905 InEKF 0.401 (0 .108) 0.140 (0 .028) 0.023 (0 .001) 0.162 (0 .082) 0.106 (0 .010) 0.017 (0 .003) 0.712 
+
+NANO-L 0.236 (0 .058) 0.125 (0 .011) 0.012 (0 .001) 0.104 (0 .031) 0.108 (0 .006) 0.014 (0 .004) 3.351 0 10 20 30 40 50 60                                                 
+
+> −2
+> −1
+> 0
+> 1
+> px(m)
+> 010 20 30 40 50 60
+> −1
+> 0
+> 1
+> 2
+> py(m)
+> 010 20 30 40 50 60
+> Time(s)
+> −0.50
+> −0.25
+> 0.00
+> 0.25
+> pz(m)
+> Ground Truth
+> InEKF
+> NANO-L 010 20 30 40 50 60
+> −1.0
+> −0.5
+> 0.0
+> 0.5
+> vx(m/s)
+> 010 20 30 40 50 60
+> −0.5
+> 0.0
+> 0.5
+> 1.0
+> vy(m/s)
+> 010 20 30 40 50 60
+> Time(s)
+> −0.2
+> 0.0
+> 0.2
+> vz(m/s) 010 20 30 40 50 60
+> −0.2
+> −0.1
+> 0.0
+> 0.1
+> roll (rad)
+> 010 20 30 40 50 60
+> 0.0
+> 0.1
+> pitch (rad)
+> 010 20 30 40 50 60
+> Time(s)
+> 0
+> 2
+> 4
+> 6
+> yaw (rad)
+
+Fig. 8: Estimated position, velocity, and orientation for InEKF and NANO-L on the unstable terrain. −1.5 −1.0 −0.5 0.0 0.5 1.0 1.5 2.0              
+
+> px(m)
+> −2.5
+> −2.0
+> −1.5
+> −1.0
+> −0.5
+> 0.0
+> 0.5
+> py(m)
+> Ground Truth
+> InEKF
+> NANO-L −2.5 −2.0 −1.5 −1.0 −0.5 0.0 0.5
+> px(m)
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> py(m) −1.5 −1.0 −0.5 0.0 0.5 1.0 1.5 2.0
+> px(m)
+> −2.5
+> −2.0
+> −1.5
+> −1.0
+> −0.5
+> 0.0
+> 0.5
+> py(m)
+
+Fig. 9: Estimated trajectories from InEKF and NANO-L on the flat terrain with different distances and durations. From left to right: (9.25 m, 40 s), (10.25 m, 50 s), and (14.6 m, 60 s). TABLE VI: Comparison of ATE and RE on the simulated trajectory. 
+
+Method ATE pos [m] ATE vel [m/s] RE pos [m] RE vel [m/s] EKF 0.386 0.346 0.240 0.549 UKF 0.387 0.345 0.239 0.551 NANO 0.101 0.267 0.187 0.370 
+
+gradient descent on the statistical manifold, yielding geometry-aware updates that respect the intrinsic structure of Gaus-sian distributions and remain invariant to parameterization. The resulting algorithm directly targets the stationary condi-tions of the variational formulation and avoids the structural limitations of traditional linearization-based Gaussian filters. We further demonstrated that, in the linear–Gaussian case, a single natural-gradient step exactly recovers the classical Kalman filter update, thereby establishing a clear theoretical 17 
+
+Fig. 10: Estimated velocity from EKF, UKF and NANO. 
+
+Fig. 11: Estimated trajectories from EKF, UKF and NANO. link to existing methods. Practical considerations, including numerical expectation evaluation, covariance stabilization, and extensions to manifold-valued states, were also discussed to facilitate implementation. Overall, the information-geometric viewpoint provides an intuitive and principled framework for understanding and designing Gaussian filters for nonlinear dynamical systems. REFERENCES [1] Z. Chen et al. , “Bayesian filtering: From Kalman filters to particle filters, and beyond,” Statistics , vol. 182, no. 1, pp. 1–69, 2003. [2] C. Liu, S. E. Li, and J. K. Hedrick, “Measurement dissemination-based distributed bayesian filter using the latest-in-and-full-out exchange protocol for networked unmanned vehicles,” IEEE Transactions on Industrial Electronics , vol. 64, no. 11, pp. 8756–8766, 2017. [3] R. Kalman, “A new approach to linear filtering and prediction problems,” 
+
+Journal of Basic Engineering , vol. 82, no. 1, pp. 35–45, 1960. [4] S. S¨ arkk¨ a and L. Svensson, Bayesian filtering and smoothing , vol. 17. Cambridge university press, 2023. [5] J. Elfring, E. Torta, and R. van de Molengraft, “Particle filters: A hands-on tutorial,” Sensors , vol. 21, no. 2, p. 438, 2021. [6] S. Thrun, “Probabilistic robotics,” Communications of the ACM , vol. 45, no. 3, pp. 52–57, 2002. [7] G. L. Smith, S. F. Schmidt, and L. A. McGee, Application of statistical filter theory to the optimal estimation of position and velocity on board a circumlunar vehicle , vol. 135. National Aeronautics and Space Administration, 1962. [8] B. A. McElhoe, “An assessment of the navigation and course corrections for a manned flyby of mars or venus,” IEEE Transactions on Aerospace and Electronic Systems , no. 4, pp. 613–623, 1966. [9] A. Gelb et al. , Applied optimal estimation . MIT press, 1974. [10] B. M. Bell and F. W. Cathey, “The iterated Kalman filter update as a Gauss-newton method,” IEEE Transactions on Automatic Control ,vol. 38, no. 2, pp. 294–297, 1993. [11] S. J. Julier, J. K. Uhlmann, and H. F. Durrant-Whyte, “A new approach for filtering nonlinear systems,” in 1995 American Control Conference (ACC) , vol. 3, pp. 1628–1632, 1995. [12] I. Arasaratnam, S. Haykin, and R. J. Elliott, “Discrete-time nonlinear filtering algorithms using Gauss–hermite quadrature,” Proceedings of the IEEE , vol. 95, no. 5, pp. 953–977, 2007. [13] I. Arasaratnam and S. Haykin, “Cubature Kalman filters,” IEEE Trans-actions on Automatic Control , vol. 54, no. 6, pp. 1254–1269, 2009. [14] W. Cao, T. Zhang, Z. Sun, C. Liu, S. S.-T. Yau, and S. E. Li, “Nonlinear bayesian filtering with natural gradient gaussian approximation,” IEEE Transactions on Pattern Analysis and Machine Intelligence , 2026 (online in arXiv, Oct. 2024). [15] W. Cao, T. Zhang, and S. E. Li, “Algorithm design and comparative test of natural gradient gaussian approximation filter,” in IFAC Modeling Estimation and Control Conference (MECC) , pp. 1–7, 2025. [16] S. Gultekin and J. Paisley, “Nonlinear Kalman filtering with divergence minimization,” IEEE Transactions on Signal Processing , vol. 65, no. 23, pp. 6319–6331, 2017. [17] J. Knoblauch, J. Jewson, and T. Damoulas, “An optimization-centric view on bayes’ rule: Reviewing and generalizing variational inference,” 
+
+Journal of Machine Learning Research , vol. 23, no. 132, pp. 1–109, 2022. [18] W. Cao, C. Liu, Z. Lan, Y. Piao, and S. E. Li, “Generalized moving hori-zon estimation for nonlinear systems with robustness to measurement outliers,” in 2023 American Control Conference (ACC) , pp. 1614–1621, 2023. [19] W. Cao, C. Liu, Z. Lan, S. E. Li, W. Pan, and A. Alessandri, “Ro-bust bayesian inference for moving horizon estimation,” Automatica ,vol. 173, p. 112108, 2025. [20] C. R. Rao, “Information and accuracy attainable in the estimation of statistical parameters,” Bulletin of the Calcutta Mathematical Society ,vol. 37, no. 3, pp. 81–91, 1945. [21] C. R. Rao, “The utilization of multiple measurements in problems of biological classification,” Journal of the Royal Statistical Society: Series B (Statistical Methodology) , vol. 10, no. 2, pp. 159–193, 1948. [22] S. Amari and H. Nagaoka, Methods of Information Geometry , vol. 191 of Translations of Mathematical Monographs . American Mathematical Society (Translations of Mathematical Monographs), 2000. [23] N. N. Chentsov, Statistical decision rules and optimal inference . Amer-ican Mathematical Society, 1982. [24] G. Bonnet, “Transformations des signaux al´ eatoires a travers les sys-temes non lin´ eaires sans m´ emoire,” in Annales des T´ el´ ecommunications ,vol. 19, pp. 203–220, Springer, 1964. [25] R. Price, “A useful theorem for nonlinear devices having Gaussian inputs,” IRE Transactions on Information Theory , vol. 4, no. 2, pp. 69– 72, 1958. [26] S. J. Julier and J. K. Uhlmann, “Unscented filtering and nonlinear estimation,” Proceedings of the IEEE , vol. 92, no. 3, pp. 401–422, 2004. [27] T. Zhang, W. Cao, and S. E. Li, “Natural gradient gaussian approx-imation filter with positive definiteness guarantee,” in 2026 American Control Conference (ACC) , 2026. [28] W. Lin, F. Nielsen, K. M. Emtiyaz, and M. Schmidt, “Tractable structured natural-gradient descent using local parameterizations,” in 
+
+International Conference on Machine Learning , pp. 6680–6691, 2021. [29] A. Goudar, W. Zhao, T. D. Barfoot, and A. P. Schoellig, “Gaussian variational inference with covariance constraints applied to range-only localization,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 2872–2879, IEEE, 2022. [30] T. D. Barfoot, State estimation for robotics . Cambridge University Press, 2024. [31] A. Barrau and S. Bonnabel, “The invariant extended Kalman filter as a stable observer,” IEEE Transactions on Automatic Control , vol. 62, no. 4, pp. 1797–1812, 2016. 18 
+
+[32] R. Hartley, M. Ghaffari, R. M. Eustice, and J. W. Grizzle, “Contact-aided invariant extended Kalman filtering for robot state estimation,” The International Journal of Robotics Research , vol. 39, no. 4, pp. 402–430, 2020. [33] T. Zhang, W. Cao, C. Liu, F. Zhang, W. Wu, and S. E. Li, “Nano-slam: natural gradient gaussian approximation for vehicle slam,” in 
+
+2025 IEEE 28th International Conference on Intelligent Transportation Systems (ITSC) , pp. 4014–4019, 2025. [34] W. Xu and F. Zhang, “Fast-lio: A fast, robust lidar-inertial odometry package by tightly-coupled iterated kalman filter,” IEEE Robotics and Automation Letters , vol. 6, no. 2, pp. 3317–3324, 2021. [35] M. Brossard, A. Barrau, and S. Bonnabel, “A code for unscented kalman filtering on manifolds (ukf-m),” in 2020 IEEE International Conference on Robotics and Automation (ICRA) , pp. 5701–5708, 2020. [36] S. Huang and G. Dissanayake, “Convergence and consistency analysis for extended kalman filter based slam,” IEEE Transactions on robotics ,vol. 23, no. 5, pp. 1036–1049, 2007. [37] C. Kim, R. Sakthivel, and W. K. Chung, “Unscented fastslam: a robust and efficient solution to the slam problem,” IEEE Transactions on Robotics , vol. 24, no. 4, pp. 808–820, 2008. [38] T. Zhang, W. Cao, C. Liu, Y. Lyu, and S. E. Li, “Natural gradient gaussian approximation filter on lie groups for robot state estimation,” 
+
+arXiv preprint arXiv:2604.10057 , 2026. [39] M. Bloesch, M. Hutter, M. A. Hoepflinger, S. Leutenegger, C. Gehring, C. D. Remy, and R. Siegwart, “State estimation for legged robots: Consistent fusion of leg kinematics and IMU,” Robotics: Science and Systems VIII , p. 17, 2013. [40] Z. Zhang and D. Scaramuzza, “A tutorial on quantitative trajectory eval-uation for visual (-inertial) odometry,” in 2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 7244–7251, IEEE, 2018. [41] Z. Yoon, J.-H. Kim, and H.-W. Park, “Invariant smoother for legged robot state estimation with dynamic contact event information,” IEEE Transactions on Robotics , vol. 40, pp. 193–212, 2023.

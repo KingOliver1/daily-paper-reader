@@ -1,0 +1,296 @@
+Title: Dynamics Aware Quadrupedal Locomotion via Intrinsic Dynamics Head
+
+URL Source: https://arxiv.org/pdf/2605.01227v1
+
+Published Time: Tue, 05 May 2026 00:29:48 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Dynamics Aware Quadrupedal Locomotion via Intrinsic Dynamics Head 
+
+Aman Arora and Nalini Ratha 
+
+Abstract — Quadrupedal locomotion plays a critical role in enabling agile, versatile movement across complex terrains. Un-derstanding and estimating the underlying physical dynamics are essential for achieving efficient and stable quadrupedal locomotion. We propose a novel training framework for quadrupedal locomotion that enables the Control Policy to understand and reason about physical dynamics. In simulation, we concurrently train an Intrinsic Dynamics (ID) Head that learns state-to-torque dynamics alongside the Control Policy, and we define a dynamics reward enabled by the ID Head that encourages the Policy toward more predictable dynamical behavior. We also provide a mechanism to tune the learned dynamics in the resulting Policy by controlling the training coefficients of the ID Head. Our simulation experiments show that this mechanism drives convergence to better optima across a wide range of standard quadrupedal locomotion re-wards, yielding more efficient and smoother policies. Our real-robot experiments demonstrate zero-shot sim-to-real transfer of these improvements, with significant gains in torque efficiency (16.8%), action rate (18.6%), and mechanical power (12.8%), while improving safe torque occupancy by 6.4%. 
+
+I. INTRODUCTION Quadrupedal locomotion holds the potential to enable ex-ploration across a wide range of terrains that were previously inaccessible to mechanical robots, largely because of the unstructured nature of these environments. One crucial aspect of legged animals and humans is their intuitive understanding of the physical dynamics of their own bodies, which in turn enables them to exhibit more efficient, stable, and smoother locomotion behavior and allows them to navigate effec-tively in such unstructured environments. Recent advances in quadrupedal locomotion have demonstrated remarkable capabilities such as rapid locomotion, multiplicity of walking behavior, and navigation in challenging environments [1], [2], [3], [4], [5], [6], [7], [8], [9]. The success of re-inforcement learning methods in quadrupedal locomotion, combined with state-of-the-art simulation environments, has been the primary driver behind these advances [10], [11], [12]. These learned control methods can be classified into two categories based on their action space: position-based control and torque-based control. The initial successful applications of RL methods in quadrupedal locomotion employed position-based control, where a learned policy outputs target joint positions that are subsequently converted to torques using low-level con-trollers such as PID controllers [6], [5], [3]. While position-based policies are easier to train as they operate in posi-tion space—removing the complexities of actuator dynamics               
+
+> 1Department of Computer Science, University at Buf-falo, The State University of New York, Buffalo, USA
+
+{amanaror,nratha }@buffalo.edu 
+
+Fig. 1: Unitree GO2 Robot navigating over curbs with the Dynamics Aware Controller (videos to be provided subse-quently). and reducing the action space dimensionality—their lack of awareness of actuator dynamics can lead to overreactions, limited compliance, and inefficient or non-smooth behav-iors [13], [14]. When a robot’s leg becomes stuck, position-based control can cause motors to generate exceptionally high torques, creating safety hazards. Additionally, policies may converge to inefficient walking behaviors such as bound-ing gaits instead of more energy-efficient trotting gaits for lower speeds [15]. Seminal work [5] attempts to address this gap through accurate modeling of actuator dynamics using a small MLP, which is then used in simulation to convert target positions to torques. While this approach results in a more accurate simulation of real actuators, without a learning signal, there is no incentive for the policy to learn actuator dynamics as it is trained in the position action space. Standard ap-proaches [10], [1], [15] typically rely on informed rewards such as action smoothness, high torque penalties, and energy penalties to guide policy behavior, yet each reward targets only one aspect of behavior, leaving the policy without a mechanism to reason about physical dynamics. In contrast, torque-based learned control methods out-
+
+> arXiv:2605.01227v1 [cs.RO] 2 May 2026
+
+Fig. 2: Complete architecture diagram depicting the baseline controller with integrated Intrinsic Dynamics Head. The ID Head processes state information as input and generates torque predictions, which in turn are used to compute the Dynamics Reward and Auxiliary Loss. put torques that are directly applied to actuators. Recent works [13], [16] have demonstrated remarkable progress in torque-based methods, showing high compliance, reduced safety risks, and better generalization to different terrains. Torque-based control is also the preferred choice for model predictive control (MPC) [17], [13]. However, torque-based methods must contend with higher-dimensional action spaces and the nonlinear complexity of state-to-torque dynamics, making them significantly more challenging to train [18]. Humans perform agile and dynamic skills such as “holding a cup” or “lifting your feet” in position space, as these tasks are easier to define and reason about in position space. However, we simultaneously possess an intrinsic and intuitive understanding of physical dynamics that makes our motion smoother, more stable, and more efficient. We do not define “holding a cup” in terms of force, yet we intuitively know to apply higher or lower forces depending on whether the cup is filled or empty. This observation motivates our hypothesis that an ideal solution should perform and reason about skills in position space while maintaining an intrinsic understanding of torque space and physical dynamics. Research in self-supervised learning mechanisms [19], [20] has resulted in interesting learning methods that learn world dynamics models in parallel with control policies [21], [22], [23]. In curiosity-driven exploration [19], [24], a for-ward dynamics model predicts the next state given an action and current state, training alongside the policy. An intrinsic reward called curiosity, defined as the prediction error of the forward dynamics model, encourages the policy to explore states where prediction error is high—states that the forward dynamics model predicts incorrectly—resulting in improved exploration. Inspired by this approach, we introduce an Intrinsic Dynamics Head for quadrupedal locomotion that trains in parallel with the policy, along with an intrinsic dynamics reward that steers the policy toward smoother and more efficient behavior. The main contributions of this work are:  
+
+> •
+
+Intrinsic Dynamics (ID) Head: A state-to-torque dy-namics model learned in parallel with the policy, provid-ing a mechanism for reasoning about physical dynamics.  
+
+> •
+
+Dynamics Reward: An intrinsic reward that steers the Policy toward smoother and more efficient behavior. We demonstrate significant improvements across a wide category of existing rewards, and we experiment with the real robot showing improvements across multiple efficiency and smoothness metrics. We provide comprehensive training details to ensure reproducibility. II. METHODOLOGY In this section, we explain the general method underlying our approach of concurrent policy and Intrinsic Dynamics Head training. First, we detail the baseline architecture of our policy, which employs the student framework [25] for sim-to-real transfer. Then we explain the design of the ID TABLE I: Privileged Observation Details      
+
+> Observation Type Description
+> Body Dynamics Body velocity, COM displacement Contact Information Foot contact states, Contact force vectors, Contact force magnitudes Surface Properties Surface friction, Restitution coefficient, Terrain height around feet Actuator Parameters Motor strength
+
+Head, dynamics reward. Importantly, we maintain architec-tural similarity with prevalent controllers [1], [3], [10], [4] for quadrupedal robots to establish a valid baseline for comparative analysis. This deliberate design choice is evident throughout our baseline controller implementation, from re-ward structure to neural network architecture, enabling fair and meaningful evaluation of our proposed enhancements. 
+
+A. Preliminaries 
+
+We model the environment as a Markov Decision Process (MDP) defined by the tuple (S, O, A, p, r, γ):Where at ∈ A is the Action taken at time t; State st ∈ S is the full state information at time t, where st = ( ot, ˆst); ot ∈ O
+
+is the observation at time t; ˆst is the privileged information at time t; Transition p : S×A → S is the state transition function, where p(st+1|st, at) is the probability of transitioning from st
+
+to st+1 given action at; Reward r : S × A → R, rt = r(st, at)
+
+is the reward received at time t for taking action at in state 
+
+st; and γ is the discount factor. 
+
+B. Baseline Policy Architecture 1) Observation and State Space : The full state at time t
+
+is given by st = [ ot, ˆst], where ot is the observation and ˆst is the privileged information vector. The privileged information 
+
+ˆst consists of features available only in simulation (e.g., ground-truth dynamics or environment parameters) and is not accessible on the real robot during deployment. This privileged vector is used during training to enable a teacher policy in a privileged learning setup. Table I provides the details of the privileged observations used in our approach. The observation ot at time t includes the joint positions qt,joint velocities ˙qt, and the gravity vector projection gt, which represents the projection of the gravity vector in the robot’s frame and serves as an orientation cue. It also contains the previous action at−1, which is included to improve training stability, as well as the commanded linear velocity vcmd  
+
+> t
+
+and commanded angular velocity ωcmd  
+
+> t
+
+.Thus, the observation at time t is given by: 
+
+ot = [ qt, ˙qt, gt, at−1, vcmd  
+
+> t
+
+, ωcmd  
+
+> t
+
+]
+
+2) Action Space : The policy outputs actions at ∈ R12 ,where each element corresponds to a target joint position for one of the robot’s 12 actuated joints. We employ an actuator network [5] that maps these position targets to joint torques, thereby modeling the actuator dynamics with greater fidelity, TABLE II: Active Reward Function Components for Loco-motion Policy Training                                                                                                                   
+
+> Component Expression Value
+> Velocity Tracking
+> Linear Velocity rv=
+> (
+> exp (−(vpr −0.6)2
+> σv)vpr <0.61.0vpr ≥0.61.0dt
+> Angular Velocity rω=exp (−(ωcmd −ωz)2
+> σω)0.5dt Auxiliary Rewards
+> Orientation rori =∥gxy ∥2−5.0dt
+> Z Velocity rvz=v2
+> z−0.02 dt
+> Roll-Pitch Vel. rωxy =∥ωxy ∥2−0.001 dt
+> Base Height rh= ( ¯h−htarget )2−30 dt
+> Collision rcol =∑i1(∥Fi∥>0.1)−5.0dt
+> Foot Slip rslip =∑ici∥vf,i∥2−0.04 dt
+> Torque rτ=∥τ∥2−1e−4dt
+> DOF Pos. Limits rqlim =∑imax (0,|qi| − qi,max )−10 .0dt
+> DOF Velocity r˙q=∥˙q∥2−1e−4dt
+> DOF Accel. r¨q=∥(˙qt−1−˙qt)/∆t∥2−2.5e−7dt
+> Power rP=∑i|τi˙qi|−2e−5dt
+> Action Rate ra=∥at−1−at∥2−0.01 dt
+> 1st Order Smooth. rs1=∥qdt−qdt−1∥2−0.1dt
+> 2nd Order Smooth. rs2=∥qdt−2qdt−1+qdt−2∥2−0.1dt
+
+which enables us to further train ID Head on a more reliable torque data. 
+
+3) Reward Function Design : Our reward function closely follows the approach presented in [10], [1], [4], [3] and incorporates insights from [15]. The reward structure pri-oritizes linear and angular velocity tracking as primary ob-jectives, complemented by auxiliary rewards for stability and smoothness. Notably, these auxiliary rewards are designed to guide the policy towards desirable behavior such as smoother actions, lower DoF velocities and accelerations, which are most positively affected by our ID Head and dynamics reward. The total reward at each timestep is computed as a weighted sum of individual reward components: 
+
+rtotal = ∑
+
+> i
+
+wi · ri
+
+where wi are the reward weights and ri are the individ-ual reward components. Table II provides a comprehensive overview of all reward functions used in our system, with their mathematical expressions and corresponding coeffi-cients. 
+
+4) Policy Optimization : We use a teacher-student training framework [1], [3], [25] where the teacher policy is trained in simulation using privileged information and the student learns from the trained teacher policy using imitation learn-ing [26]. We use a Privileged Encoder 
+
+μθenc (ˆst ) = ltsimilar to [3] to encode privileged information ˆ st to latent representation lt . The input to the policy network is then formed as 
+
+xt = [ ot , lt ],
+
+which is the concatenation of observations and latent encod-ing. The policy 
+
+πθp (xt ) = at
+
+maps this combined input to actions. The baseline policy is a multi-layer perceptron with archi-tecture details provided in Table III. Our objective is to learn a policy πθp and privileged encoder μθa that maximize the expected discounted reward starting from state s0:
+
+J(θp, θenc ) = Es0∼p(s0),at∼πθp ([ ot,μθenc (ˆst )]) 
+
+" ∞
+
+# ∑
+
+> t=0
+
+γt r(st, at)
+
+#
+
+We train both the policy and privileged encoder using the Proximal Policy Optimization (PPO) algorithm [27]. To deploy our policy on real hardware without access to priv-ileged information, we employ a student-teacher framework [25]. While the teacher policy uses privileged information during training, the student policy must operate solely on observations available on the real robot. Instead of using a privileged encoder that encodes privileged information, the student policy employs a history encoder that approximates the latent representation lt from a history of observations. The History Encoder ηθh is implemented as aTemporal Convolution Network (TCN) [28] similar to [1] and takes a sequence of past observations 
+
+ht = [ ot−T +1, ot−T +2, . . . , ot−1, ot ] as input, where T = 100 is the sequence length.: ˆlt = ηθh (ht )
+
+This Head is trained to minimize the following loss function: 
+
+Lhis enc = ∥at − ˆat ∥2 + ∥lt − ˆlt ∥2
+
+where at = πθp ([ ot , μθenc (ˆst )]) are the actions produced by the teacher policy and ˆ at = πθp ([ ot ,ˆlt ]) are the actions produced by the student policy. During this imitation learning phase, the policy parameters θp remain frozen, and only the history encoder parameters θh are updated. We use the Dataset Aggregation (DAgger) algorithm [26] in an online fashion on trajectories generated by rolling out the student policy. The architecture details for both the policy network and privileged/history encoder modules are provided in Table III. We also perform domain randomization[29] for better sim-to-real transfer, similar to [4]. The domain randomization parameters, critical for sim-to-real transfer, are detailed in Table IV. This randomization encompasses terrain properties, robot dynamics, and sensor characteristics to ensure robust policy performance across varying conditions. TABLE III: Network Architecture for Policy and Adaptation Module                                                                                   
+
+> Component Architecture Output Size
+> Policy Network
+> Input Observation ot+ Latent ltno+nl
+> Hidden Layer 1 Linear + ELU 512 Hidden Layer 2 Linear + ELU 256 Hidden Layer 3 Linear + ELU 128 Output Layer Linear na+nτ
+> Adaptation Module
+> Input Privileged Information ˆ stnp
+> Hidden Layer 1 Linear + ELU 256 Hidden Layer 2 Linear + ELU 128 Output Layer Linear nl
+> Temporal Convolutional Network (TCN) Encoder
+> Input Observation History htT×no
+> TCN Block 1 1D Conv( s=1, d=1) + ELU T×32 TCN Block 2 1D Conv( s=2, d=1) + ELU T/2×32 TCN Block 3 1D Conv( s=1, d=2) + ELU T/2×32 TCN Block 4 1D Conv( s=2, d=1) + ELU T/4×32 TCN Block 5 1D Conv( s=1, d=4) + ELU T/4×32 TCN Block 6 1D Conv( s=2, d=1) + ELU T/8×32 Output Layer Reshape + Linear + LayerNorm nl
+> no: observation dimension, nl: latent dimension, na: action dimension =
+> nτ: torque dimension, np: privileged state dimension, T: sequence length (100) All TCN blocks use 1D convolutions with kernel size k=5 and filter count
+> f=32. Parameters: s: stride, d: dilation rate
+> nτis set to 0 for baseline Policy and is set to 12 (same as na) for Policy with ID Head
+
+TABLE IV: Domain Randomization Parameters                  
+
+> Parameter Range
+> COM Displacement [−0.15 ,0.15 ]mMotor Strength [0.9,1.1]×nominal Motor Offset [−0.02 ,0.02 ]rad Friction [0.05 ,4.5]
+> Restitution [0.0,0.4]
+> DOF Position Noise 0.01 rad DOF Velocity Noise 1.5 rad/s Gravity Noise 0.05 m/s 2
+
+C. Intrinsic Dynamics Head and Dynamics Reward 
+
+In this section, we describe in detail the Intrinsic Dynamics Head and the dynamics reward. Figure 2 illustrates the overall architecture of our approach. 
+
+1) Intrinsic Dynamics Head : We define Intrinsic Dynam-ics as the mapping from the robot’s state st to the torques τt
+
+applied by the robot at time t. Formally: 
+
+f (st ) = τt
+
+This Intrinsic Dynamics Function represents the underly-ing physical relationship between the robot’s state and the resulting torques that are generated during locomotion. We can learn this function in simulation by parameterizing fwith θd to minimize the following loss function: 
+
+Ldyn = αdyn · ∥ τat − τ pt ∥2
+
+Here, αdyn is a scaling coefficient, τ pt represents the torque values predicted by the parameterized model of f ,and τat corresponds to the actual torques applied during the simulation step. Since we employ actuator networks in simulation to convert actions to torques, the τat values closely approximate the torques that would be produced by the real robot for corresponding actions, enhancing the fidelity of our dynamics modeling. We model the parameters of the Intrinsic Dynamics Function as an additional head on the policy network: In this architecture, the parameters θd and 
+
+θp share common representations except for those in their respective output heads. This design is illustrated in Figure 2, where the policy network simultaneously outputs actions, which are joint position targets, as well as torque predictions. 
+
+πθp,θd (ot , μθenc (ˆst )) = [ at , τ pt ]
+
+To train the Intrinsic Dynamics Head effectively with the Policy, we incorporate Ldyn as an auxiliary term in the PPO loss function [27] used to train the overall policy. It is important to note that although the policy network has a ID Head, it is used only during training, and during deployment, we simply ignore the torque output or don’t deploy the ID Head at all. 
+
+2) Dynamics Reward : We define dynamics reward as a penalty on the generation of unpredictable torques. Specifi-cally, given a state st at time t, we penalize how difficult it is to predict the torques generated from actions at outputted by the Policy for this state. Formally: 
+
+rdyn  
+
+> t
+
+= wdyn · ∥ τat − τ pt ∥2
+
+where wdyn controls the influence of the dynamics reward on the overall policy optimization process, τ pt represents the predicted torque values, and τat corresponds to the actual torques applied during execution. As rdyn  
+
+> t
+
+is a penalty: 
+
+wdyn < 0.0In our experiments, we explore different values for the scal-ing coefficients αdyn and wdyn across various experimental setups. The specific parameter configurations are given in the next section, which explains the effect of the dynamics reward and ID Head on the Policy Training and converged behavior. Their effects on performance are detailed in the Results section. 
+
+3) On-Policy State Distribution Shift : As demonstrated in the Results section, the dynamics reward induces astate distribution shift toward smoother and efficient pol-icy regimes, manifesting in improved performance across a wider category of rewards, including stability and smooth-ness rewards in the reward table. This occurs because, to minimize dynamics reward, the policy converges toward actions that render torques more predictable, consequently yielding well-behaved policies as evidenced by enhanced en-ergy efficiency reflected in power consumption rewards, more optimum action smoothness rewards, and other significant effects detailed in the results section. This mechanism bears much similarity to curiosity-driven exploration [19] which encourages the policy to explore unknown states by rewarding the policy to visit states where the next state prediction error is high for Forward Dynamics Model, but in contrast, our approach penalizes the policy when torque prediction error is high, as we require torques to be predictable for stable and smooth policy behavior. We also penalize the ID Head through Ldyn , which learns to pre-dict more accurately. Consequently, unlike Curiosity-Driven exploration, both the Dynamics Loss and Dynamics Reward signals work towards the same objective. This alignment should be considered carefully as accurate torque prediction is not our primary goal; rather, we aim to guide the policy toward more predictable torque regimes. However, with this configuration, the ID Head can rapidly learn to predict torques more accurately or be biased towards more non-linear Dynamics of initial training iterations, re-ducing the reward incentive for the policy to generate actions that render torques predictable. Therefore, a careful tuning of αdyn and wdyn described below is necessary. To achieve this, we employ the following three strategies:  
+
+> •
+
+Adjust the loss coefficient : Reduce the loss coefficient 
+
+αdyn of the Dynamics Loss Ldyn . Reducing the coeffi-cient delays the ID head learning and keeps pressure on the policy to select actions that result in more predictable torques.  
+
+> •
+
+Adjust the reward weight : Dynamics Reward weight 
+
+wdyn should be adjusted based on the Dynamics Loss ranges produced by the ID Head. If the proportion of the Dynamics Reward is too less in total reward then it won’t produce any meaningful effect. On the other hand if the proportion is high then it can worsen the main task performance, hence the values that strike a balance between these two effects are preferred.  
+
+> •
+
+Zero the loss coefficient : Another useful way is to completely zero out the loss coefficient αdyn and tune for wdyn . Setting the coefficient to zero puts the highest pressure on the policy as reward becomes the only signal, forcing the policy to fully rely on action selection to minimize Dynamics Reward penalty rdyn  
+
+> t
+
+.In our experiments we set αdyn to 3e-4 and wdyn is set to -1e-2. If Dynamics Loss coefficient αdyn is set to zero 
+
+wdyn is set to -5e-4. These values are sensitive to dynamics randomization settings and are applicable for our Domain Randomization settings described in Table IV. For different Dynamics Randomization settings optimal values for αdyn 
+
+and wdyn can be found by strategies described above. III. EXPERIMENTAL SETUP 
+
+A. Simulation Environment 
+
+We utilize the NVIDIA Isaac Gym SImulation Environ-ment [11], a highly parallelized physics simulation frame-work that enables simultaneous training of 4096 domain-randomized Unitree GO2 quadrupedal robot agents. The (a) Performance comparison between baseline controller and proposed approach with Intrinsic Dynamics Head (IDH) and Dynamics Reward, with and without Dynamics Loss. Results averaged over 5 runs. Upper Left: Linear velocity tracking performance remains consistent across all configurations, demonstrating that the proposed approach maintains primary task performance. Upper Right and Bottom Row: Significant improvements in auxiliary metrics (vertical velocity, action smoothness, and power consumption) when using dynamics reward, indicating enhanced controller efficiency, smoothness and stability. 
+
+Fig. 3: Performance analysis of the proposed controller with Dynamics Reward. The plots demonstrate that the proposed approach maintains primary task performance while significantly improving auxiliary metrics related to efficiency and smoothness. TABLE V: Reward Improvements with Dynamics Reward                                                       
+
+> Reward Base Dynamics Dynamics Category w/o Aux w/ Aux
+> Tracking Linear Vel 16.90 16.62 16.58 Tracking Angular Vel 7.63 7.82 7.55 Linear Velocity Z -0.047 -0.018 -0.030 Angular Velocity XY -0.027 -0.023 -0.025 Power Consumption -0.053 -0.042 -0.044 Action Rate -1.45 -1.27 -1.23
+> Action Smoothness 1 -0.56 -0.48 -0.46
+> Action Smoothness 2 -1.09 -0.96 -0.90
+> DOF Velocity -0.30 -0.25 -0.24
+> DOF Acceleration -1.60 -1.34 -1.27
+> DOF Pos Limits -0.16 -0.20 -0.21 Orientation -0.69 -0.67 -0.68 Base Height -0.65 -0.54 -0.56 Feet Slip -0.16 -0.14 -0.16 Collision -0.42 -0.37 -0.58 Torques -0.72 -0.57 -0.68 Results averaged over 5 runs. Higher values are better for tracking rewards, lower (less negative) values are better for penalty rewards. Bold
+> values indicate best performance and underlined values indicate second best performance across configurations.
+
+terrains consisted of smooth and rough terrains with 10 levels of progressive hardness. Our implementation follows the approach described in [10], leveraging the open-source code base for efficient reinforcement learning in legged locomotion tasks. Training was conducted on an NVIDIA A100 GPU server with 80GB VRAM, although the actual memory require-ments were approximately 10-12GB. The training process required 5000 iterations, completing in approximately 5hours while collecting data equivalent to 160 days of real-world experience. 
+
+B. Real Robot Experimental Setup 
+
+To validate our method on real hardware, we deployed both the baseline controller and the dynamics reward policies on a Unitree GO2 robot. We ran each controller for 2 runs with 10,000 policy steps per run to collect data. Both policies operated at 50 Hz. We collected proprioceptive data, including joint positions, velocities, commands, actions, and torque estimates from the sensors of the Robot through Unitree SDK. IV. R ESULTS 
+
+A. Simulation Results 
+
+Our experimental analysis of training with an integrated Intrinsic Dynamics Head with and without auxiliary loss re-vealed significant improvements across multiple locomotion metrics when the dynamics reward is used. Our experiments demonstrates substantial performance gains in energy effi-ciency ( rP), stability indicator ( rvz , rωxy ), and smoothness rewards ( ra, r ˙q, r ¨q), while maintaining comparable perfor-mance on primary task objectives of linear velocity ( rv) and angular velocity ( rω ). Figure 3 illustrates the comparative performance between our approach and the baseline, highlighting the marked improvements in vertical stability ( rvz ), energy consump-tion ( rP), and action smoothness ( ra) without compromising primary locomotion objectives. The improvements in linear velocity Z are most prominent , which we attribute to the policy optimizing away from jumping-like motions that gen-erate high torque spikes and are inherently less predictable. (a) Curb traversal by the Unitree GO2 Robot exhibiting a Trotting gait under the proposed controller. 
+
+> (b) Velocity commands
+> (c) Mean joint position error rate
+> (d) Mean absolute torque
+> (e) Mean mechanical power
+
+Fig. 4: Real robot performance comparison between base-line and dynamics reward policies with identical velocity commands (b). The dynamics reward policy demonstrates improved performance in joint position error rates (c), lower torque requirements (d), and reduced power consumption (e), validating the simulation results in real-world conditions. Table V presents a comprehensive analysis of performance metrics with and without the dynamics reward integration. The consistent improvement across diverse reward categories provides compelling evidence for a fundamental state distri-bution shift induced by the dynamics reward mechanism, di-recting the policy toward inherently more stable and efficient motion patterns. All these improvements can be understood through the same reasoning: the policy evolves toward be-haviors that generate more predictable torque patterns for the ID Head. TABLE VI: Performance Metrics Comparison on Real Robot. Metrics were computed over 10,000 policy steps of real robot data, averaged across 2 independent runs for each configuration. Bold values indicate best performance, underlined values indicate second-best performance, and arrows ( ↑/↓) indicate whether higher or lower values are better.                               
+
+> Metric Baseline Dynamics w/o Aux Dynamics w/ Aux
+> Position Error RMS [rad]
+> ↓
+> 0.273 0.230 0.229
+> Torque Mean [N·m] ↓4.591 3.822 4.126 Torque Rate RMS [N·m/s]
+> ↓
+> 124.3 101.7 96.0
+> Action Rate RMS [rad/s]
+> ↓
+> 22.6 18.4 17.6
+> Action Acc. RMS [rad/s 2]
+> ↓
+> 967.0 859.6 684.6
+> DoF Vel. RMS [rad/s] ↓3.069 2.583 2.550
+> Mechanical Power [W] ↓16.680 15.450 14.548
+> Energy Consumption [J] ↓20681 14596 14887 Safe Occupancy Zone % ↑88.88% 94.58% 94.31%
+
+B. Real Robot Results 
+
+Hardware experiments on the Unitree GO2 quadruped demonstrate significant performance improvements with our dynamics-aware approach. The Dynamics Reward Policy exhibits a trotting gait with stable locomotion patterns Fig-ure 4 (a). The dynamics reward policy exhibits notable advantages in three key areas: reduced action rates, lower torque magnitudes, and decreased mechanical power con-sumption. Figure 4 (b)-(e) presents a comparative analysis between standard and dynamics reward policies across 250 locomotion steps under identical velocity commands. The data reveal smoother motion profiles, evidenced by reduced joint position error fluctuations, while maintaining compara-tive locomotion performance with substantially lower energy requirements. We observe that in simulation when velocity commands are changed suddenly, depicted in Figure 4 (b), which shows that the commanded x velocity is changed from 0.6 to -0.6, the Baseline Policy changes swiftly in response then readjusts but the transition for the Dynamics Reward Policy is smoother and homogeneous. Table VI provides a quantitative performance comparison across various evaluation metrics. Particularly noteworthy is the Safe Occupation Zone metric, which measures the percentage of execution steps where torque and torque rate values remain within designated safety thresholds. The dy-namics reward policy achieves approximately 6% improve-ment in this critical metric, providing empirical validation of our theoretical framework. This improvement confirms the hypothesized on-policy state distribution shift toward more stable locomotion regimes, demonstrating that dynamics-aware policies naturally converge toward smoother and safer motion patterns. V. CONCLUSIONS In this paper, we presented a novel mechanism for learning state-to-torque dynamics in simulation through an Intrinsic Dynamics (ID) Head and leveraging this dynamics model to guide policy learning toward smoother and more efficient behaviors via a Dynamics Reward. A key advantage of our approach is that it requires no additional computational overhead during deployment, as the dynamics learning mech-anism is applied exclusively during simulation while still producing measurable improvements on the real robot. One limitation of our approach is its reliance on accurate actuator networks [5] that precisely model the physical ac-tuators to generate reliable torque data for ID Head training. However, this requirement is also a contributing factor to the successful transfer of simulation improvements to the real robot. An interesting future direction would be to train the ID Head using torque data from a PD controller and investigate its effects on our mechanism in both simulation and real-world scenarios. Another limitation is the sensitivity of the Dynamics Loss and Reward Coefficients to adjustments in Dynamics Randomization or state-observation settings, necessitating retuning under new configurations. We believe this stems from changes in the nonlinearity of the underlying state-to-torque dynamics. We leave a thorough study to future work. While we have demonstrated our concurrent Intrinsic Dynamics learning and Dynamics Reward mechanism specif-ically for quadrupedal locomotion tasks, we believe this approach is more generalizable and could produce valuable results in other robotics domains, including bipedal locomo-tion and manipulation tasks. REFERENCES [1] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning quadrupedal locomotion over challenging terrain,” Science Robotics , vol. 5, no. 47, p. eabc5986, 2020. [2] G. B. Margolis, G. Yang, K. Paigwar, T. Chen, and P. Agrawal, “Rapid locomotion via reinforcement learning,” in Proc. Robotics: Science and Systems , 2022. [3] A. Kumar, Z. Fu, D. Pathak, and J. Malik, “RMA: Rapid motor adaptation for legged robots,” in Proc. Robotics: Science and Systems ,2021. [4] G. Ji, J. Mun, H. Kim, and J. Hwangbo, “Concurrent training of a control policy and a state estimator for dynamic and robust legged locomotion,” IEEE Robotics and Automation Letters , vol. 7, no. 2, pp. 4630–4637, 2022. [5] J. Hwangbo, J. Lee, A. Dosovitskiy, D. Bellicoso, V. Tsounis, V. Koltun, and M. Hutter, “Learning agile and dynamic motor skills for legged robots,” Science Robotics , vol. 4, no. 26, p. eaau5872, 2019. [6] A. Agarwal, A. Kumar, J. Malik, and D. Pathak, “Legged locomotion in challenging terrains using egocentric vision,” in Proc. Conference on Robot Learning (CoRL) , 2022. [7] I. M. Aswin Nahrendra, B. Yu, and H. Myung, “DreamWaQ: Learning robust quadrupedal locomotion with implicit terrain imagination via deep reinforcement learning,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) , London, United Kingdom, 2023, pp. 5078–5084. [8] G. B. Margolis and P. Agrawal, “Walk these ways: Tuning robot control for generalization with multiplicity of behavior,” Conference on Robot Learning , 2022. [9] T. Miki, J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning robust perceptive locomotion for quadrupedal robots in the wild,” Science Robotics , vol. 7, no. 62, p. eabk2822, 2022. [10] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk in minutes using massively parallel deep reinforcement learning,” in 
+
+Proc. Conference on Robot Learning (CoRL) , 2022, pp. 91–100. [11] V. Makoviychuk, L. Wawrzyniak, Y. Guo, M. Lu, K. Storey, M. Mack-lin, D. Hoeller, N. Rudin, A. Allshire, A. Handa et al. , “Isaac Gym: High performance GPU-based physics simulation for robot learning,” Advances in Neural Information Processing Systems, Track on Datasets and Benchmarks , 2021. [12] E. Todorov, T. Erez, and Y. Tassa, “Mujoco: A physics engine for model-based control,” in 2012 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2012, pp. 5026–5033. [13] S. Chen, B. Zhang, M. W. Mueller, A. Rai, and K. Sreenath, “Learning torque control for quadrupedal locomotion,” in 2023 IEEE-RAS 22nd International Conference on Humanoid Robots (Humanoids) . Austin, TX, USA: IEEE, 2023, pp. 1–8. [14] N. Hogan, “Impedance control: An approach to manipulation: Part i—theory,” Journal of Dynamic Systems, Measurement, and Control ,vol. 107, no. 1, pp. 1–7, 1985. [15] Z. Fu, A. Kumar, J. Malik, and D. Pathak, “Minimizing energy consumption leads to the emergence of gaits in legged robots,” in 
+
+Proc. Conference on Robot Learning (CoRL) , 2021, pp. 928–937. [16] P. Li, H. Li, G. Sun, J. Cheng, X. Yang, G. Bellegarda, M. Shafiee, Y. Cao, A. Ijspeert, and G. Sartoretti, “Sata: Safe and adaptive torque-based locomotion policies inspired by animal learning,” in Robotics: Science and Systems (RSS) , 2025. [17] J. D. Carlo, P. M. Wensing, B. Katz, G. Bledt, and S. Kim, “Dynamic locomotion in the mit cheetah 3 through convex model-predictive control,” in 2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2018, pp. 1–9. [18] D. Kim, G. Berseth, M. Schwartz, and J. Park, “Torque-based deep reinforcement learning for task-and-robot agnostic learning on bipedal robots using sim-to-real transfer,” IEEE Robotics and Automation Letters , vol. 8, no. 10, pp. 6251–6258, Oct. 2023. [19] D. Pathak, P. Agrawal, A. A. Efros, and T. Darrell, “Curiosity-driven exploration by self-supervised prediction,” in Proc. 34th International Conference on Machine Learning (ICML) , 2017, pp. 2778–2787. [20] P. Agrawal, A. Nair, P. Abbeel, J. Malik, and S. Levine, “Learning to poke by poking: Experiential learning of intuitive physics,” in 
+
+Advances in Neural Information Processing Systems (NeurIPS 2016) ,2016. [21] D. Ha and J. Schmidhuber, “World models,” 2018. [22] M. Janner, J. Fu, M. Zhang, and S. Levine, “When to trust your model: Model-based policy optimization,” in Advances in Neural Information Processing Systems , 2019. [23] J. Schrittwieser, I. Antonoglou, T. Hubert, K. Simonyan, L. Sifre, S. Schmitt, A. Guez, E. Lockhart, D. Hassabis, T. Graepel, T. Lillicrap, and D. Silver, “Mastering atari, go, chess and shogi by planning with a learned model,” Nature , vol. 588, no. 7839, pp. 604–609, 2020. [24] Y. Burda, H. Edwards, A. Storkey, and O. Klimov, “Exploration by random network distillation,” in International Conference on Learning Representations , 2019. [Online]. Available: https: //openreview.net/forum?id=H1lJJnR5Ym [25] D. Chen, B. Zhou, V. Koltun, and P. Kr¨ ahenb¨ uhl, “Learning by cheating,” in Proc. Conference on Robot Learning (CoRL) , 2020, pp. 66–75. [26] S. Ross, G. Gordon, and J. A. Bagnell, “A reduction of imitation learning and structured prediction to no-regret online learning,” in 
+
+Proceedings of the Fourteenth International Conference on Artificial Intelligence and Statistics , 2011, pp. 627–635. [27] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” arXiv:1707.06347 , 2017. [28] S. Bai, J. Z. Kolter, and V. Koltun, “An empirical evaluation of generic convolutional and recurrent networks for sequence modeling,” 
+
+arXiv preprint arXiv:1803.01271 , 2018. [Online]. Available: https: //arxiv.org/abs/1803.01271 [29] X. B. Peng, M. Andrychowicz, W. Zaremba, and P. Abbeel, “Sim-to-real transfer of robotic control with dynamics randomization,” in 2018 IEEE International Conference on Robotics and Automation (ICRA) .IEEE, 2018, pp. 3803–3810.
