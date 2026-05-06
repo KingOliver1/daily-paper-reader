@@ -1,0 +1,474 @@
+Title: SigLoMa: Learning Open-World Quadrupedal Loco-Manipulation from Ego-Centric Vision
+
+URL Source: https://arxiv.org/pdf/2605.03846v1
+
+Published Time: Wed, 06 May 2026 01:27:10 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# SigLoMa: Learning Open-World Quadrupedal Loco-Manipulation from Ego-Centric Vision 
+
+Shiyi Chen 1, Haiyi Liu 1, Mingye Yang 2, Jiaqi Zhang 1, Debing Zhang 1,∗
+
+> 1
+
+Tsinghua University 2Imperial College London 
+
+https://11chens.github.io/SigLoMa/ 
+
+Abstract: Designing an open-world quadrupedal loco-manipulation system is highly challenging. Traditional reinforcement learning frameworks utilizing exte-roception often suffer from extreme sample inefficiency and massive sim-to-real gaps. Furthermore, the inherent latency of visual tracking fundamentally con-flicts with the high-frequency demands of precise floating-base control. Conse-quently, existing systems lean heavily on expensive external motion capture and off-board computation. To eliminate these dependencies, we present SigLoMa, a fully onboard, ego-centric vision-based pick-and-place framework. At the core of SigLoMa is the introduction of Sigma Points, a lightweight geometric repre-sentation for exteroception that guarantees high scalability and native sim-to-real alignment. To bridge the frequency divide between slow perception and fast con-trol, we design an ego-centric Kalman Filter to provide robust, high-rate state estimation. On the learning front, we alleviate sample inefficiency via an Active Sampling Curriculum guided by Hint Poses, and tackle the robot’s structural vi-sual blind spots using temporal encoding coupled with simulated random-walk drift. Real-world experiments validate that, relying solely on a 5Hz (200 ms la-tency) open-vocabulary detector, SigLoMa successfully executes dynamic loco-manipulation across multiple tasks, achieving performance comparable to expert human teleoperation. 
+
+Keywords: Quadrupedal Loco-manipulation, Ego-centric Vision, Sim-to-Real 
+
+## 1 Introduction 
+
+Equipping quadrupedal robots with manipulation capabilities holds immense practical value for un-structured environments. However, precise loco-manipulation coupled with a floating base remains fundamentally challenging. While recent works have explored Reinforcement Learning (RL) meth-ods in simulation to coordinate locomotion [1, 2, 3, 4, 5] and manipulation [6, 7, 8], external percep-tion remains a prominent bottleneck. In simulation, rendering dense visual inputs incurs high mem-ory overhead, drastically reduces environment parallelism, and leads to highly inefficient training. Furthermore, deploying such vision-based policies introduces a profound sim-to-real gap [9, 10]. Most current perception pipelines rely on dense geometric information (e.g., depth maps [11, 12] or point clouds [13, 14]) to narrow this gap; however, they inherently discard semantic understand-ing, severely limiting practical autonomy. Alternative modular pipelines incorporate visual object detectors, but running open-vocabulary trackers on constrained onboard computers yields control frequencies too low for dynamic manipulation. To guarantee high-frequency state estimation, main-stream solutions often rely on high-performance off-board compute nodes or external motion cap-ture systems [15, 16]. While indispensable for extreme high-speed tasks (e.g., robotic sports), such infrastructure-heavy setups restrict the autonomy of legged systems in everyday spaces. Further-more, while applying filtering algorithms is a standard remedy for low-frequency signals, utilizing them directly on a walking quadruped is notoriously difficult; traditional filters struggle to decou-ple the target’s relative movement from the severe ego-motion of the floating base, leading to rapid 
+
+> ∗
+
+Corresponding author 
+
+> arXiv:2605.03846v1 [cs.RO] 5 May 2026
+
+drift. Consequently, many recent frameworks bypass the continuous floating-base control challenge by stopping the base first and relying primarily on quasi-static robotic arm operations [17, 8, 18]. To address these interconnected challenges, we propose SigLoMa, a fully onboard quadrupedal loco-manipulation framework tailored for unstructured, open-world scenarios. SigLoMa is built upon three core pillars. First, we introduce Sigma Points, a lightweight, category-agnostic geo-metric representation that bridges upstream open-vocabulary semantic detectors and downstream continuous control, enabling efficient simulation training without dense visual rendering. Second, we design an ego-centric Kalman Filter (KF) that bridges the frequency gap between low-rate em-bodied perception outputs and the high-frequency demands of continuous floating-base control. By explicitly compensating for camera ego-motion, the KF separates target motion from base motion and produces robust, high-rate state estimates. Finally, we train a robust RL policy with an Active Sampling Curriculum (ASC) and Hint Poses to learn object-specific approach trajectories without heavy reward engineering. To improve reliability during the final grasping phase, SigLoMa in-corporates a memory-augmented formulation that mitigates structural blind spots and sim-to-real open-loop drift. Our core contributions are summarized as follows: 1. A Hardware-Efficient Loco-Manipulation System : SigLoMa is a fully onboard vision-based framework that enables precise floating-base control without external motion capture or off-board computation; 2. An Ego-Centric Geometric Perception Pipeline : a state estimation architecture built on Sigma Points and an ego-centric KF, which bridges embodied semantic tracking and fast control through explicit ego-motion compensation; 3. A Robust Long-Horizon Learning Curriculum : an integrated RL strategy that uses an ASC and hint poses, together with a temporal memory network, to overcome sparse rewards and improve robustness under structural visual occlusions. 
+
+## 2 Related Work 
+
+Perception-Aware Legged Control. Integrating perception into reinforcement learning has driven breakthroughs in legged locomotion. To mitigate the RGB sim-to-real gap, early works leveraged elevation or depth maps via privileged two-stage distillation (e.g., DAgger [19]) [20, 21, 2, 3, 11, 22, 23, 24, 25, 26], occasionally incorporating LiDAR for enhanced foothold planning [14, 27, 28]. Transitioning to loco-manipulation, however, necessitates both geometric and semantic understand-ing. Many systems address this by training with privileged simulated object states [7, 29, 30, 31, 32, 33] and deploying task-specific detectors. Most notably, robotic badminton [7] utilizes an Ex-tended Kalman Filter (EKF) for shuttlecock trajectory estimation, but heavily relies on Multi-Sensor Fusion and CompSLAM to maintain a rigidly stable global coordinate system. While effective for structured sports, this strict reliance on drift-free global estimation increases deployment com-plexity and restricts open-world mobility. Furthermore, such stringent tracking precludes generic, open-vocabulary vision. Consequently, achieving long-horizon floating-base manipulation using exclusively low-frequency semantic detectors on constrained onboard compute remains unresolved. 
+
+Quadruped Loco-Manipulation Pipelines. Current loco-manipulation architectures generally fall into implicit learning frameworks and modular decoupled designs. Implicit approaches, such as end-to-end RL [8] and behavior-cloning via Action Chunking Transformers [18], directly map observa-tions to actions. However, they suffer from sample inefficiency, heavy reliance on teleoperation, and their latent representations preclude integration with explicit high-frequency state estimators. Modular systems typically outfit the quadruped with a robotic arm [17, 6, 34, 35, 36], executing a “Maps-then-reach” strategy. While transferring the accuracy burden to a dedicated manipulator relaxes base tracking requirements, it introduces substantial hardware cost, payload constraints, and power overhead. A highly cost-effective alternative mounts a gripper directly onto the base, which 2Figure 1: Overall System Architecture. (1) Perception Design: In simulation, 50 Hz Sigma Points are extracted from object point clouds via visible surface computation and PCA, with random-walk noise injected in blind spots to ensure robust real-world open-loop predictions. In deployment, se-mantic masks from visual tracking are back-projected to the camera frame to generate 5 Hz Sigma Points, which are then upsampled and latency-compensated to 50 Hz by an ego-centric Kalman Fil-ter. (2) Network Architecture: Dual encoders process the Sigma Points across different frequencies and time horizons. Finally, an Actor network translates these temporal features into continuous lo-comotion and posture commands. mandates continuous, highly precise base regulation. Existing systems utilizing this morphology either restrict manipulation to task-specific dynamic interceptions (e.g., catching spheres) [29] or heavily rely on global external cameras and low-frequency perception [15]. In contrast, SigLoMa maximizes this arm-free morphology using exclusively onboard, ego-centric perception. By providing the high-frequency, low-latency state estimation essential for stringent continuous base control, it circumvents both the hardware bloat of armed quadrupeds and the exter-nal infrastructure reliance of prior base-mounted pipelines. 
+
+## 3 Method 
+
+Designing an open-world quadrupedal pick-and-place solution presents dual overarching challenges. For simulation training, the RL policy must generalize across diverse object geometries to interface seamlessly with high-level Vision Language Models (VLMs). For real-world deployment, main-taining high manipulation precision on a highly dynamic floating base imposes strict latency and frequency requirements; even minor visual tracking delays translate into centimeter-level base de-viation errors, frequently causing grasp failures. To address these issues, we propose SigLoMa, a hierarchical and highly adaptive framework: (1) prompt-driven VLM parsing for open-vocabulary target detection; (2) an ego-centric KF handling camera motion compensation, frequency amplifica-tion, and delay masking; and (3) a robust high-level RL policy utilizing computationally lightweight Sigma Points to formulate dynamic velocity and posture commands for reaching the optimal opera-tional pose. 
+
+3.1 Hierarchical System Overview 
+
+As depicted in Fig. 1, the SigLoMa pipeline initiates with a VLM processing raw user language com-mands to instantiate a pick target and a place target . We then feed these zero-shot anchors into an onboard open-vocabulary tracking model, which yields low-frequency semantic masks. Be-cause raw visual masks are computationally prohibitive for large-scale simulation and highly suscep-tible to sim-to-real domain shifts, we distill this raw perception into a sparse set of geometric feature points, termed Sigma Points . Operating on these sparse features, a Kalman Filter (KF) bridges the low-frequency visual updates to output high-frequency, low-latency target state estimates. Finally, these estimates are routed to the RL policy network to generate continuous velocity and posture commands, achieving precise grasping and placing maneuvers. 33.2 Exteroceptive State Representation via Sigma Points 
+
+To capture object geometry while maintaining computational efficiency, we represent target objects via Sigma Points—a sparse, mathematically derived set of representative features that effectively encapsulate bounding volume and spatial orientation. Let P = {C pi ∈ R3}Ni=1 be the dense object point cloud transformed into the camera coordinate frame {C}, with corresponding surface normals C ni. We first extract the visible point set V based on strict geometric back-face culling and Field-of-View (FoV) constraints. The visibility condition dictates that the surface normal must oppose the viewing direction C pi:
+
+V = C pi ∈ P | C ni · C pi < 0 ∧ FoV (C pi) = True 
+
+In simulation, points uniformly cover 3D surfaces, whereas real-world points back-projected from 2D masks suffer from perspective-induced downsampling on slanted and distant faces. To bridge this sim-to-real density gap, we assign a geometry-aware weight wi to each visible point. This weight emulates the real camera pixel distribution by accounting for the differential solid angle subtended by surface patches [37]: wi = max 
+
+
+
+0, −C ni·C pi 
+
+> ∥Cpi∥3
+
+
+
+. By incorporating wi into a weighted Principal Component Analysis (PCA) on V [38], the extracted Sigma Points in simulation achieve a statistical distribution tightly aligned with real-world pixel-level observations. This alignment ensures the downstream RL policy remains invariant to the underlying point sampling source. The weighted centroid C μ and the spatial covariance matrix Σp are computed as:  
+
+> C
+
+μ =
+
+P 
+
+> i∈V
+
+wiC pi
+
+P 
+
+> i∈V
+
+wi
+
+, Σp =
+
+P 
+
+> i∈V
+
+wi(C pi − C μ)( C pi − C μ)T
+
+P 
+
+> i∈V
+
+wi
+
+Through eigendecomposition Σpek = λkek, we extract the eigenvalues λk and eigenvectors ek
+
+(k ∈ { 1, 2, 3}). We systematically sample two points per principal axis alongside the geometric centroid, yielding a geometric feature set S = {sj }6
+
+> j=0
+
+: 
+
+> C
+
+s0 = C μ, C sk, ± = C μ ± αpλkek
+
+where α is a scaling factor. To maintain temporal consistency with downstream filtering and control modules, we denote this observed point set at any given camera frame t as Ct Sobs  
+
+> t
+
+. During RL training, we analytically compute pseudo-visible surfaces relative to the camera frame. In the real world, semantic masks are back-projected into the 3D camera coordinate frame and undergo the identical PCA process to obtain the actual Sigma Points. The processing pipeline is illustrated in Fig. 1. 
+
+3.3 Ego-Centric State Estimation via Kalman Filtering 
+
+Significant visual tracking latency severely restricts dynamic manipulation. Due to the large-range motion of the floating base, traditional methods often resort to external motion capture systems or only predict the trajectory of moving objects. To this end, we implement an ego-centric KF updating locally within the camera frame, utilizing Visual Odometry (VO) to mitigate base perturbation. To track the target’s geometric structure, we apply the filtering process uniformly to all elements of the Sigma Points set S. For each Sigma Point sj (j ∈ { 0, . . . , 6}), the system state is defined directly in the current camera frame {Ct} as Ct xj,t = [( Ct sj,t )T , (Ct vj,t )T ]T ∈ R6, where Ct sj,t and Ct vj,t 
+
+represent its 3D position and relative velocity, respectively. The core innovation of our filter lies in decoupling the state transition into two distinct physical processes: point motion prediction and camera ego-motion compensation. For the prediction step, we adopt a linear kinematic approximation to predict the j-th point’s short-term displacement relative to the previous frame {Ct−1}: 
+
+> Ct−1
+
+s− 
+
+> j,t
+
+= Ct−1 sj,t −1 + Ct−1 vj,t −1∆t (1) Simultaneously, we rectify the shifts in the sensory frame caused by the robot’s base movement. Given the sequential world-to-camera poses W TCt−1 and W TCt provided by the VO, we extract the 4Figure 2: Task Taxonomy and Pose Design. Optimal terminal poses are located on the objects, while hint poses are positioned mid-way. The green lines connecting them indicate the suggested motion trajectories. Object point clouds are visualized as blue points, with real-time computed visible surfaces highlighted in green. Notably, for long-axis objects, the hint pose implicitly guides the robot to maneuver from the front to the side to approach the short-axis grasping point. relative transformation Ct TCt−1 = ( W TCt )−1W TCt−1 . Using the rotational component Ct RCt−1
+
+and translational component Ct tCt−1 of this relative transformation, we map each predicted point state directly into the new camera perspective:  
+
+> Ct
+
+ˆsj,t = Ct RCt−1 
+
+> Ct−1
+
+s− 
+
+> j,t
+
++ Ct tCt−1 , Ct ˆvj,t = Ct RCt−1 
+
+> Ct−1
+
+vj,t −1 (2) When the visual observation arrives, the newly computed Sigma Points from the PCA serve as mea-surement updates to correct their respective prediction errors. This filtering process yields the robust Sigma Points set Ct Sobs  
+
+> t
+
+required by the downstream RL policy. It abolishes the dependency on a tightly unified global coordinate system and bounds the residual error to the inter-frame increment, resulting in low-delay geometric state estimations. Detailed mathematical derivations of the entire filtering process are provided in Appendix B. 
+
+3.4 Policy Formulation and Robust Learning Framework Task Taxonomy and MDP Setup. We formulate the loco-manipulation problem across a discrete task space T = {τlong , τ short , τ release }, which is visually summarized in Fig. 2. Specifically, we deploy dozens of daily items and regular objects to evaluate the system. For picking operations, an object whose longest axis exceeds the maximum gripper aperture is classified as a long-axis target requiring 
+
+τlong , which dictates an orthogonal approach trajectory; conversely, smaller targets default to τshort .For placing operations, the system universally executes the object release task τrelease .To solve these tasks, our high-level RL policy maps observations to actions at each control step t.As illustrated in Fig. 1, the observation space is decoupled into proprioception and exteroception. The proprioceptive state oprop  
+
+> t
+
+= [ B gt, B vt, B ωt, at−1, c task ] encapsulates the robot’s base-projected gravity, linear and angular velocities, the previous action, and the task phase flag. The exteroceptive state relies entirely on the tracking of Sigma Points Ct Sobs  
+
+> t
+
+∈ R7×3, which are processed via a dual-horizon architecture. Specifically, a short-horizon encoder processes a high-frequency history of 
+
+Hshort frames to overcome perception noise, while a long-horizon encoder processes a low-frequency history of Hlong frames to provide a memory window of effective perception within blind spots. These extracted temporal features are fused with the proprioceptive state and passed to the Actor net-work, which outputs continuous base velocities and body pitch commands at = [ vx, v y , ω z , θ y ]T .Finally, a pre-trained low-level controller [39] executes these commands. We train the policy us-ing task constraints and stability regularizations to achieve optimal terminal alignment and stable locomotion, detailing formulations in Appendix D. 
+
+Trajectory Shaping and Active Sampling. To combat the inherent sample inefficiency and sparse rewards of long-horizon tasks, we introduce two critical training optimizations. First, to regular-ize the policy’s approach behaviors, we establish an optimal terminal pose for open-loop grasp triggering for each τ ∈ T . Since standard sparse rewards poorly constrain the strict approach tra-jectories dictated by object geometry (e.g., elongated objects mandate orthogonal approaches due to limited gripper aperture), we introduce hint poses to implicitly regularize trajectory rollouts, as 5shown in Fig. 2. Serving as intermediate orientational waypoints, these hint poses enforce target pre-alignment, naturally shaping the approach to ensure smooth convergence to the optimal pose. Second, we utilize an Active Sampling Curriculum (ASC) that dynamically shifts the training focus from guided skill-bootstrapping to aggressive hard-negative mining. Inspired by biological learn-ing, we design a near-optimal initialization that functions as an active “feeding” mechanism. By intentionally spawning objects in close proximity to the optimal pose during early training, it pro-vides immediate, dense rewards that drastically lower the initial exploration barrier, conceptually akin to parental nurturing. As the policy matures, this feeding mechanism naturally decays, seam-lessly shifting the curriculum’s focus toward a failure-replay distribution to aggressively eliminate bottleneck behaviors. This curriculum transition is mathematically driven by a normalized task competency metric 
+
+ρ = min( s/s thresh , 1.0) . Here, s denotes the running success rate, evaluated via dual geometric boundaries: a rollout succeeds if the terminal pose deviation falls below the success boundary and is registered as a failure when it violates the failure boundary at timeout. The formal definitions of these boundaries are provided in Appendix C. sthresh is a predefined curriculum threshold. The sampling probability Pi for initialization type i ∈ { near-optimal , failure-replay } transitions expo-nentially from pi, start to pi, end :
+
+Pi(ρ) = pi, end + ( pi, start − pi, end ) exp( −λASC ρ)
+
+where λASC governs the transition rate. Consequently, the feeding probability exponentially decays (pi, start > p i, end ) while the failure-replay probability is exponentially prioritized ( pi, start < p i, end ). 
+
+Memory-Augmented Blind-Spot Handling. Terminal grasping inevitably pushes the target out of the camera’s FoV. To robustly simulate the ensuing open-loop KF drift during this out-of-FoV phase, we inject a cumulative, clamped random-walk noise dt ∈ R3 uniformly into the true Sigma Points  
+
+> Ct
+
+Strue  
+
+> t
+
+:
+
+dt = clip  dt−1 + N (0, σ 2
+
+> drift
+
+I), −dmax , d max 
+
+, Ct Sobs  
+
+> t
+
+= Ct Strue  
+
+> t
+
++ dt (3) where σdrift is the standard deviation governing the random-walk variance, dmax restricts the maxi-mum positional drift, and dt resets to zero upon visual tracking recovery. To maintain high-precision manipulation through this blind spot, a sufficient temporal receptive field is essential. To circumvent the prohibitive overhead of buffering at the 50Hz control rate, we maintain a lightweight 2s percep-tion memory down-sampled to 5Hz . Processed via a Temporal Convolutional Network (TCN), this historical buffer effectively encapsulates spatiotemporal context, natively bridging the sim-to-real blind-spot gap under strict onboard compute limits. 
+
+## 4 Experimental Results 
+
+4.1 Simulation Setup and Ablation Studies 
+
+The RL policy is trained using Proximal Policy Optimization (PPO) [40] in Isaac Gym [41]. To ensure robust open-world generalization, the training environment incorporates a diverse object dis-tribution, encompassing geometric primitives (e.g., cuboids, spheres, boxes, and cylinder baskets) and 27 everyday household items from the YCB dataset [42]. Furthermore, the initial 6-DoF poses of both the robot and the target objects are uniformly randomized at the onset of each episode. Despite this extensive morphological and spatial randomization, SigLoMa’s compact Sigma Point representation and the ASC enable exceptional sample efficiency; the policy fully converges in ap-proximately 6 hours on a single NVIDIA RTX 4090 GPU. We evaluate the impact of SigLoMa’s core algorithmic components through extensive ablation stud-ies. Specifically, we investigate variants operating without hint poses ( No Hint ), without the ASC (No ASC ), and with modified blind-spot memory architectures (e.g., completely removing the TCN encoder ( No TCN ), or substituting the TCN with an MLP ( Enc-MLP ) or a GRU ( Enc-GRU )). These configurations were evaluated across a diverse set of objects, mapped to task space T .6Figure 3: Real-World Experimental Results. Snapshots of the pick and place phases across three tasks, alongside their end-to-end success counts. Table 1: Simulation Ablation Studies. Success is defined as the robot successfully stopping at the task-specific optimal pose (i.e., multi-dimensional tracking error strictly less than predefined success thresholds). We report the mean success rate ( %) and standard deviation for each condition. Each experiment is evaluated over 100 independent trials, and the reported values are averaged across 3 independent evaluation runs with randomized initial poses for both the robot and the object.                                                           
+
+> Short-Axis Grasp Long-Axis Grasp Target Release Method Cuboid Apple Sugar Sphere Conditioner Shampoo Basket Box
+> SigLoMa 96 .3±1.597 .0±1.096 .0±1.087 .7±3.283 .3±2.585 .0±2.095 .3±1.592 .7±2.1
+> Enc-MLP 96 .7±1.596 .0±2.095 .3±2.183 .3±2.179 .3±2.582 .3±3.591 .0±1.787 .3±2.5
+> Enc-GRU 82 .7±3.281 .3±3.583 .3±2.172 .0±3.667 .7±4.269 .3±3.182 .3±3.178 .3±3.5
+> No TCN 89 .3±2.188 .0±2.690 .0±2.082 .0±2.686 .3±2.183 .3±2.588 .3±2.184 .3±2.1
+> No ASC 78 .0±2.076 .3±2.577 .7±2.144 .0±4.039 .3±4.543 .3±4.577 .0±3.073 .0±3.6
+> No Hint 72 .7±2.571 .3±3.173 .0±2.616 .0±3.612 .0±2.014 .3±2.572 .3±2.568 .3±2.5
+
+Results indicate that the introduction of hint poses and the ASC serves as the primary catalyst for learning long-horizon, long-axis grasping maneuvers. Without these mechanisms, the policy con-sistently fails to explore successful perpendicular approach trajectories. Furthermore, ablating the temporal memory window or substituting the sequential encoder with an MLP demonstrably de-grades grasping success. This indicates that retaining representations of previously valid visual observations is crucial for enabling the robot to maintain a stable posture. Moreover, the GRU variant underperforms the TCN. We attribute this to the GRU’s recursive mem-ory, which is highly sensitive to the non-stationary data distributions in RL. In contrast, the TCNs’s feedforward structure, operating over a fixed receptive field without accumulating hidden state er-rors, inherently provides a more robust temporal representation. Interestingly, during testing, we 7observed emergent active-perception behaviors: the agent inherently maintains a “head-up” pitch at a distance to maximize FoV retention, performs granular lateral corrections upon proximity, and executes a smooth deceleration into the blind spot to minimize internal KF drift. 
+
+4.2 Real-World Hardware Deployment 
+
+We deployed SigLoMa on a Unitree Go2 quadruped, equipped with a RealSense D435i camera, a custom low-cost gripper, and an onboard NVIDIA Jetson Orin NX. VO is provided by Isaac ROS Visual SLAM at 60 Hz. For the perception stack, we leverage the Qwen 3.5 VLM API [43] to extract initial semantic masks via zero-shot reasoning. These masks initialize Cutie [44], which runs entirely onboard to provide continuous target tracking at a low frequency of 5 Hz. Detailed hardware configurations and task execution workflows are deferred to the Appendix A. As illustrated in Fig. 3, we documented performance across three distinct pick-and-place tasks rep-resenting the SigLoMa taxonomy T : ball-to-bin (τshort → τrelease ), toy-to-hamper (τshort → τrelease ), and water bottle-to-box (τlong → τrelease ). Each setting underwent 10 trials, from which we recorded the first-attempt end-to-end success counts. To evaluate the effectiveness of our proposed meth-ods for closing the sim-to-real gap, we conducted ablation studies isolating the KF ( No KF ) and the blind-spot random-walk noise ( No BS-Noise ), ultimately comparing the SigLoMa autonomous pipeline against human teleoperation ( Teleop ). The real-world executions definitively highlight the indispensability of SigLoMa’s ego-centric state estimation framework. The KF effectively compensates for processing latency and bridges the low-frequency vision backbone, ensuring real-time locomotion reactivity. Furthermore, injecting random-walk noise during simulation training proves crucial for modeling the KF’s open-loop pre-diction drift. This targeted augmentation explicitly reduces the sim-to-real gap, enabling robust policy execution even within visual blind spots. Ultimately, the fully onboard SigLoMa autonomous pipeline achieves highly precise floating-base maneuvers, yielding end-to-end success counts that perform on par with human teleoperation. 
+
+## 5 Conclusion 
+
+In this paper, we present SigLoMa, a low-cost, open-world solution for quadrupedal loco-manipulation that eliminates the need for external tracking and high-compute platforms. To achieve this, we introduce the Sigma Point representation for efficient RL and sim-to-real transfer, along-side an ego-centric Kalman Filter that bridges the frequency gap between semantic detection and continuous control. On the learning front, an ASC guided by hint poses and a TCN with random-walk noise accelerate multi-task convergence and robustly handle visual blind spots. Real-world experiments demonstrate that SigLoMa autonomously adapts grasping strategies to diverse objects, performing dynamic pick-and-place with success rates comparable to expert human teleoperation. 
+
+5.1 Limitations and Future Work 
+
+Despite strong sim-to-real transfer, SigLoMa exhibits a few notable limitations. First, manipulation is currently constrained to flat surfaces; future work will focus on integrating local elevation maps and training the policy from scratch to maintain the stability of the gripper’s pose on uneven terrains. Second, acting primarily as a local visual servoing policy, the framework lacks long-horizon naviga-tion capabilities, which could be addressed by incorporating a semantic-based navigation module to enable long-distance traversal and adaptive obstacle avoidance. Third, as a cascaded multi-module system, the overall grasping precision is susceptible to perception instability. Specifically, errors from frequency fluctuations or dropped frames in any single module can propagate downstream. To mitigate this, future efforts could explore optimizing system-level integration and enhancing the temporal memory architecture to build resilience against such sensory data fluctuations. 8References 
+
+[1] D. Hoeller, N. Rudin, D. Sako, and M. Hutter. Anymal parkour: Learning agile navigation for quadrupedal robots. Science Robotics , 9(88):eadi7566, 2024. [2] Z. Zhuang, Z. Fu, J. Wang, C. Atkeson, S. Schwertfeger, C. Finn, and H. Zhao. Robot parkour learning. In Conference on Robot Learning (CoRL) , 2023. [3] X. Cheng, K. Shi, A. Agarwal, and D. Pathak. Extreme parkour with legged robots. arXiv preprint arXiv:2309.14341 , 2023. [4] J. Long, W. Yu, Q. Li, Z. Wang, D. Lin, and J. Pang. Learning h-infinity locomotion control. 
+
+arXiv preprint arXiv:2404.14405 , 2024. [5] R. Huang, S. Zhu, Y. Du, and H. Zhao. Moe-loco: Mixture of experts for multitask locomotion, 2025. URL https://arxiv.org/abs/2503.08564 .[6] Z. Fu, X. Cheng, and D. Pathak. Deep whole-body control: learning a unified policy for manipulation and locomotion. In Conference on Robot Learning , pages 138–149. PMLR, 2023. [7] Y. Ma, A. Cramariuc, F. Farshidian, and M. Hutter. Learning coordinated badminton skills for legged manipulators. Science Robotics , 10(102), May 2025. ISSN 2470-9476. doi:10.1126/ scirobotics.adu3922. URL http://dx.doi.org/10.1126/scirobotics.adu3922 .[8] M. Liu, Z. Chen, X. Cheng, Y. Ji, R.-Z. Qiu, R. Yang, and X. Wang. Visual whole-body control for legged loco-manipulation, 2024. URL https://arxiv.org/abs/2403.16967 .[9] W. Yu, D. Jain, A. Escontrela, A. Iscen, P. Xu, E. Coumans, S. Ha, J. Tan, and T. Zhang. Visual-locomotion: Learning to walk on complex terrains with vision. In Conference on Robot Learning , pages 1691–1702. PMLR, 2022. [10] A. Agarwal, A. Kumar, J. Malik, and D. Pathak. Legged locomotion in challenging terrains using egocentric vision. In Conference on Robot Learning , pages 403–415. PMLR, 2023. [11] T. Miki, J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter. Learning robust per-ceptive locomotion for quadrupedal robots in the wild. Science Robotics , 7(62):eabk2822, 2022. [12] ETH-PBL. Robust reinforcement learning-based locomotion for resource-constrained quadrupeds with exteroceptive sensing. arXiv preprint arXiv:2505.12537 , 2025. [13] Q. Yuan, Z. Cao, M. Cao, and K. Li. Reasan: Learning reactive safe navigation for legged robots, 2025. URL https://arxiv.org/abs/2512.09537 .[14] Z. Wang, T. Ma, Y. Jia, X. Yang, J. Zhou, W. Ouyang, Q. Zhang, and J. Liang. Omni-perception: Omnidirectional collision avoidance for legged locomotion in dynamic environ-ments, 2025. URL https://arxiv.org/abs/2505.19214 .[15] Q. Wu, Z. Fu, X. Cheng, X. Wang, and C. Finn. Helpful doggybot: Open-world object fetching using legged robots and vision-language models, 2024. URL https://arxiv.org/abs/ 2410.00231 .[16] C. Liu, L. Jiang, Y. Wang, K. Yao, J. Fu, and X. Ren. Humanoid whole-body badminton via multi-stage reinforcement learning, 2025. URL https://arxiv.org/abs/2511.11218 .[17] J. Wang, J. Rajabov, C. Xu, Y. Zheng, and H. Wang. Quadwbg: Generalizable quadrupedal whole-body grasping, 2025. URL https://arxiv.org/abs/2411.06782 .9[18] R.-Z. Qiu, Y. Song, X. Peng, S. A. Suryadevara, G. Yang, M. Liu, M. Ji, C. Jia, R. Yang, X. Zou, and X. Wang. Wildlma: Long horizon loco-manipulation in the wild, 2025. URL 
+
+https://arxiv.org/abs/2411.15131 .[19] S. Ross, G. J. Gordon, and J. A. Bagnell. A reduction of imitation learning and structured prediction to no-regret online learning, 2011. URL https://arxiv.org/abs/1011.0686 .[20] A. Loquercio, A. Kumar, and J. Malik. Learning visual locomotion with cross-modal supervi-sion. arXiv preprint arXiv:2211.03785 , 2022. [21] D. Hoeller, N. Rudin, C. Choy, A. Anandkumar, and M. Hutter. Neural scene representation for locomotion on structured terrain, 2022. URL https://arxiv.org/abs/2206.08077 .[22] S. Gangapurwala, M. Geisert, R. Orsolino, M. Fallon, and I. Havoutis. Rloc: Terrain-aware legged locomotion using reinforcement learning and optimal control. IEEE Transactions on Robotics , 38(5):2908–2927, 2022. [23] H. Duan, B. Pandit, M. S. Gadde, B. J. Van Marum, J. Dao, C. Kim, and A. Fern. Learning vision-based bipedal locomotion for challenging terrain. In 2024 IEEE International Confer-ence on Robotics and Automation (ICRA) , pages 56–62. IEEE, 2024. [24] F. Chen, R. Wan, P. Liu, N. Zheng, and B. Zhou. Vmts: Vision-assisted teacher-student reinforcement learning for multi-terrain locomotion in bipedal robots. arXiv preprint arXiv:2503.07049 , 2025. [25] D. Wang, X. Wang, X. Liu, J. Shi, Y. Zhao, C. Bai, and X. Li. More: Mixture of residual experts for humanoid lifelike gaits learning on complex terrains. arXiv preprint arXiv:2506.08840 ,2025. [26] R. Fawcett et al. Vital: Vision-based terrain-aware locomotion for legged robots. In IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2023. [27] J. Long, J. Ren, M. Shi, Z. Wang, T. Huang, P. Luo, and J. Pang. Learning humanoid locomo-tion with perceptive internal model, 2024. URL https://arxiv.org/abs/2411.14386 .[28] Y. Jiang, Y. Liang, J. Li, H. Ding, and L. Zhu. Omnidirectional humanoid locomotion on stairs via unsafe stepping penalty and sparse lidar elevation mapping, 2026. URL https: //arxiv.org/abs/2603.07928 .[29] X. Duan, Z. Zhuang, H. Zhao, and S. Schwertfeger. Playful doggybot: Learning agile and precise quadrupedal locomotion, 2025. URL https://arxiv.org/abs/2409.19920 .[30] Z. Su, Y. Gao, E. Lukas, Y. Li, J. Cai, F. Tulbah, F. Gao, C. Yu, Z. Li, Y. Wu, and K. Sreenath. Toward real-world cooperative and competitive soccer with quadrupedal robot teams, 2025. URL https://arxiv.org/abs/2505.13834 .[31] Y. Ji, G. B. Margolis, and P. Agrawal. Dribblebot: Dynamic legged manipulation in the wild, 2023. URL https://arxiv.org/abs/2304.01159 .[32] X. Huang, Z. Li, Y. Xiang, Y. Ni, Y. Chi, Y. Li, L. Yang, X. B. Peng, and K. Sreenath. Creating a dynamic quadrupedal robotic goalkeeper with reinforcement learning, 2022. URL https: //arxiv.org/abs/2210.04435 .[33] Z. Su, B. Zhang, N. Rahmanian, Y. Gao, Q. Liao, C. Regan, K. Sreenath, and S. S. Sastry. Hitter: A humanoid table tennis robot via hierarchical planning and learning, 2025. URL 
+
+https://arxiv.org/abs/2508.21043 .[34] G. Pan, Q. Ben, Z. Yuan, G. Jiang, Y. Ji, S. Li, J. Pang, H. Liu, and H. Xu. Roboduet: Learning a cooperative policy for whole-body legged loco-manipulation, 2025. URL https: //arxiv.org/abs/2403.17367 .10 [35] X. Liu, B. Ma, C. Qi, Y. Ding, N. Xu, Zhaxizhuoma, G. Zhang, P. Chen, K. Liu, Z. Jia, C. Guan, Y. Mo, J. Liu, F. Gao, J. Zhong, B. Zhao, and X. Li. Mlm: Learning multi-task loco-manipulation whole-body control for quadruped robot with arm, 2025. URL https: //arxiv.org/abs/2508.10538 .[36] T. Portela, A. Cramariuc, M. Mittal, and M. Hutter. Whole-body end-effector pose tracking, 2025. URL https://arxiv.org/abs/2409.16048 .[37] R. Hartley and A. Zisserman. Multiple View Geometry in Computer Vision . Cambridge Uni-versity Press, Cambridge, UK, 2nd edition, 2003. ISBN 978-0-521-54051-3. [38] C. M. Bishop. Pattern recognition and machine learning . Springer, 2006. [39] S. Chen, Z. Wan, S. Yan, C. Zhang, W. Zhang, Q. Li, D. Zhang, and F. U. D. Farrukh. Slr: Learning quadruped locomotion without privileged information, 2024. URL https: //arxiv.org/abs/2406.04835 .[40] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov. Proximal policy optimization algorithms. arXiv preprint arXiv:1707.06347 , 2017. [41] N. Rudin, D. Hoeller, P. Reist, and M. Hutter. Learning to walk in minutes using massively parallel deep reinforcement learning, 2022. URL https://arxiv.org/abs/2109.11978 .[42] B. Calli, A. Singh, A. Walsman, S. Srinivasa, P. Abbeel, and A. M. Dollar. The ycb object and model set: Towards common benchmarks for manipulation research. In 2015 international conference on advanced robotics (ICAR) , pages 510–517. IEEE, 2015. [43] Q. Team. Qwen3.5: Accelerating productivity with native multimodal agents, February 2026. URL https://qwen.ai/blog?id=qwen3.5 .[44] H. K. Cheng, S. W. Oh, B. Price, J.-Y. Lee, and A. Schwing. Putting the object back into video object segmentation, 2024. URL https://arxiv.org/abs/2310.12982 .11 A Hardware Setup and Task Workflow 
+
+Hardware Setup. Our hardware setup utilizes the open-source 3D-printed mounting brackets from [15] to firmly secure the camera and the end-effector. Specifically, as shown in Figure 4, an overhead D435i camera is mounted with a fixed pitch angle. The end-effector itself is an ultra-low-cost (< $20 ) servo-driven two-finger gripper. 
+
+Figure 4: Hardware Setup. The overhead D435i camera is mounted at a fixed pitch alongside an ultra-low-cost servo-driven two-finger gripper using brackets [15]. 
+
+Task Workflow. As illustrated in Figure 5, during the pick-and-place evaluation, the robot is initially teleoperated to scan the environment and record the approximate world coordinates of all target objects. The autonomous system then operates in a loop: it utilizes these global coordinates to orient until the specific target enters the visual field, which subsequently triggers the visual-based closed-loop policy. We deliberately omit complex navigation routing, as it falls outside the core scope of evaluating the visuo-motor manipulation policy. 
+
+Figure 5: Overview of the task workflow. The robot first scans for approximate global coordinates, which are then used to orient the robot until the target is within the visual field to trigger the au-tonomous policy. 
+
+## B Comprehensive Formulation of the Ego-Centric KF 
+
+To provide a complete and systematic mathematical overview, this section details the state definition, process model, and measurement update of our ego-centric Kalman Filter. 
+
+1. State Representation: 
+
+The filter tracks the spatial state of each Sigma Point sj (j ∈ { 0, . . . , 6}) independently. The system 12 state is defined directly in the current camera frame {Ct} as a 6D vector encompassing its 3D position and relative velocity:  
+
+> Ct
+
+xj,t =
+
+Ct sj,t Ct vj,t 
+
+
+
+∈ R6 (4) 
+
+2. Process Model and Ego-Motion Compensation: 
+
+The state transition is decoupled into point motion prediction and camera ego-motion compensa-tion. First, a linear kinematic model predicts the point’s displacement relative to the previous frame 
+
+{Ct−1} over a time step ∆t, where ∆t denotes the inter-frame interval:  
+
+> Ct−1
+
+s− 
+
+> j,t
+
+= Ct−1 sj,t −1 + Ct−1 vj,t −1∆t (5) Subsequently, we rectify the shifts in the sensory frame caused by the robot’s base movement. Using the relative transformation Ct TCt−1 ∈ SE (3) provided by the Visual Odometry (VO), we extract its rotational component Ct RCt−1 ∈ SO (3) and translational component Ct tCt−1 ∈ R3. The a priori 
+
+state estimate ˆx− 
+
+> j,t
+
+mapped to the new camera perspective {Ct} is formulated as:  
+
+> Ct
+
+ˆsj,t = Ct RCt−1 
+
+> Ct−1
+
+s− 
+
+> j,t
+
++ Ct tCt−1 , Ct ˆvj,t = Ct RCt−1 
+
+> Ct−1
+
+vj,t −1 (6) 
+
+3. Measurement Model and Dynamic Update: 
+
+When a visual observation is available, we extract the empirical 3D position by back-projecting the segmented image pixels, denoting this spatial observation as zj,t ∈ R3. Because the measurement space explicitly isolates the positional subspace of the full state vector, the observation model is strictly linear: 
+
+zj,t = HCt xj,t + νt, with H = [ I3×3 03×3] (7) where νt ∼ N (0, Rt) represents the measurement noise. To handle depth-dependent projection errors in physical deployments, the measurement covariance matrix Rt is dynamically scaled relative to the estimated Z-axis depth (i.e., the distance along the optical axis from the camera to the observed point) of the observed point: 
+
+Rt = diag (σ2 
+
+> X
+
+, σ 2 
+
+> Y
+
+, σ 2 
+
+> Z
+
+), where σX = Zfx
+
+σu, σY = Zfy
+
+σv , σZ = σz (8) with fx and fy denoting the intrinsic camera focal lengths (in pixels), σu and σv representing the pixel measurement uncertainties (in pixels), and σz being a constant depth uncertainty (in meters). This dynamic scaling explicitly degrades the filter’s trust in distant, noisy observations. Finally, the posterior state estimate is optimally corrected via the Kalman gain Kt:
+
+Kt = P− 
+
+> t
+
+HT (HP − 
+
+> t
+
+HT + Rt)−1 (9) 
+
+ˆx+ 
+
+> j,t
+
+= ˆ x− 
+
+> j,t
+
++ Kt(zj,t − Hˆx−
+
+> j,t
+
+) (10) where P− 
+
+> t
+
+is the prior error covariance matrix updated during the prediction step. 
+
+## C Geometric Alignment and Task Evaluation Criteria 
+
+This section defines the geometric alignment errors and terminal-state criteria used by both reward gating and ASC evaluation. 
+
+Alignment Error Formulation. Let pe ∈ R3 and Θe ∈ (−π, π ]3 denote the end-effector position and Euler angles (roll, pitch, yaw), and let popt ∈ R3 and Θopt ∈ (−π, π ]3 denote the target optimal pose. The alignment errors are defined by weighted squared norms: 
+
+e2 
+
+> pos
+
+= ( pe − popt )⊤Wp(pe − popt ), e2 
+
+> rot
+
+= ( Θe − Θopt )⊤Wr (Θe − Θopt ) (11) where Wp, Wr ∈ R3×3 are diagonal matrices specifying per-axis relative weights. Let phint ∈ R3 be the intermediate hint pose. The cross-track error to the hint-to-optimal segment is 
+
+dpath = ∥pe − Proj (pe, phint popt )∥2 (12) 13 where Proj (pe, phint popt ) denotes the orthogonal projection of pe onto the line segment connecting 
+
+phint and popt .
+
+Terminal State Boundaries. Define ∆p = pe − popt and ∆Θ = Θe − Θopt . Success and failure indicators are written as 
+
+1success = 1(|∆px| < ϵ x, |∆py | < ϵ y , |∆Θ yaw | < ϵ yaw , |∆Θ pitch | < ϵ pitch ) , (13) 
+
+1fail = 1(timeout ∧ [|∆px| ≥ δx ∨ | ∆py | ≥ δy ∨ | ∆Θ yaw | ≥ δyaw ∨ | ∆Θ pitch | ≥ δpitch ]) . (14) These indicators are used to compute the ASC running success rate s and to gate terminal reward activation. • Success State ( 1success ): Activated when the end-effector simultaneously satisfies transla-tional and rotational tolerances relative to the optimal pose. • Failure State ( 1fail ): Activated at timeout when at least one positional or rotational error exceeds its failure bound. All threshold constants and related hyperparameters are listed in Appendix G. 
+
+## D Reward Function 
+
+To avoid complex heuristic shaping, the reward combines geometric path-following, sparse indicator terms, and stability penalties. Task-level terms guide hint-based tracking, terminal alignment, and field-of-view consistency, while regularization terms suppress wobbling and aggressive actions. We use a unified shaping term E(·) = exp( −∥ · ∥ 2/σ track ). Detailed geometric definitions are provided in Appendix C. Table 2: Reward function components used in training. 
+
+Category Term Expression Weight 
+
+Task & Auxiliary Constraints 
+
+rhint E(dpath ) · E(erot ) · (1 + kE (epos )) 0.4 
+
+ropt 1success · E(epos ) · E(erot ) · E(vbase ) 20.0 
+
+rmiss 1out FOV -0.1 
+
+Stability & Control Regularizations 
+
+rroll g2 
+
+> y
+
+-2.0 
+
+rang ∥ωxy ∥2 -0.1 
+
+rsmooth ∥at − at−1∥2 -0.01 
+
+rlimit ∥aclip − a∥2 -0.1 
+
+## E Kalman Filter Configuration 
+
+Table 3: Ego-centric Kalman filter parameters. 
+
+Category Parameter Value 
+
+Process Noise ( Q) Position variance 1.0 × 10 −6 m2
+
+Velocity variance 1.0 × 10 −5 m2/s2
+
+Measurement Noise ( R) Pixel std. dev. ( σu, σv ) 20.0 px Depth base std. dev. ( σz ) 0.05 m 
+
+State Initialization ( P0) Initial pos. variance 1.0 × 10 −2 m2
+
+Initial vel. variance 1.0 × 10 −1 m2/s2
+
+14 F Domain Randomization 
+
+Table 4: Domain randomization and observation noise parameters. U(a, b ) denotes uniform distri-bution and N (0 , σ ) denotes zero-mean Gaussian noise. 
+
+Category Parameter Distribution / Range 
+
+Dynamics & Geometry 
+
+Ground friction U(0 .2, 5.0) 
+
+Restitution U(0 .0, 1.0) 
+
+Base added mass U(−1.0, 2.0) kg Sigma Points physical scale ( α) U(1 .0, 1.5) 
+
+Camera Extrinsics 
+
+Translation ( x, z ) U(−0.02 , 0.02) mTranslation ( y) U(−0.005 , 0.005) mOrientation (roll, yaw) U(−0.5◦, 0.5◦)
+
+Orientation (pitch) U(−2.0◦, 2.0◦)
+
+Observation Noise 
+
+Perception delay U(0 , 50) ms Base linear velocity N (0 , 0.1) m/s Base angular velocity N (0 , 0.1) rad/s Projected gravity N (0 , 0.1) 
+
+Sigma Points scale noise N (0 , 0.1) 
+
+Sigma Points rotation noise N (0 , 0.1) rad 
+
+15 G Training Configuration 
+
+Table 5: PPO Training and Network Configurations 
+
+Category Parameter Value 
+
+RL Hyperparameters (PPO) 
+
+Number of environments 4096 Batch size 32768 Minibatch size 8192 Learning rate 3.0 × 10 −4
+
+Discount factor ( γ) 0.99 GAE parameter ( λ) 0.95 PPO clip range 0.2 Entropy coefficient 0.01 
+
+NN Architectures 
+
+Actor MLP [dims] [512, 256, 128] Critic MLP [dims] [512, 256, 128] TCN Encoder [channels] [32, 32, 32] TCN kernel size 5TCN dropout 0.1 Activation function ELU Short-horizon frames ( Hshort ) 5Long-horizon frames ( Hlong ) 10 
+
+Active Sampling & Blind-Spot 
+
+Curriculum threshold ( sthresh ) 0.15 Transition decay rate ( λASC ) 5.0 Initial feeding prob. ( pnear-optimal ,start ) 0.8 Final feeding prob. ( pnear-optimal ,end ) 0.1 Initial replay prob. ( pfailure-replay ,start ) 0.2 Final replay prob. ( pfailure-replay ,end ) 0.5 Drift standard deviation ( σdrift ) [m] 0.01 Max positional drift ( dmax ) [m] 0.10 
+
+Terminal Criteria 
+
+Success bound: ϵx, ϵy [m] 0.05, 0.03 Success yaw bound: ϵyaw [rad] 0.10 Success pitch bound: ϵpitch [rad] 0.15 Failure bound: δx, δy [m] 0.10, 0.10 Failure yaw bound: δyaw [rad] 0.20 Failure pitch bound: δpitch [rad] 0.20 
+
+Rewards & Actions 
+
+Tracking sigma: σtrack 0.04 Hint-to-goal gain: k 1.0 Action clip ( vx, v y , ω z ) [m/s] [-0.5, 0.5] Action clip (pitch) [rad] [-π/6, π/6] 
+
+16
