@@ -1,0 +1,543 @@
+Title: Right Model, Right Time: Real-Time Cascaded-Fidelity MPC for Bipedal Walking
+
+URL Source: https://arxiv.org/pdf/2605.04607v1
+
+Published Time: Thu, 07 May 2026 00:59:42 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+# Right Model, Right Time: Real-Time Cascaded-Fidelity MPC for Bipedal Walking 
+
+Franek Stark 1, Felix Wiebe 1,2, Shubham Vyas 1,2, Dennis Mronga 1, Frank Kirchner 1,2
+
+Abstract —This paper presents a multi-phase whole-body model predictive control approach for bipedal walking, combining a detailed whole-body model in the near horizon with a simplified single-rigid-body model in the later prediction steps. This reduces computational complexity while retaining prediction capabilities. The resulting nonlinear optimal control problem is solved using sequential quadratic programming (SQP) in acados. Using a prior specified contact schedule and a target walking speed, the controller optimizes joint torques without depending on prior selected foot step locations. The controller is validated in MuJoCo simulation on the 18-DoF bipedal robot HyPer-2. 
+
+I. I NTRODUCTION 
+
+Legged robotics has advanced rapidly in recent years, with dynamic locomotion successfully demonstrated on quadrupeds and, later, on bipedal robots. Thereby, two different control paradigms are prevalent: reinforcement learning (RL) and model predictive control (MPC). While RL has shown impres-sive results and benefits strongly from improved simulations and computing power, it still faces well-known challenges such as time-consuming reward shaping, sample inefficiency, lack of generalization and open questions regarding safety. For this reason, MPC remains attractive, because it allows the controller to exploit system dynamics online and reason about constraints directly. However, for high-dimensional problems, such as bipedal walking in humanoids, the computational complexity of the optimal control problem remains too high, especially when aiming for an online solution. Hence, many works rely on reduced-order models in MPC, in combination with instantaneous Whole-Body Control (WBC), which uses the full dynamics [1], [2]. A common limitation of these approaches is that contact forces and body motions are planned independently. Here, additional heuristics make systematic tuning of the different control levels difficult and the use of simplified models in MPC may lead to dynamically infeasible motion plans. Recently, whole-body MPC for bipedal robots has become feasible due to advances in fast numerical optimal control, in particular through differential dynamic program-ming (DDP) based solvers [3]. Recent studies proposed multi-phase MPC formulations where a detailed model is used in the early steps of the prediction horizon and simpler models as the horizon progresses [4]–[6]. This reduces the problem complexity, while preserving predictive capabilities, which again improves the trade-off between solution quality and computational effort. While most of this recent work relies 
+
+> 1
+
+All authors are with the Robotics Innovation Center at the German Research Center for Artificial Intelligence (DFKI), Bremen, Germany 
+
+> 2
+
+FW, SV, and FK are also affiliated with the University Bremen, Germany Corresponding author’s email: franek.stark@dfki.de 
+
+Fig. 1. The multi-phase model predictive control (MPC) predicts the first Nwb 
+
+steps using the whole-body (WB) dynamics, while the following Nsrb steps are predicted using single-rigid-body (SRB) dynamics. This way prediction accuracy and solve time can be balanced effectively. 
+
+on DDP-based methods, often implemented in specialized, problem-specific solvers, recent results suggest that tailored sequential quadratic programming (SQP) solvers are a highly competitive alternative, particularly for constrained nonlinear MPC [7]. These methods are available in mature general-purpose software frameworks, such as acados [8], enabling robotics applications to leverage the advances in numerical optimization, without custom solver implementations. In the case of bipedal humanoid walking, this was demonstrated for a whole-body NMPC controller [9]. They use a single SQP iteration per control step in a custom general purpose solver, hence focusing on solution speed over accuracy. Motivated by these developments, this paper presents a whole-body multi-phase MPC for bipedal walking that com-bines several of the above ideas in a single framework. The proposed controller employs a whole-body (WB) model in the early steps of the horizon and a single-rigid-body (SRB) model in the later steps (see Fig. 1) to reduce computational cost, while solving the resulting nonlinear optimal control problem in a real-time SQP setting with only a small num-ber of iterations per control cycle. The entire formulation is implemented using acados [8], a general-purpose open-source framework, which recently introduced direct support for multi-phase optimal control problems [10]. Our controller was successfully tested on the 18 degrees-of-freedom (DoF) bipedal robot HyPer-2 in a MuJoCo simulation using purely torque control and a control frequency of 100 Hz .II. M ODEL PREDICTIVE CONTROL FORMULATION 
+
+The proposed MPC scheme is formulated as the following two-phase optimal control problem, in which a short-horizon 
+
+> arXiv:2605.04607v1 [cs.RO] 6 May 2026
+
+WB model is followed by a reduced SRB model. 
+
+min 
+
+X , U
+
+> Nwb −1
+
+X
+
+> k=0
+
+Lwb (xwb ,k , uwb ,k ) + Lt(xwb ,N wb )+
+
+> Nsrb −1
+
+X
+
+> k=0
+
+Lsrb (xsrb ,k , usrb ,k ) + Lf (xsrb ,N srb )s.t.
+
+xwb ,0 = x,
+
+xwb ,k +1 = fwb (xwb ,k , uwb ,k ) k = 0 . . . N wb − 1,
+
+0 ≥ hwb (xwb ,k , uwb ,k ) k = 0 . . . N wb − 1,
+
+0 ≥ ht (xwb ,N wb ) ,
+
+xsrb ,0 = ft (xwb ,N wb ) ,
+
+xsrb ,k +1 = fsrb (xsrb ,k , usrb ,k ) k = 0 . . . N srb − 1,
+
+0 ≥ hsrb (xsrb ,k , usrb ,k ) k = 0 . . . N srb − 1,
+
+0 ≥ hf (xsrb ,N srb ) .
+
+(1) Here, X and U denote the set of all states and inputs over both phases. The cost function is composed of the stage costs of the WB and SRB phases Lwb (·) and Lsrb (·), a transition cost at the phase boundary Lt(·), and a terminal cost at the end of the prediction horizon Lf (·). The first phase starts from the current state estimate ¯x and is subject to the WB dynamics 
+
+fwb (·) and constraints hwb (·). At the switching point, the transition map ft(·) initializes the SRB state from the terminal WB state, while additional transition constraints are imposed through ht(·). The second phase then evolves according to the SRB dynamics fsrb (·), constraints hsrb (·) and the terminal constraint set hf (·). All terms are detailed in the following. 
+
+A. Whole Body phase 
+
+The WB-phase considers the full bipedal dynamics. The state is parameterized as xwb ,k = [ δq⊤ 
+
+> k
+
+, v⊤ 
+
+> k
+
+]⊤, where δqk ∈
+
+Rnj +6 denotes a local coordinate representation of the gener-alized positions around the initial generalized position q0 ∈
+
+Rnj +7 , with nj the number of actuated joints, the floating-base orientation expressed in the tangent space of SO (3) , and 
+
+vk ∈ Rnj +6 the generalized joint velocities. The full configu-ration for prediction step k can be recovered as qk = q0 ⊕δqk,where ⊕ denotes the manifold update. The control input is defined as uwb ,k = [ τ ⊤ 
+
+> k
+
+, w⊤
+
+> wb ,l,k
+
+, w⊤
+
+> wb ,r,k
+
+]⊤ ∈ Rnj +12 , where 
+
+τ ∈ Rnj denotes the vector of actuated joint torques and 
+
+wwb ,i,k = [ fwb ,i,k , mwb ,i,k ] ∈ R6 the contact wrenches for the left and right foot ( i ∈ { l, r}), composed of the contact force fwb ,i,k ∈ R3 and contact moment mwb ,i,k ∈ R3. The system dynamics are discretized using forward Euler, yielding 
+
+fwb (xwb ,k , uwb ,k ) = 
+
+δqk+1 
+
+vk+1 
+
+
+
+=
+
+δqk + ∆ twb vk
+
+vk + ∆ twb ak
+
+
+
+(2) where ak denotes the generalized acceleration and ∆twb 
+
+the discretization step. To reduce computational complexity, dynamics terms are fixed around the initial (q0, v0) such that 
+
+ak = M(q0)−1
+
+Bτ k − n(q0, v0) + X
+
+> i∈{ l,r}
+
+Jci (q0)⊤wwb ,i,k 
+
+ ,
+
+(3) 
+
+where M(q0) ∈ R(nj +6) ×(nj +6) is the generalized inertia matrix, B ∈ R(nj +6) ×nj is the actuation selection matrix, 
+
+Jci (q0) ∈ R6×(nj +6) is the Jacobian of contact i, and 
+
+n(q0, v0) ∈ Rnj +6 is the combined vector of Coriolis-Centrifugal and gravity forces. The WB phase is augmented with the following constraints, which together define hwb (·):
+
+1) Wrench cone: Each wwb ,i,k is constrained to a rectan-gular wrench cone as derived in [11]. 
+
+2) Contact schedule: The force-contact constraints couple the normal contact force to the prescribed contact mode by en-forcing 0 ≤ [fwb ,i,k ]z ≤ cwb ,i,k f max  
+
+> z
+
+, where cwb ,i,k ∈ { 0, 1}
+
+is prescribed a priori and indicates whether foot i is planned to be in contact at step k, [·]z extracts the z-component of the respective force and f max  
+
+> z
+
+is the maximal z-force. 
+
+3) No slip: The no-slip constraints enforce zero foot veloc-ity for active contacts, i.e., cwb ,i,k Jci (q0) vk = 0 .
+
+4) Contact kinematics: For each foot i, a ground-contact consistency constraint is imposed as 
+
+0 ≤ hi(qk) ≤ (1 − cwb ,i,k ) h max , (4) 
+
+cwb ,i,k ϕi(qk) = 0 , cwb ,i,k θi(qk) = 0 , (5) where the functions hi(·), ϕi(·), and θi(·) map the generalized joint positions to the foot height, foot roll and foot pitch angle of foot i ∈ { l, r} using forward kinematics, respectively. This enforces zero height and planar contact under the assumption of planar terrain, while during swing allowing a maximum height of hmax .
+
+5) Joint limits: Joint position, velocity and torque limits are enforced as box constraints. The cost function of the WB-phase is 
+
+Lwb (·) = ∥δqk − δqref ∥2 
+
+> Wq
+
++ ∥vk − vref ∥2 
+
+> Wv
+
+(6) 
+
++ X
+
+> i∈{ l,r}
+
+∥hi (qk) − hi,k, ref ∥2wh + ∥ϕi(qk)∥2wϕ
+
++ ∥θi(qk)∥2wθ + bψi(qk) 2wψ
+
++ ∥byi,dis (qk) ∥2wyb + ∥ ˙pi (qk, vk) − ˙pi, ref ∥2
+
+> Wp
+
++ |uwb ,k ∥2 
+
+> Wu
+
+,
+
+where δqref , vref denote the local configuration increment and generalized velocity references, respectively. Furthermore 
+
+hi, ref denotes the height reference of foot i at prediction step 
+
+k, bψi(qk) denotes the foot yaw in body coordinates obtained via forward kinematics. Further, byi,dis (qk) is the foot–hip distance along the body y-axis of foot i, respectively. Finally, 
+
+˙pi(qk, vk) denotes the Cartesian foot velocity with ˙pi, ref be-ing its reference. The diagonal weighting matrices and scalars 
+
+Wq, Wv, wh, wϕ, wθ , wψ , wyb , Wp, and Wu determine the relative importance of the individual objectives. While the dynamic constraint is linear in the decision variables, the overall WB-phase remains nonlinear due to the kinematic constraints and the forward-kinematics-dependent cost terms, which are evaluated at the predicted qk.
+
+B. Single Rigid Body phase 
+
+In the SRB phase, the robot is approximated as a single rigid body with lumped mass and inertia, while the contact forces and contact locations are optimized. The state is parameterized as xsrb ,k = [δq⊤
+
+> b,k
+
+, v⊤
+
+> b,k
+
+, p⊤
+
+> l,k
+
+, p⊤
+
+> r,k
+
+]⊤, where δqb,k ∈ R6
+
+and vb,k ∈ R6 denote local coordinate representation of the floating base position and the velocity. Hence they match the parameterization of the WB-phase state such that the floating base position qb,k can be recovered from q0 as in the WB-phase. Instead of capturing the further joints in the state, the foot positions relative to the body frame are directly included as pi,k ∈ R3. The control input is given by 
+
+usrb ,k = [ w⊤
+
+> srb ,l,k
+
+, w⊤
+
+> srb ,r,k
+
+, ˙p⊤
+
+> l,k
+
+, ˙p⊤
+
+> r,k
+
+]⊤, with ˙pi,k as the foot velocities in body and the wrenches analogue to WB-phase as 
+
+wsrb ,i,k = [ f ⊤
+
+> srb ,i,k
+
+, m⊤
+
+> srb ,i,k
+
+]⊤ ∈ R6. The state update is 
+
+fsrb (·) = 
+
+
+
+δqb,k +1 
+
+vb,k +1 
+
+pl,k +1 
+
+pr,k +1 
+
+ =
+
+
+
+δqb,k + ∆ tsrb vb,k 
+
+vb,k + ∆ tsrb ab,k 
+
+pl,k + ∆ tsrb ˙pl,k 
+
+pr,k + ∆ tsrb ˙pr,k 
+
+ , (7) with the acceleration being expressed in local robot frame 
+
+ab,k =
+
+
+
+> 1m
+
+P 
+
+> i∈{ l,r}
+
+fsrb ,i,k 
+
+
+
+− Rwb (q0) gI (q0)−1 P
+
+> i∈{ l,r}
+
+[pi,k − pc (q0)] × fsrb ,i,k + msrb ,i,k 
+
+!
+
+
+
+(8) 
+
+m is the total robot mass, g is the gravity vector transformed into body frame by Rwb (q0), I(q0) is the rigid-body inertia used in the SRB phase, and pc(q0) denotes the center-of-mass (COM) position relative to the body frame, both linearized around q0. The SRB-phase is subject to the following con-straints, which together define hsrb (·) and hf (·):
+
+1) Kinematic reachability: Each foot is restricted to a kine-matically admissible region. Since the relative foot positions are states of the SRB model, this is imposed directly as 
+
+pi ≤ pi,k ≤ pi, for i ∈ { l, r} , (9) where the lateral bounds are chosen side-dependently to pre-serve the left/right foot assignment. 
+
+2) Wrench cones: As in the WB phase, all contact wrenches 
+
+wsrb ,i,k are constrained into rectangular wrench cones. 
+
+3) Contact schedule: The normal contact forces are coupled to the contact schedule as in the WB-phase. 
+
+4) Contact kinematics: Ground consistency is enforced as 
+
+0 ≤ [wpi,k ]z ≤ (1 − csrb ,i,k ) h max , i ∈ { l, r} , (10) where csrb ,i,k specifies the contact schedule as in WB-phase and [·]z extracts the z-component of the respective foot posi-tion approximated into world coordinates by 
+
+> w
+
+pi,k = [ qb,k ]trans + Rwb (q0)pi,k . (11) Here, [·]trans extracts the translational part of the floating-base generalized positions or velocities. 
+
+5) No slip: The no-slip condition in the SRB phase can be directly imposed through foot velocities, 
+
+csrb ,i,k 
+
+ [vb,k ]trans + ˙ pi,k 
+
+ = 0, i ∈ { l, r}. (12) The cost function of the SRB-phase is 
+
+Lsrb (·) = ∥δqb,k − δqb,ref ∥2 
+
+> Wqb
+
++ ∥vb,k − vb,ref ∥2
+
+> Wvb
+
++ X
+
+> i∈{ l,r}
+
+∥pi,k − pi, ref ∥2 
+
+> Wp
+
++ [wpi,k ]z − hi,k, ref 
+
+> 2wh
+
++ ∥usrb ,k ∥2 
+
+> Wusrb
+
+, (13) where δqb,ref , vb,ref denote the local floating-base configu-ration increment and base velocity references, respectively. Furthermore, pi, ref is the relative position reference of foot 
+
+i ∈ { l, r} in the body frame. The weighting matrices and scalars Wqb , Wvb , Wp, wh, and Wusrb determine the relative importance of the individual objectives. The final cost function Lf (·) uses the same terms, except the input dependent. 
+
+C. Transition phase 
+
+The transition-phase maps the WB-state to the SRB-state as 
+
+ft(·) = 
+
+
+
+δqb,0
+
+vb,0
+
+pl,0
+
+pr,0
+
+ =
+
+
+
+[δqNwb ]fb 
+
+[vNwb ]fb 
+
+> b
+
+pl(qNwb )
+
+> b
+
+pr(qNwb )
+
+ , (14) where [·]fb extracts the floating-base components (first 6 ele-ments) of the corresponding whole-body state, and bpi(qNwb ),
+
+i ∈ { l, r}, denotes the foot position in body frame obtained from the forward kinematics at the terminal whole-body configuration. The final state of the WB-phase xwb ,N wb is constrained and penalized in the transition phase by ht(·)
+
+and Lt(·), which both assemble from the same components as hwb (·) and Lwb (·), omitting the input dependent terms. III. R ESULTS 
+
+The controller is evaluated in a MuJoCo simulation on the torque controlled bipedal robot HyPer-2 , developed at DFKI RIC. The robot has a height of 110 cm , weighs 22 .00 kg 
+
+and has 6 torque-controlled joints per leg. In this work it is considered without arms and hence has in total 18 DoFs including the floating base. The robot dynamics and kine-matics are generated symbolically with Pinocchio [12] and CasADi [13], and used to formulate the MPC in acados [8]. Initially, the MPC is manually tuned to achieve stable walking. Therefore, the ratio α = Nwb  
+
+> Nwb +Nsrb
+
+is set to α = 0 .5 and the total number of prediction steps to N = Nwb + Nsrb = 10 .It was observed that increasing the discretization step size along the prediction horizon is beneficial. Hence the step sizes were set to ∆twb = 0 .02 s , ∆tsrb = 0 .1 s . The weights in (6) and (13) are tuned so that the robot maintains a fixed target height and follows a fixed target speed (see Appendix A). A simple walking gait with a per-foot stance time of 
+
+0.5 s and a double support time of 0.1 s is used. The swing-foot height is generated as a smooth arc with 3 cm clearance, whose derivative defines vertical velocity targets that are zero 0.3                    
+
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 12345678910
+> 10
+> 20
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 12345678910
+> 0.8
+> 1.0
+> 1.2
+> 1.4
+> 1.6
+> 1.8
+> NLP cost
+> SQP iterations
+> Solve time (ms)
+> Abs.  z error (cm)
+> SQP iterations
+> vel. error (cm/s) Fig. 2. Average NLP cost, solve time, height and velocity error for bipedal walking over no. of SQP iterations. RT capable settings are marked in green.
+
+at lift-off and touchdown. Stable walking under pure torque control required a 50 Hz to 100 Hz control rate, leaving a maximum solve time of 10 ms . The solver parameters, shown in Appendix B, were manually tuned to ensure stability while also finding solutions quickly. However, as shown in [6], it is not strictly necessary to solve the optimization problem until convergence, since a ”good-enough” solution is usu-ally adequate. Consequently, the number of SQP iterations remains one of the main factors influencing the solve time. To investigate this further, we repeat the following experiment several times: The bipedal robot walks forward for 5 s econds at a target speed of 0.3 m eters per second. We increase the number of SQP iterations in each run, starting at 1. The control frequency was set to 100 Hz , regardless of the solve time. Fig. 2 shows the average solve time, non-linear program (NLP) cost, height and velocity error over the maximum number of SQP-iterations, respectively. It shows that solve time is smaller 0.3 0.5 0.7                   
+
+> 7
+> 8
+> 9
+> 10
+> 11
+> 0.3 0.5 0.7
+> 0.1
+> 0.2
+> 0.3
+> 0.3 0.5 0.7
+> 1.00
+> 1.25
+> 1.50
+> 1.75
+> Solve time (ms) Abs. zerror (cm) vel. error (cm/s)
+> Fig. 3. Average solve time, height and velocity error for bipedal walking. Here, the ratio α=Nwb /(Nwb +Nsrb )is varied, while Nis kept fixed (N= 10 ). RT capable settings are marked in green.
+
+than 10 ms when using up to 3 SQP iterations and the solve time increases linearly with the number of iterations. The height and velocity errors are largely minimized within the first three iterations, while the solver cost does not change much after the first 3 iterations. Hence, 3 was chosen as the iteration limit for the controller and all further experiments. A video demonstrating the simulated HyPer-2 robot walking under real-time torque control is available online 1.                   
+
+> 1Video of the robot walking in simulation: https://youtu.be/1VuRR2P5hxM 15 21 31 37
+> 9.0
+> 9.5
+> 10.0
+> 15 21 31 37
+> 0.2
+> 0.4
+> 0.6
+> 15 21 31 37
+> 1.00
+> 1.25
+> 1.50
+> Solve time (ms)
+> twb (ms)
+> Abs. zerror (cm)
+> twb (ms)
+> vel. error (cm/s)
+> twb (ms)
+> Fig. 4. Average solve time, height and velocity error for bipedal walking. Here, ∆twb is varied and ∆tsrb = 5 ∆ twb .
+
+To investigate the relationship between the prediction hori-zon of whole-body and single rigid body model, the ratio α
+
+is varied, while keeping N = 10 fixed. The results are shown in Fig. 3. When using Nwb ≤ 2, that is α ∈ { 0.1, 0.2}, the robot quickly became unstable. When increasing Nwb , both, the height and velocity error reduce, where the former has its minimum at α = 0 .6. At the same time, the solve time increases linearly, such that for α = 0 .6 the target solve time of 10 ms is not met. For α > 0.7, the robot fell. Finally, we vary the discretization step sizes to study the influence of the resulting prediction horizon length, T =
+
+Nwb ∆twb +Nsrb ∆tsrb . Here, ∆twb was varied directly, while 
+
+∆tsrb was computed according to ∆tsrb = 5 ∆ twb . The results are shown in Fig. 4. Unlike in the two previous experiments, the discretization step sizes only have a minor influence on the solve time. The robot is unstable for ∆twb < 15 ms 
+
+(T < 90 ms ). While the velocity error is largely independent of the discretization step size, the height error is smallest at approximately ∆twb = 21 ms (T = 126 ms ). Beyond a step size of 21 ms , the robot exhibits increasing knee buckling and approaches a singular configuration, eventually falling for step sizes above ∆twb > 37 ms (T > 222 ms ). IV. D ISCUSSION AND FUTURE WORK 
+
+The results demonstrate that real-time whole-body MPC with a multi-phase horizon can be achieved using a stan-dard nonlinear MPC framework from the control community, without relying on specialized or problem-specific solvers. Stable walking is obtained with only a small number of SQP iterations, and the reduced model complexity in the further part of the prediction horizon decreases solve time effectively. However, the analysis is not yet conclusive. Varying the solve time in reality degrades control frequency. The horizon com-position via α also changes the effective prediction horizon 
+
+T due to the different discretization step sizes in each phase. As a result, the instabilities we observe for larger values of α
+
+(e.g., α > 0.7) may be also attributed to a shortened horizon. Future work will therefore focus on a more systematic and controlled analysis of the multi-phase design, including independent variation of horizon length, model composition, and discretization. Extending the framework to incorporate additional model abstractions, is another promising direction. Finally, validation on the real HyPer-2 system is required to assess stability in realistic conditions. ACKNOWLEDGEMENTS 
+
+This work was done in the projects CoEx (grant number 01IW24008) and ActGPT (grant number 01IW25002) both funded by the Federal Ministry of Research, Technology and Space (BMFTR) and is supported with funds from the federal state of Bremen for setting up the Underactuated Robotics Lab (265/004-08-02-02-30365/2024-102966/2024-740847/2024). Further, this work has been partially supported by the German Federal Ministry of Research, Technology and Space (BMFTR) under the Robotics Institute Germany (RIG). Many thanks to the acados team, for enabling such results. APPENDIX 
+
+A. Cost function weights 
+
+Table I summarizes the diagonal entries of all weighting matrices and scalars used in the WB and SRB stage and terminal costs. In the WB phase, the foot z-velocity costs are contact-stage dependent. During swing moderate costs are used, while in approach (one timestep before contact), larger weights promote a controlled touchdown. The foot-hip distance regularization enforces more natural walking and also works against foot self-collisions. In the SRB phase, moderate foot position weights are used to enforce natural foot placement below the hips. 
+
+TABLE I DIAGONAL COST WEIGHTS USED IN THE WB AND SRB PHASES .                                                                                
+
+> Symbol Description Value
+> WB phase
+> Wqbase pos./ori. (x, y, z, ϕ, θ, ψ )(0 ,0,50 ,10 ,10 ,1)
+> joint position regularization 1×10 −8
+> Wvbase vel. (vx, v y, v z, ω x, ω y, ω z)(40 ,40 ,10 ,10 ,10 ,1)
+> joint velocity 0.05
+> whfoot height 10
+> wϕ, w θfoot roll/pitch 30
+> wψfoot yaw 60
+> wyb foot–hip distance in body y10
+> Wpfoot velocity (swing) (1 ,1,1)
+> foot velocity (approach) (10 ,10 ,30)
+> Wujoint torque regularization 1×10 −13
+> contact wrench regularization 1×10 −8
+> SRB phase
+> Wqb base pos./ori. (x, y, z, ϕ, θ, ψ )(0 ,0,50 ,10 ,10 ,1)
+> Wvb base vel. (vx, v y, v z, ω x, ω y, ω z)(40 ,40 ,10 ,10 ,10 ,1)
+> Wpfoot position in body xy 100
+> whfoot height 10
+> Wpfoot velocity 2
+> Wu,srb contact wrench regularization 1×10 −8
+
+B. Solver setup 
+
+The acados SQP solver is configured to use a Gauss-Newton Hessian approximation and the sparsity exploiting interior-point method (IPM) solver HPIPM [14] in BALANCE 
+
+for the quadratic program (QP)-subproblems. Warm-starting is enabled at both the NLP and QP levels, including ini-tialization of the first QP from the previous NLP solution. An adaptive Levenberg-Marquardt regularization is employed to improve numerical robustness, together with projection-based regularization of the QP. A fixed-step globalization strategy is used, avoiding line-search overhead and favor-ing predictable runtimes. The adaptive QP tolerance strategy 
+
+ADAPTIVE_CURRENT_RES_JOINT balances accuracy and speed during each SQP iteration. REFERENCES [1] J. Di Carlo, P. M. Wensing, B. Katz, G. Bledt, and S. Kim, “Dynamic Locomotion in the MIT Cheetah 3 Through Convex Model-Predictive Control,” in 2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . Madrid: IEEE, Oct. 2018, pp. 1–9. [Online]. Available: https://ieeexplore.ieee.org/document/8594448/ [2] D. Kim, J. Di Carlo, B. Katz, G. Bledt, and S. Kim, “Highly Dynamic Quadruped Locomotion via Whole-Body Impulse Control and Model Predictive Control,” Sep. 2019, arXiv:1909.06586 [cs]. [Online]. Available: http://arxiv.org/abs/1909.06586 [3] E. Dantec, M. Naveau, P. Fernbach, N. Villa, G. Saurel, O. Stasse, M. Taix, and N. Mansard, “Whole-Body Model Predictive Control for Biped Locomotion on a Torque-Controlled Humanoid Robot,” in 
+
+2022 IEEE-RAS 21st International Conference on Humanoid Robots (Humanoids) , Nov. 2022, pp. 638–644, iSSN: 2164-0580. [Online]. Available: https://ieeexplore.ieee.org/document/10000129 [4] H. Li, R. J. Frei, and P. M. Wensing, “Model Hierarchy Predictive Control of Robotic Systems,” IEEE Robotics and Automation Letters ,vol. 6, no. 2, pp. 3373–3380, Apr. 2021. [Online]. Available: https://ieeexplore.ieee.org/document/9361258 [5] H. Li and P. M. Wensing, “Cafe-Mpc: A Cascaded-Fidelity Model Predictive Control Framework With Tuning-Free Whole-Body Control,” 
+
+IEEE Transactions on Robotics , vol. 41, pp. 837–856, 2025. [Online]. Available: https://ieeexplore.ieee.org/document/10759808/ [6] C. Khazoom, S. Heim, D. Gonzalez-Diaz, and S. Kim, “Optimal Scheduling of Models and Horizons for Model Hierarchy Predictive Control,” in 2023 IEEE International Conference on Robotics and Automation (ICRA) , May 2023, pp. 9952–9958. [Online]. Available: https://ieeexplore.ieee.org/abstract/document/10160528 [7] A. Jordana, S. Kleff, A. Meduri, J. Carpentier, N. Mansard, and L. Righetti, “Structure-Exploiting Sequential Quadratic Programming for Model-Predictive Control,” IEEE Transactions on Robotics , vol. 41, pp. 4960–4974, 2025. [Online]. Available: https://ieeexplore.ieee.org/ document/11112619 [8] R. Verschueren, G. Frison, D. Kouzoupis, J. Frey, N. v. Duijkeren, A. Zanelli, B. Novoselnik, T. Albin, R. Quirynen, and M. Diehl, “acados—a modular open-source framework for fast embedded optimal control,” Mathematical Programming Computation , vol. 14, no. 1, pp. 147–183, Mar. 2022. [Online]. Available: https://doi.org/10.1007/ s12532-021-00208-8 [9] C. Khazoom, S. Hong, M. Chignoli, E. Stanger-Jones, and S. Kim, “Tailoring Solution Accuracy for Fast Whole-Body Model Predictive Control of Legged Robots,” IEEE Robotics and Automation Letters ,vol. 9, no. 12, pp. 11 074–11 081, Dec. 2024. [Online]. Available: https://ieeexplore.ieee.org/document/10669220/ [10] J. Frey, K. Baumg¨ artner, G. Frison, and M. Diehl, “Multi-Phase Optimal Control Problems for Efficient Nonlinear Model Predictive Control With acados,” Optimal Control Applications and Methods , vol. 46, no. 2, pp. 827–845, 2025. [Online]. Available: https://onlinelibrary.wiley.com/doi/abs/10.1002/oca.3234 [11] S. Caron, Q.-C. Pham, and Y. Nakamura, “Stability of surface contacts for humanoid robots: Closed-form formulae of the Contact Wrench Cone for rectangular support areas,” in 2015 IEEE International Conference on Robotics and Automation (ICRA) . Seattle, WA, USA: IEEE, May 2015, pp. 5107–5112. [Online]. Available: http: //ieeexplore.ieee.org/document/7139910/ [12] J. Carpentier, G. Saurel, G. Buondonno, J. Mirabel, F. Lamiraux, O. Stasse, and N. Mansard, “The pinocchio c++ library – a fast and flexible implementation of rigid body dynamics algorithms and their analytical derivatives,” in IEEE International Symposium on System Integrations (SII) , 2019. [13] J. A. E. Andersson, J. Gillis, G. Horn, J. B. Rawlings, and M. Diehl, “CasADi – A software framework for nonlinear optimization and opti-mal control,” Mathematical Programming Computation , vol. 11, no. 1, pp. 1–36, 2019. [14] G. Frison and M. Diehl, “HPIPM: a high-performance quadratic programming framework for model predictive control,” IFAC-PapersOnLine , vol. 53, no. 2, pp. 6563–6569, 2020. [Online]. Available: https://linkinghub.elsevier.com/retrieve/pii/S2405896320303293
