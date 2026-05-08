@@ -1,0 +1,772 @@
+Title: EA-WM: Event-Aware Generative World Model with Structured Kinematic-to-Visual Action Fields
+
+URL Source: https://arxiv.org/pdf/2605.06192v1
+
+Published Time: Fri, 08 May 2026 01:44:52 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# EA-WM: Event-Aware Generative World Model with Structured Kinematic-to-Visual Action Fields 
+
+Zhaoyang Yang 1,3 Yurun Jin 3,4 
+
+Lizhe Qi 1*
+
+Kai Chen 2,3,5 ∗† 
+
+Cong Huang 2,3 ∗
+
+> 1
+
+Fudan University 2Zhongguancun Academy 
+
+> 3
+
+Zhongguancun Institute of Artificial Intelligence 
+
+> 4
+
+University of Science and Technology of China 5DeepCybo 
+
+## Abstract 
+
+Pretrained video diffusion models provide powerful spatiotemporal generative priors, making them a natural foundation for robotic world models. While recent world-action models jointly optimize future videos and actions, they predominantly treat video generation as an auxiliary representation for policy learning. Conse-quently, they insufficiently explore the inverse problem: leveraging action signals to guide video synthesis, thereby often failing to preserve precise robot spatial geome-try and fine-grained robot-object interaction dynamics in the generated rollouts. To bridge this gap, we present EA-WM , an Event-Aware Generative World Model that effectively closes the loop between kinematic control and visual perception. Rather than injecting joint or end-effector actions as abstract, low-dimensional tokens, EA-WM projects actions and kinematic states directly into the target camera view as Structured Kinematic-to-Visual Action Fields (KVAFs). To fully exploit this geo-metrically grounded representation, we introduce event-aware bidirectional fusion blocks that modulate cross-branch attention, capturing object state changes and interaction dynamics. Evaluated on the comprehensive WorldArena benchmark, EA-WM achieves state-of-the-art performance, outperforming existing baselines by a significant margin. 
+
+## 1 Introduction 
+
+Recent video foundation models have rapidly improved the ability to synthesize temporally coherent, high-fidelity videos. From latent video diffusion models and space-time diffusion architectures to diffusion-transformer systems such as CogVideoX [ 27 ] and the open Wan series [ 25 , 24 , 5], these models learn strong priors over appearance, motion, and scene evolution from large-scale video corpora [ 4, 2 , 27 , 25 ]. This progress has motivated the view that scaled video generation can move beyond visual content creation toward world simulation [ 12 , 1]. Since robot manipulation is fundamentally a process of predicting how actions change visual states over time, such spatiotemporal priors make video generation models a natural foundation for robotic world modeling. Driven by this potential, recent robotics research has begun to adapt these video priors for several roles. Some methods [ 26 , 16 , 32 ] use video world models as predictive simulators to roll out the visual consequences of candidate actions, enabling action-conditioned video prediction, visual planning, model-based reinforcement learning, and fine-grained robot-object interaction simulation. Other work [ 6 , 11 , 15 , 10 , 22 ] uses generated rollouts as robot-learning infrastructure: they can synthesize additional robot trajectories beyond manual data collection, provide video-based supervision for  
+
+> *Corresponding authors. †Project lead. Preprint.
+> arXiv:2605.06192v1 [cs.CV] 7 May 2026
+
+Figure 1: Comparison between direct low-dimensional action conditioning and the proposed Struc-tured Kinematic-to-Visual Action Fields (KVAFs). policy learning, and offer scalable proxies for evaluating VLA policies without repeatedly executing every policy on physical robots. Meanwhile, recent world-action models [ 31 , 28 , 7 ] have begun to jointly tune video generation and action modeling within unified generative frameworks, showing that future videos can provide dense world representations for action generation, policy learning, planning, and value estimation. However, these works predominantly treat video generation merely as an auxiliary representation to optimize action prediction. Consequently, they insufficiently explore the crucial inverse problem: how to effectively leverage control signals to guide accurate video synthesis. This oversight leads to a critical limitation: the generated videos often fail to preserve the precise spatial geometry of robot motion and the complex dynamics of robot-object interactions. As high-quality video rollouts are increasingly relied upon as predictive simulators and synthetic data engines for downstream tasks [ 6 , 11 , 15 , 10 , 22 ], mitigating this degradation in rollout quality is imperative. A fundamental obstacle lies in the domain misalignment between low-dimensional control signals and high-dimensional video synthesis. Standard practices typically inject raw joint-space parameters, end-effector vectors, or abstract tokens as conditionings [ 26 , 16 , 32 , 14 ]. While computationally compact, these representations are heavily tied to specific robot embodiments and carry limited spatial context [ 30 ]. They force the video generator to implicitly deduce cross-domain kinematics, frequently resulting in a failure to accurately render robot geometry or capture nuanced physical interactions. Furthermore, conventional architectures often lack an effective interaction mechanism between the action and video pathways, causing the generator to overlook fine-grained interaction information between the robot and objects. To address these challenges, we propose EA-WM , an event-aware robotic video world model conditioned on Structured Kinematic-to-Visual Action Fields (KVAFs). At the representation level, EA-WM constructs KVAFs by lifting low-dimensional robot actions and kinematic states into the target camera view through robot kinematics and camera projection. Specifically, KVAFs render depth-aware arm structures, joint landmarks, gripper geometry, end-effector heatmaps, and pose cues as temporally aligned visual fields. Compared with raw action vectors, KVAFs bring action conditioning into the same image domain as future video generation, thereby alleviating domain misalignment and providing richer spatial and geometric cues for robotic world modeling, as shown in Figure 1. At the architectural level, EA-WM augments a diffusion-transformer backbone with a dedicated KVAF branch and interval-based bidirectional fusion, facilitating continuous interaction between structured kinematic cues and video features. Crucially, we introduce an event-aware bidirectional fusion mechanism driven by Event-Difference Latent Supervision (EDLS). By supervising event predictions with VAE-encoded temporal difference latents, EDLS compels the model to dynamically allocate attention not only to the robot’s geometric progression but also to regions undergoing state 2transitions and interaction dynamics, leading to significantly more physically consistent rollouts. The key contributions of this work are summarized as follows: • We introduce EA-WM , an innovative Event-Aware Generative World Model framework for robotic video generation. By projecting low-dimensional kinematic states directly into the target camera view, our framework creates Structured Kinematic-to-Visual Action Fields 
+
+(KVAFs), fundamentally resolving the domain misalignment between raw action tokens and video-domain generation. • We propose an event-aware bidirectional fusion mechanism driven by Event-Difference Latent Supervision (EDLS). This module explicitly regularizes cross-stream attention using temporal difference latents, compelling the model to dynamically attend to critical regions of robot motion, object state transitions, and robot-object interaction dynamics, leading to more physically consistent robot videos. • We achieve superior performance on the WorldArena benchmark. Compared to existing state-of-the-art baselines, EA-WM significantly enhances the physical adherence, 3D geometric accuracy, and fine-grained controllability of generated rollouts, establishing a new standard for robotic video modeling. 
+
+## 2 Related Work 
+
+2.1 Robotic world models based on video generation models 
+
+Recent diffusion-based video generators, including Stable Video Diffusion [ 4], Lumiere [ 2], CogVideoX, and the Wan series [ 27 , 25 , 24 , 5 ], have substantially improved temporal coherence, motion realism, and scene-consistent synthesis, making them increasingly useful as priors for world simulation [ 12 , 1 ]. These priors are especially useful in robotics, where world models must predict how actions change future visual states. Existing robotic video world models span action-conditioned simulators and forward models for planning, model-based RL, and interaction simulation [ 26 , 16 , 32 ], infrastructure methods that use generated videos as synthetic trajectories, supervision, or policy-learning proxies [ 6, 11 ], and learned video environments for scalable VLA evaluation and planning [ 15 , 10 , 22 ]. Recent world-action models further couple video and action generation in unified frameworks [ 31 , 28 , 7]. Despite these advances, how to fully exploit action information to improve future robot-video generation remains insufficiently explored. 
+
+2.2 World action models 
+
+World Action Models (WAMs) are unified generative models that predict both robot actions and future visual states in an aligned manner, as formulated in DreamZero [28]. Recent work [31, 9, 28, 19 , 17 , 21 , 7, 3, 13 ] in this line mainly treats future video modeling as dense supervision or latent guidance for better action generation and policy learning. These WAM-style methods demonstrate that future videos can regularize action learning with physical dynamics, provide denser supervision than action-only imitation, and improve generalization for robot control. However, their emphasis remains largely on how video generation can improve action prediction or policy learning. The reverse direction—using action information as structured guidance to improve future robot-video generation— remains much less explored, even though rollout quality directly affects the usefulness of robotic world models as predictive simulators, planning substrates, and policy-evaluation environments [6, 11, 15, 10, 22]. A key question is therefore how action information should be represented. Existing methods have explored raw joint-space or end-effector vectors, 7-DoF control tokens, latent actions, universal action tokens, and spatial action abstractions. VideoVLA [ 19 ], UVA [ 9], Motus [ 3 ], and ViPRA [ 17 ] represent action information through numerical, latent, or video-conditioned action spaces, while UniAct [ 30 ] and SpatialVLA [ 14 ] study more transferable or spatially structured action representations. While compact and effective for policy learning, these representations remain weakly grounded in the target camera view and carry limited explicit spatial and geometric information for video generation. WoG [ 21 ] also highlights the challenge of preserving sufficient fine-grained information under compact future-conditioning representations. Recent visual representations lift actions into image or video space via RGB action targets [ 20 ], virtual robot renders [ 23 ], pixel-grounded multiview action videos [ 29 ], or multiview heatmap videos [ 8 ]. However, their action 3Figure 2: Overview of EA-WM. Robot actions and kinematic states are first lifted into camera-aligned KVAFs. RGB videos and KVAFs are encoded into the shared Wan2.2 latent space and processed by a video branch and a KVAF branch. Sparse event-aware bidirectional fusion exchanges information between the two branches, while EDLS guides the model to attend to motion and interaction changes. channels are often intentionally compact and robot-centric: they prioritize joint targets, rendered robot bodies, arm-motion cues, or heatmaps, so fine-grained kinematic detail may still be limited, and robot-object interaction information is often modeled only indirectly through companion RGB branches or downstream video generation rather than encoded explicitly in the action representation itself. 
+
+## 3 Method 
+
+EA-WM is an action-guided robotic video world model built upon the Wan2.2-TI2V backbone [ 25 ]. The overall pipeline is shown in Figure 2. Given an initial RGB observation, a language instruction, and a sequence of robot actions, our goal is to generate future robot videos that are not only visually plausible but also consistent with the commanded robot motion and robot-object interactions. Instead of injecting low-dimensional actions directly into the video generator, EA-WM first transforms actions and kinematic states into Structured Kinematic-to-Visual Action Fields 
+
+(KVAFs), which provide camera-aligned visual cues of robot geometry, motion, and end-effector intent. Both RGB videos and KVAFs are encoded into the latent space of the pretrained video VAE, allowing action information to guide generation in the same representation space as the target videos. To effectively exploit this structured action signal, EA-WM introduces a dedicated KVAF branch and event-aware bidirectional fusion blocks on top of the Wan2.2 video DiT. The KVAF branch learns to accurately predict KVAFs, encouraging the branch to understand the geometric and motion information embedded in KVAFs. Meanwhile, the event-aware bidirectional fusion blocks are guided by Event-Difference Latent Supervision (EDLS), which uses VAE-encoded temporal difference latents to supervise event predictions, encouraging the model to capture object motion and robot-object interaction cues. Through cross-attention, the video backbone exchanges information with the KVAF branch, allowing structured action geometry and event-aware interaction cues to be shared with the generative stream for more accurate future video generation. 
+
+3.1 Structured Kinematic-to-Visual Action Fields 
+
+We introduce Structured Kinematic-to-Visual Action Fields (KVAFs), which convert low-dimensional robot actions and kinematic states into camera-aligned visual fields for future video generation. Given a trajectory of length T , we construct a sequence V = {Vt}Tt=1 , where each frame Vt ∈ RH×W ×3
+
+4is rendered in the target camera view. Here H and W denote the image height and width, and t
+
+indexes the video timestep. At time step t, we take arm joint values qt, gripper states gt, end-effector poses ξt, and camera parameters (Kt, Et) as input. Here Kt denotes the camera intrinsic matrix, and Et denotes the world-to-camera extrinsic matrix. For simplicity, we omit the left/right arm index in the notation; in practice, KVAFs are constructed for both arms. We first recover 3D robot geometry by forward kinematics, 
+
+TWk (t) = TWk−1(t)Torig  
+
+> k
+
+Tmot  
+
+> k
+
+(qt,k ), (1) where TWk (t) is the world-frame pose of the k-th robot link, Torig  
+
+> k
+
+is the static joint transform from the robot kinematic chain, and Tmot  
+
+> k
+
+(qt,k ) is the motion transform induced by the joint value qt,k .The resulting link poses provide arm and gripper keypoints Pt = {pWk (t)} in the world frame. We then project these 3D keypoints into the camera plane by 
+
+pC = Et
+
+pW
+
+1
+
+
+
+, ˆu = KtpC
+
+> 1:3
+
+, (u, v ) = 
+
+ ˆux
+
+ˆuz
+
+, ˆuy
+
+ˆuz
+
+
+
+. (2) Here pW and pC denote the same robot keypoint in the world and camera coordinate frames, respectively; ˆu is the homogeneous image coordinate, and (u, v ) is the final projected pixel location. Points behind the camera are discarded. Finally, we rasterize depth-aware arm skeletons, joint landmarks, gripper geometry, end-effector heatmaps, and pose axes on a black canvas to obtain 
+
+Vt = Render  Pt, ξt, Kt, Et
+
+. (3) The rendering operator composes the projected robot keypoints, end-effector pose cues, and gripper-related visual elements into an RGB visual action field. By expressing robot actions in the same image domain as the target rollout, KVAFs provide spatially grounded and temporally aligned motion cues that are more compatible with video-based robotic world modeling than raw action tokens. 
+
+3.2 Event-Aware Generative World Model 
+
+EA-WM builds upon the Wan2.2-TI2V backbone and preserves its original text-conditioned video denoising path. To inject structured action information, we encode KVAFs with the same video VAE and introduce a dedicated KVAF branch in the latent space. After patchification, the noised video latent and KVAF latent are represented as two token streams, denoted by Hv and Hk. The video stream follows the original Wan2.2 DiT blocks, while the KVAF stream is modeled by a full-depth copy of these blocks, allowing action information to remain as a structured visual stream rather than being compressed into a low-dimensional token. We insert event-aware fusion modules at a sparse set of layers S. For ℓ ∈ S , an event MLP first computes a shared event representation from the current video and KVAF tokens, and then predicts both a per-token event gate and an event latent: 
+
+Mℓ = Φ ℓ
+
+ Hvℓ−1, Hkℓ
+
+ , Gℓ = Γ ℓ(Mℓ), ˆEℓ = Ψ ℓ(Mℓ). (4) Here Gℓ is a per-token event gate that modulates cross-stream information exchange, while ˆEℓ is the predicted event latent supervised by EDLS. Since both outputs are derived from the shared event representation Mℓ, EDLS encourages Mℓ to encode temporal changes and interaction cues, which are then passed to the gate Gℓ and used to regulate video–KVAF fusion. The event gate controls bidirectional cross-attention between the two streams: 
+
+˜Hvℓ−1 = Hvℓ−1 + Gℓ ⊙ CA v←k
+
+ Hvℓ−1, Hkℓ
+
+ , (5) 
+
+˜Hkℓ = Hkℓ + Gℓ ⊙ CA k←v
+
+ Hkℓ , Hvℓ−1
+
+ . (6) The updated video tokens are then processed by the original Wan2.2 block, and the updated KVAF tokens are passed to the next KVAF branch block. At non-fusion layers, the two streams are updated without cross-stream fusion. In this way, EDLS does not merely add an auxiliary event prediction head; it shapes the shared event representation that produces the gate, and the gate directly controls 5Table 1: Quantitative comparison on selected WorldArena metrics.All metrics are normalized to 
+
+[0 , 1] and higher is better. P3CScore is the average over the six selected metrics multiplied by 100. Physics Adherence 3D Accuracy Controllability P3CScore                                                                    
+
+> Model Interaction Quality Trajectory Accuracy Depth Accuracy Perspectivity Instruction Following Semantic Alignment CogVideoX 0.594 0.353 0.910 0.783 0.727 0.898 71.08 WoW 0.556 0.206 0.728 0.767 0.569 0.884 61.83 Wan 2.2 0.518 0.163 0.777 0.766 0.538 0.888 60.83 TesserAct 0.580 0.140 0.716 0.792 0.615 0.878 62.02 GigaWorld-0 0.537 0.155 0.632 0.760 0.616 0.859 59.32 Vidar 0.535 0.193 0.787 0.759 0.591 0.883 62.47 Cosmos-Predict 2.5 (text) 0.387 0.082 0.705 0.796 0.266 0.773 50.15 Genie Envisioner 0.205 0.068 0.866 0.528 0.203 0.854 45.40
+> EA-WM (Ours) 0.682 0.430 0.959 0.838 0.792 0.895 76.60
+
+how much KVAF information is injected into the video stream and how much scene information is fed back to the KVAF stream. To construct EDLS, we compute a frame-difference video from the input sequence {Iτ }Tτ =1 :
+
+∆I1 = 0, ∆Iτ = |Iτ − Iτ −1|, τ = 2 , . . . , T, (7) and encode it with the same VAE to obtain the event latent target E. Let ˆYv and ˆYk be the predictions of the video and KVAF heads, and Yv and Yk be their corresponding flow-matching targets. The total training objective is 
+
+L = ω(t)
+
+
+
+ˆYv − Yv 22
+
++ ˆYk − Yk 22
+
+
+
++ λevt 
+
+1
+
+|S| 
+
+X
+
+> ℓ∈S
+
+Unpatchify( ˆEℓ) − E 22
+
+. (8) Here ω(t) denotes the timestep-dependent flow-matching training weight used by the scheduler, and λevt controls the strength of EDLS. The first video frame is treated as the image condition and excluded from the video prediction loss. This objective encourages EA-WM to use KVAF information in regions where motion and interaction changes occur, preserving action-consistent robot geometry while remaining sensitive to object motion and robot-object interactions. 
+
+## 4 Experiments 
+
+4.1 Experimental Details 
+
+We train EA-WM in two stages: the first stage freezes the event-aware fusion modules and trains the main DiT LoRA, KVAF-branch LoRA, and KVAF head to stabilize the two streams; the second stage unfreezes the fusion modules to learn cross-stream event-aware interaction. We evaluate generated videos with WorldArena [ 18 ], a unified benchmark for embodied world models. We use a LoRA rank of 32, and set the learning rate to 8 × 10 −5 for all trainable components. Training is conducted on 32 H100 GPUs with a batch size of 32. Following WorldArena, we use the same Robotwin dataset and segmentation method and select three dimensions for evaluation: Physics Adherence, 3D Accuracy, and Controllability. These dimensions measure interaction plausibility, trajectory consistency, depth and perspective accuracy, instruction following, and semantic consistency. We compare EA-WM with multiple representative video world models under the selected metrics. 
+
+4.2 Experimental Results Quantitative Analysis. Following WorldArena, we evaluate EA-WM on three dimensions: Physics Adherence, 3D Accuracy, and Controllability. All metrics are normalized to [0 , 1] , and higher is better. We report P3CScore , the average score over the six selected metrics multiplied by 100. The final results are shown in Table 1. EA-WM achieves the best overall P3CScore of 76.60, outperforming the strongest baseline, CogVideoX, by 5.52 points. The improvement is particularly clear on metrics related to action-induced motion and interaction: EA-WM improves Interaction Quality from 0.594 to 0.682, Tra-jectory Accuracy from 0.353 to 0.430, and Instruction Following from 0.727 to 0.792. These gains 6Figure 3: Qualitative comparison on four randomly selected RoboTwin 2.0 tasks. For each task, we visualize results at the same temporal step. Red boxes highlight local robot-object interaction regions. suggest that introducing KVAFs and event-aware bidirectional fusion blocks helps the model better preserve robot-object interaction, follow commanded motion trajectories, and generate videos that are more consistent with the task instruction. EA-WM also improves Depth Accuracy and Perspectivity by 0.049 and 0.042 over the strongest baselines, respectively, indicating stronger 3D consistency. Overall, EA-WM outperforms all compared models on five out of six selected metrics, demonstrating stronger physics adherence, 3D consistency, and controllability for robotic video world modeling. 
+
+Qualitative Analysis. We further conduct qualitative comparisons on four randomly selected tasks, visualizing GT, the Wan2.2 baseline, and EA-WM at the same temporal step for each task. As shown in Figure 3, we compare the results in four aspects: robot-object interaction, preservation of object geometry, physical consistency of robots, and completion of tasks. Compared with the Wan2.2 baseline, EA-WM jointly models KVAF and video streams through event-aware bidirectional fusion, allowing the model to better follow action-induced motion cues and focus on regions where object states and robot-object interactions change. As a result, EA-WM generates more accurate gripper-object contact relations, better preserves object identity and local geometry, and maintains more physically plausible robot poses during manipulation. Overall, EA-WM is closer to GT in both interaction fidelity and task progress, demonstrating stronger action-consistent future video generation. 
+
+4.3 Ablation Study 
+
+To verify the effectiveness of each component in EA-WM, we conduct ablation studies on the same selected WorldArena metrics used in quantitative evaluation. We compare the full model with three variants: the original Wan2.2 backbone, a variant that replaces KVAFs with numerical action representations, and a variant that removes event-aware fusion while keeping bidirectional cross-attention for video–KVAF interaction. We report Physics Adherence, 3D Accuracy, Controllability, and the averaged P3CScore .The ablation results reveal the complementary roles of KVAFs and EAF. Compared with the variant without KVAFs, the full EA-WM improves P3CScore by 5.63 points, with particularly clear gains on Trajectory Accuracy and Depth Accuracy. This suggests that camera-aligned KVAFs provide useful geometric motion cues beyond numerical action inputs, especially for preserving robot trajectories and 3D structure in the generated videos. Compared with the variant without EAF, EA-WM improves 
+
+P3CScore by 1.80 points and shows notable gains on Interaction Quality and Perspectivity, indicating that EDLS-guided event-aware fusion helps the model better focus on motion changes and robot-object interaction regions during cross-stream information exchange. Although the variant without EAF slightly outperforms EA-WM on Semantic Alignment, the full model achieves the best overall score and more balanced performance across physics adherence, 3D accuracy, and controllability. We further visualize the ranking_block_size task to more intuitively compare the differences among ablation variants. As shown in Figure 4, the two ablations exhibit complementary failure modes. The variant without KVAFs can better maintain the local relations between the robot arm and objects, but it is less accurate in modeling the grasping trajectory and action-induced motion. In contrast, the variant without event-aware fusion can better infer the grasping route of the robot 7Table 2: Ablation study on selected WorldArena metrics. All metrics are normalized to [0 , 1] and higher is better. P3CScore is the average over the six selected metrics multiplied by 100. Physics Adherence 3D Accuracy Controllability P3CScore                                 
+
+> Variant Interaction Quality Trajectory Accuracy Depth Accuracy Perspectivity Instruction Following Semantic Alignment Wan2.2 0.518 0.163 0.777 0.766 0.538 0.888 60.83 w/o KVAFs 0.670 0.298 0.884 0.791 0.726 0.889 70.97 w/o EAF 0.656 0.407 0.947 0.800 0.782 0.896 74.80
+> EA-WM 0.682 0.430 0.959 0.838 0.792 0.895 76.60
+
+Figure 4: Ablation visualization on the ranking_block_size task. arm from KVAFs, but it struggles to preserve object consistency, such as the relative shape, size, and spatial arrangement of the blocks. By combining KVAFs with event-aware fusion, EA-WM handles both aspects more effectively: it follows the spatial motion pattern of the robot while preserving object consistency and robot-object interaction fidelity, generating videos that better match the physical progression of the task. 
+
+4.4 Additional Analysis Action recovery and image-domain alignment of KVAFs. To better understand the information encoded in KVAFs, we conduct a preliminary action-recovery analysis in the numerical action space. We use a heuristic procedure to recover end-effector translation, orientation, and gripper states from generated KVAF videos, and compare the recovered actions with predictions from a raw-action baseline that directly predicts numerical actions. As shown in Table 3, numerical action prediction still performs better on translation, rotation, and gripper errors. This gap is expected, since KVAFs are designed as image-domain action fields rather than direct numerical action outputs, and our current recovery pipeline depends on detecting small visual cues such as heatmap centers, pose axes, and gripper geometry. The detection rate of the heuristic KVAF recovery is approximately 0.45 ,suggesting that mapping structured visual action fields back to precise numerical actions remains a challenging problem. Nevertheless, the recovery results indicate that KVAFs contain partially recoverable action information, and motivate future work on more reliable bridges between image-domain action fields and numerical action spaces. More importantly, the overlay visualizations in Figure 5 show that the predicted KVAFs are well aligned with the generated robot motion across randomly selected tasks. The projected skeletons, end-effector cues, and pose axes follow the robot configuration in the generated videos, indicating that the network has learned the spatial and physical information contained in KVAFs rather than treating them as abstract conditioning signals. This image-domain alignment helps connect action-induced robot motion with object locations and local interaction regions, providing an interpretable bridge between low-dimensional actions and future video generation. 8Table 3: Numerical action recovery from generated KVAFs. Errors are re-ported for translation, rotation, and grip-per actions; lower is better.           
+
+> Method Translation Error Rotation Error Gripper Error Raw-action baseline 0.004 0.009 0.013
+> KVAF recovery 0.0155 0.110 0.039
+> Heuristic KVAF recovery detection rate: ∼0.45 .
+
+Figure 5: KVAFs overlays on generated videos. The overlays align with generated robot motion and reveal interpretable spatial cues learned from KVAFs. Table 4: Comparison with action- or trajectory-conditioned baselines on selected WorldArena metrics. All metrics are normalized to [0 , 1] and higher is better. P3CScore is the average over the six selected metrics multiplied by 100. Physics Adherence 3D Accuracy Controllability P3CScore                                        
+
+> Model Interaction Quality Trajectory Accuracy Depth Accuracy Perspectivity Instruction Following Semantic Alignment CtrlWorld 0.621 0.477 0.930 0.796 0.727 0.891 74.03 IRASim 0.566 0.364 0.931 0.779 0.660 0.885 69.75 Cosmos-Predict 2.5 (action) 0.550 0.295 0.886 0.764 0.584 0.888 66.12 RoboMaster 0.536 0.116 0.834 0.759 0.577 0.876 61.63
+> KVAF-conditioned generation 0.682 0.494 0.977 0.850 0.784 0.901 78.13
+
+KVAF-conditioned video generation. We further compare KVAF-conditioned generation with mainstream action- or trajectory-conditioned baselines. This analysis focuses on whether representing actions as camera-aligned visual fields can provide a stronger conditioning interface than numerical actions or trajectories. As shown in Table 4, KVAF-conditioned generation achieves the best performance across all six selected metrics and obtains the highest P3CScore . Compared with raw action- or trajectory-conditioned models, KVAFs provide richer spatial and geometric cues in the video domain, leading to better physics adherence, 3D consistency, and controllability. These results further suggest that transforming action information into structured visual action fields is an effective way to guide robotic video world modeling. 
+
+## 5 Limitations 
+
+EA-WM requires robot kinematics, camera calibration, and synchronized action-state logs to construct KVAFs. While this yields accurate, well-aligned action representations in simulation, real-world deployment may be affected by calibration errors, occlusions, sensor noise, or embodiment shifts. Current KVAFs mainly encode robot-side geometric motion cues, while object-state changes and robot-object interactions are captured indirectly through event-aware fusion and EDLS. Extending KVAFs with object-centric or contact-aware visual fields is a promising future direction. 
+
+## 6 Conclusion 
+
+We present EA-WM , an event-aware generative world model for action-consistent robot-video generation. Unlike current WAMs that mainly optimize action prediction or policy learning, EA-WM focuses on preserving robot spatial motion and robot-object interaction dynamics in generated videos. It maps actions and kinematic states into Structured Kinematic-to-Visual Action Fields (KVAFs) aligned with the visual generation domain, and integrates them through EDLS-guided event-aware bidirectional fusion. On WorldArena, EA-WM achieves the best P3CScore among compared models. 9References 
+
+[1] Niket Agarwal, Arslan Ali, Maciej Bala, Yogesh Balaji, Erik Barker, Tiffany Cai, Prithvijit Chattopadhyay, Yongxin Chen, Yin Cui, Yifan Ding, et al. Cosmos world foundation model platform for physical ai. arXiv preprint arXiv:2501.03575 , 2025. [2] Omer Bar-Tal, Hila Chefer, Omer Tov, Charles Herrmann, Roni Paiss, Shiran Zada, Ariel Ephrat, Junhwa Hur, Guanghui Liu, Amit Raj, Yuanzhen Li, Michael Rubinstein, Tomer Michaeli, Oliver Wang, Deqing Sun, Tali Dekel, and Inbar Mosseri. Lumiere: A space-time diffusion model for video generation. arXiv preprint arXiv:2401.12945 , 2024. [3] Hongzhe Bi, Hengkai Tan, Shenghao Xie, Zeyuan Wang, Shuhe Huang, Haitian Liu, Ruowen Zhao, Yao Feng, Chendong Xiang, Yinze Rong, Hongyan Zhao, Hanyu Liu, Zhizhong Su, Lei Ma, Hang Su, and Jun Zhu. Motus: A unified latent action world model. arXiv preprint arXiv:2512.13030 , 2025. [4] Andreas Blattmann, Tim Dockhorn, Sumith Kulal, Daniel Mendelevitch, Maciej Kilian, Do-minik Lorenz, Yam Levi, Zion English, Vikram Voleti, Adam Letts, Varun Jampani, and Robin Rombach. Stable video diffusion: Scaling latent video diffusion models to large datasets. arXiv preprint arXiv:2311.15127 , 2023. [5] Xin Gao, Li Hu, Siqi Hu, Mingyang Huang, Chaonan Ji, Dechao Meng, Jinwei Qi, Penchong Qiao, Zhen Shen, Yafei Song, Ke Sun, Linrui Tian, Guangyuan Wang, Qi Wang, Zhongjian Wang, Jiayu Xiao, Sheng Xu, Bang Zhang, Peng Zhang, Xindi Zhang, Zhe Zhang, Jingren Zhou, and Lian Zhuo. Wan-S2V: Audio-driven cinematic video generation. arXiv preprint arXiv:2508.18621 , 2025. [6] Joel Jang, Seonghyeon Ye, Zongyu Lin, Jiannan Xiang, Johan Bjorck, Yu Fang, Fengyuan Hu, Spencer Huang, Kaushil Kundalia, Yen-Chen Lin, et al. Dreamgen: Unlocking generalization in robot learning through video world models. arXiv preprint arXiv:2505.12705 , 2025. [7] Moo Jin Kim, Yihuai Gao, Tsung-Yi Lin, Yen-Chen Lin, Yunhao Ge, Grace Lam, Percy Liang, Shuran Song, Ming-Yu Liu, Chelsea Finn, and Jinwei Gu. Cosmos policy: Fine-tuning video models for visuomotor control and planning. arXiv preprint arXiv:2601.16163 , 2026. [8] Peiyan Li, Yixiang Chen, Yuan Xu, Jiabing Yang, Xiangnan Wu, Jun Guo, Nan Sun, Long Qian, Xinghang Li, Xin Xiao, Jing Liu, Nianfeng Liu, Tao Kong, Yan Huang, Liang Wang, and Tieniu Tan. Multi-view video diffusion policy: A 3d spatio-temporal-aware video action model. arXiv preprint arXiv:2604.03181 , 2026. [9] Shuang Li, Yihuai Gao, Dorsa Sadigh, and Shuran Song. Unified video action model. arXiv preprint arXiv:2503.00200 , 2025. [10] Yaxuan Li, Yichen Zhu, Junjie Wen, Chaomin Shen, and Yi Xu. Worldeval: World model as real-world robot policies evaluator. arXiv preprint arXiv:2505.19017 , 2025. [11] Junbang Liang, Pavel Tokmakov, Ruoshi Liu, Sruthi Sudhakar, Paarth Shah, Rares Ambrus, and Carl Vondrick. Video generators are robot policies. arXiv preprint arXiv:2508.00795 , 2025. [12] OpenAI. Video generation models as world simulators. https://openai.com/index/ video-generation-models-as-world-simulators/ , 2024. Technical report/blog post. [13] Jonas Pai, Liam Achenbach, Victoriano Montesinos, Benedek Forrai, Oier Mees, and Elvis Nava. mimic-video: Video-action models for generalizable robot control beyond vlas. arXiv preprint arXiv:2512.15692 , 2025. [14] Delin Qu, Haoming Song, Qizhi Chen, Yuanqi Yao, Xinyi Ye, Yan Ding, Zhigang Wang, JiaYuan Gu, Bin Zhao, Dong Wang, and Xuelong Li. SpatialVLA: Exploring spatial representations for visual-language-action model. arXiv preprint arXiv:2501.15830 , 2025. [15] Julian Quevedo, Ansh Kumar Sharma, Yixiang Sun, Varad Suryavanshi, Percy Liang, and Sherry Yang. Worldgym: World model as an environment for policy evaluation. arXiv preprint arXiv:2506.00613 , 2025. 10 [16] Marc Rigter, Tarun Gupta, Agrin Hilmkil, and Chao Ma. AVID: Adapting video diffusion models to world models. arXiv preprint arXiv:2410.12822 , 2024. [17] Sandeep Routray, Hengkai Pan, Unnat Jain, Shikhar Bahl, and Deepak Pathak. Vipra: Video prediction for robot actions. arXiv preprint arXiv:2511.07732 , 2025. [18] Yu Shang, Zhuohang Li, Yiding Ma, Weikang Su, Xin Jin, Ziyou Wang, Lei Jin, Xin Zhang, Yinzhou Tang, Haisheng Su, Gao Chen, Wei Wu, Xihui Liu, Dhruv Shah, Zhaoxiang Zhang, Zhibo Chen, Jun Zhu, Yonghong Tian, Tat-Seng Chua, Wenwu Zhu, and Yong Li. WorldArena: A unified benchmark for evaluating perception and functional utility of embodied world models. 
+
+arXiv preprint arXiv:2602.08971 , 2026. [19] Yichao Shen, Fangyun Wei, Zhiying Du, Yaobo Liang, Yan Lu, Jiaolong Yang, Nanning Zheng, and Baining Guo. Videovla: Video generators can be generalizable robot manipulators. arXiv preprint arXiv:2512.06963 , 2025. [20] Mohit Shridhar, Yat Long Lo, and Stephen James. Generative image as action models. arXiv preprint arXiv:2407.07875 , 2024. [21] Yue Su, Sijin Chen, Haixin Shi, Mingyu Liu, Zhengshen Zhang, Ningyuan Huang, Weiheng Zhong, Zhengbang Zhu, Yuxiao Liu, and Xihui Liu. World guidance: World modeling in condition space for action generation. arXiv preprint arXiv:2602.22010 , 2026. [22] Wei-Cheng Tseng, Jinwei Gu, Qinsheng Zhang, Hanzi Mao, Ming-Yu Liu, Florian Shkurti, and Yen-Chen Lin. Scalable policy evaluation with video world models. arXiv preprint arXiv:2511.11520 , 2025. [23] Vitalis Vosylius, Younggyo Seo, Jafar Uruç, and Stephen James. Render and diffuse: Aligning image and action spaces for diffusion-based behaviour cloning. arXiv preprint arXiv:2405.18196 , 2024. [24] Wan Team. Wan2.2: Open and advanced large-scale video generative models. https:// github.com/Wan-Video/Wan2.2 , 2025. GitHub repository and model release. [25] Wan Team. Wan: Open and advanced large-scale video generative models. arXiv preprint arXiv:2503.20314 , 2025. [26] Jialong Wu, Shaofeng Yin, Ningya Feng, Xu He, Dong Li, Jianye Hao, and Mingsheng Long. iVideoGPT: Interactive videogpts are scalable world models. In Advances in Neural Information Processing Systems , 2024. [27] Zhuoyi Yang, Jiayan Teng, Wendi Zheng, Ming Ding, Shiyu Huang, Jiazheng Xu, Yuanming Yang, Wenyi Hong, Xiaohan Zhang, Guanyu Feng, Da Yin, Xiaotao Gu, Yuxuan Zhang, Weihan Wang, Yean Cheng, Ting Liu, Bin Xu, Yuxiao Dong, and Jie Tang. CogVideoX: Text-to-video diffusion models with an expert transformer. In International Conference on Learning Representations , 2025. [28] Seonghyeon Ye, Yunhao Ge, Kaiyuan Zheng, Shenyuan Gao, Sihyun Yu, George Kurian, Suneel Indupuru, You Liang Tan, Chuning Zhu, Jiannan Xiang, et al. World action models are zero-shot policies. arXiv preprint arXiv:2602.15922 , 2026. [29] Haoyu Zhen, Zixian Gao, Qiao Sun, Yilin Zhao, Yuncong Yang, Yilun Du, Pengsheng Guo, Tsun-Hsuan Wang, Yi-Ling Qiao, and Chuang Gan. Action images: End-to-end policy learning via multiview video generation. arXiv preprint arXiv:2604.06168 , 2026. [30] Jinliang Zheng, Jianxiong Li, Dongxiu Liu, Yinan Zheng, Zhihao Wang, Zhonghong Ou, Yu Liu, Jingjing Liu, Ya-Qin Zhang, and Xianyuan Zhan. Universal actions for enhanced embodied foundation models. arXiv preprint arXiv:2501.10105 , 2025. [31] Chuning Zhu, Raymond Yu, Siyuan Feng, Benjamin Burchfiel, Paarth Shah, and Abhishek Gupta. Unified world models: Coupling video and action diffusion for pretraining on large robotic datasets. arXiv preprint arXiv:2504.02792 , 2025. [32] Fangqi Zhu, Hongtao Wu, Song Guo, Yuxiao Liu, Chilam Cheang, and Tao Kong. IRASim: A fine-grained world model for robot manipulation. In Proceedings of the IEEE/CVF International Conference on Computer Vision , 2025. 11 A Appendix 
+
+A.1 Detailed Network Architecture Pipeline 
+
+This section describes the full EA-WM network pipeline. We focus on how RGB videos, KVAFs, and event-difference targets are processed by the Wan2.2-based architecture. 
+
+Latent preparation. Given an RGB video sequence X = {Iτ }Tτ =1 , the corresponding KVAF sequence K, and text condition c, EA-WM first encodes both videos and KVAFs with the same pretrained video VAE: 
+
+zv 
+
+> 0
+
+= VAE( X), zk 
+
+> 0
+
+= VAE( K).
+
+This places the target video and action-derived KVAFs in a shared latent space. During flow-matching training, both latents are perturbed at timestep t, producing noised latents zvt and zkt together with their training targets Yv and Yk.
+
+Dual-stream denoising. After patchification, the video latent and KVAF latent are represented as two token streams, 
+
+Hv 
+
+> 0
+
+= P(zvt ), Hk 
+
+> 0
+
+= P(zkt ).
+
+The video stream follows the original Wan2.2 DiT blocks, while the KVAF stream is processed by a full-depth copy of the DiT blocks. Event-aware fusion modules are inserted at a sparse set of layers 
+
+S, allowing the two streams to exchange information only at selected depths. This keeps the KVAF branch expressive while avoiding dense, overly expensive cross-stream interaction. 
+
+Event-Difference Latent Supervision. EA-WM uses frame-difference latents as event supervision. Given the input video, we compute 
+
+∆I1 = 0, ∆Iτ = |Iτ − Iτ −1|, τ = 2 , . . . , T, 
+
+and encode the difference sequence with the same video VAE: 
+
+E = VAE( {∆Iτ }Tτ =1 ).
+
+This target supervises the event prediction branch in each fusion module. Since the event prediction and event gate share the same event representation, EDLS also shapes the gate that controls video– KVAF cross-attention. 
+
+Algorithm 1 EA-WM training step 
+
+Require: RGB video X, KVAF sequence K, text condition c, fusion layers S 
+
+> 1:
+
+Encode latents: zv 
+
+> 0
+
+← VAE( X), zk 
+
+> 0
+
+← VAE( K) 
+
+> 2:
+
+Sample timestep t and construct noised latents and flow targets: 
+
+(zvt , Yv ), (zkt , Yk) ← FlowMatch( zv 
+
+> 0
+
+, zk 
+
+> 0
+
+, t ) 
+
+> 3:
+
+Construct EDLS target: E ← VAE( {| Iτ − Iτ −1|} Tτ =1 ) 
+
+> 4:
+
+Patchify: Hv 
+
+> 0
+
+← P (zvt ), Hk 
+
+> 0
+
+← P (zkt ) 
+
+> 5:
+
+for ℓ = 1 to L do  
+
+> 6:
+
+Update KVAF stream: ¯Hkℓ ← B ℓ(Hkℓ−1, c, t ) 
+
+> 7:
+
+if ℓ ∈ S then  
+
+> 8:
+
+˜Hvℓ−1, Hkℓ , ˆEℓ ← EventFusion ℓ(Hvℓ−1, ¯Hkℓ ) 
+
+> 9:
+
+else  
+
+> 10:
+
+˜Hvℓ−1 ← Hvℓ−1, Hkℓ ← ¯Hkℓ 
+
+> 11:
+
+end if  
+
+> 12:
+
+Update video stream: Hvℓ ← D ℓ( ˜Hvℓ−1, c, t ) 
+
+> 13:
+
+end for  
+
+> 14:
+
+Predict ˆYv ← Head v (HvL), ˆYk ← Head k(HkL) 
+
+> 15:
+
+Compute L = ω(t)( ∥ ˆYv − Yv ∥22 + ∥ ˆYk − Yk∥22) + λevt LEDLS  
+
+> 16:
+
+return L
+
+12 Algorithm 2 Event-aware bidirectional fusion at layer ℓ
+
+Require: Video tokens Hvℓ−1, KVAF tokens ¯Hkℓ 
+
+> 1:
+
+Predict event gate and event latent: 
+
+Gℓ, ˆEℓ ← Φℓ(Hvℓ−1, ¯Hkℓ ) 
+
+> 2:
+
+Video reads KVAF: 
+
+Rvℓ ← CA v←k(Hvℓ−1, ¯Hkℓ ) 
+
+> 3:
+
+KVAF reads video: 
+
+Rkℓ ← CA k←v ( ¯Hkℓ , Hvℓ−1) 
+
+> 4:
+
+Apply event-gated residual fusion: 
+
+˜Hvℓ−1 = Hvℓ−1 + Gℓ ⊙ Rvℓ
+
+Hkℓ = ¯Hkℓ + Gℓ ⊙ Rkℓ 
+
+> 5:
+
+return ˜Hvℓ−1, Hkℓ , ˆEℓ
+
+Event-aware bidirectional fusion. The fusion block is the key interaction module between the video stream and the KVAF stream. It first predicts a shared event representation, from which both the event gate and the event latent are derived. The event latent is supervised by EDLS, while the event gate modulates the strength of bidirectional cross-attention. Therefore, EDLS affects video generation not only through an auxiliary prediction loss, but also through the gate that controls information exchange between the two streams. 
+
+Training objective. The full training loss consists of video flow matching, KVAF flow matching, and EDLS: 
+
+L = ω(t)
+
+
+
+ˆYv − Yv 22
+
++ ˆYk − Yk 22
+
+
+
++ λevt 
+
+1
+
+|S| 
+
+X
+
+> ℓ∈S
+
+Unpatchify( ˆEℓ) − E 22
+
+.
+
+The video loss trains the future video generation branch, the KVAF loss encourages the KVAF branch to preserve structured robot geometry, and EDLS guides the fusion modules to focus on motion and interaction changes. 
+
+A.2 KVAF Construction 
+
+This section describes how we construct Structured Kinematic-to-Visual Action Fields (KVAFs) from robot actions and kinematic states. KVAFs are designed to convert low-dimensional robot-side information into camera-aligned visual action fields, so that action conditioning can be expressed in the same image domain as future video generation. 
+
+Inputs. For each episode, we assume access to the robot URDF, embodiment configuration, camera parameters, and per-frame robot states. At time step t, the input to KVAF construction is 
+
+It =
+
+
+
+qLt , qRt , g Lt , g Rt , ξLt , ξRt , Kt, Et
+
+
+
+,
+
+where qLt , qRt are the left/right arm joint values, gLt , g Rt are normalized gripper states, ξLt , ξRt are end-effector poses, and (Kt, Et) are camera intrinsics and extrinsics. Each end-effector pose is represented by a 3D position and a quaternion: 
+
+ξat = ( pat , qat ), a ∈ { L, R }.
+
+Kinematic lifting. We first lift low-dimensional joint states into 3D robot geometry using forward kinematics. Let TWa,k (t) ∈ SE (3) denote the world-frame transform of the k-th link of arm a at time 
+
+t. Starting from the robot base transform, each link transform is computed recursively: 
+
+TWa,k (t) = TWa,k −1(t)Torig  
+
+> a,k
+
+Tmot  
+
+> a,k
+
+(qat,k ),
+
+13 where Torig  
+
+> a,k
+
+is the static joint transform parsed from the URDF, and Tmot  
+
+> a,k
+
+is the revolute or prismatic motion induced by the joint value. For the gripper, the normalized signal is mapped to a prismatic displacement 
+
+dat = clip( gat , 0, 1) da
+
+> max
+
+,
+
+and used to compute the two finger branches. This gives a set of 3D robot keypoints 
+
+Pat = {pWa,k (t)}Ka
+
+> k=1
+
+,
+
+including the arm skeleton, joint landmarks, and gripper endpoints. 
+
+Camera projection. Each 3D keypoint is projected to the target camera view. For a world-frame point pW , we compute 
+
+pC = Et
+
+pW
+
+1
+
+
+
+, ˆu = KtpC
+
+> 1:3
+
+,
+
+and obtain the image coordinate by perspective division: 
+
+(u, v ) = 
+
+ ˆux
+
+ˆuz
+
+, ˆuy
+
+ˆuz
+
+
+
+.
+
+Points with non-positive camera depth are discarded. This step maps robot kinematics from the world frame to the exact image plane used by the video world model. 
+
+Visual rendering. Given projected keypoints, we render a KVAF frame Vt ∈ RH×W ×3 on a black canvas. The rendered elements include depth-aware arm skeletons, joint landmarks, gripper geometry, end-effector heatmaps, and pose axes. For depth-aware skeleton rendering, we normalize the camera depth z within an episode-level range (zmin , z max ) and map it to a color palette: 
+
+α(z) = clip 
+
+ z − zmin 
+
+zmax − zmin 
+
+, 0, 1
+
+
+
+, c(z) = C(α(z)) ,
+
+where C denotes the depth color map. This allows the visual field to encode not only image-space position, but also relative depth ordering. For the end-effector, we render a truncated Gaussian heatmap centered at the projected end-effector location (uat , v at ):
+
+Hat (x, y ) = exp 
+
+
+
+− (x − uat )2 + ( y − vat )2
+
+2σ2
+
+
+
+1 (x − uat )2 + ( y − vat )2 ≤ r2 .
+
+This heatmap provides an explicit cue for the manipulation focus. We further render the local end-effector pose axes. Given the rotation matrix Rat from the end-effector quaternion, each local axis endpoint is 
+
+pa,m t = pat + ℓaxis Rat em, m ∈ { x, y, z }.
+
+After projection, the three axes are drawn in RGB colors. The final KVAF frame is the composition of all rendered components: 
+
+Vt = Render 
+
+
+
+PLt , PRt , ξLt , ξRt , Kt, Et
+
+
+
+.
+
+Stacking all frames gives the KVAF sequence 
+
+V = {Vt}Tt=1 .
+
+In the current implementation, KVAFs explicitly encode robot-side geometric motion information. Object-state changes are not directly rasterized in KVAFs, but are later captured through event-aware fusion and EDLS in the generative model. 
+
+A.3 Heuristic Action Recovery from KVAFs 
+
+This section describes the heuristic procedure used in our additional analysis to recover numerical actions from generated KVAF videos. This procedure is not part of EA-WM training or inference; it is only used to examine whether the visual action fields contain recoverable low-dimensional action information. Given a generated KVAF video, camera intrinsics and extrinsics, and the known rendered pose-axis length, we recover end-effector trajectories, gripper states, and then convert them into RoboTwin-style relative actions. 14 Algorithm 3 KVAF construction for one episode 
+
+Require: Robot URDF, embodiment config, episode states {I t}Tt=1 , image size (H, W )
+
+Ensure: KVAF sequence V = {Vt}Tt=1  
+
+> 1:
+
+Parse URDF to obtain joint origins, joint axes, link hierarchy, and gripper joints  
+
+> 2:
+
+Build left/right arm kinematic chains from the robot configuration  
+
+> 3:
+
+Estimate an episode-level depth range (zmin , z max ) from visible robot keypoints  
+
+> 4:
+
+for t = 1 to T do  
+
+> 5:
+
+Initialize a black canvas Vt ∈ RH×W ×3 
+
+> 6:
+
+for each arm a ∈ { L, R } do  
+
+> 7:
+
+Compute 3D arm and gripper keypoints by forward kinematics: 
+
+Pat ← FK( qat , g at , URDF)  
+
+> 8:
+
+Project keypoints to the target camera: 
+
+Πat ← Project( Pat , Kt, Et) 
+
+> 9:
+
+Render depth-aware arm skeleton and joint landmarks on Vt 
+
+> 10:
+
+Render gripper geometry using projected finger keypoints  
+
+> 11:
+
+Project end-effector center and render Gaussian heatmap  
+
+> 12:
+
+Project end-effector pose axes and render RGB orientation cues  
+
+> 13:
+
+end for  
+
+> 14:
+
+Append Vt to V 
+
+> 15:
+
+end for  
+
+> 16:
+
+return V
+
+Table 5: Rendered components in KVAFs and their roles.       
+
+> Component Encoded information Depth-aware skeleton Arm topology, spatial position, and relative depth Joint landmarks Local joint locations and articulated structure Gripper geometry End-effector opening state and finger configuration End-effector heatmap Manipulation focus and target interaction region Pose axes End-effector orientation and approach direction
+
+End-effector detection and pose recovery. For each KVAF frame, we first detect candidate end-effector centers from high-intensity heatmap regions. Around each detected center, we identify the rendered RGB pose-axis endpoints by thresholding local red, green, and blue regions. Let the detected image points be 
+
+u0, ux, uy , uz ∈ R2,
+
+where u0 is the end-effector center and ux, uy , uz correspond to the projected local x, y, z axes. We associate them with the canonical 3D local points 
+
+o0 = 0, ox = ℓaxis ex, oy = ℓaxis ey , oz = ℓaxis ez .
+
+Using the camera intrinsic matrix, we solve a PnP problem to estimate the end-effector pose in the camera frame, and then transform it to the world frame using the camera extrinsics. This gives a recovered pose 
+
+ˆξat = (ˆ pat , ˆRat )
+
+for each detected arm a at time t.
+
+Gripper state and bimanual track association. The gripper state is estimated from the local gripper geometry around the recovered end-effector center. We detect gripper-like white components near the pose axes and use their relative separation as a raw gripper opening signal. Since RoboTwin contains bimanual manipulation, detections are associated into left and right tracks. When two detections are present, we assign them by their recovered world-frame horizontal position. When only one detection is available, we assign it to the closer existing track. Missing detections are filled by nearest-neighbor interpolation, and the recovered pose and gripper sequences are smoothed with a short temporal median filter. Finally, the gripper curve is normalized to [0 , 1] within each episode. 15 Conversion to relative actions. After obtaining dense left and right end-effector pose sequences, we convert them into RoboTwin-style relative actions. For each arm a ∈ { L, R }, the local translation action is computed in the current end-effector frame: 
+
+∆pat = ( ˆRat )⊤  ˆpat+1 − ˆpat
+
+ .
+
+The relative rotation is 
+
+∆Rat = ( ˆRat )⊤ ˆRat+1 ,
+
+which is converted to roll-pitch-yaw angles: 
+
+∆θat = RPY(∆ Rat ).
+
+The gripper action is the temporal difference of the normalized gripper state: 
+
+∆gat = ˆ gat+1 − ˆgat .
+
+Thus the recovered bimanual action at time t is 
+
+ˆat = [∆ pLt , ∆θLt , ∆gLt , ∆pRt , ∆θRt , ∆gRt ].
+
+Evaluation. We compare the recovered actions with ground-truth action CSVs using group-wise errors for translation, rotation, and gripper commands. Translation and rotation errors are computed as vector norms over the corresponding action dimensions, while the gripper error is computed as absolute error. Because the recovery depends on detecting small rendered cues such as heatmap centers, pose axes, and gripper components, the current heuristic pipeline is not expected to match direct numerical action prediction. Instead, it serves as an analysis tool for probing how much action information can be recovered from the image-domain KVAF representation. The relatively low detection rate of this heuristic recovery pipeline reflects the difficulty of inverting image-domain action fields back into precise numerical actions. This supports our view that KVAFs are better suited as a video-domain conditioning interface rather than as a direct replacement for numerical action labels. 
+
+A.4 Full-metric evaluation. 
+
+In the main paper, we focus on Physics Adherence, 3D Accuracy, and Controllability, as these dimensions are most directly related to robot motion, spatial consistency, and action-conditioned generation. For completeness, we additionally report all 16 WorldArena video perception metrics in Tables 6 and 7. Table 6 compares EA-WM with the representative video and embodied world models used in the main quantitative analysis, while Table 7 compares KVAF-conditioned generation with mainstream action- or trajectory-conditioned baselines. Unlike the main-paper P3CScore , which is computed only on the six selected metrics, the appendix Avg 16 averages all 16 metrics including Action Following. Across both comparisons, EA-WM and KVAF-conditioned generation achieve the strongest overall Avg 16 , while also showing consistent advantages on robot-centric metrics such as Interaction Quality, Trajectory Accuracy, Depth Accuracy, and Perspectivity. These results further support that representing actions as camera-aligned KVAFs provides effective structured guidance for robotic video world modeling. 
+
+A.5 Additional Visualizations of Generated KVAFs and Videos 
+
+To further examine the learned video-domain action representation, we visualize generated KVAF sequences together with the corresponding generated video frames in Figures 6–10. Across different tasks, the generated KVAFs are well aligned with the robot motion in the videos: skeletons, end-effector cues, gripper geometry, and pose axes follow the generated robot configurations, while the video frames maintain consistent object locations and interaction progress. 
+
+A.6 Broader Impacts 
+
+EA-WM is developed for robotic video world modeling and is evaluated in simulation. The model does not directly execute robot actions, nor is it deployed on real robots in this work. Nevertheless, more accurate robotic world models may eventually be used as predictive simulators, planning modules, policy-learning aids, or evaluation environments for downstream VLA systems. If such 16 Algorithm 4 Heuristic action recovery from KVAF videos 
+
+Require: Generated KVAF video V, camera intrinsics K, camera extrinsics E, pose-axis length 
+
+ℓaxis 
+
+Ensure: Recovered relative action sequence {ˆat}
+
+1: for each frame Vt do 
+
+2: Detect candidate end-effector centers from heatmap peaks 
+
+3: for each detected center do 
+
+4: Detect local RGB pose-axis endpoints (ux, uy , uz )
+
+5: Solve PnP using canonical 3D axis points and detected 2D endpoints 
+
+6: Convert the recovered camera-frame pose to world frame 
+
+7: Estimate raw gripper opening from local gripper geometry 
+
+8: end for 
+
+9: Store all valid detections for frame t
+
+10: end for 
+
+11: Associate detections into left/right tracks using recovered world positions 
+
+12: Fill missing detections by nearest-neighbor interpolation 
+
+13: Smooth pose and gripper trajectories with a temporal median filter 
+
+14: Normalize gripper curves to [0 , 1] 
+
+15: for each arm a ∈ { L, R } and timestep t do 
+
+16: Compute local translation: 
+
+∆pat = ( ˆRat )⊤(ˆ pat+1 − ˆpat )
+
+17: Compute local rotation: 
+
+∆θat = RPY 
+
+
+
+( ˆRat )⊤ ˆRat+1 
+
+
+
+18: Compute gripper delta: 
+
+∆gat = ˆ gat+1 − ˆgat
+
+19: end for 
+
+20: Concatenate left/right translation, rotation, and gripper deltas: 
+
+ˆat = [∆ pLt , ∆θLt , ∆gLt , ∆pRt , ∆θRt , ∆gRt ]
+
+21: return {ˆat}
+
+Table 6: Full WorldArena video perception metrics for the models compared in the main results. All metrics are normalized to [0 , 1] and higher is better. Avg 16 averages all 16 metrics, and multiplies the result by 100.                                                                                                                           
+
+> Visual Quality Motion Quality Content Consistency Physics 3D Controllability Avg 16
+> Model Img. Aes. JEPA Dyn. Flow Smooth Subj. Bg. Photo Inter. Traj. Depth Persp. Instr. Sem. Action CogVideoX 0.358 0.378 0.938 0.317 0.219 0.739 0.808 0.877 0.358 0.594 0.353 0.910 0.783 0.727 0.898 0.008 57.91 WoW 0.459 0.387 0.744 0.461 0.271 0.769 0.816 0.903 0.217 0.556 0.206 0.728 0.767 0.569 0.884 0.043 54.87 Wan 2.2 0.388 0.396 0.758 0.435 0.127 0.702 0.839 0.904 0.478 0.518 0.163 0.777 0.766 0.538 0.888 0.051 54.55 TesserAct 0.332 0.459 0.458 0.515 0.245 0.758 0.825 0.924 0.249 0.580 0.140 0.716 0.792 0.615 0.878 0.031 53.23 GigaWorld-0 0.504 0.399 0.441 0.671 0.312 0.781 0.730 0.856 0.176 0.537 0.155 0.632 0.760 0.616 0.859 0.113 53.39 Vidar 0.415 0.407 0.561 0.277 0.143 0.797 0.763 0.830 0.235 0.535 0.193 0.787 0.759 0.591 0.883 0.082 51.61 Cosmos-Predict 2.5 (text) 0.667 0.450 0.313 0.591 0.430 0.788 0.749 0.851 0.138 0.387 0.082 0.705 0.796 0.266 0.773 0.142 50.80 Genie Envisioner 0.231 0.329 0.334 0.693 0.086 0.697 0.776 0.902 0.201 0.205 0.068 0.866 0.528 0.203 0.854 0.011 43.65
+> EA-WM (Ours) 0.364 0.387 0.951 0.360 0.273 0.730 0.827 0.904 0.220 0.682 0.430 0.959 0.838 0.792 0.895 0.048 60.38
+
+models generate misleading future rollouts, downstream policies or planners may make unsafe decisions, especially in physical environments involving humans, fragile objects, or safety-critical manipulation. This work does not involve human-subject data, personally identifiable information, or real-robot deployment. The primary goal is to study how structured action information can improve robotic video world modeling. 17 Table 7: Full WorldArena video perception metrics for mainstream action- or trajectory-conditioned baselines. All metrics are normalized to [0 , 1] and higher is better. Avg 16 averages all 16 metrics, and multiplies the result by 100. 
+
+Visual Quality Motion Quality Content Consistency Physics 3D Controllability Avg 16 
+
+Model Img. Aes. JEPA Dyn. Flow Smooth Subj. Bg. Photo Inter. Traj. Depth Persp. Instr. Sem. Action CtrlWorld 0.352 0.389 0.919 0.426 0.345 0.738 0.841 0.906 0.173 0.621 0.477 0.930 0.796 0.727 0.891 0.021 59.70 IRASim 0.349 0.362 0.933 0.414 0.208 0.705 0.831 0.907 0.352 0.566 0.364 0.931 0.779 0.660 0.885 0.053 58.12 Cosmos-Predict 2.5 (action) 0.449 0.358 0.930 0.399 0.057 0.710 0.820 0.889 0.353 0.550 0.295 0.886 0.764 0.584 0.888 0.013 55.91 RoboMaster 0.349 0.384 0.297 0.612 0.148 0.694 0.830 0.912 0.336 0.536 0.116 0.834 0.759 0.577 0.876 0.035 51.84 
+
+KVAF-conditioned generation 0.364 0.383 0.950 0.360 0.268 0.729 0.818 0.899 0.229 0.682 0.494 0.977 0.850 0.784 0.901 0.048 60.84 
+
+Figure 6: Generated KVAF and video frame sequence 18 Figure 7: Generated KVAF and video frame sequence 19 Figure 8: Generated KVAF and video frame sequence 20 Figure 9: Generated KVAF and video frame sequence 21 Figure 10: Generated KVAF and video frame sequence 22

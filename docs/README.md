@@ -6,30 +6,37 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-07
-- 运行时间：2026-05-07 20:31:55 UTC
+- 最新运行日期：2026-05-08
+- 运行时间：2026-05-08 20:43:29 UTC
 - 运行状态：成功
-- 本次总论文数：3
-- 精读区：1
+- 本次总论文数：5
+- 精读区：3
 - 速读区：2
 
 ### 今日简报（AI）
-今日聚焦双足机器人实时控制突破，深度解析级联保真度 MPC 如何重塑行走性能。
-重点推荐“在对的时间
-- 详情：[/202605/07/README](/202605/07/README)
+今日深度解析人形机器人力自适应控制与多点接触运动，涵盖 5 篇机器人领域前沿进展。
+重点推荐满分论文 VOFA，其展示了人形机器人在视觉引导下精准推动目标的力控方案，并探讨了多点接触运动中的摆动结构。
+建议优先研读 VOFA 框架，深入理解人形机器人在复杂物理交互任务中的视觉与力学融合技术。
+- 详情：[/202605/08/README](/202605/08/README)
 
 ### 精读区论文标签
-1. [Right Model, Right Time: Real-Time Cascaded-Fidelity MPC for Bipedal Walking](/202605/07/2605.04607v1-right-model-right-time-real-time-cascaded-fidelity-mpc-for-bipedal-walking)  
+1. [VOFA: Visual Object Goal Pushing with Force-Adaptive Control for Humanoids](/202605/08/2605.01518v3-vofa-visual-object-goal-pushing-with-force-adaptive-control-for-humanoids)  
+   标签：评分：10.0/10、query:robot
+   evidence：使用机载第一视角感知的类人机器人移动操作
+2. [On the Emergence of Pendular Structure in Multi-Contact Locomotion](/202605/08/2605.05707v1-on-the-emergence-of-pendular-structure-in-multi-contact-locomotion)  
    标签：评分：9.0/10、query:robot
-   evidence：用于双足行走控制的级联精度模型预测控制
+   evidence：多接触足式运动中的质心最优控制与摆动结构
+3. [GA3T: A Ground-Aerial Terrain Traversability Dataset for Heterogeneous Robot Teams in Unstructured Environments](/202605/08/2605.06478v1-ga3t-a-ground-aerial-terrain-traversability-dataset-for-heterogeneous-robot-teams-in-unstructured-environments)  
+   标签：评分：8.0/10、query:robot
+   evidence：异构机器人团队的地形可通行性数据集
 
 ### 速读区论文标签
-1. [From Language to Logic: A Theoretical Architecture for VLM-Grounded Safe Navigation](/202605/07/2605.04327v1-from-language-to-logic-a-theoretical-architecture-for-vlm-grounded-safe-navigation)  
+1. [Visibility-Aware Mobile Grasping in Dynamic Environments](/202605/08/2605.02487v2-visibility-aware-mobile-grasping-in-dynamic-environments)  
+   标签：评分：7.0/10、query:robot
+   evidence：用于移动操作的全身规划器和主动感知
+2. [EA-WM: Event-Aware Generative World Model with Structured Kinematic-to-Visual Action Fields](/202605/08/2605.06192v1-ea-wm-event-aware-generative-world-model-with-structured-kinematic-to-visual-action-fields)  
    标签：评分：6.0/10、query:robot
-   evidence：非结构化户外环境中基于VLM的安全导航和地形偏好感知
-2. [A Closed-Form Dual-Barrier CBF Safety Filter for Holonomic Robots on Incrementally Built Occupancy Grid Maps](/202605/07/2605.05182v1-a-closed-form-dual-barrier-cbf-safety-filter-for-holonomic-robots-on-incrementally-built-occupancy-grid-maps)  
-   标签：评分：6.0/10、query:robot
-   evidence：占据网格地图上的机器人安全过滤器
+   evidence：闭合运动控制与视觉感知之间的环路
 
 
 <div class="dpr-home-promo-card">
