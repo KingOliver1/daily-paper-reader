@@ -6,37 +6,32 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-08
-- 运行时间：2026-05-08 20:43:29 UTC
+- 最新运行日期：2026-05-09
+- 运行时间：2026-05-09 20:35:57 UTC
 - 运行状态：成功
-- 本次总论文数：5
-- 精读区：3
-- 速读区：2
+- 本次总论文数：3
+- 精读区：0
+- 速读区：3
 
 ### 今日简报（AI）
-今日深度解析人形机器人力自适应控制与多点接触运动，涵盖 5 篇机器人领域前沿进展。
-重点推荐满分论文 VOFA，其展示了人形机器人在视觉引导下精准推动目标的力控方案，并探讨了多点接触运动中的摆动结构。
-建议优先研读 VOFA 框架，深入理解人形机器人在复杂物理交互任务中的视觉与力学融合技术。
-- 详情：[/202605/08/README](/202605/08/README)
+今日聚焦机器人操作的认知升级，涵盖 4D 时空推理、复杂桌面整理及世界模型的自适应执行。
+ConsisVLA-4D 显著提升了 3D 感知的一致性，而“信任想象”机制则为世界模型在现实中的可靠应用提供了新思路。
+推荐关注如何利用环境约束和时空推理，让机器人更聪明地处理杂乱的异构物体。
+- 详情：[/202605/09/README](/202605/09/README)
 
 ### 精读区论文标签
-1. [VOFA: Visual Object Goal Pushing with Force-Adaptive Control for Humanoids](/202605/08/2605.01518v3-vofa-visual-object-goal-pushing-with-force-adaptive-control-for-humanoids)  
-   标签：评分：10.0/10、query:robot
-   evidence：使用机载第一视角感知的类人机器人移动操作
-2. [On the Emergence of Pendular Structure in Multi-Contact Locomotion](/202605/08/2605.05707v1-on-the-emergence-of-pendular-structure-in-multi-contact-locomotion)  
-   标签：评分：9.0/10、query:robot
-   evidence：多接触足式运动中的质心最优控制与摆动结构
-3. [GA3T: A Ground-Aerial Terrain Traversability Dataset for Heterogeneous Robot Teams in Unstructured Environments](/202605/08/2605.06478v1-ga3t-a-ground-aerial-terrain-traversability-dataset-for-heterogeneous-robot-teams-in-unstructured-environments)  
-   标签：评分：8.0/10、query:robot
-   evidence：异构机器人团队的地形可通行性数据集
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Visibility-Aware Mobile Grasping in Dynamic Environments](/202605/08/2605.02487v2-visibility-aware-mobile-grasping-in-dynamic-environments)  
+1. [ConsisVLA-4D: Advancing Spatiotemporal Consistency in Efficient 3D-Perception and 4D-Reasoning for Robotic Manipulation](/202605/09/2605.05126v1-consisvla-4d-advancing-spatiotemporal-consistency-in-efficient-3d-perception-and-4d-reasoning-for-robotic-manipulation)  
    标签：评分：7.0/10、query:robot
-   evidence：用于移动操作的全身规划器和主动感知
-2. [EA-WM: Event-Aware Generative World Model with Structured Kinematic-to-Visual Action Fields](/202605/08/2605.06192v1-ea-wm-event-aware-generative-world-model-with-structured-kinematic-to-visual-action-fields)  
+   evidence：机器人3D感知与时空推理
+2. [Robotic Desk Organization: A Multi-Primitive Approach to Manipulating Heterogeneous Objects via Environmental Constraints](/202605/09/2605.02135v1-robotic-desk-organization-a-multi-primitive-approach-to-manipulating-heterogeneous-objects-via-environmental-constraints)  
    标签：评分：6.0/10、query:robot
-   evidence：闭合运动控制与视觉感知之间的环路
+   evidence：用于检测环境约束的感知流水线
+3. [When to Trust Imagination: Adaptive Action Execution for World Action Models](/202605/09/2605.06222v1-when-to-trust-imagination-adaptive-action-execution-for-world-action-models)  
+   标签：评分：6.0/10、query:robot
+   evidence：机器人世界模型的自适应动作执行与验证
 
 
 <div class="dpr-home-promo-card">
