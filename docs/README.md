@@ -6,32 +6,29 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-05-09
-- 运行时间：2026-05-09 20:35:57 UTC
+- 最新运行日期：2026-05-10
+- 运行时间：2026-05-10 19:46:24 UTC
 - 运行状态：成功
-- 本次总论文数：3
+- 本次总论文数：2
 - 精读区：0
-- 速读区：3
+- 速读区：2
 
 ### 今日简报（AI）
-今日聚焦机器人操作的认知升级，涵盖 4D 时空推理、复杂桌面整理及世界模型的自适应执行。
-ConsisVLA-4D 显著提升了 3D 感知的一致性，而“信任想象”机制则为世界模型在现实中的可靠应用提供了新思路。
-推荐关注如何利用环境约束和时空推理，让机器人更聪明地处理杂乱的异构物体。
-- 详情：[/202605/09/README](/202605/09/README)
+- 今日共生成 2 篇推荐（精读 0 篇，速读 2 篇）
+- 速读：《Plug-and-Play Label Map Diffusion for Universal Goal-Oriented Navigation》（7.0/10）, 《Multi-Robot Coordination in V2X Environments》（6.0/10）
+- 这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。
+- 详情：[/202605/10/README](/202605/10/README)
 
 ### 精读区论文标签
 - 本次无精读推荐。
 
 ### 速读区论文标签
-1. [ConsisVLA-4D: Advancing Spatiotemporal Consistency in Efficient 3D-Perception and 4D-Reasoning for Robotic Manipulation](/202605/09/2605.05126v1-consisvla-4d-advancing-spatiotemporal-consistency-in-efficient-3d-perception-and-4d-reasoning-for-robotic-manipulation)  
+1. [Plug-and-Play Label Map Diffusion for Universal Goal-Oriented Navigation](/202605/10/2605.05960v1-plug-and-play-label-map-diffusion-for-universal-goal-oriented-navigation)  
    标签：评分：7.0/10、query:robot
-   evidence：机器人3D感知与时空推理
-2. [Robotic Desk Organization: A Multi-Primitive Approach to Manipulating Heterogeneous Objects via Environmental Constraints](/202605/09/2605.02135v1-robotic-desk-organization-a-multi-primitive-approach-to-manipulating-heterogeneous-objects-via-environmental-constraints)  
+   evidence：目标导向导航与语义地图补全
+2. [Multi-Robot Coordination in V2X Environments](/202605/10/2605.06662v1-multi-robot-coordination-in-v2x-environments)  
    标签：评分：6.0/10、query:robot
-   evidence：用于检测环境约束的感知流水线
-3. [When to Trust Imagination: Adaptive Action Execution for World Action Models](/202605/09/2605.06222v1-when-to-trust-imagination-adaptive-action-execution-for-world-action-models)  
-   标签：评分：6.0/10、query:robot
-   evidence：机器人世界模型的自适应动作执行与验证
+   evidence：多机器人协作与动作感知
 
 
 <div class="dpr-home-promo-card">
